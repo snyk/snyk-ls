@@ -22,13 +22,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 
-	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -64,14 +63,11 @@ func getDummyOAuth2Token(expiry time.Time) oauth2.Token {
 func checkInvalidCredentialsMessageRequest(t *testing.T, expected string, tokenString string) {
 	t.Helper()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
-	srv, jsonRpcRecorder, _ := setupServer(t, engine, tokenService)
-
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
+	srv, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	enableOnlyProducts(t, engine, product.ProductOpenSource)
 	// we have to reset the token, as smoketest automatically grab it from env
 	tokenService.SetToken(engine.GetConfiguration(), "")
 	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
-	di.Init(engine, tokenService)
 
 	clientParams := types.InitializeParams{
 		WorkspaceFolders: []types.WorkspaceFolder{{Uri: uri.PathToUri(types.FilePath(t.TempDir())), Name: t.Name()}},

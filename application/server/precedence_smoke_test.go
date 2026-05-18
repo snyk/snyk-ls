@@ -520,11 +520,8 @@ func Test_SmokePrecedence_ActivateSnykCodeSecurity_OR_Reconciliation(t *testing.
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
 	testutil.CreateDummyProgressListener(t)
 
-	loc, _, _ := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
-	di.Init(engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
+	enableOnlyProducts(t, engine)
 
 	folder := types.FilePath(t.TempDir())
 	_ = initTestRepo(t, string(folder))
@@ -571,11 +568,8 @@ func Test_SmokePrecedence_DefaultValues_WhenNoUserOrRemoteConfig(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
 	testutil.CreateDummyProgressListener(t)
 
-	loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
-	di.Init(engine, tokenService)
+	loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	enableOnlyProducts(t, engine)
 
 	folder := types.FilePath(t.TempDir())
 	_ = initTestRepo(t, string(folder))

@@ -35,10 +35,8 @@ import (
 
 func Test_Concurrent_CLI_Runs(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
-	srv, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
-	di.Init(engine, tokenService)
+	srv, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	enableOnlyProducts(t, engine, product.ProductOpenSource)
 	t.Setenv("SNYK_LOG_LEVEL", "info")
 	lspClient := srv.Client
 
