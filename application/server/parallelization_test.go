@@ -43,8 +43,13 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 	lspClient := srv.Client
 
 	// create clones and make them workspace folders
-	type scanParamsTuple map[product.Product]bool
-	successfulScans := map[types.FilePath]scanParamsTuple{}
+	type scanStatus struct {
+		status types.ScanStatus
+		error  string
+	}
+	scanStatuses := map[types.FilePath]map[product.Product]scanStatus{}
+
+	prevStatuses := map[types.FilePath]map[product.Product]scanStatus{}
 
 	var workspaceFolders []types.WorkspaceFolder
 	wg := sync.WaitGroup{}
@@ -62,7 +67,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 			}
 			mu.Lock()
 			workspaceFolders = append(workspaceFolders, folder)
-			successfulScans[repo] = scanParamsTuple{}
+			scanStatuses[repo] = map[product.Product]scanStatus{}
 			mu.Unlock()
 		}()
 	}
@@ -97,6 +102,8 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 	// check if all scan params were sent
 	assert.Eventuallyf(t, func() bool {
 		notificationsByMethod := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
+
+		// Track scan statuses for diagnostics
 		for _, notification := range notificationsByMethod {
 			var scanParams types.SnykScanParams
 			err := notification.UnmarshalParams(&scanParams)
@@ -104,19 +111,58 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 				continue
 			}
 
-			if scanParams.Status == types.Success {
-				successfulScans[scanParams.FolderPath][product.ToProduct(scanParams.Product)] = true
+			p := product.ToProduct(scanParams.Product)
+			if _, exists := scanStatuses[scanParams.FolderPath]; !exists {
+				continue
+			}
+
+			// Update status for this folder/product combination
+			scanStatuses[scanParams.FolderPath][p] = scanStatus{
+				status: scanParams.Status,
+				error:  "",
+			}
+			if scanParams.PresentableError != nil {
+				scanStatuses[scanParams.FolderPath][p] = scanStatus{
+					status: scanParams.Status,
+					error:  scanParams.PresentableError.ErrorMessage,
+				}
 			}
 		}
 
+		// Log only on status transitions to avoid log spam during polling
+		for folderPath, productStatuses := range scanStatuses {
+			for p, status := range productStatuses {
+				if prevStatuses[folderPath] == nil {
+					prevStatuses[folderPath] = map[product.Product]scanStatus{}
+				}
+				if prevStatuses[folderPath][p] != status {
+					prevStatuses[folderPath][p] = status
+					if status.status == types.ErrorStatus {
+						t.Logf("Scan error for folder %s product %s: %s", folderPath, p.ToProductCodename(), status.error)
+					} else {
+						t.Logf("Scan status changed: folder %s product %s → %s", folderPath, p.ToProductCodename(), status.status)
+					}
+				}
+			}
+		}
+
+		// Count successful scans
+		ossEnabled := engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled))
+		iacEnabled := engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled))
 		received := 0
-		for _, tuple := range successfulScans {
-			if tuple[product.ProductOpenSource] == engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)) && tuple[product.ProductInfrastructureAsCode] == engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)) {
+		for _, productStatuses := range scanStatuses {
+			ossSuccess := productStatuses[product.ProductOpenSource].status == types.Success
+			iacSuccess := productStatuses[product.ProductInfrastructureAsCode].status == types.Success
+			if ossSuccess == ossEnabled && iacSuccess == iacEnabled {
 				received++
 			}
 		}
 		return received == len(workspaceFolders)
 	}, 10*time.Minute, time.Second, "not all scans were successful")
+
+	// Log final scan state so timeout failures are diagnosable without tracing transition logs.
+	t.Logf("Final scan state: %+v", scanStatuses)
+
 	// Wait for reference branch scans to complete so their goroutines don't outlive the test
 	// and cause the cleanup shutdown to block for an extended period.
 	waitForAllScansToComplete(t, di.ScanStateAggregator())
