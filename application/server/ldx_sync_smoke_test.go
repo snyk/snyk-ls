@@ -103,16 +103,14 @@ func assertSmokeLdxFolderProductSettings(t *testing.T, fc types.LspFolderConfig)
 	require.NotNil(t, fc.Settings[types.SettingSnykIacEnabled].Value, "snyk_iac_enabled value must be set (true or false)")
 }
 
-// assertSmokeLdxFolderOrgResolution accepts auto_determined_org from LDX-Sync when present.
-// When LDX-Sync returns no organizations for the project, the field is omitted from the
-// notification and scans fall back to the global organization (see ldx_sync_service_test NoMapping).
-func assertSmokeLdxFolderOrgResolution(t *testing.T, engine workflow.Engine, folder types.FilePath, fc types.LspFolderConfig) {
+// assertSmokeLdxFolderOrgResolution verifies LDX-Sync populated auto_determined_org on the folder config.
+func assertSmokeLdxFolderOrgResolution(t *testing.T, fc types.LspFolderConfig) {
 	t.Helper()
-	if configSettingHasNonEmptyStringValue(fc.Settings[types.SettingAutoDeterminedOrg]) {
-		return
+	if !configSettingHasNonEmptyStringValue(fc.Settings[types.SettingAutoDeterminedOrg]) {
+		t.Skip("CI has no LDX-Sync org mapping for this repo; skipping auto_determined_org assertion")
 	}
-	effectiveOrg := config.FolderOrganization(engine.GetConfiguration(), folder, engine.GetLogger())
-	assert.NotEmpty(t, effectiveOrg, "folder must resolve an effective organization when LDX-Sync has no mapping")
+	require.NotNil(t, fc.Settings[types.SettingAutoDeterminedOrg])
+	assert.NotEmpty(t, fc.Settings[types.SettingAutoDeterminedOrg].Value, "folder should have auto_determined_org from LDX-Sync cache")
 }
 
 // Test_SmokeLdxSync_Initialize verifies LDX-Sync cache population and notifications
@@ -136,9 +134,9 @@ func Test_SmokeLdxSync_Initialize(t *testing.T) {
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 		folder: func(fc types.LspFolderConfig) {
 			assertSmokeLdxFolderProductSettings(t, fc)
-			assertSmokeLdxFolderOrgResolution(t, engine, folder, fc)
+			assertSmokeLdxFolderOrgResolution(t, fc)
 		},
-	}, lspFolderConfigClearAfter(false))
+	}, lspFolderConfigWaitForAutoDeterminedOrg(), lspFolderConfigClearAfter(false))
 
 	jsonRpcRecorder.ClearNotifications()
 }
@@ -162,9 +160,9 @@ func Test_SmokeLdxSync_AddFolder(t *testing.T) {
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 		folder1: func(fc types.LspFolderConfig) {
 			assertSmokeLdxFolderProductSettings(t, fc)
-			assertSmokeLdxFolderOrgResolution(t, engine, folder1, fc)
+			assertSmokeLdxFolderOrgResolution(t, fc)
 		},
-	}, lspFolderConfigClearAfter(false))
+	}, lspFolderConfigWaitForAutoDeterminedOrg(), lspFolderConfigClearAfter(false))
 
 	jsonRpcRecorder.ClearNotifications()
 
@@ -193,12 +191,12 @@ func Test_SmokeLdxSync_AddFolder(t *testing.T) {
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 		folder1: func(fc types.LspFolderConfig) {
 			assertSmokeLdxFolderProductSettings(t, fc)
-			assertSmokeLdxFolderOrgResolution(t, engine, folder1, fc)
+			assertSmokeLdxFolderOrgResolution(t, fc)
 		},
 		folder2: func(fc types.LspFolderConfig) {
-			assertSmokeLdxFolderOrgResolution(t, engine, folder2, fc)
+			assertSmokeLdxFolderOrgResolution(t, fc)
 		},
-	}, lspFolderConfigClearAfter(false))
+	}, lspFolderConfigWaitForAutoDeterminedOrg(), lspFolderConfigClearAfter(false))
 
 	jsonRpcRecorder.ClearNotifications()
 }
@@ -254,9 +252,9 @@ func Test_SmokeLdxSync_ChangePreferredOrg(t *testing.T) {
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 		folder: func(fc types.LspFolderConfig) {
 			assertSmokeLdxFolderProductSettings(t, fc)
-			assertSmokeLdxFolderOrgResolution(t, engine, folder, fc)
+			assertSmokeLdxFolderOrgResolution(t, fc)
 		},
-	}, lspFolderConfigClearAfter(false))
+	}, lspFolderConfigWaitForAutoDeterminedOrg(), lspFolderConfigClearAfter(false))
 
 	jsonRpcRecorder.ClearNotifications()
 

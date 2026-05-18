@@ -1968,10 +1968,14 @@ func Test_applyOrganization_ResetsSummaryPanelOnOrgChange(t *testing.T) {
 	const newOrg = "00000000-0000-0000-0000-0000000000a2"
 	scanErr := errors.New("scan failed")
 
-	setupAggregatorWithFinishedScan := func(t *testing.T) (workflow.Engine, types.FilePath) {
+	setupAggregatorWithFinishedScan := func(t *testing.T) (workflow.Engine, types.FilePath, scanstates.Aggregator) {
 		t.Helper()
 		engine, tokenService := testutil.UnitTestWithEngine(t)
-		di.TestInit(t, engine, tokenService)
+		ctrl := gomock.NewController(t)
+		emitter := scanstates.NewMockScanStateChangeEmitter(ctrl)
+		emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
+		realAgg := scanstates.NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, testutil.DefaultConfigResolver(engine), engine)
+		di.TestInitWithScanStateAggregator(t, engine, tokenService, realAgg)
 
 		tmpDir := types.FilePath(t.TempDir())
 		require.NoError(t, initTestRepo(t, string(tmpDir)))
@@ -1984,27 +1988,17 @@ func Test_applyOrganization_ResetsSummaryPanelOnOrgChange(t *testing.T) {
 		require.Len(t, folders, 1)
 		folderPath := folders[0].Path()
 
-		// di.TestInit installs a noop aggregator; swap in a real one so we
-		// can observe the reset, then restore the noop after the test.
-		ctrl := gomock.NewController(t)
-		emitter := scanstates.NewMockScanStateChangeEmitter(ctrl)
-		emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
-		realAgg := scanstates.NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, testutil.DefaultConfigResolver(engine), engine)
-		previous := di.ScanStateAggregator()
-		di.SetScanStateAggregator(realAgg)
-		t.Cleanup(func() { di.SetScanStateAggregator(previous) })
-
 		realAgg.Init([]types.FilePath{folderPath})
 		realAgg.SetScanDone(folderPath, product.ProductOpenSource, false, scanErr)
 		require.Equal(t, scanErr, realAgg.GetScanErr(folderPath, product.ProductOpenSource, false),
 			"precondition: aggregator should hold the seeded scan error")
 
 		config.SetOrganization(engine.GetConfiguration(), oldOrg)
-		return engine, folderPath
+		return engine, folderPath, realAgg
 	}
 
 	t.Run("org changed and LSP initialized -> aggregator is reset", func(t *testing.T) {
-		engine, folderPath := setupAggregatorWithFinishedScan(t)
+		engine, folderPath, realAgg := setupAggregatorWithFinishedScan(t)
 		conf := engine.GetConfiguration()
 		conf.Set(types.SettingIsLspInitialized, true)
 
@@ -2013,12 +2007,12 @@ func Test_applyOrganization_ResetsSummaryPanelOnOrgChange(t *testing.T) {
 				types.SettingOrganization: {Value: newOrg, Changed: true},
 			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
-		assert.NoError(t, di.ScanStateAggregator().GetScanErr(folderPath, product.ProductOpenSource, false),
+		assert.NoError(t, realAgg.GetScanErr(folderPath, product.ProductOpenSource, false),
 			"summary panel should be reset to initial state on org change")
 	})
 
 	t.Run("org unchanged -> aggregator is NOT reset", func(t *testing.T) {
-		engine, folderPath := setupAggregatorWithFinishedScan(t)
+		engine, folderPath, realAgg := setupAggregatorWithFinishedScan(t)
 		conf := engine.GetConfiguration()
 		conf.Set(types.SettingIsLspInitialized, true)
 
@@ -2027,12 +2021,12 @@ func Test_applyOrganization_ResetsSummaryPanelOnOrgChange(t *testing.T) {
 				types.SettingOrganization: {Value: oldOrg, Changed: true},
 			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
-		assert.Equal(t, scanErr, di.ScanStateAggregator().GetScanErr(folderPath, product.ProductOpenSource, false),
+		assert.Equal(t, scanErr, realAgg.GetScanErr(folderPath, product.ProductOpenSource, false),
 			"summary panel must not be reset when the org value is unchanged")
 	})
 
 	t.Run("LSP not initialized -> aggregator is NOT reset", func(t *testing.T) {
-		engine, folderPath := setupAggregatorWithFinishedScan(t)
+		engine, folderPath, realAgg := setupAggregatorWithFinishedScan(t)
 		conf := engine.GetConfiguration()
 		// SettingIsLspInitialized intentionally left false.
 
@@ -2041,7 +2035,7 @@ func Test_applyOrganization_ResetsSummaryPanelOnOrgChange(t *testing.T) {
 				types.SettingOrganization: {Value: newOrg, Changed: true},
 			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
-		assert.Equal(t, scanErr, di.ScanStateAggregator().GetScanErr(folderPath, product.ProductOpenSource, false),
+		assert.Equal(t, scanErr, realAgg.GetScanErr(folderPath, product.ProductOpenSource, false),
 			"summary panel must not be reset before the LSP is initialized")
 	})
 }
@@ -2051,32 +2045,46 @@ func Test_updateFolderConfig_PreferredOrgChange_ResetsSummaryPanelOnOrgChange(t 
 	const newOrg = "00000000-0000-0000-0000-0000000000b2"
 	scanErr := errors.New("scan failed")
 
-	setupAggregatorWithFinishedScan := func(t *testing.T) (*folderConfigTestSetup, types.FilePath) {
+	setupAggregatorWithFinishedScan := func(t *testing.T) (*folderConfigTestSetup, types.FilePath, scanstates.Aggregator) {
 		t.Helper()
-		setup := setupFolderConfigTest(t)
-		setup.createStoredConfig(oldOrg, true)
-
-		folders := config.GetWorkspace(setup.engine.GetConfiguration()).Folders()
-		require.Len(t, folders, 1)
-		folderPath := folders[0].Path()
+		engine, tokenService := testutil.UnitTestWithEngine(t)
 
 		ctrl := gomock.NewController(t)
 		emitter := scanstates.NewMockScanStateChangeEmitter(ctrl)
 		emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
-		realAgg := scanstates.NewScanStateAggregator(setup.engine.GetConfiguration(), setup.engine.GetLogger(), emitter, testutil.DefaultConfigResolver(setup.engine), setup.engine)
-		previous := di.ScanStateAggregator()
-		di.SetScanStateAggregator(realAgg)
-		t.Cleanup(func() { di.SetScanStateAggregator(previous) })
+		realAgg := scanstates.NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, testutil.DefaultConfigResolver(engine), engine)
+		di.TestInitWithScanStateAggregator(t, engine, tokenService, realAgg)
 
-		realAgg.Init([]types.FilePath{folderPath})
-		realAgg.SetScanDone(folderPath, product.ProductOpenSource, false, scanErr)
-		require.Equal(t, scanErr, realAgg.GetScanErr(folderPath, product.ProductOpenSource, false))
+		engineConfig := engine.GetConfiguration()
+		engineConfig.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction("test-default-org-uuid"))
+		engineConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, configuration.ImmutableDefaultValueFunction("test-default-org-slug"))
 
-		return setup, folderPath
+		folderPath := types.FilePath(t.TempDir())
+		require.NoError(t, initTestRepo(t, string(folderPath)))
+		_, _ = workspaceutil.SetupWorkspace(t, engine, folderPath)
+
+		setup := &folderConfigTestSetup{
+			t:            t,
+			engine:       engine,
+			engineConfig: engineConfig,
+			logger:       engine.GetLogger(),
+			folderPath:   folderPath,
+		}
+		setup.createStoredConfig(oldOrg, true)
+
+		folders := config.GetWorkspace(engine.GetConfiguration()).Folders()
+		require.Len(t, folders, 1)
+		aggregatorFolderPath := folders[0].Path()
+
+		realAgg.Init([]types.FilePath{aggregatorFolderPath})
+		realAgg.SetScanDone(aggregatorFolderPath, product.ProductOpenSource, false, scanErr)
+		require.Equal(t, scanErr, realAgg.GetScanErr(aggregatorFolderPath, product.ProductOpenSource, false))
+
+		return setup, aggregatorFolderPath, realAgg
 	}
 
 	t.Run("folder preferred org changed and LSP initialized -> aggregator is reset", func(t *testing.T) {
-		setup, folderPath := setupAggregatorWithFinishedScan(t)
+		setup, folderPath, realAgg := setupAggregatorWithFinishedScan(t)
 		setup.engineConfig.Set(types.SettingIsLspInitialized, true)
 
 		UpdateSettings(setup.engineConfig, setup.engine, setup.logger, nil, []types.LspFolderConfig{
@@ -2088,11 +2096,11 @@ func Test_updateFolderConfig_PreferredOrgChange_ResetsSummaryPanelOnOrgChange(t 
 			},
 		}, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
 
-		assert.NoError(t, di.ScanStateAggregator().GetScanErr(folderPath, product.ProductOpenSource, false))
+		assert.NoError(t, realAgg.GetScanErr(folderPath, product.ProductOpenSource, false))
 	})
 
 	t.Run("folder preferred org unchanged -> aggregator is NOT reset", func(t *testing.T) {
-		setup, folderPath := setupAggregatorWithFinishedScan(t)
+		setup, folderPath, realAgg := setupAggregatorWithFinishedScan(t)
 		setup.engineConfig.Set(types.SettingIsLspInitialized, true)
 
 		// Changed: true means the IDE included preferred_org in this patch, not that the value
@@ -2106,11 +2114,11 @@ func Test_updateFolderConfig_PreferredOrgChange_ResetsSummaryPanelOnOrgChange(t 
 			},
 		}, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
 
-		assert.Equal(t, scanErr, di.ScanStateAggregator().GetScanErr(folderPath, product.ProductOpenSource, false))
+		assert.Equal(t, scanErr, realAgg.GetScanErr(folderPath, product.ProductOpenSource, false))
 	})
 
 	t.Run("LSP not initialized -> aggregator is NOT reset", func(t *testing.T) {
-		setup, folderPath := setupAggregatorWithFinishedScan(t)
+		setup, folderPath, realAgg := setupAggregatorWithFinishedScan(t)
 
 		UpdateSettings(setup.engineConfig, setup.engine, setup.logger, nil, []types.LspFolderConfig{
 			{
@@ -2121,40 +2129,46 @@ func Test_updateFolderConfig_PreferredOrgChange_ResetsSummaryPanelOnOrgChange(t 
 			},
 		}, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
 
-		assert.Equal(t, scanErr, di.ScanStateAggregator().GetScanErr(folderPath, product.ProductOpenSource, false))
+		assert.Equal(t, scanErr, realAgg.GetScanErr(folderPath, product.ProductOpenSource, false))
 	})
 
 	t.Run("folder org_set_by_user toggled without preferred org change -> aggregator is reset", func(t *testing.T) {
-		setup := setupFolderConfigTest(t)
-		types.SetPreferredOrgAndOrgSetByUser(setup.engineConfig, setup.folderPath, "", false)
-
-		folders := config.GetWorkspace(setup.engine.GetConfiguration()).Folders()
-		require.Len(t, folders, 1)
-		folderPath := folders[0].Path()
+		engine, tokenService := testutil.UnitTestWithEngine(t)
 
 		ctrl := gomock.NewController(t)
 		emitter := scanstates.NewMockScanStateChangeEmitter(ctrl)
 		emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
-		realAgg := scanstates.NewScanStateAggregator(setup.engine.GetConfiguration(), setup.engine.GetLogger(), emitter, testutil.DefaultConfigResolver(setup.engine), setup.engine)
-		previous := di.ScanStateAggregator()
-		di.SetScanStateAggregator(realAgg)
-		t.Cleanup(func() { di.SetScanStateAggregator(previous) })
+		realAgg := scanstates.NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, testutil.DefaultConfigResolver(engine), engine)
+		di.TestInitWithScanStateAggregator(t, engine, tokenService, realAgg)
 
-		realAgg.Init([]types.FilePath{folderPath})
-		realAgg.SetScanDone(folderPath, product.ProductOpenSource, false, scanErr)
-		require.Equal(t, scanErr, realAgg.GetScanErr(folderPath, product.ProductOpenSource, false))
+		conf := engine.GetConfiguration()
+		conf.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction("test-default-org-uuid"))
+		conf.AddDefaultValue(configuration.ORGANIZATION_SLUG, configuration.ImmutableDefaultValueFunction("test-default-org-slug"))
 
-		setup.engineConfig.Set(types.SettingIsLspInitialized, true)
+		folderPath := types.FilePath(t.TempDir())
+		require.NoError(t, initTestRepo(t, string(folderPath)))
+		_, _ = workspaceutil.SetupWorkspace(t, engine, folderPath)
+		types.SetPreferredOrgAndOrgSetByUser(conf, folderPath, "", false)
 
-		UpdateSettings(setup.engineConfig, setup.engine, setup.logger, nil, []types.LspFolderConfig{
+		folders := config.GetWorkspace(conf).Folders()
+		require.Len(t, folders, 1)
+		aggregatorFolderPath := folders[0].Path()
+
+		realAgg.Init([]types.FilePath{aggregatorFolderPath})
+		realAgg.SetScanDone(aggregatorFolderPath, product.ProductOpenSource, false, scanErr)
+		require.Equal(t, scanErr, realAgg.GetScanErr(aggregatorFolderPath, product.ProductOpenSource, false))
+
+		conf.Set(types.SettingIsLspInitialized, true)
+
+		UpdateSettings(conf, engine, engine.GetLogger(), nil, []types.LspFolderConfig{
 			{
-				FolderPath: setup.folderPath,
+				FolderPath: folderPath,
 				Settings: map[string]*types.ConfigSetting{
 					types.SettingOrgSetByUser: {Value: true, Changed: true},
 				},
 			},
-		}, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
+		}, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
-		assert.NoError(t, di.ScanStateAggregator().GetScanErr(folderPath, product.ProductOpenSource, false))
+		assert.NoError(t, realAgg.GetScanErr(aggregatorFolderPath, product.ProductOpenSource, false))
 	})
 }

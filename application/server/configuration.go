@@ -41,6 +41,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
+	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -191,9 +192,10 @@ func InitializeSettings(conf configuration.Configuration, engine workflow.Engine
 
 	processInitMetadata(conf, engine, logger, opts)
 	// global
-	processConfigSettings(conf, engine, logger, opts.Settings, analytics.TriggerSourceInitialize, resolver)
+	scanAgg := di.ScanStateAggregator()
+	processConfigSettings(conf, engine, logger, opts.Settings, analytics.TriggerSourceInitialize, resolver, scanAgg)
 	// folder
-	processFolderConfigs(conf, engine, logger, opts.FolderConfigs, analytics.TriggerSourceInitialize, resolver)
+	processFolderConfigs(conf, engine, logger, opts.FolderConfigs, analytics.TriggerSourceInitialize, resolver, scanAgg)
 }
 
 // UpdateSettings processes settings from workspace/didChangeConfiguration.
@@ -208,8 +210,9 @@ func UpdateSettings(conf configuration.Configuration, engine workflow.Engine, lo
 		}
 	}
 
-	processConfigSettings(conf, engine, logger, settings, triggerSource, configResolver)
-	processFolderConfigs(conf, engine, logger, folderConfigs, triggerSource, configResolver)
+	scanAgg := di.ScanStateAggregator()
+	processConfigSettings(conf, engine, logger, settings, triggerSource, configResolver, scanAgg)
+	processFolderConfigs(conf, engine, logger, folderConfigs, triggerSource, configResolver, scanAgg)
 
 	if ws != nil {
 		for _, folder := range ws.Folders() {
@@ -274,7 +277,7 @@ func validateLockedMachineFields(settings map[string]*types.ConfigSetting, confi
 
 // processConfigSettings writes incoming settings to configuration and applies side effects.
 // This replaces the old writeSettings + update* functions.
-func processConfigSettings(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
+func processConfigSettings(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface, scanAgg scanstates.Aggregator) {
 	conf.ClearCache()
 
 	if len(settings) == 0 {
@@ -301,7 +304,7 @@ func processConfigSettings(conf configuration.Configuration, engine workflow.Eng
 	applyIssueViewOptions(conf, engine, logger, settings, triggerSource, configResolver)
 	applyDeltaFindings(conf, engine, logger, settings, triggerSource, configResolver)
 	applyAutoScan(conf, settings)
-	applyOrganization(conf, engine, logger, settings, triggerSource, configResolver)
+	applyOrganization(conf, engine, logger, settings, triggerSource, configResolver, scanAgg)
 	applyCliConfig(conf, settings)
 	applyEnvironment(conf, logger, settings)
 	applyCliBaseDownloadURL(conf, engine, logger, settings, triggerSource, configResolver)
@@ -348,7 +351,7 @@ func hasFilterChangesInLspConfig(lspConfig *types.LspFolderConfig) bool {
 }
 
 // processFolderConfigs handles the folder configuration portion of incoming settings.
-func processFolderConfigs(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, folderConfigs []types.LspFolderConfig, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
+func processFolderConfigs(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, folderConfigs []types.LspFolderConfig, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface, scanAgg scanstates.Aggregator) {
 	notifier := di.Notifier()
 	incomingMap := buildIncomingLspConfigMap(folderConfigs)
 	allPaths := gatherAllFolderPathsFromLspConfigs(incomingMap, config.GetWorkspace(conf))
@@ -362,9 +365,13 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 	var processedConfigs []types.FolderConfig
 	var changedConfigs []*types.FolderConfig
 	filterChanged := false
+	var orgChangedFolderPaths []types.FilePath
 
 	for path := range allPaths {
-		folderConfig, oldSnapshot, newSnapshot, configChanged := processSingleLspFolderConfig(conf, engine, logger, path, incomingMap, notifier)
+		folderConfig, oldSnapshot, newSnapshot, configChanged, orgSettingsChanged := processSingleLspFolderConfig(conf, engine, logger, path, incomingMap, notifier)
+		if orgSettingsChanged {
+			orgChangedFolderPaths = append(orgChangedFolderPaths, path)
+		}
 
 		if configChanged {
 			changedConfigs = append(changedConfigs, &folderConfig)
@@ -391,6 +398,10 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 	// Trigger diagnostics republishing if filter changes detected
 	if filterChanged {
 		sendDiagnosticsForNewSettings(conf, logger)
+	}
+
+	if conf.GetBool(types.SettingIsLspInitialized) && len(orgChangedFolderPaths) > 0 {
+		resetSummaryPanelForOrgChange(scanAgg, orgChangedFolderPaths)
 	}
 
 	sendFolderConfigUpdateIfNeeded(conf, engine, logger, notifier, processedConfigs, len(changedConfigs) > 0, triggerSource, configResolver)
@@ -706,7 +717,7 @@ func applyAutoScan(conf configuration.Configuration, settings map[string]*types.
 	types.SetGlobalDeferredFolderScope(conf, types.SettingScanAutomatic, autoScan)
 }
 
-func applyOrganization(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
+func applyOrganization(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface, scanAgg scanstates.Aggregator) {
 	v, ok := settingStr(settings, types.SettingOrganization)
 	if !ok {
 		return
@@ -717,25 +728,31 @@ func applyOrganization(conf configuration.Configuration, engine workflow.Engine,
 	newOrgId := types.GetGlobalOrganization(conf)
 	if oldOrgId != newOrgId && conf.GetBool(types.SettingIsLspInitialized) {
 		analytics.SendConfigChangedAnalytics(conf, engine, logger, configOrganization, oldOrgId, newOrgId, triggerSource, configResolver)
-		resetSummaryPanelForOrgChange(conf)
+		resetSummaryPanelForOrgChange(scanAgg, workspaceFolderPaths(conf))
 	}
 }
 
-// resetSummaryPanelForOrgChange clears the scan-state aggregator so the
+// resetSummaryPanelForOrgChange clears scan state for the given folders so the
 // Summary Panel returns to its initial "no scans yet" state. The aggregator's
-// Init re-emits a fresh snapshot, which IDE clients render as the empty
-// summary panel.
-func resetSummaryPanelForOrgChange(conf configuration.Configuration) {
+// Init re-emits a fresh snapshot, which IDE clients render as the empty summary panel.
+func resetSummaryPanelForOrgChange(scanAgg scanstates.Aggregator, folderPaths []types.FilePath) {
+	if scanAgg == nil || len(folderPaths) == 0 {
+		return
+	}
+	scanAgg.Init(folderPaths)
+}
+
+func workspaceFolderPaths(conf configuration.Configuration) []types.FilePath {
 	ws := config.GetWorkspace(conf)
 	if ws == nil {
-		return
+		return nil
 	}
 	folders := ws.Folders()
 	folderPaths := make([]types.FilePath, 0, len(folders))
 	for _, f := range folders {
 		folderPaths = append(folderPaths, f.Path())
 	}
-	di.ScanStateAggregator().Init(folderPaths)
+	return folderPaths
 }
 
 func applyCliConfig(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
@@ -984,7 +1001,7 @@ func gatherAllFolderPathsFromLspConfigs(incomingMap map[types.FilePath]types.Lsp
 // It loads the existing FolderConfig (unenriched), applies the LspFolderConfig updates, and returns
 // the processed config without persisting. The caller is responsible for batch-persisting all changes.
 // Returns: (processedConfig, oldSnapshot, newSnapshot, configChanged)
-func processSingleLspFolderConfig(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path types.FilePath, incomingMap map[types.FilePath]types.LspFolderConfig, notifier notification.Notifier) (types.FolderConfig, types.FolderConfigSnapshot, types.FolderConfigSnapshot, bool) {
+func processSingleLspFolderConfig(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path types.FilePath, incomingMap map[types.FilePath]types.LspFolderConfig, notifier notification.Notifier) (types.FolderConfig, types.FolderConfigSnapshot, types.FolderConfigSnapshot, bool, bool) {
 	subLogger := logger.With().Str("method", "processSingleLspFolderConfig").Str("path", string(path)).Logger()
 	resolver := di.ConfigResolver()
 	fc := config.GetUnenrichedFolderConfigFromEngine(engine, resolver, path, logger)
@@ -1006,13 +1023,13 @@ func processSingleLspFolderConfig(conf configuration.Configuration, engine workf
 		applyChanged = fc.ApplyLspUpdate(&incoming)
 	}
 
-	updateFolderOrgIfNeeded(conf, engine, logger, fc, fc, oldSnapshot, notifier)
+	orgSettingsChanged := updateFolderOrgIfNeeded(conf, engine, logger, fc, fc, oldSnapshot, notifier)
 	di.FeatureFlagService().PopulateFolderConfig(fc)
 
 	newSnapshot := types.ReadFolderConfigSnapshot(conf, normalizedPath)
 	configChanged := applyChanged
 
-	return *fc, oldSnapshot, newSnapshot, configChanged
+	return *fc, oldSnapshot, newSnapshot, configChanged, orgSettingsChanged
 }
 
 // validateLockedFields checks if any fields in the incoming LspFolderConfig are locked by LDX-Sync.
@@ -1091,7 +1108,7 @@ func temporarilyApplyNewOrgForValidation(conf configuration.Configuration, folde
 	}
 }
 
-func updateFolderOrgIfNeeded(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, fc *types.FolderConfig, folderConfig *types.FolderConfig, oldSnapshot types.FolderConfigSnapshot, notifier notification.Notifier) {
+func updateFolderOrgIfNeeded(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, fc *types.FolderConfig, folderConfig *types.FolderConfig, oldSnapshot types.FolderConfigSnapshot, notifier notification.Notifier) bool {
 	orgSettingsChanged := fc != nil && !folderConfigsOrgSettingsEqual(oldSnapshot, *folderConfig)
 
 	if orgSettingsChanged {
@@ -1101,11 +1118,8 @@ func updateFolderOrgIfNeeded(conf configuration.Configuration, engine workflow.E
 		if folder != nil {
 			di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, []types.Folder{folder}, notifier)
 		}
-		if conf.GetBool(types.SettingIsLspInitialized) {
-			// orgSettingsChanged matches folderConfigsOrgSettingsEqual (PreferredOrg, OrgSetByUser, AutoDeterminedOrg).
-			resetSummaryPanelForOrgChange(conf)
-		}
 	}
+	return orgSettingsChanged
 }
 
 func handleFolderCacheClearing(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path types.FilePath, oldSnapshot, newSnapshot types.FolderConfigSnapshot, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
