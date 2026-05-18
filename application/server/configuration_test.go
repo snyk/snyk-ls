@@ -18,10 +18,12 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -33,6 +35,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/oauth2"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
@@ -41,6 +44,7 @@ import (
 	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
+	storage2 "github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/storedconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -493,6 +497,9 @@ func initTestRepo(t *testing.T, tempDir string) error {
 
 func Test_UpdateSettings_BlankOrganizationResetsToDefault_Integration(t *testing.T) {
 	c := testutil.IntegTest(t)
+	if c.Token() == "" {
+		t.Skip("SNYK_TOKEN is required to resolve the user's preferred default org via /rest/self")
+	}
 
 	// Set to a specific org first
 	initialOrgId := "00000000-0000-0000-0000-000000000001"
@@ -514,6 +521,9 @@ func Test_UpdateSettings_BlankOrganizationResetsToDefault_Integration(t *testing
 
 func Test_UpdateSettings_WhitespaceOrganizationResetsToDefault_Integration(t *testing.T) {
 	c := testutil.IntegTest(t)
+	if c.Token() == "" {
+		t.Skip("SNYK_TOKEN is required to resolve the user's preferred default org via /rest/self")
+	}
 
 	// Set to a specific org first
 	initialOrgId := "00000000-0000-0000-0000-000000000001"
@@ -848,6 +858,73 @@ func Test_updateFolderConfig_HandlesNilStoredConfig(t *testing.T) {
 	// Should not panic and should handle nil gracefully
 	updateFolderConfig(c, settings, logger, analytics.TriggerSourceTest)
 	// If we get here without panic, the nil check worked
+}
+
+// Test_InitializeSettings_PreservesRefreshedOAuthTokenWhenInitializeSendsStaleToken
+// reproduces the IDE-1900 scenario end-to-end against InitializeSettings: a fresh
+// OAuth token reaches the auth service first (e.g. via GAF refresh), then the IDE
+// sends a stale token through InitializationOptions. The stale token must NOT
+// overwrite the fresh one in memory and must NOT generate an IDE notification.
+func Test_InitializeSettings_PreservesRefreshedOAuthTokenWhenInitializeSendsStaleToken(t *testing.T) {
+	c := testutil.UnitTest(t)
+	di.TestInit(t)
+	c.SetAuthenticationMethod(types.OAuthAuthentication)
+
+	// ConfigureProviders during updateAuthenticationMethod calls Default() which
+	// registers a storage callback, so storage must be in place.
+	storageWithCallbacks, err := storage2.NewStorageWithCallbacks(storage2.WithStorageFile(filepath.Join(t.TempDir(), "testStorage")))
+	require.NoError(t, err)
+	c.SetStorage(storageWithCallbacks)
+
+	freshExpiry := time.Now().Add(2 * time.Hour)
+	staleExpiry := time.Now().Add(1 * time.Hour)
+	freshTokenBytes, err := json.Marshal(oauth2.Token{
+		AccessToken:  "fresh-access",
+		RefreshToken: "fresh-refresh",
+		TokenType:    "Bearer",
+		Expiry:       freshExpiry,
+	})
+	require.NoError(t, err)
+	freshToken := string(freshTokenBytes)
+
+	staleTokenBytes, err := json.Marshal(oauth2.Token{
+		AccessToken:  "stale-access",
+		RefreshToken: "stale-refresh",
+		TokenType:    "Bearer",
+		Expiry:       staleExpiry,
+	})
+	require.NoError(t, err)
+	staleToken := string(staleTokenBytes)
+
+	var authNotificationsMu sync.Mutex
+	var authNotifications []types.AuthenticationParams
+	di.Notifier().CreateListener(func(params any) {
+		if authParams, ok := params.(types.AuthenticationParams); ok {
+			authNotificationsMu.Lock()
+			defer authNotificationsMu.Unlock()
+			authNotifications = append(authNotifications, authParams)
+		}
+	})
+	t.Cleanup(func() { di.Notifier().DisposeListener() })
+
+	// Simulate the fresh token reaching the auth service first (e.g. via the OAuth
+	// storage bridge after a GAF refresh).
+	di.AuthenticationService().UpdateCredentials(freshToken, true, false)
+
+	// Now simulate the IDE sending a stale token via InitializationOptions.
+	InitializeSettings(c, types.Settings{
+		Token:                staleToken,
+		AuthenticationMethod: types.OAuthAuthentication,
+	})
+
+	assert.Equal(t, freshToken, c.Token(), "stale OAuth token from init MUST NOT overwrite the fresher in-memory token")
+
+	authNotificationsMu.Lock()
+	defer authNotificationsMu.Unlock()
+	require.NotEmpty(t, authNotifications, "fresh token UpdateCredentials should have produced at least one notification")
+	for _, params := range authNotifications {
+		assert.NotEqual(t, staleToken, params.Token, "no IDE notification should carry the stale token")
+	}
 }
 
 func Test_InitializeSettings(t *testing.T) {

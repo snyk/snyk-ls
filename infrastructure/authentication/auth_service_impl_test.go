@@ -278,6 +278,42 @@ func Test_UpdateCredentials(t *testing.T) {
 		service.UpdateCredentials(token, false, true)
 		assert.Empty(t, mockNotifier.SentMessages())
 	})
+
+	t.Run("Rejected stale OAuth token does not send notification", func(t *testing.T) {
+		c := testutil.UnitTest(t)
+		c.SetAuthenticationMethod(types.OAuthAuthentication)
+		mockNotifier := notification.NewMockNotifier()
+		service := NewAuthenticationService(c, nil, error_reporting.NewTestErrorReporter(), mockNotifier)
+
+		freshTokenBytes, err := json.Marshal(oauth2.Token{
+			AccessToken:  "fresh-access",
+			RefreshToken: "fresh-refresh",
+			Expiry:       time.Now().Add(2 * time.Hour),
+		})
+		require.NoError(t, err)
+		freshToken := string(freshTokenBytes)
+		service.UpdateCredentials(freshToken, false, false)
+
+		// Drain notifications from the fresh-token write (should be none as
+		// sendNotification=false, but be defensive).
+		_ = mockNotifier.SentMessages()
+
+		// Reset notifier capture so the second call's notification (if any)
+		// is observable in isolation.
+		freshNotifierCount := len(mockNotifier.SentMessages())
+
+		staleTokenBytes, err := json.Marshal(oauth2.Token{
+			AccessToken:  "stale-access",
+			RefreshToken: "stale-refresh",
+			Expiry:       time.Now().Add(time.Hour),
+		})
+		require.NoError(t, err)
+		service.UpdateCredentials(string(staleTokenBytes), true, false)
+
+		assert.Equal(t, freshToken, c.Token(), "stale OAuth token must NOT overwrite the in-memory token")
+		assert.Equal(t, freshNotifierCount, len(mockNotifier.SentMessages()),
+			"updateCredentials must NOT send a notification when SetToken rejected the stale OAuth token")
+	})
 }
 
 func Test_Authenticate(t *testing.T) {
@@ -618,6 +654,32 @@ func TestGetApiUrl(t *testing.T) {
 			result := getPrioritizedApiUrl(tt.customUrl, tt.engineUrl)
 			assert.Equal(t, tt.expectedResult, result, "getApiUrl(%v, %v) = %v; want %v",
 				tt.customUrl, tt.engineUrl, result, tt.expectedResult)
+		})
+	}
+}
+
+// Test_isPermanentOAuthRefreshError verifies that OAuth permanent-failure error
+// strings (invalid_grant, token_inactive, "authentication failed") are detected
+// even when wrapped or in mixed case.
+func Test_isPermanentOAuthRefreshError(t *testing.T) {
+	cases := []struct {
+		name string
+		msg  string
+		want bool
+	}{
+		{"oauth2 invalid_grant", "oauth2: cannot fetch token: 400 Bad Request: invalid_grant", true},
+		{"token_inactive", "oauth2 token refresh failed: token_inactive", true},
+		{"authentication failed (lowercase)", "authentication failed", true},
+		{"AUTHENTICATION FAILED uppercase", "AUTHENTICATION FAILED", true},
+		{"wrapped in url.Error context", `Get "https://api.snyk.io/rest/self": Post "https://api.snyk.io/oauth2/token": oauth2: cannot fetch token: 400: invalid_grant`, true},
+		{"transient network error - no logout", "dial tcp: connection refused", false},
+		{"random error - no logout", "something unexpected happened", false},
+		{"empty string - no logout", "", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, isPermanentOAuthRefreshError(tc.msg))
 		})
 	}
 }

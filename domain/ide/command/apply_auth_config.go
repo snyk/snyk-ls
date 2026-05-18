@@ -30,8 +30,13 @@ import (
 // logs out and clears workspace. Returns true if endpoints changed.
 // Logout internally calls configureProviders, so no explicit ConfigureProviders call is needed.
 func ApplyEndpointChange(ctx context.Context, c *config.Config, authService authentication.AuthenticationService, endpoint string) bool {
+	oldEndpoint := c.Endpoint()
 	changed := c.UpdateApiEndpoints(endpoint)
 	if changed && c.IsLSPInitialized() {
+		c.Logger().Info().
+			Str("old_endpoint", oldEndpoint).
+			Str("new_endpoint", endpoint).
+			Msg("auth endpoint changed after LSP initialization; clearing credentials")
 		authService.Logout(ctx)
 		c.Workspace().Clear()
 	}
@@ -51,6 +56,10 @@ func ApplyAuthMethodChange(ctx context.Context, c *config.Config, authService au
 	}
 
 	previousMethod := c.AuthenticationMethod()
+	c.Logger().Info().
+		Str("old_auth_method", string(previousMethod)).
+		Str("new_auth_method", string(authMethod)).
+		Msg("auth method change requested")
 	c.SetAuthenticationMethod(authMethod)
 	authService.ConfigureProviders(c)
 

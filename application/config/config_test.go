@@ -392,12 +392,79 @@ func TestConfig_shouldUpdateOAuth2Token(t *testing.T) {
 
 		assert.True(t, c.shouldUpdateOAuth2Token(string(oldTokenBytes), string(newTokenBytes)))
 	})
+	t.Run("same expiry rotated refresh token -> true", func(t *testing.T) {
+		oldToken := token
+		oldToken.AccessToken = "old-access"
+		oldToken.RefreshToken = "old-refresh"
+		oldTokenBytes, err := json.Marshal(oldToken)
+		require.NoError(t, err)
+
+		rotatedToken := token
+		rotatedToken.AccessToken = "new-access"
+		rotatedToken.RefreshToken = "new-refresh"
+		rotatedTokenBytes, err := json.Marshal(rotatedToken)
+		require.NoError(t, err)
+
+		assert.True(t, c.shouldUpdateOAuth2Token(string(oldTokenBytes), string(rotatedTokenBytes)))
+	})
 	t.Run("old token not an oauth token, but new one is -> true", func(t *testing.T) {
 		assert.True(t, c.shouldUpdateOAuth2Token(uuid.NewString(), string(newTokenBytes)))
 	})
 	t.Run("new token not an oauth token -> false", func(t *testing.T) {
 		assert.False(t, c.shouldUpdateOAuth2Token(string(newTokenBytes), uuid.NewString()))
 	})
+}
+
+// Test_SetToken_RejectsStaleOAuth_DoesNotNotify verifies that when SetToken is
+// called with a stale OAuth token (older expiry than current), the in-memory
+// c.token is NOT overwritten and token-change channel listeners are NOT notified
+// with the stale value.
+func Test_SetToken_RejectsStaleOAuth_DoesNotNotify(t *testing.T) {
+	c := New(WithBinarySearchPaths([]string{}))
+	require.NoError(t, c.WaitForDefaultEnv(t.Context()))
+	c.SetAuthenticationMethod(types.OAuthAuthentication)
+
+	freshTokenBytes, err := json.Marshal(oauth2.Token{
+		AccessToken:  "fresh-access",
+		RefreshToken: "fresh-refresh",
+		Expiry:       time.Now().Add(2 * time.Hour),
+	})
+	require.NoError(t, err)
+	freshToken := string(freshTokenBytes)
+
+	// Register a channel before the fresh-token write so we can confirm the write
+	// fired a notification, then consume it to clear the slate.
+	freshChannel := c.TokenChangesChannel()
+	c.SetToken(freshToken)
+	select {
+	case <-freshChannel:
+		// expected: fresh token notification fired
+	case <-time.After(2 * time.Second):
+		t.Fatal("fresh token write did not fire channel notification")
+	}
+
+	require.Equal(t, freshToken, c.Token(), "fresh token should be the in-memory token")
+
+	// Register a new channel before attempting the stale write.
+	staleChannel := c.TokenChangesChannel()
+
+	staleTokenBytes, err := json.Marshal(oauth2.Token{
+		AccessToken:  "stale-access",
+		RefreshToken: "stale-refresh",
+		Expiry:       time.Now().Add(time.Hour),
+	})
+	require.NoError(t, err)
+
+	c.SetToken(string(staleTokenBytes))
+
+	assert.Equal(t, freshToken, c.Token(), "stale OAuth token must NOT overwrite in-memory token")
+
+	select {
+	case newToken := <-staleChannel:
+		assert.Failf(t, "channel notified with stale token", "received: %v", newToken)
+	case <-time.After(100 * time.Millisecond):
+		// pass: no notification within timeout
+	}
 }
 
 func TestConfig_AuthenticationMethodMatchesToken(t *testing.T) {

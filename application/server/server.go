@@ -48,6 +48,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
@@ -235,6 +236,10 @@ func initializeHandler(c *config.Config, srv *jrpc2.Server) handler.Func {
 		}
 
 		c.SetStorage(storage)
+
+		// Register the OAuth storage bridge before any pre-initialization API call so a
+		// rotated refresh token is reliably propagated to the IDE.
+		authentication.RegisterOAuthStorageBridge(storage, di.AuthenticationService())
 
 		addWorkspaceFolders(c, params)
 		di.LdxSyncService().RefreshConfigFromLdxSync(ctx, c, c.Workspace().Folders(), nil)

@@ -60,4 +60,11 @@ type AuthenticationService interface {
 
 	// AuthURL retrieves the authentication URL
 	AuthURL(ctx context.Context) string
+
+	// queueCredentialUpdate queues a credential update for serialized processing by the
+	// internal worker. Used by the OAuth storage bridge to prevent rapid-rotation races.
+	queueCredentialUpdate(token string, sendNotification bool, updateApiUrl bool)
+
+	// Shutdown cleans up resources such as the credential update worker goroutine.
+	Shutdown()
 }

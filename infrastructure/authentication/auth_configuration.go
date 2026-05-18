@@ -63,11 +63,7 @@ func unsetOauthTokenConfig(c *config.Config) {
 func Default(c *config.Config, authenticationService AuthenticationService) AuthenticationProvider {
 	conf := c.Engine().GetConfiguration()
 	conf.Unset(configuration.AUTHENTICATION_TOKEN)
-	credentialsUpdateCallback := func(_ string, value any) {
-		// an empty struct marks an empty token, so we stay with empty string if the cast fails
-		newToken, _ := value.(string)
-		go authenticationService.updateCredentials(newToken, true, false)
-	}
+	credentialsUpdateCallback := newOAuthStorageBridgeCallback(authenticationService)
 
 	openBrowserFunc := func(url string) {
 		authenticationService.provider().setAuthUrl(url)
@@ -123,4 +119,29 @@ func NewOAuthProvider(
 func NewPatProvider(c *config.Config, openBrowserFunc func(string)) *PatAuthenticationProvider {
 	conf := c.Engine().GetConfiguration()
 	return newPatAuthenticationProvider(conf, openBrowserFunc, c.Logger())
+}
+
+// RegisterOAuthStorageBridge attaches a callback to the OAuth token storage key
+// so any write — including rotations performed by GAF during pre-initialization
+// API calls — is routed through the authentication service. This is the same
+// callback that Default() installs via NewOAuthProvider; the bridge exists so it
+// can be wired up in initializeHandler before the OAuth provider has been
+// constructed, ensuring an early GAF-driven refresh is not lost.
+func RegisterOAuthStorageBridge(s storage.StorageWithCallbacks, authenticationService AuthenticationService) {
+	if s == nil || authenticationService == nil {
+		return
+	}
+	s.RegisterCallback(auth.CONFIG_KEY_OAUTH_TOKEN, newOAuthStorageBridgeCallback(authenticationService))
+}
+
+// newOAuthStorageBridgeCallback is the single source of truth for the storage
+// callback that propagates a written/rotated OAuth token to the authentication
+// service. It queues the update for sequential processing to prevent race
+// conditions where older tokens overwrite newer ones during rapid rotations.
+func newOAuthStorageBridgeCallback(authenticationService AuthenticationService) storage.StorageCallbackFunc {
+	return func(_ string, value any) {
+		// an empty struct marks an empty token, so we stay with empty string if the cast fails
+		newToken, _ := value.(string)
+		authenticationService.queueCredentialUpdate(newToken, true, false)
+	}
 }

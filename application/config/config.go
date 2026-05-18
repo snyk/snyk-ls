@@ -705,21 +705,31 @@ func (c *Config) SetToken(newTokenString string) {
 
 	newOAuthToken, oAuthErr := getAsOauthToken(newTokenString, c.logger)
 
-	if c.authenticationMethod == types.OAuthAuthentication && oAuthErr == nil &&
-		c.shouldUpdateOAuth2Token(oldTokenString, newTokenString) {
-		c.logger.Debug().Msg("put oauth2 token into GAF")
-		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
-		conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newTokenString)
+	// applied is the token that was actually written to GAF (or already there).
+	// If we skip the write below because the incoming token is stale, applied
+	// stays equal to the existing on-disk/in-memory token so the rest of this
+	// function does not overwrite c.token or notify listeners with the stale value.
+	applied := newTokenString
+
+	if c.authenticationMethod == types.OAuthAuthentication && oAuthErr == nil {
+		if c.shouldUpdateOAuth2Token(oldTokenString, newTokenString) {
+			c.logger.Debug().Msg("put oauth2 token into GAF")
+			conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, true)
+			conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, newTokenString)
+		} else {
+			c.logger.Debug().Msg("rejected stale oauth2 token; keeping existing credentials")
+			applied = oldTokenString
+		}
 	} else if conf.GetString(configuration.AUTHENTICATION_TOKEN) != newTokenString {
 		c.logger.Debug().Msg("put api token or pat into GAF")
 		conf.Set(configuration.FF_OAUTH_AUTH_FLOW_ENABLED, false)
 		conf.Set(configuration.AUTHENTICATION_TOKEN, newTokenString) // We use the same config key for PATs and API Tokens.
 	}
 
-	// ensure scrubbing of new newTokenString
+	// ensure scrubbing of the token that was actually applied
 	if w, ok := c.scrubbingWriter.(frameworkLogging.ScrubbingLogWriter); ok {
-		if newTokenString != "" {
-			w.AddTerm(newTokenString, 0)
+		if applied != "" {
+			w.AddTerm(applied, 0)
 			if newOAuthToken != nil && newOAuthToken.AccessToken != "" {
 				w.AddTerm(newOAuthToken.AccessToken, 0)
 				w.AddTerm(newOAuthToken.RefreshToken, 0)
@@ -727,8 +737,8 @@ func (c *Config) SetToken(newTokenString string) {
 		}
 	}
 
-	c.token = newTokenString
-	c.notifyTokenChannelListeners(newTokenString, oldTokenString)
+	c.token = applied
+	c.notifyTokenChannelListeners(applied, oldTokenString)
 }
 
 func (c *Config) notifyTokenChannelListeners(newTokenString string, oldTokenString string) {
@@ -762,9 +772,9 @@ func (c *Config) shouldUpdateOAuth2Token(oldToken string, newToken string) bool 
 	}
 
 	isNewToken := oldToken != newToken
-	tokenExpiryIsNewer := oldOauthToken.Expiry.Before(newOauthToken.Expiry)
+	tokenExpiryIsSameOrNewer := !newOauthToken.Expiry.Before(oldOauthToken.Expiry)
 
-	return isNewToken && tokenExpiryIsNewer
+	return isNewToken && tokenExpiryIsSameOrNewer
 }
 
 func (c *Config) SetFormat(format string) {

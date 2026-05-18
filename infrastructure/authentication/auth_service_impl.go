@@ -44,6 +44,15 @@ const ExpirationMsg = "Your authentication failed due to token expiration. Pleas
 const InvalidCredsMessage = "Your authentication credentials cannot be validated. Automatically clearing credentials. You need to re-authenticate to use Snyk."
 const MethodChangedMessage = "Your authentication method has changed. Please re-authenticate to continue using Snyk."
 
+// credentialUpdate represents a request to update credentials with synchronization.
+// Used by the OAuth storage bridge to serialize updates and prevent race conditions
+// where older tokens overwrite newer ones during rapid rotations.
+type credentialUpdate struct {
+	token            string
+	sendNotification bool
+	updateApiUrl     bool
+}
+
 type AuthenticationServiceImpl struct {
 	authProvider  AuthenticationProvider
 	errorReporter error_reporting.ErrorReporter
@@ -56,16 +65,68 @@ type AuthenticationServiceImpl struct {
 	m                           sync.RWMutex
 	previousAuthCtxCancelFunc   context.CancelFunc
 	previousAuthCtxCancelFuncMu sync.Mutex
+	// credentialUpdateChan serializes credential updates from the OAuth storage bridge
+	// so concurrent rotations cannot apply tokens out-of-order.
+	credentialUpdateChan chan credentialUpdate
+	// credentialUpdateCancel cancels the credential update worker on Shutdown.
+	credentialUpdateCancel context.CancelFunc
 }
 
 func NewAuthenticationService(c *config.Config, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier) AuthenticationService {
 	cache := imcache.New[string, bool]()
-	return &AuthenticationServiceImpl{
-		authProvider:  authProviders,
-		errorReporter: errorReporter,
-		notifier:      notifier,
-		c:             c,
-		authCache:     cache,
+	updateChan := make(chan credentialUpdate, 100)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	service := &AuthenticationServiceImpl{
+		authProvider:           authProviders,
+		errorReporter:          errorReporter,
+		notifier:               notifier,
+		c:                      c,
+		authCache:              cache,
+		credentialUpdateChan:   updateChan,
+		credentialUpdateCancel: cancel,
+	}
+
+	// Start worker goroutine to process credential updates sequentially.
+	go service.credentialUpdateWorker(ctx)
+
+	return service
+}
+
+// credentialUpdateWorker processes credential updates sequentially from the channel.
+// This prevents race conditions where older tokens overwrite newer ones during rapid
+// rotations from the OAuth storage bridge.
+func (a *AuthenticationServiceImpl) credentialUpdateWorker(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case update := <-a.credentialUpdateChan:
+			a.UpdateCredentials(update.token, update.sendNotification, update.updateApiUrl)
+		}
+	}
+}
+
+// queueCredentialUpdate queues a credential update for sequential processing by the
+// worker goroutine. Used by the OAuth storage bridge callback to serialize updates.
+func (a *AuthenticationServiceImpl) queueCredentialUpdate(token string, sendNotification bool, updateApiUrl bool) {
+	select {
+	case a.credentialUpdateChan <- credentialUpdate{
+		token:            token,
+		sendNotification: sendNotification,
+		updateApiUrl:     updateApiUrl,
+	}:
+	default:
+		a.c.Logger().Warn().
+			Str("method", "AuthenticationService.queueCredentialUpdate").
+			Msg("credential update channel full, dropping update")
+	}
+}
+
+// Shutdown cleans up the credential update worker goroutine. Safe to call multiple times.
+func (a *AuthenticationServiceImpl) Shutdown() {
+	if a.credentialUpdateCancel != nil {
+		a.credentialUpdateCancel()
 	}
 }
 
@@ -202,6 +263,15 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		// checks are performed - e.g. in IsAuthenticated or Authenticate which call the API to check for real
 		a.authCache.Remove(oldToken)
 		a.c.SetToken(newToken)
+		// SetToken silently rejects stale OAuth tokens (older expiry than current).
+		// If that happened, do not fire token-change listeners or send notifications
+		// with the stale value the caller passed in.
+		if a.c.Token() != newToken {
+			a.c.Logger().Debug().
+				Str("method", "AuthenticationService.updateCredentials").
+				Msg("auth credentials update skipped because token was not applied")
+			return
+		}
 	}
 
 	if sendNotification {
@@ -351,6 +421,13 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 	// string matching where we don't have explicit errors
 	default:
 		errMsg := err.Error()
+		// "authentication failed", "invalid_grant", and "token_inactive" only appear when
+		// the OAuth server explicitly rejected the credentials (e.g. invalid_grant on
+		// token refresh). This is a permanent failure and must trigger logout even when
+		// wrapped inside a url.Error transport chain.
+		if isPermanentOAuthRefreshError(errMsg) {
+			return true
+		}
 		switch {
 		case strings.Contains(errMsg, "oauth2"):
 			return true
@@ -368,6 +445,13 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 			return false
 		}
 	}
+}
+
+func isPermanentOAuthRefreshError(errMsg string) bool {
+	lower := strings.ToLower(errMsg)
+	return strings.Contains(lower, "authentication failed") ||
+		strings.Contains(lower, "invalid_grant") ||
+		strings.Contains(lower, "token_inactive")
 }
 
 func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLegacyToken bool, invalidToken oauth2.Token) {
