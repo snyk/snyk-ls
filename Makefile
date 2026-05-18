@@ -109,6 +109,7 @@ test-smoke-serial: _smoke-shard-1 _smoke-shard-2 _smoke-shard-3 _smoke-shard-4
 	@for s in test-smoke test-smoke-serial; do $(MAKE) --no-print-directory _save-test-hash STAGE=$$s; done
 
 ## test-smoke-parallel: Run all 4 smoke shards concurrently (4 threads, output buffered per shard).
+## Records test-smoke-shard-N for each shard that passes (even if another shard fails).
 .PHONY: test-smoke-parallel
 test-smoke-parallel:
 	@mkdir -p $(BUILD_DIR); \
@@ -117,10 +118,10 @@ test-smoke-parallel:
 	SMOKE_TESTS=1 SMOKE_SHARD_3=1 go test $(TIMEOUT) -failfast ./... > $(BUILD_DIR)/smoke-shard-3.log 2>&1 & pid3=$$!; \
 	SMOKE_TESTS=1 SMOKE_SHARD_4=1 go test $(TIMEOUT) -failfast ./... > $(BUILD_DIR)/smoke-shard-4.log 2>&1 & pid4=$$!; \
 	failed=0; \
-	wait $$pid1 || failed=1; \
-	wait $$pid2 || failed=1; \
-	wait $$pid3 || failed=1; \
-	wait $$pid4 || failed=1; \
+	wait $$pid1 && $(MAKE) --no-print-directory _save-test-hash STAGE=test-smoke-shard-1 || failed=1; \
+	wait $$pid2 && $(MAKE) --no-print-directory _save-test-hash STAGE=test-smoke-shard-2 || failed=1; \
+	wait $$pid3 && $(MAKE) --no-print-directory _save-test-hash STAGE=test-smoke-shard-3 || failed=1; \
+	wait $$pid4 && $(MAKE) --no-print-directory _save-test-hash STAGE=test-smoke-shard-4 || failed=1; \
 	for i in 1 2 3 4; do echo "=== Shard $$i ==="; cat $(BUILD_DIR)/smoke-shard-$$i.log; done; \
 	exit $$failed
 	@for s in test-smoke test-smoke-parallel; do $(MAKE) --no-print-directory _save-test-hash STAGE=$$s; done
@@ -128,12 +129,16 @@ test-smoke-parallel:
 .PHONY: _smoke-shard-1 _smoke-shard-2 _smoke-shard-3 _smoke-shard-4
 _smoke-shard-1:
 	SMOKE_TESTS=1 SMOKE_SHARD_1=1 go test $(TIMEOUT) -failfast ./...
+	$(MAKE) --no-print-directory _save-test-hash STAGE=test-smoke-shard-1
 _smoke-shard-2:
 	SMOKE_TESTS=1 SMOKE_SHARD_2=1 go test $(TIMEOUT) -failfast ./...
+	$(MAKE) --no-print-directory _save-test-hash STAGE=test-smoke-shard-2
 _smoke-shard-3:
 	SMOKE_TESTS=1 SMOKE_SHARD_3=1 go test $(TIMEOUT) -failfast ./...
+	$(MAKE) --no-print-directory _save-test-hash STAGE=test-smoke-shard-3
 _smoke-shard-4:
 	SMOKE_TESTS=1 SMOKE_SHARD_4=1 go test $(TIMEOUT) -failfast ./...
+	$(MAKE) --no-print-directory _save-test-hash STAGE=test-smoke-shard-4
 
 ## test-all: Run all tests
 .PHONY: test-all
