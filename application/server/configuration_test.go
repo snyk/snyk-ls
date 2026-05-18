@@ -1532,6 +1532,58 @@ func Test_updateFolderConfig_SwitchFromManualToAutoOrg_BlanksPreferredOrg(t *tes
 	assert.Empty(t, updatedConfig.PreferredOrg(), "PreferredOrg should be blanked when switching to automatic mode")
 }
 
+func Test_updateFolderConfig_UserSetOrg_BlankedPreferredOrg_GlobalAlsoBlank_RevertToAutoOrg(t *testing.T) {
+	setup := setupFolderConfigTest(t)
+
+	// User had a specific org set; global org is blank (e.g. not configured)
+	setup.createStoredConfig("user-chosen-org", true)
+	config.SetOrganization(setup.engine.GetConfiguration(), "")
+
+	// User blanks the preferred org
+	folderConfigs := []types.LspFolderConfig{
+		{
+			FolderPath: setup.folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg: {Value: "", Changed: true},
+			},
+		},
+	}
+	UpdateSettings(setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(),
+		nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
+
+	updatedConfig := setup.getUpdatedConfig()
+	assert.False(t, updatedConfig.OrgSetByUser(),
+		"OrgSetByUser must revert to false when global org is also blank: auto-org should take over")
+	assert.Empty(t, updatedConfig.PreferredOrg(), "PreferredOrg should be empty after blanking")
+}
+
+func Test_updateFolderConfig_UserSetOrg_BlankedPreferredOrg_UsesGlobalOrg(t *testing.T) {
+	setup := setupFolderConfigTest(t)
+
+	// User previously set a specific org
+	setup.createStoredConfig("user-chosen-org", true)
+	// Store an auto-determined org to confirm it is NOT used after blanking
+	types.SetAutoDeterminedOrg(setup.engine.GetConfiguration(), setup.folderPath, "auto-determined-org")
+
+	// User blanks the preferred org (clears the field in config dialog)
+	folderConfigs := []types.LspFolderConfig{
+		{
+			FolderPath: setup.folderPath,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg: {Value: "", Changed: true},
+			},
+		},
+	}
+	UpdateSettings(setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(),
+		nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
+
+	updatedConfig := setup.getUpdatedConfig()
+	assert.True(t, updatedConfig.OrgSetByUser(),
+		"OrgSetByUser must remain true: user chose global org, not auto-org")
+	assert.Empty(t, updatedConfig.PreferredOrg(),
+		"PreferredOrg should be empty after blanking")
+}
+
 func Test_validateLockedFields_RestoresConfigAfterValidation(t *testing.T) {
 	setup := setupFolderConfigTest(t)
 	setup.createStoredConfig("org-a", true)

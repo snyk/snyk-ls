@@ -588,7 +588,14 @@ func (fc *FolderConfig) applyPreferredOrg(update *LspFolderConfig, handled map[s
 
 	keyPreferred := configresolver.UserFolderKey(fp, SettingPreferredOrg)
 	keyOrgSetByUser := configresolver.UserFolderKey(fp, SettingOrgSetByUser)
-	orgSetByUser := preferredOrg != ""
+	// Blanking preferredOrg means "use global org" (not auto-org), so preserve
+	// curOrgSetByUser — unless the global org is also blank, in which case revert
+	// to auto-org mode (orgSetByUser=false at all levels).
+	// Use GetGlobalString (UserGlobalKey path) to avoid triggering the defaultFunc
+	// for configuration.ORGANIZATION which may return a non-empty test/default value.
+	curOrgSetByUser := getBoolFromConfig(conf, fp, SettingOrgSetByUser)
+	globalOrg := GetGlobalString(conf, SettingOrganization)
+	orgSetByUser := preferredOrg != "" || (curOrgSetByUser && globalOrg != "")
 	conf.PersistInStorage(keyPreferred)
 	conf.PersistInStorage(keyOrgSetByUser)
 	conf.Set(keyPreferred, &configresolver.LocalConfigField{Value: preferredOrg, Changed: true})
