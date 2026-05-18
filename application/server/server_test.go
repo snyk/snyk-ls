@@ -907,11 +907,27 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 
 	// Register cleanup BEFORE the assert.Eventually call so it runs FIRST in
 	// LIFO order — before server shutdown — giving scans time to finish.
-	// On Windows, CLI subprocesses hold the temp dir open; we must wait for
-	// both the working-directory and reference-branch scans to reach a terminal
-	// state before t.TempDir cleanup tries to delete the directory.
+	// On Windows, CLI subprocesses hold the temp dir open until the subprocess
+	// exits; the terminal $/snyk.scan notification is emitted only after
+	// internalScan (and its subprocess) has returned, so the notification is a
+	// reliable proxy for "file handles released."
+	//
+	// OSS and IaC are both enabled by default; Snyk Code is disabled above.
+	// ScanFolder runs both product scanners in parallel, each emitting exactly
+	// one terminal (Success or ErrorStatus) notification. The reference-scan
+	// goroutine starts but processResults returns early (IsReferenceScan &&
+	// !SettingScanNetNew), so it emits no extra notification. We wait for
+	// terminal >= 2 to cover both products.
+	//
+	// We use the JSON-RPC notification stream rather than ScanStateAggregator:
+	// the aggregator is initialized during "initialize" (before the folder is
+	// added via sendFileSavedMessage), so the folder's state entries are never
+	// registered and allMatch returns true vacuously on an empty map.
 	t.Cleanup(func() {
-		_ = assert.Eventually(t, func() bool {
+		if t.Failed() {
+			return
+		}
+		require.Eventually(t, func() bool {
 			terminal := 0
 			for _, n := range jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan") {
 				var params types.SnykScanParams
