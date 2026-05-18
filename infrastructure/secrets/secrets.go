@@ -19,7 +19,6 @@ package secrets
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -154,7 +153,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 	secretsConfig.Set(configuration.INPUT_DIRECTORY, string(scanPath))
 	result, err := sc.c.Engine().InvokeWithConfig(workflow.NewWorkflowIdentifier("secrets.test"), secretsConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed secrets scan: %w", err)
+		return handleSecretsInvokeError(err, &logger)
 	}
 	if len(result) == 1 && result[0].GetPayload() != nil {
 		testApiRes := ufm.GetTestResultsFromWorkflowData(result[0])
