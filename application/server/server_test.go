@@ -913,20 +913,10 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 		time.Millisecond,
 	)
 
-	// Wait for the scan to reach a terminal state so CLI subprocesses exit and
-	// release file handles before t.TempDir cleanup runs (Windows file locking).
-	assert.Eventually(t, func() bool {
-		for _, n := range jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan") {
-			var params types.SnykScanParams
-			if err := n.UnmarshalParams(&params); err != nil {
-				continue
-			}
-			if params.Status == types.Success || params.Status == types.ErrorStatus {
-				return true
-			}
-		}
-		return false
-	}, 2*time.Minute, time.Millisecond)
+	// Wait for both working-directory and reference-branch scans to reach a
+	// terminal state so CLI subprocesses exit and release file handles before
+	// t.TempDir cleanup runs (Windows file locking).
+	waitForAllScansToComplete(t, di.ScanStateAggregator())
 }
 
 func Test_textDocumentDidOpenHandler_shouldNotPublishIfNotCached(t *testing.T) {
