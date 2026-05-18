@@ -37,6 +37,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
@@ -191,9 +192,12 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePat
 	deps[ctx2.DepFolderConfig] = workspaceFolderConfig
 	ctx = ctx2.NewContextWithDependencies(ctx, deps)
 
+	if !cliScanner.IsEnabledForFolder(workspaceFolderConfig) {
+		return nil, errors.New(utils.ErrSnykOssNotEnabledForFolder)
+	}
 	if !cliScanner.config.NonEmptyToken() {
-		logger.Info().Msg("not authenticated, not scanning")
-		return issues, err
+		logger.Info().Msg(utils.MsgNotAuthenticatedNoScan)
+		return nil, errors.New(utils.MsgNotAuthenticatedNoScan)
 	}
 	cliPathScan := cliScanner.isSupported(pathToScan)
 	if !cliPathScan {

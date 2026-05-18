@@ -236,6 +236,9 @@ func Test_Scan(t *testing.T) {
 
 	t.Run("Shouldn't run if Sast is disabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
+		// Enable Code on the config so the IsEnabledForFolder guard passes
+		// (added in IDE-2002); this subtest exercises the downstream SastEnabled check.
+		c.SetSnykCodeEnabled(true)
 		ctrl := gomock.NewController(t)
 		mockEngine := mocks.NewMockEngine(ctrl)
 		mockConfig := mocks.NewMockConfiguration(ctrl)
@@ -282,6 +285,9 @@ func Test_Scan(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			c := testutil.UnitTest(t)
+			// Enable Code on the config so the IsEnabledForFolder guard passes
+			// (added in IDE-2002; resolver=nil falls back to c.IsSnykCodeEnabled).
+			c.SetSnykCodeEnabled(true)
 			snykApiMock := &snyk_api.FakeApiClient{CodeEnabled: true}
 			ctrl := gomock.NewController(t)
 			mockEngine := mocks.NewMockEngine(ctrl)

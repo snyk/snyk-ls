@@ -20,9 +20,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	notification2 "github.com/snyk/snyk-ls/application/server/notification"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -84,6 +86,51 @@ func Test_SendMessage(t *testing.T) {
 			assert.Fail(t, "Scan message was not sent")
 		})
 	}
+}
+
+func Test_SendError_NotAuthenticated_SuppressesNotification(t *testing.T) {
+	c := testutil.UnitTest(t)
+	mockNotifier := notification.NewMockNotifier()
+	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier, nil)
+	folderPath := types.FilePath("/test/oss/folderPath")
+
+	scanNotifier.SendError(product.ProductOpenSource, folderPath, utils.MsgNotAuthenticatedNoScan)
+
+	requireMessageSent(t, mockNotifier)
+	for _, msg := range mockNotifier.SentMessages() {
+		scanParam := msg.(types.SnykScanParams)
+		assert.Equal(t, types.ErrorStatus, scanParam.Status)
+		assert.Equal(t, product.ProductOpenSource.ToProductCodename(), scanParam.Product)
+		assert.Equal(t, folderPath, scanParam.FolderPath)
+		require.NotNil(t, scanParam.PresentableError)
+		assert.False(t, scanParam.PresentableError.ShowNotification)
+		assert.Equal(t, "(not authenticated)", scanParam.PresentableError.TreeNodeSuffix)
+	}
+}
+
+func Test_SendError_ProductDisabledForFolder_SendsErrorStatus(t *testing.T) {
+	c := testutil.UnitTest(t)
+	mockNotifier := notification.NewMockNotifier()
+	scanNotifier, _ := notification2.NewScanNotifier(c, mockNotifier, nil)
+	folderPath := types.FilePath("/test/code/folderPath")
+
+	scanNotifier.SendError(product.ProductCode, folderPath, utils.ErrSnykCodeNotEnabledForFolder)
+
+	requireMessageSent(t, mockNotifier)
+	for _, msg := range mockNotifier.SentMessages() {
+		scanParam := msg.(types.SnykScanParams)
+		assert.Equal(t, types.ErrorStatus, scanParam.Status)
+		assert.Equal(t, product.ProductCode.ToProductCodename(), scanParam.Product)
+		assert.Equal(t, folderPath, scanParam.FolderPath)
+		require.NotNil(t, scanParam.PresentableError)
+		assert.False(t, scanParam.PresentableError.ShowNotification)
+		assert.Equal(t, "(disabled in workspace)", scanParam.PresentableError.TreeNodeSuffix)
+	}
+}
+
+func requireMessageSent(t *testing.T, notifier *notification.MockNotifier) {
+	t.Helper()
+	assert.NotEmpty(t, notifier.SentMessages(), "expected scan notification to be sent")
 }
 
 func Test_SendSuccess_SendsForAllEnabledProducts(t *testing.T) {

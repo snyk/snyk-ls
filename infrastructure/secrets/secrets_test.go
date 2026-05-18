@@ -31,8 +31,10 @@ import (
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -66,7 +68,12 @@ func createUFMWorkflowData(t *testing.T, findings []testapi.FindingData) workflo
 	)
 }
 
-func secretsEnabledFolderConfig(folderPath types.FilePath) *types.FolderConfig {
+// secretsEnabledFolderConfig sets up both the global Secrets enablement and the
+// per-folder SnykSecretsEnabled feature flag. Tests that construct the scanner
+// with a nil ConfigResolver need the global enablement so the Scanner's
+// IsEnabledForFolder guard (added in IDE-2002) does not short-circuit Scan.
+func secretsEnabledFolderConfig(c *config.Config, folderPath types.FilePath) *types.FolderConfig {
+	c.SetSnykSecretsEnabled(true)
 	return &types.FolderConfig{
 		FolderPath:   folderPath,
 		FeatureFlags: map[string]bool{featureflag.SnykSecretsEnabled: true},
@@ -94,7 +101,7 @@ func TestScanner_Scan(t *testing.T) {
 		workspaceFolder := types.FilePath(t.TempDir())
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), nil)
 
-		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(workspaceFolder))
+		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(c, workspaceFolder))
 
 		require.NoError(t, err)
 		require.Len(t, issues, 1)
@@ -120,7 +127,7 @@ func TestScanner_Scan(t *testing.T) {
 		workspaceFolder := types.FilePath(t.TempDir())
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), nil)
 
-		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(workspaceFolder))
+		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(c, workspaceFolder))
 
 		require.NoError(t, err)
 		require.Len(t, issues, 2)
@@ -143,7 +150,7 @@ func TestScanner_Scan(t *testing.T) {
 		workspaceFolder := types.FilePath(t.TempDir())
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), nil)
 
-		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(workspaceFolder))
+		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(c, workspaceFolder))
 
 		require.NoError(t, err)
 		require.Len(t, issues, 1)
@@ -156,7 +163,7 @@ func TestScanner_Scan(t *testing.T) {
 		assert.Equal(t, 1, totalCached)
 	})
 
-	t.Run("returns empty when no token", func(t *testing.T) {
+	t.Run("returns MsgNotAuthenticatedNoScan error when no token", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		testutil.SetUpEngineMock(t, c)
 		c.SetToken("")
@@ -164,15 +171,20 @@ func TestScanner_Scan(t *testing.T) {
 		workspaceFolder := types.FilePath(t.TempDir())
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), nil)
 
-		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(workspaceFolder))
+		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(c, workspaceFolder))
 
-		assert.NoError(t, err)
-		assert.Empty(t, issues)
+		require.Error(t, err)
+		assert.Equal(t, utils.MsgNotAuthenticatedNoScan, err.Error())
+		assert.Nil(t, issues)
+		assert.True(t, utils.IsNonFailingScanError(err.Error()), "no-token error must classify as non-failing")
 	})
 
-	t.Run("returns empty without error when feature flag disabled", func(t *testing.T) {
+	t.Run("returns ErrSnykSecretsNotEnabled when feature flag disabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		testutil.SetUpEngineMock(t, c)
+		// Enable Secrets on the config so the IsEnabledForFolder guard passes
+		// and we exercise the downstream per-folder FF check.
+		c.SetSnykSecretsEnabled(true)
 
 		workspaceFolder := types.FilePath(t.TempDir())
 		folderConfig := &types.FolderConfig{
@@ -183,8 +195,10 @@ func TestScanner_Scan(t *testing.T) {
 
 		issues, err := scanner.Scan(t.Context(), workspaceFolder, folderConfig)
 
-		assert.NoError(t, err)
-		assert.Empty(t, issues)
+		require.Error(t, err)
+		assert.Equal(t, utils.ErrSnykSecretsNotEnabled, err.Error())
+		assert.Nil(t, issues)
+		assert.True(t, utils.IsNonFailingScanError(err.Error()), "FF-disabled error must classify as non-failing")
 	})
 
 	t.Run("returns error when InvokeWithConfig fails", func(t *testing.T) {
@@ -198,7 +212,7 @@ func TestScanner_Scan(t *testing.T) {
 		workspaceFolder := types.FilePath(t.TempDir())
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), nil)
 
-		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(workspaceFolder))
+		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(c, workspaceFolder))
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "engine invocation failed")
@@ -216,7 +230,7 @@ func TestScanner_Scan(t *testing.T) {
 		workspaceFolder := types.FilePath(t.TempDir())
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), nil)
 
-		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(workspaceFolder))
+		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(c, workspaceFolder))
 
 		assert.NoError(t, err)
 		assert.Empty(t, issues)
@@ -238,7 +252,7 @@ func TestScanner_Scan(t *testing.T) {
 		workspaceFolder := types.FilePath(t.TempDir())
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), nil)
 
-		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(workspaceFolder))
+		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(c, workspaceFolder))
 
 		assert.NoError(t, err)
 		assert.Empty(t, issues)
@@ -259,7 +273,7 @@ func TestScanner_Scan(t *testing.T) {
 		workspaceFolder := types.FilePath(t.TempDir())
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), nil)
 
-		issues, err := scanner.Scan(t.Context(), "", secretsEnabledFolderConfig(workspaceFolder))
+		issues, err := scanner.Scan(t.Context(), "", secretsEnabledFolderConfig(c, workspaceFolder))
 
 		require.NoError(t, err)
 		require.Len(t, issues, 1)
@@ -276,7 +290,7 @@ func TestScanner_Scan(t *testing.T) {
 
 		workspaceFolder := types.FilePath(t.TempDir())
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), nil)
-		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(workspaceFolder))
+		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(c, workspaceFolder))
 
 		assert.NoError(t, err)
 		assert.Empty(t, issues)
@@ -292,7 +306,7 @@ func TestScanner_Scan(t *testing.T) {
 
 		workspaceFolder := types.FilePath(t.TempDir())
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), nil)
-		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(workspaceFolder))
+		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(c, workspaceFolder))
 
 		assert.Error(t, err)
 		assert.Nil(t, issues)
@@ -308,7 +322,7 @@ func TestScanner_Scan(t *testing.T) {
 
 		workspaceFolder := types.FilePath(t.TempDir())
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), nil)
-		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(workspaceFolder))
+		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(c, workspaceFolder))
 
 		assert.Error(t, err)
 		assert.Nil(t, issues)
@@ -324,47 +338,47 @@ func TestScanner_Scan(t *testing.T) {
 
 		workspaceFolder := types.FilePath(t.TempDir())
 		scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), nil)
-		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(workspaceFolder))
+		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(c, workspaceFolder))
 
 		assert.Error(t, err)
 		assert.Nil(t, issues)
 	})
 
 	t.Run("preserves cached issues when engine returns NoSupportedFilesFoundError", func(t *testing.T) {
-		scanner, mockEngine, workspaceFolder := seedScannerCache(t)
+		c, scanner, mockEngine, workspaceFolder := seedScannerCache(t)
 
 		// Second scan: file is now excluded — SNYK-CLI-0008 must NOT wipe previous findings.
 		workflowID := workflow.NewWorkflowIdentifier("secrets.test")
 		mockEngine.EXPECT().InvokeWithConfig(workflowID, gomock.Any()).
 			Return(nil, cli_errors.NewNoSupportedFilesFoundError("No supported files found."))
-		_, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(workspaceFolder))
+		_, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(c, workspaceFolder))
 
 		assert.NoError(t, err)
 		assert.NotEmpty(t, totalCachedIssues(scanner), "previously discovered findings must survive an excluded-file scan")
 	})
 
 	t.Run("preserves cached issues and returns error when engine returns FeatureNotEnabledError", func(t *testing.T) {
-		scanner, mockEngine, workspaceFolder := seedScannerCache(t)
+		c, scanner, mockEngine, workspaceFolder := seedScannerCache(t)
 
 		// Second scan: org-level feature disabled — SNYK-CLI-0016 is a real error and
 		// must not silently wipe cached findings.
 		workflowID := workflow.NewWorkflowIdentifier("secrets.test")
 		mockEngine.EXPECT().InvokeWithConfig(workflowID, gomock.Any()).
 			Return(nil, cli_errors.NewFeatureNotEnabledError("secrets not enabled for org."))
-		_, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(workspaceFolder))
+		_, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(c, workspaceFolder))
 
 		assert.Error(t, err)
 		assert.NotEmpty(t, totalCachedIssues(scanner), "previously discovered findings must be preserved when feature is disabled")
 	})
 
 	t.Run("preserves cached issues when engine returns a real (non-ignorable) error", func(t *testing.T) {
-		scanner, mockEngine, workspaceFolder := seedScannerCache(t)
+		c, scanner, mockEngine, workspaceFolder := seedScannerCache(t)
 
 		// Second scan: transient failure — cache must be preserved.
 		workflowID := workflow.NewWorkflowIdentifier("secrets.test")
 		mockEngine.EXPECT().InvokeWithConfig(workflowID, gomock.Any()).
 			Return(nil, errors.New("network failure"))
-		_, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(workspaceFolder))
+		_, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(c, workspaceFolder))
 
 		assert.Error(t, err)
 		assert.NotEmpty(t, totalCachedIssues(scanner), "previously discovered findings must be preserved on transient error")
@@ -372,9 +386,9 @@ func TestScanner_Scan(t *testing.T) {
 }
 
 // seedScannerCache builds a Scanner, runs one successful scan that produces a single
-// finding, asserts the cache is populated, and returns the scanner/mockEngine/folder for
-// a follow-up scan to exercise cache-preservation behavior on errors.
-func seedScannerCache(t *testing.T) (*Scanner, *mocks.MockEngine, types.FilePath) {
+// finding, asserts the cache is populated, and returns the config/scanner/mockEngine/folder
+// for a follow-up scan to exercise cache-preservation behavior on errors.
+func seedScannerCache(t *testing.T) (*config.Config, *Scanner, *mocks.MockEngine, types.FilePath) {
 	t.Helper()
 	c := testutil.UnitTest(t)
 	mockEngine, _ := testutil.SetUpEngineMock(t, c)
@@ -391,11 +405,11 @@ func seedScannerCache(t *testing.T) (*Scanner, *mocks.MockEngine, types.FilePath
 	workspaceFolder := types.FilePath(t.TempDir())
 	scanner := New(c, performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, featureflag.NewFakeService(), notification.NewMockNotifier(), nil)
 
-	_, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(workspaceFolder))
+	_, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(c, workspaceFolder))
 	require.NoError(t, err)
 	require.NotZero(t, totalCachedIssues(scanner), "seed scan must populate the cache")
 
-	return scanner, mockEngine, workspaceFolder
+	return c, scanner, mockEngine, workspaceFolder
 }
 
 func totalCachedIssues(scanner *Scanner) int {

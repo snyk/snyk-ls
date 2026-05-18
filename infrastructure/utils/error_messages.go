@@ -18,8 +18,24 @@ package utils
 
 const (
 	ErrSnykCodeNotEnabled = "Snyk Code is not enabled for this organization"
-	ErrNoReferenceBranch  = "must specify reference for delta scans"
-	ErrNoRepo             = "repository does not exist"
+	// ErrSnykCodeNotEnabledForFolder is when Code is turned off for this workspace folder in the IDE / config (not org SAST).
+	ErrSnykCodeNotEnabledForFolder = "Snyk Code is not enabled for this workspace folder"
+	// ErrSnykSecretsNotEnabled is when Secrets is not available for the organization (e.g. feature flag).
+	ErrSnykSecretsNotEnabled = "Snyk Secrets is not enabled for this organization"
+	// ErrSnykSecretsNotEnabledForFolder is when Secrets is turned off for this workspace folder in the IDE / config.
+	ErrSnykSecretsNotEnabledForFolder = "Snyk Secrets is not enabled for this workspace folder"
+	// ErrSnykIacNotEnabledForFolder is when IaC is turned off for this workspace folder in the IDE / config.
+	ErrSnykIacNotEnabledForFolder = "Snyk IaC is not enabled for this workspace folder"
+	// ErrSnykOssNotEnabledForFolder is when Open Source is turned off for this workspace folder in the IDE / config.
+	ErrSnykOssNotEnabledForFolder = "Snyk Open Source is not enabled for this workspace folder"
+	ErrSastSettingsNotAvailable   = "SAST settings not available"
+	ErrNoReferenceBranch          = "must specify reference for delta scans"
+	ErrNoRepo                     = "repository does not exist"
+	// ErrFolderConfigNotInContext is returned when FolderConfig is missing from the scan context (configuration bug).
+	ErrFolderConfigNotInContext = "FolderConfig not found in context"
+
+	// MsgNotAuthenticatedNoScan is the standard log line when a scanner skips work because there is no auth token.
+	MsgNotAuthenticatedNoScan = "not authenticated, not scanning"
 )
 
 // ErrorMetadata contains metadata about how to handle specific errors
@@ -34,6 +50,30 @@ var ErrorConfig = map[string]ErrorMetadata{
 		ShowNotification: false,
 		TreeRootSuffix:   "(disabled at Snyk)",
 	},
+	ErrSnykCodeNotEnabledForFolder: {
+		ShowNotification: false,
+		TreeRootSuffix:   "(disabled in workspace)",
+	},
+	ErrSnykSecretsNotEnabled: {
+		ShowNotification: false,
+		TreeRootSuffix:   "(disabled at Snyk)",
+	},
+	ErrSnykSecretsNotEnabledForFolder: {
+		ShowNotification: false,
+		TreeRootSuffix:   "(disabled in workspace)",
+	},
+	ErrSnykIacNotEnabledForFolder: {
+		ShowNotification: false,
+		TreeRootSuffix:   "(disabled in workspace)",
+	},
+	ErrSnykOssNotEnabledForFolder: {
+		ShowNotification: false,
+		TreeRootSuffix:   "(disabled in workspace)",
+	},
+	ErrSastSettingsNotAvailable: {
+		ShowNotification: false,
+		TreeRootSuffix:   "(Code settings unavailable)",
+	},
 	ErrNoReferenceBranch: {
 		ShowNotification: false,
 		TreeRootSuffix:   "(no reference branch)",
@@ -42,4 +82,24 @@ var ErrorConfig = map[string]ErrorMetadata{
 		ShowNotification: false,
 		TreeRootSuffix:   "(repository not found)",
 	},
+	MsgNotAuthenticatedNoScan: {
+		ShowNotification: false,
+		TreeRootSuffix:   "(not authenticated)",
+	},
+}
+
+// nonFailingScanErrors lists scanner-returned error strings that should not be logged as failures
+// or shown as error diagnostics. Do not add log-only strings here (scanners must return these as err).
+var nonFailingScanErrors = map[string]bool{
+	MsgNotAuthenticatedNoScan:         true,
+	ErrSnykCodeNotEnabledForFolder:    true,
+	ErrSnykIacNotEnabledForFolder:     true,
+	ErrSnykOssNotEnabledForFolder:     true,
+	ErrSnykSecretsNotEnabledForFolder: true,
+	ErrSnykCodeNotEnabled:             true,
+	ErrSnykSecretsNotEnabled:          true,
+}
+
+func IsNonFailingScanError(errorMessage string) bool {
+	return nonFailingScanErrors[errorMessage]
 }

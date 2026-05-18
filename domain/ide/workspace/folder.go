@@ -49,6 +49,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -371,6 +372,16 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 
 func (f *Folder) sendScanError(product product.Product, err error) {
 	f.scanNotifier.SendError(product, f.path, err.Error())
+
+	if utils.IsNonFailingScanError(err.Error()) {
+		f.c.Logger().Debug().
+			Err(err).
+			Str("method", "ProcessResults").
+			Str("product", string(product)).
+			Msg("product scan skipped with expected status")
+		return
+	}
+
 	f.c.Logger().Err(err).
 		Str("method", "ProcessResults").
 		Str("product", string(product)).

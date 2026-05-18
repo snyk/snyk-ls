@@ -165,21 +165,24 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 
 	logger.Debug().Msg("Code scanner: starting scan")
 
+	if !sc.IsEnabledForFolder(workspaceFolderConfig) {
+		return nil, errors.New(utils.ErrSnykCodeNotEnabledForFolder)
+	}
+
 	if !sc.C.NonEmptyToken() {
-		logger.Info().Msg("not authenticated, not scanning")
-		return issues, err
+		logger.Info().Msg(utils.MsgNotAuthenticatedNoScan)
+		return nil, errors.New(utils.MsgNotAuthenticatedNoScan)
 	}
 
 	if workspaceFolderConfig.SastSettings == nil {
-		errMsg := "SAST settings not available"
-		logger.Error().Msg(errMsg)
-		return issues, errors.New(errMsg)
+		logger.Error().Msg(utils.ErrSastSettingsNotAvailable)
+		return nil, errors.New(utils.ErrSastSettingsNotAvailable)
 	}
 
 	sastResponse := workspaceFolderConfig.SastSettings
 
 	if !sastResponse.SastEnabled {
-		return issues, errors.New(utils.ErrSnykCodeNotEnabled)
+		return nil, errors.New(utils.ErrSnykCodeNotEnabled)
 	}
 
 	if isLocalEngineEnabled(sastResponse) {
@@ -283,7 +286,10 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, f
 
 	if t.IsCanceled() || ctx.Err() != nil {
 		progress.Cancel(t.GetToken())
-		return results, err
+		// Match OSS/IaC: cancellation returns an explicit empty slice (not the
+		// named-return zero value (nil, nil)) so callers and JSON/LSP
+		// consumers see an empty issue list rather than nil.
+		return []types.Issue{}, nil
 	}
 
 	codeConsistentIgnoresEnabled := sc.featureFlagService.GetFromFolderConfig(folderPath, featureflag.SnykCodeConsistentIgnores)

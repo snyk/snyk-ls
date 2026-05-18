@@ -121,9 +121,13 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspa
 
 	logger.Debug().Msg("IAC scanner: starting scan")
 
+	if !iac.IsEnabledForFolder(workspaceFolderConfig) {
+		return nil, errors.New(utils.ErrSnykIacNotEnabledForFolder)
+	}
+
 	if !c.NonEmptyToken() {
-		logger.Info().Msg("not authenticated, not scanning")
-		return issues, err
+		logger.Info().Msg(utils.MsgNotAuthenticatedNoScan)
+		return nil, errors.New(utils.MsgNotAuthenticatedNoScan)
 	}
 
 	if ctx.Err() != nil {
