@@ -18,8 +18,13 @@ package utils
 
 const (
 	ErrSnykCodeNotEnabled = "Snyk Code is not enabled for this organization"
-	ErrNoReferenceBranch  = "must specify reference for delta scans"
-	ErrNoRepo             = "repository does not exist"
+	// ErrSnykSecretsNotEnabled is when Secrets is not available for the organization (e.g. feature flag).
+	ErrSnykSecretsNotEnabled = "Snyk Secrets is not enabled for this organization"
+	ErrNoReferenceBranch     = "must specify reference for delta scans"
+	ErrNoRepo                = "repository does not exist"
+
+	// MsgNotAuthenticatedNoScan is the standard log line when a scanner skips work because there is no auth token.
+	MsgNotAuthenticatedNoScan = "not authenticated, not scanning"
 )
 
 // ErrorMetadata contains metadata about how to handle specific errors
@@ -33,6 +38,14 @@ var ErrorConfig = map[string]ErrorMetadata{
 	ErrSnykCodeNotEnabled: {
 		ShowNotification: false,
 		TreeRootSuffix:   "(disabled at Snyk)",
+	},
+	ErrSnykSecretsNotEnabled: {
+		ShowNotification: false,
+		TreeRootSuffix:   "(disabled at Snyk)",
+	},
+	MsgNotAuthenticatedNoScan: {
+		ShowNotification: false,
+		TreeRootSuffix:   "(not authenticated)",
 	},
 	ErrNoReferenceBranch: {
 		ShowNotification: false,
