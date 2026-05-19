@@ -153,7 +153,7 @@ func TestScanner_Scan(t *testing.T) {
 		assert.Equal(t, 1, totalCached)
 	})
 
-	t.Run("returns empty when no token", func(t *testing.T) {
+	t.Run("returns error when no token", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		testutil.SetUpEngineMock(t, c)
 		c.SetToken("")
@@ -163,11 +163,11 @@ func TestScanner_Scan(t *testing.T) {
 
 		issues, err := scanner.Scan(t.Context(), workspaceFolder, secretsEnabledFolderConfig(workspaceFolder))
 
-		assert.NoError(t, err)
+		assert.EqualError(t, err, "not authenticated, not scanning")
 		assert.Empty(t, issues)
 	})
 
-	t.Run("returns empty without error when feature flag disabled", func(t *testing.T) {
+	t.Run("returns error when feature flag disabled", func(t *testing.T) {
 		c := testutil.UnitTest(t)
 		testutil.SetUpEngineMock(t, c)
 
@@ -180,7 +180,7 @@ func TestScanner_Scan(t *testing.T) {
 
 		issues, err := scanner.Scan(t.Context(), workspaceFolder, folderConfig)
 
-		assert.NoError(t, err)
+		assert.EqualError(t, err, "Snyk Secrets is not enabled for this organization")
 		assert.Empty(t, issues)
 	})
 

@@ -19,6 +19,7 @@ package secrets
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -32,6 +33,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/issuecache"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -118,14 +120,14 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath, workspac
 	logger.Info().Msg("Secrets scanner: starting scan")
 
 	if !sc.c.NonEmptyToken() {
-		logger.Info().Msg("not authenticated, not scanning")
-		return issues, err
+		logger.Info().Msg(utils.MsgNotAuthenticatedNoScan)
+		return nil, errors.New(utils.MsgNotAuthenticatedNoScan)
 	}
 
 	isSecretsScannerEnabled := workspaceFolderConfig.FeatureFlags[featureflag.SnykSecretsEnabled]
 	if !isSecretsScannerEnabled {
-		logger.Error().Str("folderPath", string(workspaceFolder)).Msgf("feature flag %s not enabled", featureflag.SnykSecretsEnabled)
-		return issues, nil
+		logger.Debug().Str("folderPath", string(workspaceFolder)).Msgf("feature flag %s not enabled, skipping scan", featureflag.SnykSecretsEnabled)
+		return nil, errors.New(utils.ErrSnykSecretsNotEnabled)
 	}
 
 	scanStatus := NewScanStatus()
