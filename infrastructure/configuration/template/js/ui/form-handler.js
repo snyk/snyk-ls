@@ -80,15 +80,8 @@
 		processElements(inputs, data);
 		processElements(selects, data);
 
-		// Process complex global objects
-		processFilterSeverity(data);
-		processIssueViewOptions(data);
-
 		// Resolve cli_release_channel: use custom text input value when "Specify version" is selected
 		resolveCliReleaseChannel(data);
-
-		// Process per-folder org-scope overrides into LspFolderConfig-shaped fields
-		processFolderOverrides(data);
 
 		// Remove UI-only helper field
 		delete data.cli_release_channel_custom;
@@ -103,14 +96,6 @@
 
 			if (!name) continue;
 
-			// Skip complex object fields (handled separately)
-			if (
-				name.indexOf("enabled_severities_") === 0 ||
-				name.indexOf("issue_view_") === 0
-			) {
-				continue;
-			}
-
 			// Trusted folder logic: trustedFolder_INDEX
 			if (name.indexOf("trustedFolder_") === 0) {
 				// Only add non-empty values
@@ -124,15 +109,13 @@
 			if (name.indexOf("folder_") === 0) {
 				var parts = name.split("_");
 				if (parts.length >= 3) {
-					var index = parseInt(parts[1]);
+					var index = parseInt(parts[1], 10);
+					if (!isFinite(index) || index < 0) {
+						continue;
+					}
 
 					if (!data.folderConfigs[index]) {
 						data.folderConfigs[index] = {};
-					}
-
-					// Skip override fields — handled by processFolderOverrides()
-					if (parts[2] === "override") {
-						continue;
 					}
 
 					// Check if this is a scanConfig field: folder_INDEX_scanConfig_PRODUCT_PARTS_FIELD
@@ -165,13 +148,22 @@
 						var field = parts.slice(2).join("_");
 						if (field === "additional_parameters") {
 							// Split by whitespace and filter out empty strings
-							data.folderConfigs[index][field] = el.value ? el.value.trim().split(/\s+/).filter(function(item) { return item.length > 0; }) : [];
+							data.folderConfigs[index][field] = el.value
+								? el.value
+										.trim()
+										.split(/\s+/)
+										.filter(function (item) {
+											return item.length > 0;
+										})
+								: [];
 							continue;
 						}
 
 						// Skip preferredOrg if orgSetByUser is false (auto-org is enabled)
 						if (field === "preferred_org") {
-							var orgSetByUserInput = dom.get("folder_" + index + "_org_set_by_user");
+							var orgSetByUserInput = dom.get(
+								"folder_" + index + "_org_set_by_user"
+							);
 							if (orgSetByUserInput && orgSetByUserInput.value === "false") {
 								continue;
 							}
@@ -196,16 +188,11 @@
 		if (el.type === "checkbox") {
 			obj[field] = el.checked;
 		} else if (el.type === "number") {
-			obj[field] = el.value ? parseInt(el.value) : null;
+			obj[field] = el.value ? parseInt(el.value, 10) : null;
+		} else if (el.dataset && el.dataset.bool === "1") {
+			obj[field] = el.value === "true";
 		} else {
-			// Convert string boolean values to actual booleans
-			if (el.value === "true") {
-				obj[field] = true;
-			} else if (el.value === "false") {
-				obj[field] = false;
-			} else {
-				obj[field] = el.value;
-			}
+			obj[field] = el.value;
 		}
 	}
 
@@ -219,116 +206,22 @@
 		}
 	}
 
-	function processFilterSeverity(data) {
-		var critical = dom.getByName("enabled_severities_critical")[0];
-		var high = dom.getByName("enabled_severities_high")[0];
-		var medium = dom.getByName("enabled_severities_medium")[0];
-		var low = dom.getByName("enabled_severities_low")[0];
-
-		if (critical || high || medium || low) {
-			data.severity_filter_critical = critical ? critical.checked : false;
-      data.severity_filter_high = high ? high.checked : false;
-      data.severity_filter_medium = medium ? medium.checked : false;
-      data.severity_filter_low = low ? low.checked : false;
-		}
-	}
-
-	function processIssueViewOptions(data) {
-		var openIssues = dom.getByName("issue_view_open_issues")[0];
-		var ignoredIssues = dom.getByName("issue_view_ignored_issues")[0];
-
-		if (openIssues || ignoredIssues) {
-			data.issue_view_open_issues = openIssues ? openIssues.checked : false;
-			data.issue_view_ignored_issues = ignoredIssues ? ignoredIssues.checked : false;
-		}
-	}
-
-	// Collect per-folder org-scope override fields and map them to LspFolderConfig JSON field names.
-	// The HTML form uses "folder_X_override_*" names; this maps them to the LspFolderConfig wire format
-	// so the IDE can treat them identically to $/snyk.folderConfigs notifications.
-	function processFolderOverrides(data) {
-		if (!data.folderConfigs) return;
-
-		for (var i = 0; i < data.folderConfigs.length; i++) {
-			if (!data.folderConfigs[i]) continue;
-			var fc = data.folderConfigs[i];
-			var prefix = "folder_" + i + "_override_";
-
-			// scan_automatic: select with value "auto"/"manual" → bool
-			var scanAutoEl = dom.get(prefix + "scan_automatic");
-			if (scanAutoEl) {
-				fc.scan_automatic = scanAutoEl.value === "auto";
-			}
-
-			// scan_net_new: select with value "true"/"false" → bool
-			var scanNetNewEl = dom.get(prefix + "scan_net_new");
-			if (scanNetNewEl) {
-				fc.scan_net_new = scanNetNewEl.value === "true";
-			}
-
-			// enabled_severities: checkboxes → SeverityFilter object
-			var sevCritical = dom.getByName(prefix + "severity_filter_critical")[0];
-			var sevHigh = dom.getByName(prefix + "severity_filter_high")[0];
-			var sevMedium = dom.getByName(prefix + "severity_filter_medium")[0];
-			var sevLow = dom.getByName(prefix + "severity_filter_low")[0];
-			if (sevCritical || sevHigh || sevMedium || sevLow) {
-				fc.severity_filter_critical = sevCritical ? sevCritical.checked : false;
-				fc.severity_filter_high = sevHigh ? sevHigh.checked : false;
-				fc.severity_filter_medium = sevMedium ? sevMedium.checked : false;
-				fc.severity_filter_low = sevLow ? sevLow.checked : false;
-			}
-
-			// Product enablement: individual checkboxes → individual bool fields
-			var ossEl = dom.getByName(prefix + "snyk_oss_enabled")[0];
-			if (ossEl) {
-				fc.snyk_oss_enabled = ossEl.checked;
-			}
-			var codeEl = dom.getByName(prefix + "snyk_code_enabled")[0];
-			if (codeEl) {
-				fc.snyk_code_enabled = codeEl.checked;
-			}
-			var iacEl = dom.getByName(prefix + "snyk_iac_enabled")[0];
-			if (iacEl) {
-				fc.snyk_iac_enabled = iacEl.checked;
-			}
-			var secretsEl = dom.getByName(prefix + "snyk_secrets_enabled")[0];
-			if (secretsEl) {
-				fc.snyk_secrets_enabled = secretsEl.checked;
-			}
-
-			// issue_view_open_issues: checkbox → bool
-			var issueOpenEl = dom.getByName(prefix + "issue_view_open_issues")[0];
-			if (issueOpenEl) {
-				fc.issue_view_open_issues = issueOpenEl.checked;
-			}
-
-			// issue_view_ignored_issues: checkbox → bool
-			var issueIgnoredEl = dom.getByName(prefix + "issue_view_ignored_issues")[0];
-			if (issueIgnoredEl) {
-				fc.issue_view_ignored_issues = issueIgnoredEl.checked;
-			}
-
-			// risk_score_threshold: number input → int
-			var riskScoreEl = dom.get(prefix + "risk_score_threshold");
-			if (riskScoreEl) {
-				fc.risk_score_threshold = riskScoreEl.value !== "" ? parseInt(riskScoreEl.value, 10) : null;
-			}
-		}
-	}
-
 	// Mark a folder for complete reset (all org-scope overrides will be set to null)
-	formHandler.markFolderForReset = function(folderIndex) {
+	formHandler.markFolderForReset = function (folderIndex) {
 		window.ConfigApp.folderResets = window.ConfigApp.folderResets || {};
 		window.ConfigApp.folderResets[folderIndex] = true;
 	};
 
 	// Check if a folder is marked for reset
-	formHandler.isFolderMarkedForReset = function(folderIndex) {
-		return window.ConfigApp.folderResets && window.ConfigApp.folderResets[folderIndex];
+	formHandler.isFolderMarkedForReset = function (folderIndex) {
+		return (
+			window.ConfigApp.folderResets &&
+			window.ConfigApp.folderResets[folderIndex]
+		);
 	};
 
 	// Apply reset: set all org-scope fields to null on the folder config
-	formHandler.applyFolderResets = function(data) {
+	formHandler.applyFolderResets = function (data) {
 		if (!data.folderConfigs) return;
 		for (var i = 0; i < data.folderConfigs.length; i++) {
 			if (formHandler.isFolderMarkedForReset(i) && data.folderConfigs[i]) {

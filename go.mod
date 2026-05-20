@@ -15,7 +15,7 @@ require (
 	github.com/getsentry/sentry-go v0.31.1
 	github.com/go-git/go-git/v5 v5.19.0
 	github.com/golang/mock v1.6.0
-	github.com/gomarkdown/markdown v0.0.0-20250207164621-7a1f277a159e
+	github.com/gomarkdown/markdown v0.0.0-20260417124207-7d523f7318df
 	github.com/google/uuid v1.6.0
 	github.com/gosimple/hashdir v1.0.2
 	github.com/hexops/gotextdiff v1.0.3

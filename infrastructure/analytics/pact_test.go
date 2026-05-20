@@ -27,7 +27,7 @@ import (
 
 func TestAnalyticsProviderPactV2(t *testing.T) {
 	testsupport.NotOnWindows(t, "we don't have a pact cli")
-	engine, tokenService := testutil.UnitTestWithEngine(t)
+	engine, tokenService := testutil.IntegTestWithEngine(t)
 
 	pact := &dsl.Pact{
 		Consumer: "snyk-ls",
@@ -81,7 +81,7 @@ func TestAnalyticsProviderPactV2(t *testing.T) {
 
 func TestAnalyticsPluginInstalled(t *testing.T) {
 	testsupport.NotOnWindows(t, "we don't have a pact cli")
-	engine, tokenService := testutil.UnitTestWithEngine(t)
+	engine, tokenService := testutil.IntegTestWithEngine(t)
 
 	pact := &dsl.Pact{
 		Consumer: "snyk-ls",
