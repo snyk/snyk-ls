@@ -51,7 +51,7 @@ func flockEnforced(t *testing.T) bool {
 	if err = syscall.Flock(int(f1.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		return true // first lock failed — unusual, but treat as enforced
 	}
-	defer syscall.Flock(int(f1.Fd()), syscall.LOCK_UN) //nolint:errcheck
+	defer syscall.Flock(int(f1.Fd()), syscall.LOCK_UN)
 
 	// If a second LOCK_EX|LOCK_NB on the same file succeeds, locks are not enforced.
 	err = syscall.Flock(int(f2.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
