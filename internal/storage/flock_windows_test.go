@@ -1,3 +1,5 @@
+//go:build windows
+
 /*
  * © 2023-2024 Snyk Limited
  *
@@ -13,8 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-//go:build windows
 
 package storage
 
