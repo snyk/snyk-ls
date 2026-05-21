@@ -898,6 +898,21 @@ func checkForScanParams(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecord
 	checkForScanParamsWithMaxWait(t, jsonRPCRecorder, cloneTargetDir, p, 5*time.Minute)
 }
 
+// isTransientScanError reports whether the error message matches a known transient backend
+// error that should not count as a test failure (rate-limits, temporary unavailability, etc.).
+func isTransientScanError(errMsg string) bool {
+	for _, pat := range []string{
+		"Client request cannot be processed",
+		"Too Many Requests",
+		`"429"`, // HTTP 429 embedded in error strings, e.g.: unexpected response status "429"
+	} {
+		if strings.Contains(errMsg, pat) {
+			return true
+		}
+	}
+	return false
+}
+
 func checkForScanParamsWithMaxWait(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, cloneTargetDir string, p product.Product, maxWait time.Duration) {
 	t.Helper()
 	var notifications []jrpc2.Request
@@ -923,9 +938,19 @@ func checkForScanParamsWithMaxWait(t *testing.T, jsonRPCRecorder *testsupport.Js
 		"Scan did not complete for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
 
 	require.NotNil(t, finalScanParams, "No scan notification received for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
-	require.NotEqual(t, types.ErrorStatus, finalScanParams.Status,
-		"Scan failed - Product: %s, Folder: %s, Error: %w",
-		finalScanParams.Product, finalScanParams.FolderPath, finalScanParams.PresentableError)
+	if finalScanParams.Status == types.ErrorStatus {
+		errMsg := ""
+		if finalScanParams.PresentableError != nil {
+			errMsg = finalScanParams.PresentableError.ErrorMessage
+		}
+		if isTransientScanError(errMsg) {
+			t.Skipf("skipping: transient API error during %s scan in %s: %s",
+				finalScanParams.Product, finalScanParams.FolderPath, errMsg)
+		}
+		require.NotEqual(t, types.ErrorStatus, finalScanParams.Status,
+			"Scan failed - Product: %s, Folder: %s, Error: %w",
+			finalScanParams.Product, finalScanParams.FolderPath, finalScanParams.PresentableError)
+	}
 	require.Equal(t, types.Success, finalScanParams.Status,
 		"Unexpected scan status: %s", finalScanParams.Status)
 }
