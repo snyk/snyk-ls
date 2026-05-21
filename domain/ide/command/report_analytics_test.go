@@ -202,7 +202,7 @@ func Test_ReportAnalyticsCommand_PlugInstalledEvent(t *testing.T) {
 			// including key names. Derive the expected key form at runtime so the assertion
 			// is correct for any OS username, not just "dev".
 			expectedKey := "device_id"
-			if u, err := user.Current(); err == nil && strings.Contains("device_id", u.Username) {
+			if u, userErr := user.Current(); userErr == nil && strings.Contains("device_id", u.Username) {
 				expectedKey = strings.ReplaceAll("device_id", u.Username, "***")
 			}
 			require.Contains(t, payload, expectedKey,
