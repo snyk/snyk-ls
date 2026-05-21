@@ -1149,6 +1149,9 @@ func temporarilyApplyNewOrgForValidation(conf configuration.Configuration, folde
 	}
 }
 
+// No SettingIsLspInitialized guard here — the outer check in processFolderConfigs
+// prevents the summary panel reset before init. This function runs unconditionally
+// so that LDX-Sync refresh and orgChangedFolderPaths are always populated.
 func updateFolderOrgIfNeeded(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, fc *types.FolderConfig, folderConfig *types.FolderConfig, oldSnapshot types.FolderConfigSnapshot, notifier notification.Notifier) bool {
 	orgSettingsChanged := fc != nil && !folderConfigsOrgSettingsEqual(oldSnapshot, *folderConfig)
 
