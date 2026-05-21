@@ -319,7 +319,7 @@ func Test_CheckDirectory_ReadOnlyDirectory(t *testing.T) {
 		t.Skip("Skipping read-only test on Windows")
 	}
 	if os.Getuid() == 0 {
-		t.Skip("Skipping read-only test when running as root: root ignores file permissions")
+		t.Skip("Skipping: root bypasses mode bits, so chmod 0555 is still writable")
 	}
 
 	tmpDir := t.TempDir()

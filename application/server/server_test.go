@@ -56,7 +56,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
-	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -906,6 +905,36 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 
 	sendFileSavedMessage(t, engine, snykFilePath, folderPath, loc)
 
+	// Register cleanup BEFORE the assert.Eventually call so it runs FIRST in
+	// LIFO order — before server shutdown — giving scans time to finish.
+	// On Windows, CLI subprocesses hold the temp dir open until the subprocess
+	// exits; the terminal $/snyk.scan notification is emitted only after
+	// internalScan (and its subprocess) has returned, so the notification is a
+	// reliable proxy for "file handles released."
+	t.Cleanup(func() {
+		// Use the JSON-RPC notification stream rather than ScanStateAggregator:
+		// the aggregator is initialized during "initialize" (before the folder is
+		// added via sendFileSavedMessage), so the folder's state entries are never
+		// registered and allMatch returns true vacuously on an empty map.
+		assert.Eventually(t, func() bool {
+			terminal := 0
+			for _, n := range jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan") {
+				var params types.SnykScanParams
+				if n.UnmarshalParams(&params) != nil {
+					continue
+				}
+				if params.Status == types.Success || params.Status == types.ErrorStatus {
+					terminal++
+				}
+			}
+			// OSS and IaC are both enabled by default; Snyk Code is disabled above.
+			// ScanFolder runs both product scanners in parallel — 2 terminal
+			// notifications expected (one per product). The reference-scan goroutine
+			// returns early (!SettingScanNetNew) and emits no additional notification.
+			return terminal >= 2
+		}, 60*time.Second, time.Second)
+	})
+
 	// Wait for $/snyk.scan notification
 	assert.Eventually(
 		t,
@@ -1239,48 +1268,40 @@ func checkForSnykScan(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder
 func Test_IntegrationHoverResults(t *testing.T) {
 	engine, tokenService := testutil.IntegTestWithEngine(t)
 	loc, _ := setupServer(t, engine, tokenService)
-	enableOnlyProducts(t, engine, product.ProductOpenSource)
 
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
-	fakeAuthenticationProvider.IsAuthenticated = true
-
-	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.NodejsGoof, "0336589", engine.GetLogger(), false)
-	defer func(path string) { _ = os.RemoveAll(path) }(string(cloneTargetDir))
-	if err != nil {
-		t.Fatal(err, "Couldn't setup test repo")
-	}
-	folder := types.WorkspaceFolder{
-		Name: "Test Repo",
-		Uri:  uri.PathToUri(cloneTargetDir),
-	}
-	clientParams := types.InitializeParams{
-		WorkspaceFolders: []types.WorkspaceFolder{folder},
-	}
-
-	_, err = loc.Client.Call(t.Context(), "initialize", clientParams)
+	_, err := loc.Client.Call(t.Context(), "initialize", types.InitializeParams{})
 	if err != nil {
 		t.Fatal(err, "Initialize failed")
 	}
-	_, err = loc.Client.Call(t.Context(), "initialized", clientParams)
+	_, err = loc.Client.Call(t.Context(), "initialized", nil)
 	if err != nil {
 		t.Fatal(err, "Initialized failed")
 	}
 
-	// wait till the whole workspace is scanned
-	require.Eventually(t, func() bool {
-		w := config.GetWorkspace(engine.GetConfiguration())
-		f := w.GetFolderContaining(cloneTargetDir)
-		return f != nil && f.IsScanned()
-	}, maxIntegTestDuration, 100*time.Millisecond, "workspace scan did not complete within %s", maxIntegTestDuration)
-
-	testPath := string(cloneTargetDir) + string(os.PathSeparator) + "package.json"
+	testPath := types.FilePath(filepath.Join(t.TempDir(), "package.json"))
 	testPosition := sglsp.Position{
 		Line:      17,
 		Character: 7,
 	}
 
+	// Inject mock hover data directly — this test verifies the hover LSP endpoint
+	// correctly proxies the hover service, not the scanning pipeline.
+	di.HoverService().Channel() <- hover.DocumentHovers{
+		Path:    testPath,
+		Product: product.ProductOpenSource,
+		Hover: []hover.Hover[hover.Context]{{
+			Id:      "test-hover",
+			Range:   types.Range{Start: types.Position{Line: 17, Character: 0}, End: types.Position{Line: 17, Character: 20}},
+			Message: "test hover content",
+		}},
+	}
+
+	require.Eventually(t, func() bool {
+		return di.HoverService().GetHover(testPath, converter.FromPosition(testPosition)).Contents.Value != ""
+	}, 5*time.Second, 10*time.Millisecond, "hover data not available")
+
 	hoverResp, err := loc.Client.Call(t.Context(), "textDocument/hover", hover.Params{
-		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(types.FilePath(testPath))},
+		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(testPath)},
 		Position:     testPosition,
 	})
 	if err != nil {
@@ -1295,7 +1316,7 @@ func Test_IntegrationHoverResults(t *testing.T) {
 
 	assert.Equal(t,
 		hoverResult.Contents.Value,
-		di.HoverService().GetHover(types.FilePath(testPath), converter.FromPosition(testPosition)).Contents.Value)
+		di.HoverService().GetHover(testPath, converter.FromPosition(testPosition)).Contents.Value)
 	assert.Equal(t, hoverResult.Contents.Kind, "markdown")
 }
 
