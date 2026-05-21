@@ -912,14 +912,11 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 	// internalScan (and its subprocess) has returned, so the notification is a
 	// reliable proxy for "file handles released."
 	t.Cleanup(func() {
-		if t.Failed() {
-			return
-		}
 		// Use the JSON-RPC notification stream rather than ScanStateAggregator:
 		// the aggregator is initialized during "initialize" (before the folder is
 		// added via sendFileSavedMessage), so the folder's state entries are never
 		// registered and allMatch returns true vacuously on an empty map.
-		require.Eventually(t, func() bool {
+		assert.Eventually(t, func() bool {
 			terminal := 0
 			for _, n := range jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan") {
 				var params types.SnykScanParams
@@ -935,7 +932,7 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 			// notifications expected (one per product). The reference-scan goroutine
 			// returns early (!SettingScanNetNew) and emits no additional notification.
 			return terminal >= 2
-		}, maxIntegTestDuration, time.Second)
+		}, 60*time.Second, time.Second)
 	})
 
 	// Wait for $/snyk.scan notification
