@@ -78,15 +78,30 @@ func IntegTestWithEngine(t *testing.T) (workflow.Engine, *config.TokenServiceImp
 	return prepareTestHelper(t, testsupport.IntegTestEnvVar, "")
 }
 
-func SmokeTest(t *testing.T, tokenSecretName string) workflow.Engine {
+// SmokeTest skips unless SMOKE_TESTS=1 and shardEnvVar is set. shardEnvVar is the CI env var
+// that enables this test's shard (e.g. "SMOKE_SHARD_4"). Every smoke test must declare its shard.
+func SmokeTest(t *testing.T, tokenSecretName string, shardEnvVar string) workflow.Engine {
 	t.Helper()
+	if os.Getenv(testsupport.SmokeTestEnvVar) == "" {
+		t.Skipf("%s is not set", testsupport.SmokeTestEnvVar)
+	}
+	if os.Getenv(shardEnvVar) == "" {
+		t.Skipf("shard env var %s is not set", shardEnvVar)
+	}
 	engine, _ := prepareTestHelper(t, testsupport.SmokeTestEnvVar, tokenSecretName)
 	return engine
 }
 
-// SmokeTestWithEngine returns both engine and tokenService for smoke tests that need to call setupServer.
-func SmokeTestWithEngine(t *testing.T, tokenSecretName string) (workflow.Engine, *config.TokenServiceImpl) {
+// SmokeTestWithEngine returns both engine and tokenService. shardEnvVar is the CI env var that
+// enables this test's shard (e.g. "SMOKE_SHARD_1"). Every smoke test must declare its shard.
+func SmokeTestWithEngine(t *testing.T, tokenSecretName string, shardEnvVar string) (workflow.Engine, *config.TokenServiceImpl) {
 	t.Helper()
+	if os.Getenv(testsupport.SmokeTestEnvVar) == "" {
+		t.Skipf("%s is not set", testsupport.SmokeTestEnvVar)
+	}
+	if os.Getenv(shardEnvVar) == "" {
+		t.Skipf("shard env var %s is not set", shardEnvVar)
+	}
 	return prepareTestHelper(t, testsupport.SmokeTestEnvVar, tokenSecretName)
 }
 

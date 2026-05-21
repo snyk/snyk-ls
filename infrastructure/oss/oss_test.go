@@ -46,6 +46,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
@@ -61,6 +62,72 @@ const testDataPackageJson = "/testdata/package.json"
 func defaultResolver(t *testing.T, engine workflow.Engine) *types.ConfigResolver {
 	t.Helper()
 	return testutil.DefaultConfigResolver(engine)
+}
+
+func Test_Scan_ReturnsErrorWhenOssDisabledForFolder_ContextResolver(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	engine := testutil.UnitTest(t)
+	mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
+	mockResolver.EXPECT().
+		IsProductEnabledForFolder(product.ProductOpenSource, gomock.Any()).
+		Return(false).
+		Times(1)
+
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine))
+	folderConfig := &types.FolderConfig{FolderPath: "."}
+	ctx := ctx2.NewContextWithConfigResolver(context.Background(), mockResolver)
+	ctx = ctx2.NewContextWithFolderConfig(ctx, folderConfig)
+
+	issues, err := scanner.Scan(ctx, "package.json")
+
+	assert.Error(t, err)
+	assert.Equal(t, utils.ErrSnykOssNotEnabledForFolder, err.Error())
+	assert.Nil(t, issues)
+}
+
+func Test_Scan_ReturnsErrorWhenOssDisabledForFolder_StructResolver(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	engine := testutil.UnitTest(t)
+	mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
+	mockResolver.EXPECT().
+		IsProductEnabledForFolder(product.ProductOpenSource, gomock.Any()).
+		Return(false).
+		Times(1)
+
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), mockResolver)
+	folderConfig := &types.FolderConfig{FolderPath: "."}
+	ctx := ctx2.NewContextWithFolderConfig(context.Background(), folderConfig)
+
+	issues, err := scanner.Scan(ctx, "package.json")
+
+	assert.Error(t, err)
+	assert.Equal(t, utils.ErrSnykOssNotEnabledForFolder, err.Error())
+	assert.Nil(t, issues)
+}
+
+func Test_Scan_SkipsUnsupportedPathWithoutError(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	scanner := NewCLIScanner(
+		engine,
+		performance.NewInstrumentor(),
+		error_reporting.NewTestErrorReporter(engine),
+		cli.NewTestExecutor(engine),
+		getLearnMock(t),
+		notification.NewMockNotifier(),
+		defaultResolver(t, engine),
+	)
+
+	folderConfig := &types.FolderConfig{FolderPath: "."}
+	ctx := ctx2.NewContextWithFolderConfig(context.Background(), folderConfig)
+
+	issues, err := scanner.Scan(ctx, "main.go")
+
+	assert.NoError(t, err)
+	assert.Empty(t, issues)
 }
 
 // todo test issue parsing & conversion
@@ -893,7 +960,7 @@ func Test_scheduleRefreshScan_UsesConfigResolverFromContext(t *testing.T) {
 	mockResolver.EXPECT().
 		IsProductEnabledForFolder(product.ProductOpenSource, gomock.Any()).
 		Return(true).
-		Times(1)
+		Times(2) // scheduleRefreshScan gate + Scan entry
 
 	fakeCli := cli.NewTestExecutor(engine)
 	fakeCli.ExecuteDuration = time.Millisecond
@@ -924,7 +991,7 @@ func Test_scheduleRefreshScan_FallsBackToStructFieldWhenNoResolverInContext(t *t
 	mockResolver.EXPECT().
 		IsProductEnabledForFolder(product.ProductOpenSource, gomock.Any()).
 		Return(true).
-		Times(1)
+		Times(2) // scheduleRefreshScan gate + Scan entry
 	mockResolver.EXPECT().
 		GetStringSlice(gomock.Any(), gomock.Any()).
 		Return(nil).

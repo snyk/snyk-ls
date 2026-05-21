@@ -34,7 +34,7 @@ import (
 )
 
 func Test_Concurrent_CLI_Runs(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	srv, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
@@ -43,8 +43,11 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 	lspClient := srv.Client
 
 	// create clones and make them workspace folders
-	type scanParamsTuple map[product.Product]bool
-	successfulScans := map[types.FilePath]scanParamsTuple{}
+	type scanStatus struct {
+		status    types.ScanStatus
+		scanError string
+	}
+	scanStatuses := map[types.FilePath]map[product.Product]scanStatus{}
 
 	var workspaceFolders []types.WorkspaceFolder
 	wg := sync.WaitGroup{}
@@ -62,7 +65,7 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 			}
 			mu.Lock()
 			workspaceFolders = append(workspaceFolders, folder)
-			successfulScans[repo] = scanParamsTuple{}
+			scanStatuses[repo] = map[product.Product]scanStatus{}
 			mu.Unlock()
 		}()
 	}
@@ -97,6 +100,12 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 	// check if all scan params were sent
 	assert.Eventuallyf(t, func() bool {
 		notificationsByMethod := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
+
+		// Track scan statuses for diagnostics; log only on transitions to avoid spam.
+		// Both reference-branch and working-copy scans emit $/snyk.scan with the
+		// same folderPath/product key, so the last notification wins. This is
+		// acceptable: the test exits only after the working-copy scan succeeds, and
+		// waitForAllScansToComplete at the end guards against goroutine leaks.
 		for _, notification := range notificationsByMethod {
 			var scanParams types.SnykScanParams
 			err := notification.UnmarshalParams(&scanParams)
@@ -104,19 +113,45 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 				continue
 			}
 
-			if scanParams.Status == types.Success {
-				successfulScans[scanParams.FolderPath][product.ToProduct(scanParams.Product)] = true
+			p := product.ToProduct(scanParams.Product)
+			if _, exists := scanStatuses[scanParams.FolderPath]; !exists {
+				continue
 			}
+
+			var errMsg string
+			if scanParams.PresentableError != nil {
+				errMsg = scanParams.PresentableError.ErrorMessage
+			}
+			ss := scanStatus{status: scanParams.Status, scanError: errMsg}
+
+			prev := scanStatuses[scanParams.FolderPath][p]
+			if prev != ss {
+				if ss.status == types.ErrorStatus {
+					t.Logf("Scan error for folder %s product %s: %s", scanParams.FolderPath, p.ToProductCodename(), ss.scanError)
+				} else {
+					t.Logf("Scan status changed: folder %s product %s → %s", scanParams.FolderPath, p.ToProductCodename(), ss.status)
+				}
+			}
+			scanStatuses[scanParams.FolderPath][p] = ss
 		}
 
+		// Count successful scans
+		ossEnabled := engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled))
+		iacEnabled := engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled))
 		received := 0
-		for _, tuple := range successfulScans {
-			if tuple[product.ProductOpenSource] == engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykOssEnabled)) && tuple[product.ProductInfrastructureAsCode] == engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykIacEnabled)) {
+		for _, productStatuses := range scanStatuses {
+			ossSuccess := productStatuses[product.ProductOpenSource].status == types.Success
+			iacSuccess := productStatuses[product.ProductInfrastructureAsCode].status == types.Success
+			if ossSuccess == ossEnabled && iacSuccess == iacEnabled {
 				received++
 			}
 		}
 		return received == len(workspaceFolders)
 	}, 10*time.Minute, time.Second, "not all scans were successful")
+
+	// Log final scan state so timeout failures are diagnosable without tracing transition logs.
+	t.Logf("Final scan state: %+v", scanStatuses)
+
 	// Wait for reference branch scans to complete so their goroutines don't outlive the test
 	// and cause the cleanup shutdown to block for an extended period.
 	waitForAllScansToComplete(t, di.ScanStateAggregator())

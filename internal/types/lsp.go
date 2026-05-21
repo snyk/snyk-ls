@@ -616,66 +616,6 @@ type LspConfigurationParam struct {
 	FolderConfigs []LspFolderConfig         `json:"folderConfigs,omitempty"`
 }
 
-// Settings is the struct that is parsed from the InitializationParams.InitializationOptions field
-type Settings struct {
-	// Global settings start
-	ActivateSnykOpenSource              string               `json:"activateSnykOpenSource,omitempty"`
-	ActivateSnykCode                    string               `json:"activateSnykCode,omitempty"`
-	ActivateSnykIac                     string               `json:"activateSnykIac,omitempty"`
-	ActivateSnykSecrets                 string               `json:"activateSnykSecrets,omitempty"`
-	Insecure                            string               `json:"insecure,omitempty"`
-	Endpoint                            string               `json:"endpoint,omitempty"`
-	CliBaseDownloadURL                  string               `json:"cliBaseDownloadURL,omitempty"`
-	Organization                        *string              `json:"organization,omitempty"`
-	Path                                string               `json:"path,omitempty"`
-	CliPath                             string               `json:"cliPath,omitempty"`
-	Token                               string               `json:"token,omitempty"`
-	IntegrationName                     string               `json:"integrationName,omitempty"`
-	IntegrationVersion                  string               `json:"integrationVersion,omitempty"`
-	AutomaticAuthentication             string               `json:"automaticAuthentication,omitempty"`
-	DeviceId                            string               `json:"deviceId,omitempty"`
-	FilterSeverity                      *SeverityFilter      `json:"filterSeverity,omitempty"`
-	RiskScoreThreshold                  *int                 `json:"riskScoreThreshold,omitempty"` // Valid range is 0-1000.
-	IssueViewOptions                    *IssueViewOptions    `json:"issueViewOptions,omitempty"`
-	SendErrorReports                    string               `json:"sendErrorReports,omitempty"`
-	ManageBinariesAutomatically         string               `json:"manageBinariesAutomatically,omitempty"`
-	EnableTrustedFoldersFeature         string               `json:"enableTrustedFoldersFeature,omitempty"`
-	ActivateSnykCodeSecurity            string               `json:"activateSnykCodeSecurity,omitempty"`
-	ActivateSnykCodeQuality             string               `json:"activateSnykCodeQuality,omitempty"`
-	OsPlatform                          string               `json:"osPlatform,omitempty"`
-	OsArch                              string               `json:"osArch,omitempty"`
-	RuntimeVersion                      string               `json:"runtimeVersion,omitempty"`
-	RuntimeName                         string               `json:"runtimeName,omitempty"`
-	ScanningMode                        string               `json:"scanningMode,omitempty"`
-	AuthenticationMethod                AuthenticationMethod `json:"authenticationMethod,omitempty"`
-	SnykCodeApi                         string               `json:"snykCodeApi,omitempty"`
-	EnableSnykLearnCodeActions          string               `json:"enableSnykLearnCodeActions,omitempty"`
-	EnableSnykOSSQuickFixCodeActions    string               `json:"enableSnykOSSQuickFixCodeActions,omitempty"`
-	EnableSnykOpenBrowserActions        string               `json:"enableSnykOpenBrowserActions,omitempty"`
-	EnableDeltaFindings                 string               `json:"enableDeltaFindings,omitempty"` // should this be global?
-	RequiredProtocolVersion             string               `json:"requiredProtocolVersion,omitempty"`
-	HoverVerbosity                      *int                 `json:"hoverVerbosity,omitempty"`
-	OutputFormat                        *string              `json:"outputFormat,omitempty"`
-	AutoConfigureSnykMcpServer          string               `json:"autoConfigureSnykMcpServer,omitempty"`
-	SecureAtInceptionExecutionFrequency string               `json:"secureAtInceptionExecutionFrequency,omitempty"`
-	ProxyHttp                           string               `json:"proxyHttp,omitempty"`
-	ProxyHttps                          string               `json:"proxyHttps,omitempty"`
-	ProxyNoProxy                        string               `json:"proxyNoProxy,omitempty"`
-	PublishSecurityAtInceptionRules     string               `json:"publishSecurityAtInceptionRules,omitempty"`
-	CliReleaseChannel                   string               `json:"cliReleaseChannel,omitempty"`
-	// Global settings end
-
-	// Folder specific settings start
-	AdditionalParams string            `json:"additionalParams,omitempty"` // TODO make folder specific, move to folder config
-	AdditionalEnv    string            `json:"additionalEnv,omitempty"`    // Global fallback for backward compatibility; folder-specific values in FolderConfig.AdditionalEnv
-	TrustedFolders   []string          `json:"trustedFolders,omitempty"`   // TODO make folder specific, move to folder config
-	FolderConfigs    []LspFolderConfig `json:"folderConfigs,omitempty"`    // IDE ↔ LS communication uses LspFolderConfig with PATCH semantics
-	// Folder specific settings end
-
-	// Internal fields (not serialized to JSON, used for HTML rendering only)
-	StoredFolderConfigs []FolderConfig `json:"-"`
-}
-
 type AuthenticationMethod string
 
 const (

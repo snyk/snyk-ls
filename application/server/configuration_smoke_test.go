@@ -40,7 +40,7 @@ import (
 // 4. Generated HTML includes ALL sub-fields from FolderConfig
 // 5. Includes authentication and logout triggers
 func Test_SmokeConfigurationDialog(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
 	testutil.CreateDummyProgressListener(t)
 
 	// Setup server with LSP client
@@ -135,10 +135,10 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			assertFieldPresent(t, html, "scan_automatic", "ScanningMode field")
 
 			// Filter and display settings
-			assertFieldPresent(t, html, "enabled_severities_critical", "FilterSeverity Critical field")
-			assertFieldPresent(t, html, "enabled_severities_high", "FilterSeverity High field")
-			assertFieldPresent(t, html, "enabled_severities_medium", "FilterSeverity Medium field")
-			assertFieldPresent(t, html, "enabled_severities_low", "FilterSeverity Low field")
+			assertFieldPresent(t, html, "severity_filter_critical", "FilterSeverity Critical field")
+			assertFieldPresent(t, html, "severity_filter_high", "FilterSeverity High field")
+			assertFieldPresent(t, html, "severity_filter_medium", "FilterSeverity Medium field")
+			assertFieldPresent(t, html, "severity_filter_low", "FilterSeverity Low field")
 			assertFieldPresent(t, html, "issue_view_open_issues", "IssueViewOptions field")
 			assertFieldPresent(t, html, "scan_net_new", "EnableDeltaFindings field")
 		})

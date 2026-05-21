@@ -44,7 +44,7 @@ import (
 // setupLdxSyncTest creates test environment for LDX-Sync cache tests
 func setupLdxSyncTest(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder) {
 	t.Helper()
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_4")
 
 	origConfigHome := xdg.ConfigHome
 	xdg.ConfigHome = t.TempDir()
@@ -122,7 +122,7 @@ func Test_SmokeLdxSync_Initialize(t *testing.T) {
 			require.NotNil(t, fc.Settings[types.SettingAutoDeterminedOrg], "Folder should have autoDeterminedOrg set")
 			assert.NotEmpty(t, fc.Settings[types.SettingAutoDeterminedOrg].Value, "Folder should have autoDeterminedOrg from LDX-Sync cache")
 		},
-	}, false)
+	}, lspFolderConfigWaitForAutoDeterminedOrg(), lspFolderConfigClearAfter(false))
 
 	jsonRpcRecorder.ClearNotifications()
 }
@@ -154,7 +154,7 @@ func Test_SmokeLdxSync_AddFolder(t *testing.T) {
 			require.NotNil(t, fc.Settings[types.SettingAutoDeterminedOrg], "Folder 1 should have autoDeterminedOrg set")
 			assert.NotEmpty(t, fc.Settings[types.SettingAutoDeterminedOrg].Value, "Folder 1 should have autoDeterminedOrg from LDX-Sync cache")
 		},
-	}, false)
+	}, lspFolderConfigWaitForAutoDeterminedOrg(), lspFolderConfigClearAfter(false))
 
 	jsonRpcRecorder.ClearNotifications()
 
@@ -195,7 +195,7 @@ func Test_SmokeLdxSync_AddFolder(t *testing.T) {
 			require.NotNil(t, fc.Settings[types.SettingAutoDeterminedOrg], "Folder 2 should have autoDeterminedOrg set")
 			assert.NotEmpty(t, fc.Settings[types.SettingAutoDeterminedOrg].Value, "Folder 2 should have autoDeterminedOrg from LDX-Sync cache")
 		},
-	}, false)
+	}, lspFolderConfigWaitForAutoDeterminedOrg(), lspFolderConfigClearAfter(false))
 
 	jsonRpcRecorder.ClearNotifications()
 }
@@ -259,7 +259,7 @@ func Test_SmokeLdxSync_ChangePreferredOrg(t *testing.T) {
 			require.NotNil(t, fc.Settings[types.SettingAutoDeterminedOrg], "Folder should have autoDeterminedOrg set")
 			assert.NotEmpty(t, fc.Settings[types.SettingAutoDeterminedOrg].Value, "Folder should have autoDeterminedOrg from LDX-Sync cache")
 		},
-	}, false)
+	}, lspFolderConfigWaitForAutoDeterminedOrg(), lspFolderConfigClearAfter(false))
 
 	jsonRpcRecorder.ClearNotifications()
 
@@ -298,7 +298,7 @@ func Test_SmokeLdxSync_ChangePreferredOrg(t *testing.T) {
 				require.NotNil(t, fc.Settings[types.SettingAutoDeterminedOrg], "Folder should have autoDeterminedOrg set")
 				assert.NotEmpty(t, fc.Settings[types.SettingAutoDeterminedOrg].Value, "Folder should have autoDeterminedOrg after config change")
 			},
-		}, false)
+		}, lspFolderConfigWaitForAutoDeterminedOrg(), lspFolderConfigClearAfter(false))
 	}
 
 	jsonRpcRecorder.ClearNotifications()

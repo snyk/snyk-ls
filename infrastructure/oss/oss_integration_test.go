@@ -45,7 +45,7 @@ import (
 // This is a smoke test that downloads and installs the CLI if necessary
 // it uses real CLI output for verification of functionality
 func Test_Scan(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
 	testutil.CreateDummyProgressListener(t)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 	ctx := t.Context()
@@ -83,6 +83,11 @@ func Test_Scan(t *testing.T) {
 	ctx = oss.EnrichContextForTest(t, ctx, engine, workingDir)
 	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), types.FilePath(workingDir), engine.GetLogger())
 	ctx = ctx2.NewContextWithFolderConfig(ctx, folderConfig)
+
+	if config.GetToken(engine.GetConfiguration()) == "" {
+		t.Skip("SNYK_TOKEN must be set in the environment to run this smoke test")
+	}
+
 	issues, err := scanner.Scan(ctx, types.FilePath(path))
 	require.NoError(t, err, "scan should succeed")
 

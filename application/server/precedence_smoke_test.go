@@ -48,7 +48,7 @@ import (
 
 func setupPrecedenceTest(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder) {
 	t.Helper()
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
 
 	origConfigHome := xdg.ConfigHome
 	xdg.ConfigHome = t.TempDir()
@@ -129,7 +129,7 @@ func Test_SmokePrecedence_OrgScope_UserFolderOverrideReflectedInNotification(t *
 		folder: func(fc types.LspFolderConfig) {
 			require.NotNil(t, fc.Settings[types.SettingAutoDeterminedOrg])
 		},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 	scanAutomaticWasLocked := false
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 		folder: func(fc types.LspFolderConfig) {
@@ -137,7 +137,7 @@ func Test_SmokePrecedence_OrgScope_UserFolderOverrideReflectedInNotification(t *
 				scanAutomaticWasLocked = scanAuto.IsLocked
 			}
 		},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 	jsonRpcRecorder.ClearNotifications()
 
 	// Send didChangeConfiguration attempting to override both a locked and an unlocked setting
@@ -175,7 +175,7 @@ func Test_SmokePrecedence_OrgScope_UserFolderOverrideReflectedInNotification(t *
 				assert.Equal(t, "user-override", scanNetNew.Source, "source should be user-override")
 			}
 		},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 
 	jsonRpcRecorder.ClearNotifications()
 }
@@ -207,7 +207,7 @@ func Test_SmokePrecedence_OrgScope_LockedFieldsHaveIsLockedTrue(t *testing.T) {
 				t.Log("No locked fields found in LDX-Sync response - this is expected if the test org has no locked policies")
 			}
 		},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 
 	jsonRpcRecorder.ClearNotifications()
 }
@@ -235,7 +235,7 @@ func Test_SmokePrecedence_OrgScope_LDXSyncSourceInNotification(t *testing.T) {
 				}
 			}
 		},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 
 	jsonRpcRecorder.ClearNotifications()
 }
@@ -277,7 +277,7 @@ func Test_SmokePrecedence_FolderScope_SettingsRoundtrip(t *testing.T) {
 				assert.Equal(t, "DEBUG=1;VERBOSE=1", addlEnv.Value, "additional_environment should be set")
 			}
 		},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 
 	jsonRpcRecorder.ClearNotifications()
 }
@@ -312,7 +312,7 @@ func Test_SmokePrecedence_OldFormatSettings_Roundtrip(t *testing.T) {
 				assert.Equal(t, "release", baseBranch.Value, "base_branch from old format should be applied")
 			}
 		},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 
 	jsonRpcRecorder.ClearNotifications()
 }
@@ -339,7 +339,7 @@ func Test_SmokePrecedence_GlobalChangePreserves_FolderOverrides(t *testing.T) {
 				scanAutomaticWasLocked = scanAuto.IsLocked
 			}
 		},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 	jsonRpcRecorder.ClearNotifications()
 
 	// Step 1: Attempt folder overrides for both a locked and an unlocked setting
@@ -374,7 +374,7 @@ func Test_SmokePrecedence_GlobalChangePreserves_FolderOverrides(t *testing.T) {
 				assert.Equal(t, "user-override", scanNetNew.Source, "source should be user-override")
 			}
 		},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 	jsonRpcRecorder.ClearNotifications()
 
 	// Step 2: Change a global setting, sending the folder config without overrides to trigger notification
@@ -422,7 +422,7 @@ func Test_SmokePrecedence_MultiFolder_DifferentOrgs(t *testing.T) {
 		folder1: func(fc types.LspFolderConfig) {
 			require.NotNil(t, fc.Settings[types.SettingAutoDeterminedOrg])
 		},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 	jsonRpcRecorder.ClearNotifications()
 
 	// Add a second folder
@@ -449,7 +449,7 @@ func Test_SmokePrecedence_MultiFolder_DifferentOrgs(t *testing.T) {
 			assert.NotNil(t, fc.Settings[types.SettingSnykCodeEnabled],
 				"Folder 2 should have org-scope settings")
 		},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 
 	jsonRpcRecorder.ClearNotifications()
 }
@@ -483,7 +483,7 @@ func Test_SmokePrecedence_LoginRefreshesConfig_WithFolderOverridesPreserved(t *t
 				assert.Equal(t, "feature-branch", baseBranch.Value)
 			}
 		},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 	jsonRpcRecorder.ClearNotifications()
 
 	// Switch to FakeAuthentication AFTER initialization (which hardcodes TokenAuthentication)
@@ -511,7 +511,7 @@ func Test_SmokePrecedence_LoginRefreshesConfig_WithFolderOverridesPreserved(t *t
 					"folder-scope base_branch should be preserved after login")
 			}
 		},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 
 	jsonRpcRecorder.ClearNotifications()
 }
@@ -520,7 +520,7 @@ func Test_SmokePrecedence_LoginRefreshesConfig_WithFolderOverridesPreserved(t *t
 // ActivateSnykCodeSecurity field is ORed with ActivateSnykCode when processing old-format
 // settings through the full LSP pipeline. This tests the reconciliation logic end-to-end.
 func Test_SmokePrecedence_ActivateSnykCodeSecurity_OR_Reconciliation(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
 	testutil.CreateDummyProgressListener(t)
 
 	loc, _ := setupServer(t, engine, tokenService)
@@ -571,7 +571,7 @@ func Test_SmokePrecedence_ActivateSnykCodeSecurity_OR_Reconciliation(t *testing.
 // no user settings are provided and no LDX-Sync remote config is available,
 // default values are used for all settings.
 func Test_SmokePrecedence_DefaultValues_WhenNoUserOrRemoteConfig(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
 	testutil.CreateDummyProgressListener(t)
 
 	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
@@ -634,7 +634,7 @@ func setupScanPrecedenceTest(t *testing.T, codeEnabled, ossEnabled, iacEnabled b
 	workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder, types.FilePath,
 ) {
 	t.Helper()
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
 
 	origConfigHome := xdg.ConfigHome
 	xdg.ConfigHome = t.TempDir()
@@ -825,7 +825,7 @@ func Test_SmokeScanPrecedence_UserOverrideDisablesProduct(t *testing.T) {
 // a severity filter (Critical+High only) is configured at initialization, published
 // diagnostics only contain issues matching the allowed severities.
 func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
 
 	origConfigHome := xdg.ConfigHome
 	xdg.ConfigHome = t.TempDir()
@@ -924,7 +924,7 @@ func Test_SmokePrecedence_FolderLevelRemote_OverridesOrgLevel(t *testing.T) {
 			// Baseline: note the initial value of scan_automatic
 			t.Logf("Baseline scan_automatic: %v", fc.Settings[types.SettingScanAutomatic])
 		},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 	jsonRpcRecorder.ClearNotifications()
 
 	// Now write folder-level remote config with a different value than org-level
@@ -971,7 +971,7 @@ func Test_SmokePrecedence_FolderLevelRemote_OverridesOrgLevel(t *testing.T) {
 					scanAuto.Value, scanAuto.Source, scanAuto.IsLocked)
 			}
 		},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 	jsonRpcRecorder.ClearNotifications()
 }
 
@@ -985,7 +985,7 @@ func Test_SmokePrecedence_FolderLevelRemoteLocked_OverridesUserOverride(t *testi
 	// Wait for baseline
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 		folder: func(fc types.LspFolderConfig) {},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 	jsonRpcRecorder.ClearNotifications()
 
 	conf := engine.GetConfiguration()
@@ -1029,7 +1029,7 @@ func Test_SmokePrecedence_FolderLevelRemoteLocked_OverridesUserOverride(t *testi
 					scanAuto.Value, scanAuto.Source, scanAuto.IsLocked)
 			}
 		},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 	jsonRpcRecorder.ClearNotifications()
 }
 
@@ -1047,7 +1047,7 @@ func Test_SmokePrecedence_FolderScopePrecedenceChain(t *testing.T) {
 
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 		folder: func(fc types.LspFolderConfig) {},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 	jsonRpcRecorder.ClearNotifications()
 
 	conf := engine.GetConfiguration()
@@ -1102,7 +1102,7 @@ func Test_SmokePrecedence_FolderScopePrecedenceChain(t *testing.T) {
 				t.Error("additional_environment should be present in notification")
 			}
 		},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 	jsonRpcRecorder.ClearNotifications()
 
 	// Step 2: User global takes priority over unlocked remote org.
@@ -1122,7 +1122,7 @@ func Test_SmokePrecedence_FolderScopePrecedenceChain(t *testing.T) {
 				t.Error("additional_environment should be present in notification")
 			}
 		},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 	jsonRpcRecorder.ClearNotifications()
 
 	// Step 3: Remote folder overrides remote org.
@@ -1136,7 +1136,7 @@ func Test_SmokePrecedence_FolderScopePrecedenceChain(t *testing.T) {
 					"remote folder should override remote org for folder-scope additional_environment")
 			}
 		},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 	jsonRpcRecorder.ClearNotifications()
 
 	// Step 4: Folder value (user:folder) overrides remote folder.
@@ -1154,7 +1154,7 @@ func Test_SmokePrecedence_FolderScopePrecedenceChain(t *testing.T) {
 					"source should be folder")
 			}
 		},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 	jsonRpcRecorder.ClearNotifications()
 
 	// Step 5: Locked remote overrides folder value.
@@ -1172,6 +1172,6 @@ func Test_SmokePrecedence_FolderScopePrecedenceChain(t *testing.T) {
 					"source should be ldx_sync_locked")
 			}
 		},
-	}, false)
+	}, lspFolderConfigClearAfter(false))
 	jsonRpcRecorder.ClearNotifications()
 }

@@ -60,7 +60,7 @@ import (
 )
 
 func Test_SmokeInstanceTest(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	ossFile := "package.json"
 	codeFile := "app.js"
 	testutil.CreateDummyProgressListener(t)
@@ -162,7 +162,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 				tokenSecretName = "SNYK_TOKEN_CONSISTENT_IGNORES"
 			}
 
-			engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretName)
+			engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretName, "SMOKE_SHARD_1")
 			runSmokeTest(t, engine, tokenService, tc.repo, tc.commit, tc.file1, tc.file2, tc.hasVulns, "", tc.products...)
 		})
 	}
@@ -171,7 +171,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 func Test_SmokePreScanCommand(t *testing.T) {
 	t.Run("executes pre scan command if configured", func(t *testing.T) {
 		testsupport.NotOnWindows(t, "we can enable windows if we have the correct error message")
-		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+		engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 		loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
 		enableOnlyProducts(t, engine, product.ProductOpenSource)
 		di.Init(engine, tokenService)
@@ -227,7 +227,7 @@ func Test_SmokePreScanCommand(t *testing.T) {
 func Test_SmokeIssueCaching(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
 	t.Run("adds issues to cache correctly", func(t *testing.T) {
-		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+		engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_1")
 		loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 		enableOnlyProducts(t, engine, product.ProductOpenSource, product.ProductCode)
 		di.Init(engine, tokenService)
@@ -310,7 +310,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	})
 
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
-		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+		engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_1")
 		loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 		enableOnlyProducts(t, engine, product.ProductOpenSource, product.ProductCode)
 		di.Init(engine, tokenService)
@@ -357,7 +357,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 }
 
 func Test_SmokeExecuteCLICommand(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, _ := setupServer(t, engine, tokenService)
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
@@ -388,7 +388,7 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 }
 
 func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretNameForRiskScore)
+	engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretNameForRiskScore, "SMOKE_SHARD_1")
 	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
 	di.Init(engine, tokenService)
@@ -898,19 +898,35 @@ func checkForScanParams(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecord
 	checkForScanParamsWithMaxWait(t, jsonRPCRecorder, cloneTargetDir, p, 5*time.Minute)
 }
 
+// isTransientScanError reports whether the error message matches a known transient backend
+// error that should not count as a test failure (rate-limits, temporary unavailability, etc.).
+func isTransientScanError(errMsg string) bool {
+	for _, pat := range []string{
+		"Client request cannot be processed",
+		"Too Many Requests",
+		`"429"`, // HTTP 429 embedded in error strings, e.g.: unexpected response status "429"
+	} {
+		if strings.Contains(errMsg, pat) {
+			return true
+		}
+	}
+	return false
+}
+
 func checkForScanParamsWithMaxWait(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, cloneTargetDir string, p product.Product, maxWait time.Duration) {
 	t.Helper()
 	var notifications []jrpc2.Request
 	var finalScanParams *types.SnykScanParams
+	expectedFolderKey := types.PathKey(types.FilePath(cloneTargetDir))
 
-	// Wait for scan to complete (success or error)
+	// Wait for scan to complete (success or error). Callers pass maxWait (e.g. monorepoRealScanPhaseMaxWait for large fixtures).
 	require.Eventually(t, func() bool {
 		notifications = jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
 		for _, n := range notifications {
 			var scanParams types.SnykScanParams
 			_ = n.UnmarshalParams(&scanParams)
 			if scanParams.Product != p.ToProductCodename() ||
-				scanParams.FolderPath != types.FilePath(cloneTargetDir) ||
+				types.PathKey(scanParams.FolderPath) != expectedFolderKey ||
 				scanParams.Status == types.InProgress {
 				continue
 			}
@@ -922,9 +938,19 @@ func checkForScanParamsWithMaxWait(t *testing.T, jsonRPCRecorder *testsupport.Js
 		"Scan did not complete for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
 
 	require.NotNil(t, finalScanParams, "No scan notification received for product %s in folder %s", p.ToProductCodename(), cloneTargetDir)
-	require.NotEqual(t, types.ErrorStatus, finalScanParams.Status,
-		"Scan failed - Product: %s, Folder: %s, Error: %w",
-		finalScanParams.Product, finalScanParams.FolderPath, finalScanParams.PresentableError)
+	if finalScanParams.Status == types.ErrorStatus {
+		errMsg := ""
+		if finalScanParams.PresentableError != nil {
+			errMsg = finalScanParams.PresentableError.ErrorMessage
+		}
+		if isTransientScanError(errMsg) {
+			t.Skipf("skipping: transient API error during %s scan in %s: %s",
+				finalScanParams.Product, finalScanParams.FolderPath, errMsg)
+		}
+		require.NotEqual(t, types.ErrorStatus, finalScanParams.Status,
+			"Scan failed - Product: %s, Folder: %s, Error: %w",
+			finalScanParams.Product, finalScanParams.FolderPath, finalScanParams.PresentableError)
+	}
 	require.Equal(t, types.Success, finalScanParams.Status,
 		"Unexpected scan status: %s", finalScanParams.Status)
 }
@@ -1202,7 +1228,7 @@ func checkFeatureFlagStatus(t *testing.T, engine workflow.Engine, loc *server.Lo
 }
 
 func Test_SmokeSnykCodeFileScan(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	enableOnlyProducts(t, engine, product.ProductCode)
@@ -1221,7 +1247,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 }
 
 func Test_SmokeUncFilePath(t *testing.T) {
-	engine, tokenService := testutil.IntegTestWithEngine(t)
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	testsupport.OnlyOnWindows(t, "testing windows UNC file paths")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	enableOnlyProducts(t, engine, product.ProductCode)
@@ -1250,7 +1276,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	enableOnlyProducts(t, engine, product.ProductCode)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
@@ -1280,7 +1306,7 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	enableOnlyProducts(t, engine, product.ProductCode)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
@@ -1308,7 +1334,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	enableOnlyProducts(t, engine, product.ProductCode)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
@@ -1341,7 +1367,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 // This reproduces the bug where git.PlainOpen fails for subfolders because it doesn't
 // walk up parent directories to find .git. The fix uses PlainOpenWithOptions with DetectDotGit.
 func Test_SmokeSnykCodeDelta_SubfolderWorkspace(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	testutil.OnlyEnableCode(t, engine)
 	testutil.EnableSastAndAutoFix(engine)
@@ -1389,7 +1415,7 @@ app.get('/unique_subfolder_test', function(req, res) {
 
 func Test_SmokeScanUnmanaged(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_1")
 	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
 	// OSS-only: unmanaged scan is an OSS-specific path (--unmanaged for C/C++ repos).
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
@@ -1431,44 +1457,172 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 		"publishDiagnostics did not report more than 10 unmanaged OSS issues for folder %s", cloneTargetDir)
 }
 
-// requireLspFolderConfigNotification checks that a $/snyk.configuration notification
-// contains the expected folder configs. validators is a map of folder path to validation function.
-// clearNotifications controls whether to clear notifications after validation (default: true).
-func requireLspFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.JsonRPCRecorder, validators map[types.FilePath]func(types.LspFolderConfig), clearNotifications ...bool) {
-	t.Helper()
+type lspFolderConfigNotifOpts struct {
+	clearNotifications               bool
+	waitForNonEmptyAutoDeterminedOrg bool
+}
 
-	var notifications []jrpc2.Request
-	var lastConfigParam types.LspConfigurationParam
-	require.Eventuallyf(t, func() bool {
-		notifications = jsonRpcRecorder.FindNotificationsByMethod("$/snyk.configuration")
-		for i := len(notifications) - 1; i >= 0; i-- {
-			var param types.LspConfigurationParam
-			if err := notifications[i].UnmarshalParams(&param); err == nil && len(param.FolderConfigs) > 0 {
-				lastConfigParam = param
-				return true
+type lspFolderConfigNotifOption func(*lspFolderConfigNotifOpts)
+
+func lspFolderConfigClearAfter(clearNotifications bool) lspFolderConfigNotifOption {
+	return func(o *lspFolderConfigNotifOpts) { o.clearNotifications = clearNotifications }
+}
+
+// lspFolderConfigWaitForAutoDeterminedOrg makes requireLspFolderConfigNotification wait until the
+// newest $/snyk.configuration notification has non-empty SettingAutoDeterminedOrg for every path in
+// validators (LDX-Sync can populate folder configs before autoDeterminedOrg is ready).
+func lspFolderConfigWaitForAutoDeterminedOrg() lspFolderConfigNotifOption {
+	return func(o *lspFolderConfigNotifOpts) { o.waitForNonEmptyAutoDeterminedOrg = true }
+}
+
+func parseLspFolderConfigNotifOpts(opts ...lspFolderConfigNotifOption) lspFolderConfigNotifOpts {
+	o := lspFolderConfigNotifOpts{clearNotifications: true}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return o
+}
+
+func folderConfigPathsMatch(a, b types.FilePath) bool {
+	ka, kb := types.PathKey(a), types.PathKey(b)
+	if ka == kb {
+		return true
+	}
+	ra, err1 := filepath.EvalSymlinks(string(ka))
+	rb, err2 := filepath.EvalSymlinks(string(kb))
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	return types.PathKey(types.FilePath(ra)) == types.PathKey(types.FilePath(rb))
+}
+
+func configSettingHasNonEmptyStringValue(s *types.ConfigSetting) bool {
+	if s == nil || s.Value == nil {
+		return false
+	}
+	switch v := s.Value.(type) {
+	case string:
+		return strings.TrimSpace(v) != ""
+	default:
+		return strings.TrimSpace(fmt.Sprint(v)) != ""
+	}
+}
+
+func folderConfigsHaveNonEmptyAutoDeterminedOrgForValidators(
+	param types.LspConfigurationParam,
+	validators map[types.FilePath]func(types.LspFolderConfig),
+) bool {
+	if len(validators) == 1 && len(param.FolderConfigs) == 1 {
+		var want types.FilePath
+		for w := range validators {
+			want = w
+			break
+		}
+		fc := param.FolderConfigs[0]
+		if !folderConfigPathsMatch(fc.FolderPath, want) {
+			return false
+		}
+		return configSettingHasNonEmptyStringValue(fc.Settings[types.SettingAutoDeterminedOrg])
+	}
+	for wantPath := range validators {
+		var match *types.LspFolderConfig
+		for i := range param.FolderConfigs {
+			if folderConfigPathsMatch(param.FolderConfigs[i].FolderPath, wantPath) {
+				match = &param.FolderConfigs[i]
+				break
 			}
 		}
-		return false
-	}, 10*time.Second, time.Millisecond, "No $/snyk.configuration notification with folder configs")
+		if match == nil {
+			return false
+		}
+		if !configSettingHasNonEmptyStringValue(match.Settings[types.SettingAutoDeterminedOrg]) {
+			return false
+		}
+	}
+	return true
+}
 
+// tryParseLatestMatchingFolderConfig walks notifications newest-first and returns the first
+// $/snyk.configuration payload that satisfies cfg (including optional autoDeterminedOrg wait).
+func tryParseLatestMatchingFolderConfig(
+	notifications []jrpc2.Request,
+	cfg lspFolderConfigNotifOpts,
+	validators map[types.FilePath]func(types.LspFolderConfig),
+) (types.LspConfigurationParam, bool) {
+	for i := len(notifications) - 1; i >= 0; i-- {
+		var param types.LspConfigurationParam
+		if err := notifications[i].UnmarshalParams(&param); err != nil || len(param.FolderConfigs) == 0 {
+			continue
+		}
+		if cfg.waitForNonEmptyAutoDeterminedOrg {
+			if !folderConfigsHaveNonEmptyAutoDeterminedOrgForValidators(param, validators) {
+				continue
+			}
+			return param, true
+		}
+		return param, true
+	}
+	return types.LspConfigurationParam{}, false
+}
+
+func countValidatedFolderConfigs(
+	lastConfigParam types.LspConfigurationParam,
+	validators map[types.FilePath]func(types.LspFolderConfig),
+) int {
 	validationsCount := 0
+	if len(lastConfigParam.FolderConfigs) == 1 && len(validators) == 1 {
+		fc := lastConfigParam.FolderConfigs[0]
+		for wantPath, onlyValidator := range validators {
+			if folderConfigPathsMatch(fc.FolderPath, wantPath) {
+				validationsCount++
+				onlyValidator(fc)
+			}
+			return validationsCount
+		}
+	}
 	for _, folderConfig := range lastConfigParam.FolderConfigs {
-		validator, ok := validators[folderConfig.FolderPath]
-		if ok {
-			validationsCount++
+		var validator func(types.LspFolderConfig)
+		for wantPath, v := range validators {
+			if folderConfigPathsMatch(folderConfig.FolderPath, wantPath) {
+				validator = v
+				break
+			}
 		}
 		if validator != nil {
+			validationsCount++
 			validator(folderConfig)
 		}
 	}
+	return validationsCount
+}
 
+// requireLspFolderConfigNotification checks that a $/snyk.configuration notification
+// contains the expected folder configs. validators is a map of folder path to validation function.
+// By default, notifications are cleared after validation; pass lspFolderConfigClearAfter(false) to keep them.
+func requireLspFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsupport.JsonRPCRecorder, validators map[types.FilePath]func(types.LspFolderConfig), opts ...lspFolderConfigNotifOption) {
+	t.Helper()
+
+	cfg := parseLspFolderConfigNotifOpts(opts...)
+	deadline := 10 * time.Second
+	if cfg.waitForNonEmptyAutoDeterminedOrg {
+		deadline = 30 * time.Second
+	}
+
+	var lastConfigParam types.LspConfigurationParam
+	require.Eventuallyf(t, func() bool {
+		notifications := jsonRpcRecorder.FindNotificationsByMethod("$/snyk.configuration")
+		param, ok := tryParseLatestMatchingFolderConfig(notifications, cfg, validators)
+		if !ok {
+			return false
+		}
+		lastConfigParam = param
+		return true
+	}, deadline, time.Millisecond, "No $/snyk.configuration notification with folder configs")
+
+	validationsCount := countValidatedFolderConfigs(lastConfigParam, validators)
 	require.Equal(t, len(lastConfigParam.FolderConfigs), validationsCount, "Not all folder configs were validated")
 
-	shouldClear := true
-	if len(clearNotifications) > 0 {
-		shouldClear = clearNotifications[0]
-	}
-	if shouldClear {
+	if cfg.clearNotifications {
 		jsonRpcRecorder.ClearNotifications()
 	}
 }
@@ -1476,7 +1630,7 @@ func requireLspFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsuppo
 func Test_SmokeOrgSelection(t *testing.T) {
 	setupOrgSelectionTest := func(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder, types.FilePath, types.InitializeParams) {
 		t.Helper()
-		engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+		engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
 		loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
 		enableOnlyProducts(t, engine, product.ProductOpenSource)
 		di.Init(engine, tokenService)
@@ -2161,7 +2315,7 @@ type monorepoRealScanHarness struct {
 
 func setupMonorepoRealScanHarness(t *testing.T) *monorepoRealScanHarness {
 	t.Helper()
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	nCode, nOSS := monorepoBenchmarkFixtureScale(t)
 
 	parent := types.FilePath(testutil.TempDirWithRetry(t))

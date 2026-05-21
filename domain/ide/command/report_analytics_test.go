@@ -18,6 +18,8 @@ package command
 
 import (
 	"encoding/json"
+	"os/user"
+	"strings"
 	"testing"
 	"time"
 
@@ -195,8 +197,16 @@ func Test_ReportAnalyticsCommand_PlugInstalledEvent(t *testing.T) {
 
 			require.Contains(t, payload, "plugin installed")
 			require.Contains(t, payload, "install")
-			require.Contains(t, payload, "device_id")
 			require.Contains(t, payload, "123")
+			// SanitizeUsername in GAF does strings.ReplaceAll over the entire JSON string,
+			// including key names. Derive the expected key form at runtime so the assertion
+			// is correct for any OS username, not just "dev".
+			expectedKey := "device_id"
+			if u, userErr := user.Current(); userErr == nil && strings.Contains("device_id", u.Username) {
+				expectedKey = strings.ReplaceAll("device_id", u.Username, "***")
+			}
+			require.Contains(t, payload, expectedKey,
+				"payload should contain device_id key (possibly sanitized by SanitizeUsername)")
 
 			return true
 		}),
