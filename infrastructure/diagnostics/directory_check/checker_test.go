@@ -328,6 +328,14 @@ func Test_CheckDirectory_ReadOnlyDirectory(t *testing.T) {
 	err := os.Chmod(tmpDir, 0555)
 	require.NoError(t, err)
 
+	// Overlay filesystems (e.g. Docker) may not enforce mode bits for non-root
+	// users. Detect this and skip rather than failing spuriously.
+	if probe, probeErr := os.Create(filepath.Join(tmpDir, ".permission-probe")); probeErr == nil {
+		_ = probe.Close()
+		_ = os.Remove(filepath.Join(tmpDir, ".permission-probe"))
+		t.Skip("Skipping: filesystem does not enforce chmod 0555 for this user (overlay fs)")
+	}
+
 	// Clean up: restore write permissions
 	t.Cleanup(func() {
 		err = os.Chmod(tmpDir, 0755)
