@@ -118,10 +118,11 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 				continue
 			}
 
-			ss := scanStatus{status: scanParams.Status}
+			var errMsg string
 			if scanParams.PresentableError != nil {
-				ss.scanError = scanParams.PresentableError.ErrorMessage
+				errMsg = scanParams.PresentableError.ErrorMessage
 			}
+			ss := scanStatus{status: scanParams.Status, scanError: errMsg}
 
 			prev := scanStatuses[scanParams.FolderPath][p]
 			if prev != ss {
