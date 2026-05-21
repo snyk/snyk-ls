@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
@@ -29,6 +30,33 @@ import (
 
 	"github.com/snyk/snyk-ls/internal/testsupport"
 )
+
+// flockEnforced returns true when the OS/filesystem actually enforces exclusive
+// file locks. Overlay filesystems (e.g. Docker) often treat flock as a no-op,
+// which makes Test_ParallelFileLocking meaningless and spuriously slow.
+func flockEnforced(t *testing.T) bool {
+	t.Helper()
+	f1, err := os.CreateTemp(t.TempDir(), "flock-probe-")
+	if err != nil {
+		return true // assume enforced if we can't probe
+	}
+	defer f1.Close()
+
+	f2, err := os.Open(f1.Name())
+	if err != nil {
+		return true
+	}
+	defer f2.Close()
+
+	if err = syscall.Flock(int(f1.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		return true // first lock failed — unusual, but treat as enforced
+	}
+	defer syscall.Flock(int(f1.Fd()), syscall.LOCK_UN) //nolint:errcheck
+
+	// If a second LOCK_EX|LOCK_NB on the same file succeeds, locks are not enforced.
+	err = syscall.Flock(int(f2.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+	return err != nil
+}
 
 func Test_StorageCallsRegisterCallbacksForKeys(t *testing.T) {
 	called := make(chan bool, 1)
@@ -110,6 +138,9 @@ func Test_StorageCallsRegisterCallbacks_InvalidJsonContent_ShouldClean(t *testin
 }
 
 func Test_ParallelFileLocking(t *testing.T) {
+	if !flockEnforced(t) {
+		t.Skip("Skipping: filesystem does not enforce exclusive file locks (overlay fs)")
+	}
 	t.Run("should respect locking order", func(t *testing.T) {
 		file := filepath.Join(t.TempDir(), testsupport.PathSafeTestName(t))
 		err := os.MkdirAll(filepath.Dir(file), 0755)
