@@ -47,6 +47,11 @@ func Test_SmokeTreeView(t *testing.T) {
 
 	waitForScan(t, cloneTargetDirString, engine)
 
+	// Register before any t.Skipf site: t.Cleanup runs even when t.Skipf fires
+	// (runtime.Goexit honors registered cleanup functions), so reference-branch
+	// goroutines are always given time to finish before the temp dir is removed.
+	t.Cleanup(func() { waitForDeltaScan(t, di.ScanStateAggregator()) })
+
 	// Poll for TotalIssues>0: early SetScanInProgress notifications arrive before
 	// the workspace cache is populated; the async render goroutine may lag behind waitForScan.
 	// The closure uses only local variables so there is no shared mutable state between
@@ -137,6 +142,4 @@ func Test_SmokeTreeView(t *testing.T) {
 		})
 		require.NoError(t, err)
 	})
-
-	waitForDeltaScan(t, di.ScanStateAggregator())
 }

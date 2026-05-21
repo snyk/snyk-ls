@@ -44,12 +44,10 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 
 	// create clones and make them workspace folders
 	type scanStatus struct {
-		status types.ScanStatus
-		error  string
+		status    types.ScanStatus
+		scanError string
 	}
 	scanStatuses := map[types.FilePath]map[product.Product]scanStatus{}
-
-	prevStatuses := map[types.FilePath]map[product.Product]scanStatus{}
 
 	var workspaceFolders []types.WorkspaceFolder
 	wg := sync.WaitGroup{}
@@ -103,7 +101,11 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 	assert.Eventuallyf(t, func() bool {
 		notificationsByMethod := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan")
 
-		// Track scan statuses for diagnostics
+		// Track scan statuses for diagnostics; log only on transitions to avoid spam.
+		// Both reference-branch and working-copy scans emit $/snyk.scan with the
+		// same folderPath/product key, so the last notification wins. This is
+		// acceptable: the test exits only after the working-copy scan succeeds, and
+		// waitForAllScansToComplete at the end guards against goroutine leaks.
 		for _, notification := range notificationsByMethod {
 			var scanParams types.SnykScanParams
 			err := notification.UnmarshalParams(&scanParams)
@@ -116,34 +118,20 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 				continue
 			}
 
-			// Update status for this folder/product combination
-			scanStatuses[scanParams.FolderPath][p] = scanStatus{
-				status: scanParams.Status,
-				error:  "",
-			}
+			ss := scanStatus{status: scanParams.Status}
 			if scanParams.PresentableError != nil {
-				scanStatuses[scanParams.FolderPath][p] = scanStatus{
-					status: scanParams.Status,
-					error:  scanParams.PresentableError.ErrorMessage,
-				}
+				ss.scanError = scanParams.PresentableError.ErrorMessage
 			}
-		}
 
-		// Log only on status transitions to avoid log spam during polling
-		for folderPath, productStatuses := range scanStatuses {
-			for p, status := range productStatuses {
-				if prevStatuses[folderPath] == nil {
-					prevStatuses[folderPath] = map[product.Product]scanStatus{}
-				}
-				if prevStatuses[folderPath][p] != status {
-					prevStatuses[folderPath][p] = status
-					if status.status == types.ErrorStatus {
-						t.Logf("Scan error for folder %s product %s: %s", folderPath, p.ToProductCodename(), status.error)
-					} else {
-						t.Logf("Scan status changed: folder %s product %s → %s", folderPath, p.ToProductCodename(), status.status)
-					}
+			prev := scanStatuses[scanParams.FolderPath][p]
+			if prev != ss {
+				if ss.status == types.ErrorStatus {
+					t.Logf("Scan error for folder %s product %s: %s", scanParams.FolderPath, p.ToProductCodename(), ss.scanError)
+				} else {
+					t.Logf("Scan status changed: folder %s product %s → %s", scanParams.FolderPath, p.ToProductCodename(), ss.status)
 				}
 			}
+			scanStatuses[scanParams.FolderPath][p] = ss
 		}
 
 		// Count successful scans

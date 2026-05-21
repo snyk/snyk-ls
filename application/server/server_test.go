@@ -911,22 +911,14 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 	// exits; the terminal $/snyk.scan notification is emitted only after
 	// internalScan (and its subprocess) has returned, so the notification is a
 	// reliable proxy for "file handles released."
-	//
-	// OSS and IaC are both enabled by default; Snyk Code is disabled above.
-	// ScanFolder runs both product scanners in parallel, each emitting exactly
-	// one terminal (Success or ErrorStatus) notification. The reference-scan
-	// goroutine starts but processResults returns early (IsReferenceScan &&
-	// !SettingScanNetNew), so it emits no extra notification. We wait for
-	// terminal >= 2 to cover both products.
-	//
-	// We use the JSON-RPC notification stream rather than ScanStateAggregator:
-	// the aggregator is initialized during "initialize" (before the folder is
-	// added via sendFileSavedMessage), so the folder's state entries are never
-	// registered and allMatch returns true vacuously on an empty map.
 	t.Cleanup(func() {
 		if t.Failed() {
 			return
 		}
+		// Use the JSON-RPC notification stream rather than ScanStateAggregator:
+		// the aggregator is initialized during "initialize" (before the folder is
+		// added via sendFileSavedMessage), so the folder's state entries are never
+		// registered and allMatch returns true vacuously on an empty map.
 		require.Eventually(t, func() bool {
 			terminal := 0
 			for _, n := range jsonRPCRecorder.FindNotificationsByMethod("$/snyk.scan") {
@@ -938,6 +930,10 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 					terminal++
 				}
 			}
+			// OSS and IaC are both enabled by default; Snyk Code is disabled above.
+			// ScanFolder runs both product scanners in parallel — 2 terminal
+			// notifications expected (one per product). The reference-scan goroutine
+			// returns early (!SettingScanNetNew) and emits no additional notification.
 			return terminal >= 2
 		}, maxIntegTestDuration, time.Second)
 	})
