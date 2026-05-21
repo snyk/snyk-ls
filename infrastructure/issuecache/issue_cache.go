@@ -77,10 +77,18 @@ func (c *IssueCache) SetCacheForTests(ic *imcache.Cache[types.FilePath, []types.
 	c.rebuildIndexFromStore()
 }
 
-// Index returns the in-memory issue index. Exposed for callers that will read
-// by key / path / code-action UUID without materializing the rich body. See
-// IDE-1940 cp11r.
+// Index returns the in-memory issue index, pruned of any entries whose paths
+// have expired from the TTL store. Callers always see a consistent snapshot:
+// no stale entries linger between AddToCache calls.
+//
+// The lock and RemoveExpired call add a small overhead on every read, but keep
+// the consistency contract tight: an entry in the index always has a matching
+// entry in the store.
 func (c *IssueCache) Index() *IssueIndex {
+	c.store.RemoveExpired()
+	c.mu.Lock()
+	c.pruneExpiredFromIndex()
+	c.mu.Unlock()
 	return c.index.Load()
 }
 

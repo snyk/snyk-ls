@@ -198,17 +198,25 @@ func TestIssueCache_ConcurrentAddAndClearMaintainsConsistency(t *testing.T) {
 }
 
 func TestIssueCache_RemoveExpiredKeepsIndexInSync(t *testing.T) {
+	// Use the default (12h) TTL so the fresh item survives for the duration of
+	// the test. The expiring entry is injected directly with a 1µs TTL so only
+	// it is evicted by RemoveExpired; the fresh entry uses the long-lived default.
 	c := NewIssueCache(product.ProductCode)
-	c.SetCacheForTests(imcache.New[types.FilePath, []types.Issue](
-		imcache.WithDefaultExpirationOption[types.FilePath, []types.Issue](time.Microsecond),
-	))
 	expiring := buildIssue(t, "expired-key", "expired.go")
-	c.AddToCache([]types.Issue{expiring})
+	// Insert the expiring item directly into imcache with a 1µs TTL, bypassing
+	// AddToCache (which would apply the 12h default). Manually update the index
+	// so pruning has an entry to remove.
+	c.Cache.Set("expired.go", []types.Issue{expiring}, imcache.WithExpiration(time.Microsecond))
+	c.index.Load().UpsertFromIssue(expiring)
+
+	// Wait until imcache evicts the short-lived entry.
 	require.Eventually(t, func() bool {
 		_, found := c.Cache.Get("expired.go")
 		return !found
 	}, time.Second, time.Millisecond)
 
+	// AddToCache adds the fresh item (with 12h TTL) and prunes expired index
+	// entries; Index() must then also reflect the pruned state.
 	c.AddToCache([]types.Issue{buildIssue(t, "fresh-key", "fresh.go")})
 
 	assert.Empty(t, c.IssuesForFile("expired.go"))
@@ -216,4 +224,30 @@ func TestIssueCache_RemoveExpiredKeepsIndexInSync(t *testing.T) {
 	assert.False(t, foundExpired)
 	_, foundFresh := c.Index().EntryByKey("fresh-key")
 	assert.True(t, foundFresh)
+}
+
+// TestIssueCache_IndexPrunesExpiredWithoutAddToCache verifies that Index()
+// itself prunes stale index entries when TTL-based eviction has occurred,
+// without requiring a subsequent AddToCache call. This is the consistency
+// contract documented on IssueCache: readers of Index() must never observe
+// entries for issues that have already expired from the store.
+func TestIssueCache_IndexPrunesExpiredWithoutAddToCache(t *testing.T) {
+	c := NewIssueCache(product.ProductCode)
+	c.SetCacheForTests(imcache.New[types.FilePath, []types.Issue](
+		imcache.WithDefaultExpirationOption[types.FilePath, []types.Issue](time.Microsecond),
+	))
+
+	c.AddToCache([]types.Issue{buildIssue(t, "ttl-key", "ttl.go")})
+
+	// Wait until imcache evicts the entry via TTL.
+	require.Eventually(t, func() bool {
+		_, found := c.Cache.Get("ttl.go")
+		return !found
+	}, time.Second, time.Millisecond)
+
+	// Index() must prune the stale entry on its own — no AddToCache call here.
+	idx := c.Index()
+	_, foundStale := idx.EntryByKey("ttl-key")
+	assert.False(t, foundStale, "Index() must not return stale entries after TTL expiry")
+	assert.Empty(t, idx.Paths(), "Index() must not return paths with expired issues")
 }
