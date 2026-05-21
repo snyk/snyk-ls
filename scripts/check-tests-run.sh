@@ -9,6 +9,9 @@ set -e
 
 HASH_FILE=".tests-hash"
 REQUIRED_STAGES=("test")   # block push if stale
+# test-integ and test-smoke are advisory locally (each takes 30-90 min) and warn only.
+# The blocking quality gate for these stages is CI, which always runs them on every PR;
+# the pre-push hook intentionally stays out of the way so contributors can iterate fast.
 ADVISORY_STAGES=("test-integ" "test-smoke")                                   # warn only — takes 30-90 min
 
 # Determine upstream ref; default to origin/<current-branch> if the tracking branch is unset.

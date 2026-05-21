@@ -106,10 +106,7 @@ func assertSmokeLdxFolderProductSettings(t *testing.T, fc types.LspFolderConfig)
 // assertSmokeLdxFolderOrgResolution verifies LDX-Sync populated auto_determined_org on the folder config.
 func assertSmokeLdxFolderOrgResolution(t *testing.T, fc types.LspFolderConfig) {
 	t.Helper()
-	if !configSettingHasNonEmptyStringValue(fc.Settings[types.SettingAutoDeterminedOrg]) {
-		t.Skip("CI has no LDX-Sync org mapping for this repo; skipping auto_determined_org assertion")
-	}
-	require.NotNil(t, fc.Settings[types.SettingAutoDeterminedOrg])
+	require.NotNil(t, fc.Settings[types.SettingAutoDeterminedOrg], "folder should have auto_determined_org set by LDX-Sync")
 	assert.NotEmpty(t, fc.Settings[types.SettingAutoDeterminedOrg].Value, "folder should have auto_determined_org from LDX-Sync cache")
 }
 
