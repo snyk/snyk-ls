@@ -70,8 +70,15 @@ type TreeNode struct {
 	// FileIconHTML holds a pre-rendered HTML fragment (inline SVG or <img> tag)
 	// for the file icon shown on file-type nodes. Empty string falls back to the
 	// generic icon defined in the template.
-	FileIconHTML string     `json:"fileIconHtml,omitempty"`
-	Children     []TreeNode `json:"children,omitempty"`
+	FileIconHTML string `json:"fileIconHtml,omitempty"`
+	// Tooltip is the title-attribute text shown on hover for product-type nodes.
+	// Callers must supply plain unescaped text; html/template handles attribute escaping.
+	Tooltip string `json:"tooltip,omitempty"`
+	// InfoVariant selects alternate rendering for info nodes.
+	// "filter-empty" is hidden by default and revealed by JS when all issues are
+	// filtered out. "untrusted-folder" renders a Trust action button.
+	InfoVariant string     `json:"infoVariant,omitempty"`
+	Children    []TreeNode `json:"children,omitempty"`
 }
 
 // TreeViewFilterState captures the current filter settings for the tree view.
@@ -195,6 +202,14 @@ func WithReferenceFolderPath(path string) TreeNodeOption {
 
 func WithFileIconHTML(html string) TreeNodeOption {
 	return func(n *TreeNode) { n.FileIconHTML = html }
+}
+
+func WithTooltip(tooltip string) TreeNodeOption {
+	return func(n *TreeNode) { n.Tooltip = tooltip }
+}
+
+func WithInfoVariant(variant string) TreeNodeOption {
+	return func(n *TreeNode) { n.InfoVariant = variant }
 }
 
 func WithChildren(children []TreeNode) TreeNodeOption {

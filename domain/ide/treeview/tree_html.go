@@ -53,6 +53,7 @@ func NewTreeHtmlRenderer(logger *zerolog.Logger) (*TreeHtmlRenderer, error) {
 		"severitySVG":       func(s types.Severity) template.HTML { return template.HTML(severitySVG(s)) },
 		"severitySVGByName": severitySVGByName,
 		"productSVG":        func(p product.Product) template.HTML { return template.HTML(productSVG(p)) },
+		"productID":         productIDFunc,
 		"checkmarkSVG":      func() template.HTML { return template.HTML(checkmarkSVG()) },
 		"fileIcon":          fileIconFunc,
 		"isEnabled":         isEnabledFunc,
@@ -173,4 +174,20 @@ func isEnabledFunc(enabled *bool) bool {
 // fileIconFunc returns a pre-rendered file icon HTML fragment as trusted template.HTML.
 func fileIconFunc(iconHTML string) template.HTML {
 	return template.HTML(iconHTML)
+}
+
+// productIDFunc returns the kebab-case product identifier used in data-product-id attributes.
+func productIDFunc(p product.Product) string {
+	switch p {
+	case product.ProductOpenSource:
+		return "open-source"
+	case product.ProductCode:
+		return "code-security"
+	case product.ProductInfrastructureAsCode:
+		return "infrastructure-as-code"
+	case product.ProductSecrets:
+		return "secrets"
+	default:
+		return ""
+	}
 }

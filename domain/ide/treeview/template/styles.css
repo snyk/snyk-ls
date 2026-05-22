@@ -251,10 +251,10 @@ body {
   vertical-align: middle;
 }
 
-/* Error state for product nodes */
-.tree-node-error > .tree-node-row .tree-label {
-  color: var(--error-foreground);
-}
+/* Errored scanners no longer paint the row label red. Scanner names stay in
+   the normal foreground regardless of state; only the inline description suffix
+   shifts to --description-foreground. Errors are already discoverable via the
+   click-to-open overlay and the inline status suffix. */
 
 /* File icon */
 .file-icon {
@@ -403,7 +403,27 @@ body {
   height: 16px;
 }
 
-/* Info nodes — regular text, no interaction */
+/* Both disabled and errored products dim the product icon via opacity so the
+   gradient/colour-rich scanner glyph recedes visually without affecting the
+   scanner-name typography next to it. */
+.tree-node-disabled > .tree-node-row .product-icon,
+.tree-node-error > .tree-node-row .product-icon {
+  opacity: 0.55;
+}
+
+/* Inline description suffix on product rows.
+   - Normal scanner: same foreground colour as the bold scanner name, regular weight.
+   - Disabled or errored scanner: dim to --description-foreground so the suffix
+     recedes without affecting the scanner name's colour or weight. */
+[data-product-id] > .tree-node-row > .tree-description-product {
+  color: var(--text-color);
+  font-weight: normal;
+}
+.tree-node-disabled > .tree-node-row > .tree-description-product,
+.tree-node-error > .tree-node-row > .tree-description-product {
+  color: var(--description-foreground);
+}
+
 .tree-node-info {
   cursor: default;
 }
@@ -416,10 +436,58 @@ body {
   background-color: transparent;
 }
 
-/* Disabled product nodes — greyed out */
-.tree-node-disabled .tree-node-row {
-  opacity: 0.5;
+/* Info-row label reads as an annotation rather than a sibling of the file
+   labels below it. Italic alone (no color/weight shift) sits the row a half-step
+   above filepaths without competing with the bold scanner name above. Scoped to
+   .tree-label so action elements inside variants (e.g. the untrusted-folder
+   Trust button) keep their upright type. */
+.tree-node-row-info .tree-label {
+  font-style: italic;
 }
+
+/* Disabled scanner rows use targeted dimming on the product icon and description
+   suffix rather than a row-wide opacity drop — the scanner name itself stays at
+   full contrast. */
+.tree-node-disabled .tree-node-row {
+  cursor: default;
+}
+
+/* Untrusted-folder info node. Sits on the .tree-node-info foundation (no banner
+   chrome) so it visually belongs in the same family as the other inline info rows.
+   The action row is stacked under the message so the Trust button stays visible at
+   the sidebar's natural width. Button styling reuses --vscode-button-* tokens. */
+.tree-node-info--untrusted-folder .tree-label {
+  color: var(--text-color);
+  font-weight: normal;
+}
+.tree-node-info--untrusted-folder .untrusted-action-row {
+  padding-top: 4px;
+}
+.tree-node-info--untrusted-folder .untrusted-trust-btn {
+  background-color: var(--button-background-color);
+  color: var(--button-text-color);
+  border: none;
+  border-radius: 2px;
+  padding: 4px 12px;
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+.tree-node-info--untrusted-folder .untrusted-trust-btn:hover {
+  background-color: var(--button-hover-background);
+}
+
+/* Native-IDE scrollbars. Maps to VS Code's --vscode-scrollbarSlider-* webview
+   theme tokens (already injected by buildDevPreviewDoc per active theme). */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--vscode-scrollbarSlider-background, rgba(100,100,100,0.4)); }
+::-webkit-scrollbar-thumb:hover { background: var(--vscode-scrollbarSlider-hoverBackground, rgba(100,100,100,0.7)); }
+::-webkit-scrollbar-thumb:active { background: var(--vscode-scrollbarSlider-activeBackground, rgba(100,100,100,0.9)); }
+::-webkit-scrollbar-corner { background: transparent; }
 
 /* Delta reference picker overlay — inline dropdown on folder node click */
 .ref-picker-overlay {
@@ -537,6 +605,10 @@ body {
 /* Scan error overlay — viewport-fixed popup shown when a product error node is clicked.
    Width and position are set by JS; max-height limits the scrollable message area. */
 .error-overlay {
+  /* JS sets style.width to fit the viewport (Math.min(520, vw - 16)); border-box
+     makes that the total rendered width incl. padding + border, otherwise the
+     overlay overflows the right edge in narrow sidebars. */
+  box-sizing: border-box;
   z-index: 200;
   max-height: 60vh;
   overflow-y: auto;
@@ -586,4 +658,24 @@ body {
 .error-overlay-close:hover {
   background-color: var(--warning-background);
   opacity: 0.8;
+}
+
+/* File-row middle truncation.
+ * tree.js rewrites .tree-label textContent into a middle-truncated string
+ * (filename always intact, ellipsis replacing interior segments) once it has
+ * measured the available width. Flex layout below exposes that width via
+ * label.clientWidth; the text-overflow rule on the label is a graceful
+ * fallback for the brief window before the script runs. */
+.tree-node-file > .tree-node-row {
+  display: flex;
+  align-items: center;
+}
+.tree-node-file > .tree-node-row > .tree-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tree-node-file > .tree-node-row > .tree-description {
+  flex: 0 0 auto;
 }
