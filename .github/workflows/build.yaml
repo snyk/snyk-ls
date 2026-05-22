@@ -27,12 +27,13 @@ jobs:
           git config --global core.autocrlf false
           git config --global core.longpaths true
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
+          cache: true
 
       - name: Setup tools (`make tools`)
         uses: ./.github/actions/setup-tools
@@ -43,52 +44,9 @@ jobs:
       - name: Lint source code
         run: make lint
 
-  unit-tests:
-    name: unit tests
-    needs: [lint]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Prepare git
-        run: |
-          git config --global core.autocrlf false
-          git config --global core.longpaths true
-
-      - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: 'go.mod'
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Set up Snyk CLI
-        uses: snyk/actions/setup@master
-
-      - name: Setup tools (`make tools`)
-        uses: ./.github/actions/setup-tools
-
-      - name: Run tests
-        env:
-          DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
-          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
-          SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES}}
-        run: |
-          export PATH=$PWD/.bin/pact/bin:$PATH
-
-          # this is required to be able to test the clipboard
-          export DISPLAY=:99
-          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
-          sudo apt-get install -y xsel xclip wl-clipboard
-
-          make clean test
-
   integration-tests:
     name: integration-tests
-    needs: [lint]
+    needs: []
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -100,15 +58,16 @@ jobs:
           git config --global core.autocrlf false
           git config --global core.longpaths true
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
+          cache: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
 
@@ -116,14 +75,13 @@ jobs:
         if: matrix.os != 'windows-latest'
         uses: ./.github/actions/setup-tools
 
-      - name: Run integration & smoke tests with Pact
+      - name: Run integration tests with Pact
         if: matrix.os == 'ubuntu-latest'
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
-          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN_5 }}
           SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES}}
           INTEG_TESTS: "true"
-          SMOKE_TESTS: "true"
         run: |
           export PATH=$PWD/.bin/pact/bin:$PATH
 
@@ -138,10 +96,9 @@ jobs:
         if: matrix.os == 'macos-latest'
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
-          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN_5 }}
           SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES}}
           INTEG_TESTS: "true"
-          SMOKE_TESTS: "true"
         run: |
           export PATH=$PWD/.bin/pact/bin:$PATH
 
@@ -155,45 +112,143 @@ jobs:
         if: matrix.os == 'windows-latest'
         env:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
-          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN_5 }}
           SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES}}
           INTEG_TESTS: "true"
-          SMOKE_TESTS: "true"
         run: |
           make clean test
 
+  # Smoke tests run across 4 numbered shards × 3 OS = 12 parallel jobs.
+  # Each test declares its own shard via testutil.SmokeTestWithEngine(..., "SMOKE_SHARD_N").
+  # The shard job sets export SMOKE_SHARD_N=1; tests that belong to a different shard skip themselves.
+  smoke-tests:
+    name: smoke (${{ matrix.shard }}, ${{ matrix.os }})
+    needs: []
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        shard: [1, 2, 3, 4]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Prepare git
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.longpaths true
+
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Setup tools (`make tools`)
+        if: matrix.os != 'windows-latest'
+        uses: ./.github/actions/setup-tools
+
+      # Export absolute cache paths via GITHUB_ENV so Go's os.MkdirAll/os.Stat receive
+      # the same expanded paths that actions/cache uses. Tilde is NOT expanded in env: blocks.
+      - name: Set cache dir paths
+        shell: bash
+        run: |
+          echo "SNYK_LS_CLI_CACHE_DIR=$HOME/.cache/snyk-ls/cli" >> "$GITHUB_ENV"
+          echo "SNYK_LS_FIXTURE_CACHE_DIR=$HOME/.cache/snyk-ls/fixtures" >> "$GITHUB_ENV"
+
+      - name: Cache Snyk CLI
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.SNYK_LS_CLI_CACHE_DIR }}
+          key: snyk-cli-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('infrastructure/cli/install/*.go') }}
+
+      - name: Cache smoke fixtures
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.SNYK_LS_FIXTURE_CACHE_DIR }}
+          # Key is derived from smoke_main_test.go so any change to pinned commits
+          # automatically invalidates the cache without a separate YAML edit.
+          key: smoke-fixtures-${{ hashFiles('application/server/smoke_main_test.go') }}
+
+      - name: Start Xvfb and install clipboard tools (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+          sudo apt-get install -y xsel xclip wl-clipboard
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+
+      - name: Start Xvfb (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+
+      - name: Run smoke shard (${{ matrix.shard }})
+        shell: bash
+        env:
+          DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
+          SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES}}
+          # TestUnifiedTestApiSmokeTest uses SNYK_TOKEN_OSTEST for the risk-score OSS API.
+          # It falls back to SNYK_TOKEN when SNYK_TOKEN_OSTEST is unset; the per-shard
+          # tokens may lack that feature flag, so we pin SNYK_TOKEN_OSTEST to the main token.
+          SNYK_TOKEN_OSTEST: ${{secrets.SNYK_TOKEN}}
+          SMOKE_TESTS: "true"
+          # SNYK_LS_CLI_CACHE_DIR, SNYK_LS_FIXTURE_CACHE_DIR, and DISPLAY are set
+          # by earlier steps via GITHUB_ENV.
+        run: |
+          export SMOKE_SHARD_${{ matrix.shard }}=1
+          export PATH="$PWD/.bin/pact/bin:$PATH"
+          if [ ${{ matrix.shard }} == 1 ]; then
+            export SNYK_TOKEN=${{ secrets.SNYK_TOKEN }}
+          elif [ ${{ matrix.shard }} == 2 ]; then
+            export SNYK_TOKEN=${{ secrets.SNYK_TOKEN_2 }}
+          elif [ ${{ matrix.shard }} == 3 ]; then
+            export SNYK_TOKEN=${{ secrets.SNYK_TOKEN_3 }}
+          elif [ ${{ matrix.shard }} == 4 ]; then
+            export SNYK_TOKEN=${{ secrets.SNYK_TOKEN_4 }}
+          fi
+
+          go test -timeout=25m -count=1 ./...
+
   proxy-test:
     name: proxy-test
-    needs: [lint]
+    needs: []
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Run proxy tests
         env:
-          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN_5 }}
         run: |
           make clean proxy-test
 
   race-tests:
     name: race-test
-    needs: [lint]
+    needs: []
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
+          cache: true
 
       - name: Setup tools (`make tools`)
         uses: ./.github/actions/setup-tools
 
-      - name: Run race tests
+      - name: Run integration race tests (no smoke)
         env:
-          SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
+          SNYK_TOKEN: ${{secrets.SNYK_TOKEN_5 }}
           SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES}}
+          INTEG_TESTS: "true"
         run: |
           export PATH=$PWD/.bin/pact/bin:$PATH
 
@@ -202,11 +257,17 @@ jobs:
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
           sudo apt-get install -y xsel xclip wl-clipboard
 
-          make clean race-test
+          go test -timeout=25m -race -failfast ./...
 
-  update-licenses:
-    name: update licenses
-    needs: [unit-tests]
+  # Smoke tests run under the race detector, sharded across 4 ubuntu-latest runners.
+  # Smoke tests are excluded from the serial race-tests job above to avoid serial 22-25 min runs.
+  smoke-race-tests:
+    name: smoke-race (${{ matrix.shard }})
+    needs: []
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     runs-on: ubuntu-latest
     steps:
       - name: Prepare git
@@ -214,16 +275,86 @@ jobs:
           git config --global core.autocrlf false
           git config --global core.longpaths true
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Setup tools (`make tools`)
+        uses: ./.github/actions/setup-tools
+
+      - name: Set cache dir paths
+        run: |
+          echo "SNYK_LS_CLI_CACHE_DIR=$HOME/.cache/snyk-ls/cli" >> "$GITHUB_ENV"
+          echo "SNYK_LS_FIXTURE_CACHE_DIR=$HOME/.cache/snyk-ls/fixtures" >> "$GITHUB_ENV"
+
+      - name: Cache Snyk CLI
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.SNYK_LS_CLI_CACHE_DIR }}
+          key: snyk-cli-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('infrastructure/cli/install/*.go') }}
+
+      - name: Cache smoke fixtures
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.SNYK_LS_FIXTURE_CACHE_DIR }}
+          key: smoke-fixtures-${{ hashFiles('application/server/smoke_main_test.go') }}
+
+      - name: Run smoke-race shard (${{ matrix.shard }})
+        shell: bash
+        env:
+          DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
+          SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES}}
+          # See comment in smoke-tests job: pin to main token for risk-score OSS API access.
+          SNYK_TOKEN_OSTEST: ${{secrets.SNYK_TOKEN}}
+          SMOKE_TESTS: "true"
+          DISPLAY: ':99'
+        run: |
+          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+          sudo apt-get install -y xsel xclip wl-clipboard
+
+          export SMOKE_SHARD_${{ matrix.shard }}=1
+          if [ ${{ matrix.shard }} == 1 ]; then
+            export SNYK_TOKEN=${{ secrets.SNYK_TOKEN }}
+          elif [ ${{ matrix.shard }} == 2 ]; then
+            export SNYK_TOKEN=${{ secrets.SNYK_TOKEN_2 }}
+          elif [ ${{ matrix.shard }} == 3 ]; then
+            export SNYK_TOKEN=${{ secrets.SNYK_TOKEN_3 }}
+          elif [ ${{ matrix.shard }} == 4 ]; then
+            export SNYK_TOKEN=${{ secrets.SNYK_TOKEN_4 }}
+          fi
+
+          go test -timeout=25m -count=1 -race -failfast ./...
+
+  update-licenses:
+    name: update licenses
+    needs: [ lint ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare git
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.longpaths true
+
+      - uses: actions/checkout@v6
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.ref }}
           token: ${{ secrets.TEAM_IDE_PAT }}
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
+          cache: true
 
       - name: Setup tools (`make tools`)
         uses: ./.github/actions/setup-tools
@@ -233,7 +364,7 @@ jobs:
           make license-update
 
       - name: commit license changes
-        uses: EndBug/add-and-commit@v9
+        uses: EndBug/add-and-commit@v10
         with:
           default_author: github_actor
           committer_name: Github Actions
@@ -243,17 +374,18 @@ jobs:
           push: true
   test-release:
     name: test-release
-    needs: [lint, unit-tests]
+    needs: []
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # does an unshallow checkout with tags & branches
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
+          cache: true
 
       - name: Setup tools (`make tools`)
         uses: ./.github/actions/setup-tools
@@ -268,7 +400,7 @@ jobs:
           echo $LICENSES
 
       - name: Do test release with goreleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         env:
           LICENSES: ${{ steps.create_license_report.outputs.LICENSES }}
         with:

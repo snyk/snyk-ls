@@ -86,3 +86,19 @@ node_modules/
 
 .vscode
 .vault
+
+# Local session brain (personal knowledge, not shared)
+brain/
+# Test-stage cache (local dev only)
+.tests-hash
+.tests-hash.tmp
+*verification-triage-*
+
+# Added by ggshield
+.cache_ggshield
+# Claude Code skill artefacts (local dev only)
+.commit-reviewed
+.commit-progress
+.verify-range
+.verify-agent-progress
+.pr-review-*.md

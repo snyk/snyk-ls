@@ -63,7 +63,7 @@ var allSettings = []string{
 	SettingEnableSnykLearnCodeActions,
 	SettingEnableSnykOssQuickFixActions,
 	SettingEnableSnykOpenBrowserActions,
-	// Org-scope (15 — was 13, SettingEnabledSeverities split into 4)
+	// Org-scope (15 — was 13, enabled_severities split into 4 severity_filter_* keys)
 	SettingSeverityFilterCritical,
 	SettingSeverityFilterHigh,
 	SettingSeverityFilterMedium,

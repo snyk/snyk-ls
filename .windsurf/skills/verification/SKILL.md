@@ -271,11 +271,11 @@ Add verification findings to the implementation plan:
 ### Commands
 
 | Task      | Command                                     |
-| --------- | ------------------------------------------- |
+| --------- |---------------------------------------------|
 | Check PR  | `gh pr view --json number,reviews,comments` |
 | SCA scan  | `snyk_sca_scan` with absolute path          |
 | Code scan | `snyk_code_scan` with absolute path         |
-| Run tests | `make cover && make test-integration-local` |
+| Run tests | `make format && make test-all`              |
 
 ### Red Flags (Stop and Discuss)
 

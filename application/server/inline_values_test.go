@@ -19,14 +19,15 @@ package server
 import (
 	"path/filepath"
 	"testing"
-	"time"
 
+	"github.com/golang/mock/gomock"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
-	"github.com/snyk/snyk-ls/infrastructure/cli/install"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -44,51 +45,38 @@ func Test_textDocumentInlineValues_shouldBeServed(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func Test_textDocumentInlineValues_InlineValues_IntegTest(t *testing.T) {
-	engine, tokenService := testutil.IntegTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
-	di.Init(engine, tokenService)
+func Test_textDocumentInlineValues_InlineValues(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	ctrl := gomock.NewController(t)
+
 	dir, err := filepath.Abs("testdata")
-	assert.NoError(t, err)
+	require.NoError(t, err)
+	testFilePath := types.FilePath(filepath.Join(dir, "package.json"))
+	documentURI := uri.PathToUri(testFilePath)
 
-	discovery := install.Discovery{}
-	clientParams := types.InitializeParams{
-		RootURI: uri.PathToUri(types.FilePath(dir)),
-		InitializationOptions: types.InitializationOptions{
-			Settings: map[string]*types.ConfigSetting{
-				types.SettingSnykCodeEnabled:            {Value: false, Changed: true},
-				types.SettingSnykOssEnabled:             {Value: true, Changed: true},
-				types.SettingSnykIacEnabled:             {Value: false, Changed: true},
-				types.SettingTrustEnabled:               {Value: false, Changed: true},
-				types.SettingAuthenticationMethod:       {Value: string(types.TokenAuthentication), Changed: true},
-				types.SettingAutomaticAuthentication:    {Value: false, Changed: true},
-				types.SettingToken:                      {Value: config.GetToken(engine.GetConfiguration()), Changed: true},
-				types.SettingCliPath:                    {Value: filepath.Join(t.TempDir(), discovery.ExecutableName(false)), Changed: true},
-				types.SettingCliAdditionalOssParameters: {Value: []string{"--file=package.json"}, Changed: true},
-			},
-		},
-	}
-	_, err = loc.Client.Call(t.Context(), "initialize", clientParams)
-	assert.NoError(t, err)
+	inlineRange := types.Range{Start: types.Position{Line: 17}, End: types.Position{Line: 17}}
 
-	_, err = loc.Client.Call(t.Context(), "initialized", nil)
-	assert.NoError(t, err)
+	mockValue := mock_snyk.NewMockInlineValue(ctrl)
+	mockValue.EXPECT().Range().Return(inlineRange).AnyTimes()
+	mockValue.EXPECT().Text().Return("Issues: 1").AnyTimes()
 
-	testFilePath := filepath.Join(dir, "package.json")
-	documentURI := uri.PathToUri(types.FilePath(testFilePath))
+	mockProvider := mock_snyk.NewMockInlineValueProvider(ctrl)
+	mockProvider.EXPECT().GetInlineValues(testFilePath, gomock.Any()).Return([]snyk.InlineValue{mockValue}, nil)
 
-	assert.Eventually(t, func() bool {
-		// wait for scan
-		rsp, err := loc.Client.Call(t.Context(), "textDocument/inlineValue", types.InlineValueParams{
-			TextDocument: sglsp.TextDocumentIdentifier{URI: documentURI},
-			Range:        sglsp.Range{Start: sglsp.Position{Line: 17}, End: sglsp.Position{Line: 17}},
-		})
-		assert.NoError(t, err)
+	loc, _, _ := setupCustomServerWithDeps(t, engine, tokenService, nil, func(deps di.Dependencies) di.Dependencies {
+		deps.InlineValueProvider = mockProvider
+		return deps
+	})
 
-		var inlineValues []types.InlineValue
-		err = rsp.UnmarshalResult(&inlineValues)
-		assert.NoError(t, err)
+	rsp, err := loc.Client.Call(t.Context(), "textDocument/inlineValue", types.InlineValueParams{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: documentURI},
+		Range:        sglsp.Range{Start: sglsp.Position{Line: 17}, End: sglsp.Position{Line: 17}},
+	})
+	require.NoError(t, err)
 
-		return len(inlineValues) == 1 && inlineValues[0].Range.Start.Line == 17 && inlineValues[0].Range.End.Line == 17
-	}, time.Minute, time.Millisecond, "expected inline values to be served, but they were not")
+	var inlineValues []types.InlineValue
+	require.NoError(t, rsp.UnmarshalResult(&inlineValues))
+	require.Len(t, inlineValues, 1)
+	assert.Equal(t, 17, inlineValues[0].Range.Start.Line)
+	assert.Equal(t, 17, inlineValues[0].Range.End.Line)
 }

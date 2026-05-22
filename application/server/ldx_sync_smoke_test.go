@@ -44,7 +44,7 @@ import (
 // setupLdxSyncTest creates test environment for LDX-Sync cache tests
 func setupLdxSyncTest(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder) {
 	t.Helper()
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_4")
 
 	origConfigHome := xdg.ConfigHome
 	xdg.ConfigHome = t.TempDir()
@@ -93,6 +93,23 @@ func requireLspConfigurationNotification(t *testing.T, jsonRpcRecorder *testsupp
 	}
 }
 
+func assertSmokeLdxFolderProductSettings(t *testing.T, fc types.LspFolderConfig) {
+	t.Helper()
+	require.NotNil(t, fc.Settings[types.SettingSnykOssEnabled], "folder settings must include snyk_oss_enabled")
+	require.NotNil(t, fc.Settings[types.SettingSnykOssEnabled].Value, "snyk_oss_enabled value must be set (true or false)")
+	require.NotNil(t, fc.Settings[types.SettingSnykCodeEnabled], "folder settings must include snyk_code_enabled")
+	require.NotNil(t, fc.Settings[types.SettingSnykCodeEnabled].Value, "snyk_code_enabled value must be set (true or false)")
+	require.NotNil(t, fc.Settings[types.SettingSnykIacEnabled], "folder settings must include snyk_iac_enabled")
+	require.NotNil(t, fc.Settings[types.SettingSnykIacEnabled].Value, "snyk_iac_enabled value must be set (true or false)")
+}
+
+// assertSmokeLdxFolderOrgResolution verifies LDX-Sync populated auto_determined_org on the folder config.
+func assertSmokeLdxFolderOrgResolution(t *testing.T, fc types.LspFolderConfig) {
+	t.Helper()
+	require.NotNil(t, fc.Settings[types.SettingAutoDeterminedOrg], "folder should have auto_determined_org set by LDX-Sync")
+	assert.NotEmpty(t, fc.Settings[types.SettingAutoDeterminedOrg].Value, "folder should have auto_determined_org from LDX-Sync cache")
+}
+
 // Test_SmokeLdxSync_Initialize verifies LDX-Sync cache population and notifications
 // are sent correctly when initializing with a workspace folder
 func Test_SmokeLdxSync_Initialize(t *testing.T) {
@@ -113,16 +130,10 @@ func Test_SmokeLdxSync_Initialize(t *testing.T) {
 	// Product-enabled settings are folder-scoped and appear in FolderConfigs, not global Settings
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 		folder: func(fc types.LspFolderConfig) {
-			require.NotNil(t, fc.Settings[types.SettingSnykOssEnabled], "folder settings must include snyk_oss_enabled")
-			require.NotNil(t, fc.Settings[types.SettingSnykOssEnabled].Value, "snyk_oss_enabled value must be set (true or false)")
-			require.NotNil(t, fc.Settings[types.SettingSnykCodeEnabled], "folder settings must include snyk_code_enabled")
-			require.NotNil(t, fc.Settings[types.SettingSnykCodeEnabled].Value, "snyk_code_enabled value must be set (true or false)")
-			require.NotNil(t, fc.Settings[types.SettingSnykIacEnabled], "folder settings must include snyk_iac_enabled")
-			require.NotNil(t, fc.Settings[types.SettingSnykIacEnabled].Value, "snyk_iac_enabled value must be set (true or false)")
-			require.NotNil(t, fc.Settings[types.SettingAutoDeterminedOrg], "Folder should have autoDeterminedOrg set")
-			assert.NotEmpty(t, fc.Settings[types.SettingAutoDeterminedOrg].Value, "Folder should have autoDeterminedOrg from LDX-Sync cache")
+			assertSmokeLdxFolderProductSettings(t, fc)
+			assertSmokeLdxFolderOrgResolution(t, fc)
 		},
-	}, false)
+	}, lspFolderConfigWaitForAutoDeterminedOrg(), lspFolderConfigClearAfter(false))
 
 	jsonRpcRecorder.ClearNotifications()
 }
@@ -145,16 +156,10 @@ func Test_SmokeLdxSync_AddFolder(t *testing.T) {
 	// Product-enabled settings are folder-scoped and appear in FolderConfigs, not global Settings
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 		folder1: func(fc types.LspFolderConfig) {
-			require.NotNil(t, fc.Settings[types.SettingSnykOssEnabled], "folder settings must include snyk_oss_enabled")
-			require.NotNil(t, fc.Settings[types.SettingSnykOssEnabled].Value)
-			require.NotNil(t, fc.Settings[types.SettingSnykCodeEnabled], "folder settings must include snyk_code_enabled")
-			require.NotNil(t, fc.Settings[types.SettingSnykCodeEnabled].Value)
-			require.NotNil(t, fc.Settings[types.SettingSnykIacEnabled], "folder settings must include snyk_iac_enabled")
-			require.NotNil(t, fc.Settings[types.SettingSnykIacEnabled].Value)
-			require.NotNil(t, fc.Settings[types.SettingAutoDeterminedOrg], "Folder 1 should have autoDeterminedOrg set")
-			assert.NotEmpty(t, fc.Settings[types.SettingAutoDeterminedOrg].Value, "Folder 1 should have autoDeterminedOrg from LDX-Sync cache")
+			assertSmokeLdxFolderProductSettings(t, fc)
+			assertSmokeLdxFolderOrgResolution(t, fc)
 		},
-	}, false)
+	}, lspFolderConfigWaitForAutoDeterminedOrg(), lspFolderConfigClearAfter(false))
 
 	jsonRpcRecorder.ClearNotifications()
 
@@ -182,20 +187,13 @@ func Test_SmokeLdxSync_AddFolder(t *testing.T) {
 	// Product-enabled settings are folder-scoped and appear in FolderConfigs, not global Settings
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 		folder1: func(fc types.LspFolderConfig) {
-			require.NotNil(t, fc.Settings[types.SettingSnykOssEnabled], "folder settings must include snyk_oss_enabled")
-			require.NotNil(t, fc.Settings[types.SettingSnykOssEnabled].Value)
-			require.NotNil(t, fc.Settings[types.SettingSnykCodeEnabled], "folder settings must include snyk_code_enabled")
-			require.NotNil(t, fc.Settings[types.SettingSnykCodeEnabled].Value)
-			require.NotNil(t, fc.Settings[types.SettingSnykIacEnabled], "folder settings must include snyk_iac_enabled")
-			require.NotNil(t, fc.Settings[types.SettingSnykIacEnabled].Value)
-			require.NotNil(t, fc.Settings[types.SettingAutoDeterminedOrg], "Folder 1 should have autoDeterminedOrg set")
-			assert.NotEmpty(t, fc.Settings[types.SettingAutoDeterminedOrg].Value, "Folder 1 should still have autoDeterminedOrg")
+			assertSmokeLdxFolderProductSettings(t, fc)
+			assertSmokeLdxFolderOrgResolution(t, fc)
 		},
 		folder2: func(fc types.LspFolderConfig) {
-			require.NotNil(t, fc.Settings[types.SettingAutoDeterminedOrg], "Folder 2 should have autoDeterminedOrg set")
-			assert.NotEmpty(t, fc.Settings[types.SettingAutoDeterminedOrg].Value, "Folder 2 should have autoDeterminedOrg from LDX-Sync cache")
+			assertSmokeLdxFolderOrgResolution(t, fc)
 		},
-	}, false)
+	}, lspFolderConfigWaitForAutoDeterminedOrg(), lspFolderConfigClearAfter(false))
 
 	jsonRpcRecorder.ClearNotifications()
 }
@@ -250,16 +248,10 @@ func Test_SmokeLdxSync_ChangePreferredOrg(t *testing.T) {
 	// Product-enabled settings are folder-scoped and appear in FolderConfigs, not global Settings
 	requireLspFolderConfigNotification(t, jsonRpcRecorder, map[types.FilePath]func(types.LspFolderConfig){
 		folder: func(fc types.LspFolderConfig) {
-			require.NotNil(t, fc.Settings[types.SettingSnykOssEnabled], "folder settings must include snyk_oss_enabled")
-			require.NotNil(t, fc.Settings[types.SettingSnykOssEnabled].Value)
-			require.NotNil(t, fc.Settings[types.SettingSnykCodeEnabled], "folder settings must include snyk_code_enabled")
-			require.NotNil(t, fc.Settings[types.SettingSnykCodeEnabled].Value)
-			require.NotNil(t, fc.Settings[types.SettingSnykIacEnabled], "folder settings must include snyk_iac_enabled")
-			require.NotNil(t, fc.Settings[types.SettingSnykIacEnabled].Value)
-			require.NotNil(t, fc.Settings[types.SettingAutoDeterminedOrg], "Folder should have autoDeterminedOrg set")
-			assert.NotEmpty(t, fc.Settings[types.SettingAutoDeterminedOrg].Value, "Folder should have autoDeterminedOrg from LDX-Sync cache")
+			assertSmokeLdxFolderProductSettings(t, fc)
+			assertSmokeLdxFolderOrgResolution(t, fc)
 		},
-	}, false)
+	}, lspFolderConfigWaitForAutoDeterminedOrg(), lspFolderConfigClearAfter(false))
 
 	jsonRpcRecorder.ClearNotifications()
 
@@ -298,7 +290,7 @@ func Test_SmokeLdxSync_ChangePreferredOrg(t *testing.T) {
 				require.NotNil(t, fc.Settings[types.SettingAutoDeterminedOrg], "Folder should have autoDeterminedOrg set")
 				assert.NotEmpty(t, fc.Settings[types.SettingAutoDeterminedOrg].Value, "Folder should have autoDeterminedOrg after config change")
 			},
-		}, false)
+		}, lspFolderConfigWaitForAutoDeterminedOrg(), lspFolderConfigClearAfter(false))
 	}
 
 	jsonRpcRecorder.ClearNotifications()

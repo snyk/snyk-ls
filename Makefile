@@ -38,6 +38,8 @@ TIMEOUT := "-timeout=90m"
 ## tools: Install required tooling.
 .PHONY: tools
 tools: $(TOOLS_BIN)/go-licenses $(TOOLS_BIN)/golangci-lint $(TOOLS_BIN)/pact/bin/pact
+	@command -v pre-commit >/dev/null 2>&1 && { pre-commit install && pre-commit install --hook-type pre-push; } || \
+		echo "⚠️  pre-commit not found — run 'make hooks' after installing pre-commit to enable git hooks"
 
 .PHONY: hooks
 hooks:
@@ -78,12 +80,97 @@ lint-fix: $(TOOLS_BIN)/golangci-lint
 format: lint-fix
 	@echo "==> Formatting code..."
 
-## test: Run all tests.
+## test: Run all tests (uses Go test cache; no coverage profile by default).
+## Set INTEG_TESTS=1 or SMOKE_TESTS=1 to include integration/smoke tests.
+## Records which test stage passed at the current HEAD in .tests-hash.
 .PHONY: test
 test: test-js
-	@echo "==> Running unit tests..."
+	@echo "==> Running tests..."
+	@mkdir -p $(BUILD_DIR)
+	go test $(TIMEOUT) -failfast ./...
+	@stages="test"; \
+	 [ -n "$(INTEG_TESTS)" ] && stages="$$stages test-integ" || true; \
+	 [ -n "$(SMOKE_TESTS)" ] && stages="$$stages test-smoke" || true; \
+	 for s in $$stages; do $(MAKE) --no-print-directory _save-test-hash STAGE=$$s; done
+
+## test-integ: Run integration tests (alias for INTEG_TESTS=1 make test).
+.PHONY: test-integ
+test-integ:
+	INTEG_TESTS=1 $(MAKE) test
+
+## test-smoke: Run smoke tests (all shards, single go test invocation).
+.PHONY: test-smoke
+test-smoke:
+	SMOKE_TESTS=1 SMOKE_SHARD_1=1 SMOKE_SHARD_2=1 SMOKE_SHARD_3=1 SMOKE_SHARD_4=1 $(MAKE) test
+
+## test-smoke-serial: Run smoke tests one shard at a time.
+.PHONY: test-smoke-serial
+test-smoke-serial: _smoke-shard-1 _smoke-shard-2 _smoke-shard-3 _smoke-shard-4
+	@for s in test-smoke test-smoke-serial; do $(MAKE) --no-print-directory _save-test-hash STAGE=$$s; done
+
+## test-smoke-parallel: Run all 4 smoke shards concurrently (4 threads, output buffered per shard).
+.PHONY: test-smoke-parallel
+test-smoke-parallel:
+	@mkdir -p $(BUILD_DIR); \
+	SMOKE_TESTS=1 SMOKE_SHARD_1=1 go test $(TIMEOUT) -failfast ./... > $(BUILD_DIR)/smoke-shard-1.log 2>&1 & pid1=$$!; \
+	SMOKE_TESTS=1 SMOKE_SHARD_2=1 go test $(TIMEOUT) -failfast ./... > $(BUILD_DIR)/smoke-shard-2.log 2>&1 & pid2=$$!; \
+	SMOKE_TESTS=1 SMOKE_SHARD_3=1 go test $(TIMEOUT) -failfast ./... > $(BUILD_DIR)/smoke-shard-3.log 2>&1 & pid3=$$!; \
+	SMOKE_TESTS=1 SMOKE_SHARD_4=1 go test $(TIMEOUT) -failfast ./... > $(BUILD_DIR)/smoke-shard-4.log 2>&1 & pid4=$$!; \
+	failed=0; \
+	wait $$pid1 || failed=1; \
+	wait $$pid2 || failed=1; \
+	wait $$pid3 || failed=1; \
+	wait $$pid4 || failed=1; \
+	for i in 1 2 3 4; do echo "=== Shard $$i ==="; cat $(BUILD_DIR)/smoke-shard-$$i.log; done; \
+	exit $$failed
+	@for s in test-smoke test-smoke-parallel; do $(MAKE) --no-print-directory _save-test-hash STAGE=$$s; done
+
+.PHONY: _smoke-shard-1 _smoke-shard-2 _smoke-shard-3 _smoke-shard-4
+_smoke-shard-1:
+	SMOKE_TESTS=1 SMOKE_SHARD_1=1 go test $(TIMEOUT) -failfast ./...
+_smoke-shard-2:
+	SMOKE_TESTS=1 SMOKE_SHARD_2=1 go test $(TIMEOUT) -failfast ./...
+_smoke-shard-3:
+	SMOKE_TESTS=1 SMOKE_SHARD_3=1 go test $(TIMEOUT) -failfast ./...
+_smoke-shard-4:
+	SMOKE_TESTS=1 SMOKE_SHARD_4=1 go test $(TIMEOUT) -failfast ./...
+
+## test-all: Run all tests
+.PHONY: test-all
+test-all:
+	INTEG_TESTS=1 SMOKE_TESTS=1 SMOKE_SHARD_1=1 SMOKE_SHARD_2=1 SMOKE_SHARD_3=1 SMOKE_SHARD_4=1 $(MAKE) test
+
+## test-coverage: Run unit tests with coverage profile (disables Go test cache).
+.PHONY: test-coverage
+test-coverage: test-js
+	@echo "==> Running unit tests with coverage..."
 	@mkdir -p $(BUILD_DIR)
 	go test $(TIMEOUT) -failfast -cover -coverprofile=$(BUILD_DIR)/coverage.out ./...
+
+## check-tests: Verify all required test stages have run at the current HEAD.
+.PHONY: check-tests
+check-tests:
+	@./scripts/check-tests-run.sh
+
+# Internal: _update-test-hash is intentionally undocumented to prevent bypass.
+# Only CI bootstrap should call it directly. Use make test/test-all
+.PHONY: _update-test-hash
+_update-test-hash:
+	@if [ -z "$(TARGET)" ]; then \
+		echo "ERROR: TARGET is required"; \
+		exit 1; \
+	fi
+	$(MAKE) --no-print-directory _save-test-hash STAGE=$(TARGET)
+
+.PHONY: _save-test-hash
+_save-test-hash:
+	@hash=$$(git rev-parse HEAD); \
+	 if [ -f .tests-hash ]; then \
+	     grep -v "^$(STAGE)=" .tests-hash > .tests-hash.tmp 2>/dev/null || true; \
+	     mv .tests-hash.tmp .tests-hash; \
+	 fi; \
+	 echo "$(STAGE)=$$hash" >> .tests-hash
+	@echo "✅ Stage '$(STAGE)' recorded for commit $$(git rev-parse --short HEAD)"
 
 ## benchmark: Run Go benchmarks under benchmark/ and tee results to build/benchmark-results.txt
 .PHONY: benchmark
@@ -95,7 +182,7 @@ benchmark:
 ## Optional: BENCHMARK_REAL_SCAN_PROFILE_DIR=<dir> for runtime/pprof (CPU + heap before/after scan phase); see benchmark/README.md.
 .PHONY: benchmark-real
 benchmark-real:
-	SMOKE_TESTS=1 BENCHMARK_REAL_SCAN_MONOREPO=1 BENCHMARK_REALSCAN_FULL_FIXTURE=1 go test $(TIMEOUT) -count=1 ./application/server/... -run Test_SmokeRealScanMonorepoFixture
+	SMOKE_TESTS=1 SMOKE_SHARD_2=1 BENCHMARK_REAL_SCAN_MONOREPO=1 BENCHMARK_REALSCAN_FULL_FIXTURE=1 go test $(TIMEOUT) -count=1 ./application/server/... -run Test_SmokeRealScanMonorepoFixture
 
 ## test-js: Run all JavaScript tests (tree view + config dialog) and check ES5 compatibility.
 .PHONY: test-js
@@ -109,9 +196,7 @@ test-js: tree-view-fixture config-dialog-fixture
 race-test:
 	@echo "==> Running integration tests with race-detector..."
 	@mkdir -p $(BUILD_DIR)
-	@export INTEG_TESTS=true
-	@export SMOKE_TESTS=true
-	go test $(TIMEOUT) -race -failfast ./...
+	INTEG_TESTS=1 SMOKE_TESTS=1 SMOKE_SHARD_1=1 SMOKE_SHARD_2=1 SMOKE_SHARD_3=1 SMOKE_SHARD_4=1 go test $(TIMEOUT) -race -failfast ./...
 
 .PHONY: proxy-test
 proxy-test:
@@ -121,7 +206,7 @@ proxy-test:
 
 instance-test:
 	@echo "==> Running instance tests"
-	export SMOKE_TESTS=1 && cd application/server && go test $(TIMEOUT) -failfast -run Test_SmokeInstanceTest && cd -
+	export SMOKE_TESTS=1 SMOKE_SHARD_2=1 && cd application/server && go test $(TIMEOUT) -failfast -run Test_SmokeInstanceTest && cd -
 	@curl -sSL https://static.snyk.io/eclipse/stable/p2.index
 
 ## tree-view-fixture: Regenerate tree view HTML fixture used by JS tests.

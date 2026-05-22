@@ -104,6 +104,7 @@ func withContext(
 	configResolver types.ConfigResolverInterface,
 	authenticationService authentication.AuthenticationService,
 	ldxSyncService command.LdxSyncService,
+	inlineValueProvider snyk.InlineValueProvider,
 ) jrpc2.Handler {
 	return func(ctx context.Context, req *jrpc2.Request) (any, error) {
 		ctx = ctx2.NewContextWithLogger(ctx, logger)
@@ -112,15 +113,20 @@ func withContext(
 		if configResolver != nil {
 			ctx = ctx2.NewContextWithConfigResolver(ctx, configResolver)
 		}
-		if authenticationService != nil {
-			deps, found := ctx2.DependenciesFromContext(ctx)
-			if !found {
-				deps = map[string]any{}
-			}
-			deps[ctx2.DepAuthService] = authenticationService
-			deps["ldxSyncService"] = ldxSyncService
-			ctx = ctx2.NewContextWithDependencies(ctx, deps)
+		deps, found := ctx2.DependenciesFromContext(ctx)
+		if !found {
+			deps = map[string]any{}
 		}
+		if authenticationService != nil {
+			deps[ctx2.DepAuthService] = authenticationService
+		}
+		if ldxSyncService != nil {
+			deps["ldxSyncService"] = ldxSyncService
+		}
+		if inlineValueProvider != nil {
+			deps[ctx2.DepInlineValueProvider] = inlineValueProvider
+		}
+		ctx = ctx2.NewContextWithDependencies(ctx, deps)
 		return h(ctx, req)
 	}
 }
@@ -131,7 +137,7 @@ const textDocumentDidSaveOperation = "textDocument/didSave"
 
 func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, deps di.Dependencies) {
 	enrich := func(h jrpc2.Handler) jrpc2.Handler {
-		return withContext(h, logger, conf, engine, deps.ConfigResolver, deps.AuthenticationService, deps.LdxSyncService)
+		return withContext(h, logger, conf, engine, deps.ConfigResolver, deps.AuthenticationService, deps.LdxSyncService, deps.InlineValueProvider)
 	}
 	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv))
 	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv))
@@ -172,6 +178,15 @@ func ldxSyncServiceFromContext(ctx context.Context) (command.LdxSyncService, boo
 	}
 	ldxSyncService, ok := deps["ldxSyncService"].(command.LdxSyncService)
 	return ldxSyncService, ok
+}
+
+func inlineValueProviderFromContext(ctx context.Context) (snyk.InlineValueProvider, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	p, ok := deps[ctx2.DepInlineValueProvider].(snyk.InlineValueProvider)
+	return p, ok
 }
 
 func textDocumentDidChangeHandler(conf configuration.Configuration) jrpc2.Handler {

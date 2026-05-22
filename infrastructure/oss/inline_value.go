@@ -17,14 +17,27 @@
 package oss
 
 import (
+	"path/filepath"
+
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type inlineValueMap map[types.FilePath][]snyk.InlineValue
 
+// inlineValuesPathKey normalizes paths used as inline-value cache keys so URI-derived
+// paths (textDocument/inlineValue) and OSS issue paths agree on Windows (slash style, cleaning).
+func inlineValuesPathKey(p types.FilePath) types.FilePath {
+	if p == "" {
+		return p
+	}
+	// ToSlash aligns Windows paths from URIs vs CLI; no-op on Unix-style paths.
+	return types.FilePath(filepath.ToSlash(filepath.Clean(string(p))))
+}
+
 func (cliScanner *CLIScanner) GetInlineValues(path types.FilePath, myRange types.Range) (result []snyk.InlineValue, err error) {
 	logger := cliScanner.engine.GetLogger().With().Str("method", "CLIScanner.GetInlineValues").Logger()
+	path = inlineValuesPathKey(path)
 	cliScanner.inlineValueMutex.RLock()
 	inlineValues := cliScanner.inlineValues[path]
 	cliScanner.inlineValueMutex.RUnlock()
@@ -35,7 +48,7 @@ func (cliScanner *CLIScanner) GetInlineValues(path types.FilePath, myRange types
 
 func (cliScanner *CLIScanner) ClearInlineValues(path types.FilePath) {
 	cliScanner.inlineValueMutex.Lock()
-	cliScanner.inlineValues[path] = nil
+	cliScanner.inlineValues[inlineValuesPathKey(path)] = nil
 	cliScanner.inlineValueMutex.Unlock()
 }
 
@@ -54,6 +67,7 @@ func filterInlineValuesForRange(inlineValues []snyk.InlineValue, myRange types.R
 
 func (cliScanner *CLIScanner) addToCache(iv snyk.InlineValue, cache inlineValueMap) {
 	cliScanner.inlineValueMutex.Lock()
-	cache[iv.Path()] = append(cache[iv.Path()], iv)
+	key := inlineValuesPathKey(iv.Path())
+	cache[key] = append(cache[key], iv)
 	cliScanner.inlineValueMutex.Unlock()
 }

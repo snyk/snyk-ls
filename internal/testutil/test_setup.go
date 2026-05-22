@@ -42,6 +42,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
+	shellenv "github.com/snyk/snyk-ls/internal"
 	"github.com/snyk/snyk-ls/internal/constants"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
@@ -51,6 +52,20 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
+
+// NewMinimalEngine creates a minimal standalone workflow engine that does not require
+// *testing.T, making it safe to call from TestMain or other non-test entry points.
+// Caller is responsible for any cleanup needed.
+func NewMinimalEngine() (workflow.Engine, error) {
+	preConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	preConf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
+	engine := app.CreateAppEngineWithOptions(app.WithConfiguration(preConf))
+	if err := config.InitWorkflows(engine); err != nil {
+		return nil, err
+	}
+	_ = engine.Init()
+	return engine, nil
+}
 
 func IntegTest(t *testing.T) workflow.Engine {
 	t.Helper()
@@ -63,16 +78,30 @@ func IntegTestWithEngine(t *testing.T) (workflow.Engine, *config.TokenServiceImp
 	return prepareTestHelper(t, testsupport.IntegTestEnvVar, "")
 }
 
-// TODO: remove useConsistentIgnores once we have fully rolled out the feature
-func SmokeTest(t *testing.T, tokenSecretName string) workflow.Engine {
+// SmokeTest skips unless SMOKE_TESTS=1 and shardEnvVar is set. shardEnvVar is the CI env var
+// that enables this test's shard (e.g. "SMOKE_SHARD_4"). Every smoke test must declare its shard.
+func SmokeTest(t *testing.T, tokenSecretName string, shardEnvVar string) workflow.Engine {
 	t.Helper()
+	if os.Getenv(testsupport.SmokeTestEnvVar) == "" {
+		t.Skipf("%s is not set", testsupport.SmokeTestEnvVar)
+	}
+	if os.Getenv(shardEnvVar) == "" {
+		t.Skipf("shard env var %s is not set", shardEnvVar)
+	}
 	engine, _ := prepareTestHelper(t, testsupport.SmokeTestEnvVar, tokenSecretName)
 	return engine
 }
 
-// SmokeTestWithEngine returns both engine and tokenService for smoke tests that need to call setupServer.
-func SmokeTestWithEngine(t *testing.T, tokenSecretName string) (workflow.Engine, *config.TokenServiceImpl) {
+// SmokeTestWithEngine returns both engine and tokenService. shardEnvVar is the CI env var that
+// enables this test's shard (e.g. "SMOKE_SHARD_1"). Every smoke test must declare its shard.
+func SmokeTestWithEngine(t *testing.T, tokenSecretName string, shardEnvVar string) (workflow.Engine, *config.TokenServiceImpl) {
 	t.Helper()
+	if os.Getenv(testsupport.SmokeTestEnvVar) == "" {
+		t.Skipf("%s is not set", testsupport.SmokeTestEnvVar)
+	}
+	if os.Getenv(shardEnvVar) == "" {
+		t.Skipf("shard env var %s is not set", shardEnvVar)
+	}
 	return prepareTestHelper(t, testsupport.SmokeTestEnvVar, tokenSecretName)
 }
 
@@ -100,6 +129,7 @@ func initStandaloneTestPreEngine(t *testing.T, binarySearchPaths []string) workf
 
 func UnitTestWithEngine(t *testing.T) (workflow.Engine, *config.TokenServiceImpl) {
 	t.Helper()
+	_ = os.Setenv(shellenv.DisableShellEnvLoadingEnvVar, "1") //nolint:usetesting // t.Setenv panics when called from a parallel test (Go 1.25+)
 	engine, ts := config.InitEngine(initStandaloneTestPreEngine(t, []string{}))
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
@@ -190,6 +220,7 @@ func CreateDummyProgressListener(t *testing.T) {
 
 func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) (workflow.Engine, *config.TokenServiceImpl) {
 	t.Helper()
+	_ = os.Setenv(shellenv.DisableShellEnvLoadingEnvVar, "1") //nolint:usetesting // t.Setenv panics when called from a parallel test (Go 1.25+)
 	if os.Getenv(envVar) == "" {
 		t.Logf("%s is not set", envVar)
 		t.SkipNow()
