@@ -33,6 +33,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
@@ -50,6 +51,7 @@ import (
 
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
@@ -1472,7 +1474,8 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 
 		rejected := validateLockedFields(setup.engine.GetConfiguration(), folderConfig, &incoming, setup.logger)
 
-		assert.True(t, rejected, "should reject changes to settings locked by the new org")
+		assert.ElementsMatch(t, []string{types.SettingSnykCodeEnabled}, rejected,
+			"should report the locked setting name so the caller can dedupe into one notification")
 		// SnykCodeEnabled should have been cleared (locked by org-B)
 		assert.Nil(t, incoming.Settings[types.SettingSnykCodeEnabled], "locked setting should be cleared from incoming")
 		// ScanAutomatic should still be present (not locked)
@@ -1508,7 +1511,7 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 
 		rejected := validateLockedFields(setup.engine.GetConfiguration(), folderConfig, &incoming, setup.logger)
 
-		assert.False(t, rejected, "should allow changes when new org has no locks")
+		assert.Empty(t, rejected, "should allow changes when new org has no locks")
 		assert.NotNil(t, incoming.Settings[types.SettingSnykCodeEnabled], "setting should remain since new org doesn't lock it")
 	})
 }
@@ -2256,4 +2259,68 @@ func TestResetSummaryPanelForOrgChange_EmptyFolderPaths_DoesNotCallInit(t *testi
 		resetSummaryPanelForOrgChange(agg, []types.FilePath{})
 	})
 	assert.Empty(t, agg.initCalls, "Init must not be called when folderPaths is empty")
+}
+
+// Test_notifyLockedFieldsRejected_DeduplicatesAcrossGroupsAndEmitsOnce covers
+// the IDE-1970 acceptance criteria for the locked-fields warning notification:
+//
+//   - exactly one notification per triggering event,
+//   - regardless of how many fields (or folders) carry the same lock,
+//   - with every affected field name surfaced in the message,
+//   - and each name appearing only once.
+//
+// We exercise the helper directly with a MockNotifier so the test asserts on
+// the user-visible message itself rather than on async listener side effects.
+func Test_notifyLockedFieldsRejected_DeduplicatesAcrossGroupsAndEmitsOnce(t *testing.T) {
+	t.Run("single notification with deduplicated, sorted field list", func(t *testing.T) {
+		mock := notification.NewMockNotifier()
+
+		// Simulate one triggering event that produced locked-field rejections
+		// at both the machine scope and across multiple folders, with overlap.
+		machineRejections := []string{types.SettingSnykCodeEnabled}
+		folderRejections := []string{
+			types.SettingSeverityFilterHigh,
+			types.SettingSnykCodeEnabled, // same field locked in another folder
+			types.SettingSeverityFilterHigh,
+		}
+
+		notifyLockedFieldsRejected(mock, machineRejections, folderRejections)
+
+		require.Equal(t, 1, mock.SendShowMessageCount(),
+			"locked-field rejections from any number of fields/folders must collapse into exactly one notification (IDE-1970)")
+
+		require.Len(t, mock.SentMessages(), 1)
+		msg, ok := mock.SentMessages()[0].(sglsp.ShowMessageParams)
+		require.True(t, ok, "sent payload should be a ShowMessageParams")
+		assert.EqualValues(t, sglsp.MTWarning, msg.Type)
+		assert.Contains(t, msg.Message, types.SettingSnykCodeEnabled,
+			"notification must list every locked field affected by the event")
+		assert.Contains(t, msg.Message, types.SettingSeverityFilterHigh,
+			"notification must list every locked field affected by the event")
+		// Each name appears at most once even though it was rejected multiple times.
+		assert.Equal(t, 1, strings.Count(msg.Message, types.SettingSnykCodeEnabled),
+			"each locked field must appear at most once in the message (dedup)")
+		assert.Equal(t, 1, strings.Count(msg.Message, types.SettingSeverityFilterHigh),
+			"each locked field must appear at most once in the message (dedup)")
+	})
+
+	t.Run("no notification when nothing was rejected", func(t *testing.T) {
+		mock := notification.NewMockNotifier()
+		notifyLockedFieldsRejected(mock, nil, nil, []string{})
+		assert.Zero(t, mock.SendShowMessageCount(),
+			"must stay silent when no fields were rejected — no triggering event => no notification")
+	})
+
+	t.Run("only one notification even when only folder-scope fields were rejected", func(t *testing.T) {
+		mock := notification.NewMockNotifier()
+		// Before IDE-1970 this would produce one notification *per folder*.
+		notifyLockedFieldsRejected(mock,
+			nil,
+			[]string{types.SettingSnykCodeEnabled},          // folder A
+			[]string{types.SettingSnykCodeEnabled},          // folder B (same lock)
+			[]string{types.SettingSeverityFilterCritical},   // folder C (different lock)
+		)
+		assert.Equal(t, 1, mock.SendShowMessageCount(),
+			"multiple folders with locked-field rejections must still produce only one notification")
+	})
 }
