@@ -196,7 +196,7 @@ func InitializeSettings(conf configuration.Configuration, engine workflow.Engine
 	// folder
 	rejectedFolderFields := processFolderConfigs(conf, engine, logger, opts.FolderConfigs, analytics.TriggerSourceInitialize, resolver, globalOrgChanged)
 
-	notifyLockedFieldsRejected(di.Notifier(), rejectedMachineFields, rejectedFolderFields)
+	notifyLockedFieldsRejected(di.Notifier(), configOptionsMetaData(resolver), rejectedMachineFields, rejectedFolderFields)
 }
 
 // UpdateSettings processes settings from workspace/didChangeConfiguration.
@@ -214,7 +214,7 @@ func UpdateSettings(conf configuration.Configuration, engine workflow.Engine, lo
 	globalOrgChanged, rejectedMachineFields := processConfigSettings(conf, engine, logger, settings, triggerSource, configResolver)
 	rejectedFolderFields := processFolderConfigs(conf, engine, logger, folderConfigs, triggerSource, configResolver, globalOrgChanged)
 
-	notifyLockedFieldsRejected(di.Notifier(), rejectedMachineFields, rejectedFolderFields)
+	notifyLockedFieldsRejected(di.Notifier(), configOptionsMetaData(configResolver), rejectedMachineFields, rejectedFolderFields)
 
 	if ws != nil {
 		for _, folder := range ws.Folders() {
@@ -284,29 +284,57 @@ func validateLockedMachineFields(settings map[string]*types.ConfigSetting, confi
 // event (LSP initialize / didChangeConfiguration), summarising every locked
 // field that was rejected across machine-scope and folder-scope updates. Field
 // names are deduplicated so that a setting locked in multiple folders only
-// appears once. See [IDE-1970].
-func notifyLockedFieldsRejected(notifier notification.Notifier, rejectedFieldGroups ...[]string) {
+// appears once, and each name is rendered with its registered display name
+// (e.g. "Snyk Code Enabled") rather than the internal snake_case identifier.
+// See [IDE-1970].
+func notifyLockedFieldsRejected(notifier notification.Notifier, fm workflow.ConfigurationOptionsMetaData, rejectedFieldGroups ...[]string) {
 	seen := make(map[string]struct{})
-	var unique []string
+	var displayNames []string
 	for _, group := range rejectedFieldGroups {
 		for _, name := range group {
 			if _, ok := seen[name]; ok {
 				continue
 			}
 			seen[name] = struct{}{}
-			unique = append(unique, name)
+			displayNames = append(displayNames, displayNameFor(fm, name))
 		}
 	}
-	if len(unique) == 0 {
+	if len(displayNames) == 0 {
 		return
 	}
-	// Sort so the notification is deterministic regardless of map iteration order
-	// upstream; otherwise the same triggering event could surface fields in
-	// different orders across runs, which would confuse users and test fixtures.
-	sort.Strings(unique)
+	// Sort the display names so the notification is deterministic regardless of
+	// map iteration order upstream; otherwise the same triggering event could
+	// surface fields in different orders across runs, which would confuse users
+	// and test fixtures.
+	sort.Strings(displayNames)
 	notifier.SendShowMessage(sglsp.MTWarning,
 		fmt.Sprintf("Failed to update some settings: locked by your organization's policy (%s)",
-			strings.Join(unique, ", ")))
+			strings.Join(displayNames, ", ")))
+}
+
+// configOptionsMetaData safely extracts ConfigurationOptionsMetaData from a
+// possibly-nil ConfigResolverInterface. Returns nil when the resolver is nil so
+// callers can still emit notifications using raw setting identifiers as a
+// fallback (e.g. in tests without a fully-wired resolver).
+func configOptionsMetaData(resolver types.ConfigResolverInterface) workflow.ConfigurationOptionsMetaData {
+	if resolver == nil {
+		return nil
+	}
+	return resolver.ConfigurationOptionsMetaData()
+}
+
+// displayNameFor resolves a setting's user-facing display name from its
+// registered config.displayName annotation, falling back to the raw setting
+// identifier when no metadata is available (e.g. in tests that don't register
+// flags, or for settings without a display-name annotation).
+func displayNameFor(fm workflow.ConfigurationOptionsMetaData, name string) string {
+	if fm == nil {
+		return name
+	}
+	if dn, ok := fm.GetConfigurationOptionAnnotation(name, configresolver.AnnotationDisplayName); ok && dn != "" {
+		return dn
+	}
+	return name
 }
 
 // processConfigSettings writes incoming settings to configuration and applies side effects.

@@ -34,6 +34,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	sglsp "github.com/sourcegraph/go-lsp"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
@@ -2267,10 +2268,16 @@ func TestResetSummaryPanelForOrgChange_EmptyFolderPaths_DoesNotCallInit(t *testi
 //   - exactly one notification per triggering event,
 //   - regardless of how many fields (or folders) carry the same lock,
 //   - with every affected field name surfaced in the message,
-//   - and each name appearing only once.
+//   - each name appearing only once,
+//   - field names rendered with their registered display names when available,
+//   - and the message text deterministic (sorted) regardless of map iteration order.
 //
 // We exercise the helper directly with a MockNotifier so the test asserts on
 // the user-visible message itself rather than on async listener side effects.
+// The end-to-end regression test for the IDE-1970 bug (verifying that
+// UpdateSettings/InitializeSettings produce exactly one notification across
+// machine + folder scopes) lives in
+// Test_UpdateSettings_LockedFields_EmitsExactlyOneNotification below.
 func Test_notifyLockedFieldsRejected_DeduplicatesAcrossGroupsAndEmitsOnce(t *testing.T) {
 	t.Run("single notification with deduplicated, sorted field list", func(t *testing.T) {
 		mock := notification.NewMockNotifier()
@@ -2284,7 +2291,9 @@ func Test_notifyLockedFieldsRejected_DeduplicatesAcrossGroupsAndEmitsOnce(t *tes
 			types.SettingSeverityFilterHigh,
 		}
 
-		notifyLockedFieldsRejected(mock, machineRejections, folderRejections)
+		// nil fm => fall back to raw setting identifiers, which keeps the assertion
+		// stable across snyk-ls' display-name registrations.
+		notifyLockedFieldsRejected(mock, nil, machineRejections, folderRejections)
 
 		require.Equal(t, 1, mock.SendShowMessageCount(),
 			"locked-field rejections from any number of fields/folders must collapse into exactly one notification (IDE-1970)")
@@ -2293,34 +2302,211 @@ func Test_notifyLockedFieldsRejected_DeduplicatesAcrossGroupsAndEmitsOnce(t *tes
 		msg, ok := mock.SentMessages()[0].(sglsp.ShowMessageParams)
 		require.True(t, ok, "sent payload should be a ShowMessageParams")
 		assert.EqualValues(t, sglsp.MTWarning, msg.Type)
-		assert.Contains(t, msg.Message, types.SettingSnykCodeEnabled,
-			"notification must list every locked field affected by the event")
-		assert.Contains(t, msg.Message, types.SettingSeverityFilterHigh,
-			"notification must list every locked field affected by the event")
-		// Each name appears at most once even though it was rejected multiple times.
-		assert.Equal(t, 1, strings.Count(msg.Message, types.SettingSnykCodeEnabled),
-			"each locked field must appear at most once in the message (dedup)")
-		assert.Equal(t, 1, strings.Count(msg.Message, types.SettingSeverityFilterHigh),
-			"each locked field must appear at most once in the message (dedup)")
+
+		// Pin the full message string. This catches three contracts at once:
+		//   (a) the dedup ('snyk_code_enabled' appears once despite three input occurrences),
+		//   (b) the deterministic sort order ('severity_filter_high' < 'snyk_code_enabled'
+		//       lexicographically) — removing sort.Strings would surface map iteration order
+		//       and break this assertion intermittently,
+		//   (c) the user-visible message prefix wording.
+		assert.Equal(t,
+			"Failed to update some settings: locked by your organization's policy (severity_filter_high, snyk_code_enabled)",
+			msg.Message,
+			"locked-field notification text must be deterministic and deduplicated")
 	})
 
 	t.Run("no notification when nothing was rejected", func(t *testing.T) {
 		mock := notification.NewMockNotifier()
-		notifyLockedFieldsRejected(mock, nil, nil, []string{})
+		notifyLockedFieldsRejected(mock, nil, nil, nil, []string{})
 		assert.Zero(t, mock.SendShowMessageCount(),
 			"must stay silent when no fields were rejected — no triggering event => no notification")
 	})
 
-	t.Run("only one notification even when only folder-scope fields were rejected", func(t *testing.T) {
+	t.Run("only one notification even when many folders reject the same lock", func(t *testing.T) {
 		mock := notification.NewMockNotifier()
 		// Before IDE-1970 this would produce one notification *per folder*.
-		notifyLockedFieldsRejected(mock,
-			nil,
-			[]string{types.SettingSnykCodeEnabled},          // folder A
-			[]string{types.SettingSnykCodeEnabled},          // folder B (same lock)
-			[]string{types.SettingSeverityFilterCritical},   // folder C (different lock)
-		)
+		// processFolderConfigs flattens per-folder rejections into a single
+		// slice before calling the helper, so this matches the real call shape.
+		folderRejectionsFlat := []string{
+			types.SettingSnykCodeEnabled,        // folder A
+			types.SettingSnykCodeEnabled,        // folder B (same lock as A)
+			types.SettingSeverityFilterCritical, // folder C (different lock)
+		}
+		notifyLockedFieldsRejected(mock, nil, nil, folderRejectionsFlat)
 		assert.Equal(t, 1, mock.SendShowMessageCount(),
 			"multiple folders with locked-field rejections must still produce only one notification")
+
+		require.Len(t, mock.SentMessages(), 1)
+		msg := mock.SentMessages()[0].(sglsp.ShowMessageParams)
+		// 'severity_filter_critical' < 'snyk_code_enabled', and snyk_code_enabled
+		// appears only once despite being rejected by two folders.
+		assert.Equal(t,
+			"Failed to update some settings: locked by your organization's policy (severity_filter_critical, snyk_code_enabled)",
+			msg.Message,
+			"flattened multi-folder rejections must still dedupe and sort")
 	})
+
+	t.Run("flat group ordering is irrelevant; sort is deterministic", func(t *testing.T) {
+		// Same inputs, different group order — the sorted message must be identical.
+		mockA := notification.NewMockNotifier()
+		notifyLockedFieldsRejected(mockA, nil,
+			[]string{types.SettingSeverityFilterHigh}, // "machine" arg
+			[]string{types.SettingSnykCodeEnabled},    // "folder" arg
+		)
+		mockB := notification.NewMockNotifier()
+		notifyLockedFieldsRejected(mockB, nil,
+			[]string{types.SettingSnykCodeEnabled},    // "machine" arg
+			[]string{types.SettingSeverityFilterHigh}, // "folder" arg
+		)
+		require.Equal(t, 1, mockA.SendShowMessageCount())
+		require.Equal(t, 1, mockB.SendShowMessageCount())
+		assert.Equal(t,
+			mockA.SentMessages()[0].(sglsp.ShowMessageParams).Message,
+			mockB.SentMessages()[0].(sglsp.ShowMessageParams).Message,
+			"caller-side argument ordering must not affect the user-visible message — sort guarantees determinism")
+	})
+
+	t.Run("setting identifiers are rendered as registered display names when fm is provided", func(t *testing.T) {
+		// Wire a real ConfigurationOptionsMetaData by registering the snyk-ls
+		// flags into a flagset. This proves the helper consults
+		// AnnotationDisplayName rather than echoing the raw snake_case keys.
+		engine, _ := testutil.UnitTestWithEngine(t)
+		fs := pflag.NewFlagSet("test-locked-fields-display-name", pflag.ContinueOnError)
+		types.RegisterAllConfigurations(fs)
+		_ = engine.GetConfiguration().AddFlagSet(fs)
+		fm := workflow.ConfigurationOptionsFromFlagset(fs)
+
+		mock := notification.NewMockNotifier()
+		notifyLockedFieldsRejected(mock,
+			fm,
+			[]string{types.SettingSnykCodeEnabled},
+			[]string{types.SettingSeverityFilterHigh},
+		)
+
+		require.Equal(t, 1, mock.SendShowMessageCount())
+		msg := mock.SentMessages()[0].(sglsp.ShowMessageParams)
+		// "Severity Filter High" < "Snyk Code Enabled" lexicographically.
+		assert.Equal(t,
+			"Failed to update some settings: locked by your organization's policy (Severity Filter High, Snyk Code Enabled)",
+			msg.Message,
+			"notification must render display names (e.g. 'Snyk Code Enabled') instead of raw 'snyk_code_enabled' identifiers")
+	})
+}
+
+// Test_UpdateSettings_LockedFields_EmitsExactlyOneNotification is the
+// end-to-end regression test for IDE-1970. It drives `UpdateSettings` through
+// the full pipeline (machine-scope validation + multi-folder accumulator +
+// notification emission) and asserts that the real `di.Notifier()` channel
+// receives exactly one ShowMessageParams covering every locked field across
+// every folder. If a future refactor re-introduces an inline `SendShowMessage`
+// call in `processConfigSettings` or `processSingleLspFolderConfig` (the bug
+// IDE-1970 fixed), this test fails — the helper-level unit tests above would
+// not.
+func Test_UpdateSettings_LockedFields_EmitsExactlyOneNotification(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	di.TestInit(t, engine, tokenService)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	// Mock the org-default lookups so workspace setup doesn't hit the network.
+	conf.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction("test-default-org-uuid"))
+	conf.AddDefaultValue(configuration.ORGANIZATION_SLUG, configuration.ImmutableDefaultValueFunction("test-default-org-slug"))
+
+	// Two workspace folders, both bound to org-a (per-folder PreferredOrg below).
+	folderA := types.FilePath(t.TempDir())
+	folderB := types.FilePath(t.TempDir())
+	require.NoError(t, initTestRepo(t, string(folderA)))
+	require.NoError(t, initTestRepo(t, string(folderB)))
+	_, _ = workspaceutil.SetupWorkspace(t, engine, folderA, folderB)
+	types.SetPreferredOrgAndOrgSetByUser(conf, folderA, "org-a", true)
+	types.SetPreferredOrgAndOrgSetByUser(conf, folderB, "org-a", true)
+
+	// Lock a machine-scope setting at the RemoteMachineKey level.
+	conf.Set(configresolver.RemoteMachineKey(types.SettingApiEndpoint),
+		&configresolver.RemoteConfigField{Value: "https://locked.api.snyk.io", IsLocked: true})
+
+	// Lock two folder-scope settings at the org level. Both folders inherit
+	// these locks because they share org-a above.
+	orgConfig := types.NewLDXSyncOrgConfig("org-a")
+	orgConfig.SetField(types.SettingSnykCodeEnabled, true, true, "group")
+	orgConfig.SetField(types.SettingSeverityFilterHigh, true, true, "group")
+	types.WriteOrgConfigToConfiguration(conf, orgConfig)
+
+	resolver := testutil.DefaultConfigResolver(engine)
+	di.SetConfigResolver(resolver)
+
+	// Subscribe to the real notifier before driving the change so we don't miss
+	// any messages produced on the request goroutine.
+	var (
+		mu              sync.Mutex
+		showMessages    []sglsp.ShowMessageParams
+		listenerStarted = make(chan struct{})
+	)
+	di.Notifier().CreateListener(func(params any) {
+		select {
+		case <-listenerStarted:
+		default:
+			close(listenerStarted)
+		}
+		if sm, ok := params.(sglsp.ShowMessageParams); ok {
+			mu.Lock()
+			defer mu.Unlock()
+			showMessages = append(showMessages, sm)
+		}
+	})
+	t.Cleanup(func() { di.Notifier().DisposeListener() })
+
+	// One triggering event that tries to PATCH every locked setting across
+	// machine scope and both folders. folderB also tries to change
+	// SnykCodeEnabled, which collides with folderA — the bug being fixed
+	// previously emitted one notification per folder; the fix collapses them.
+	machineSettings := map[string]*types.ConfigSetting{
+		types.SettingApiEndpoint: {Value: "https://attempted-override", Changed: true},
+	}
+	folderConfigs := []types.LspFolderConfig{
+		{
+			FolderPath: folderA,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingSnykCodeEnabled:    {Value: false, Changed: true},
+				types.SettingSeverityFilterHigh: {Value: false, Changed: true},
+			},
+		},
+		{
+			FolderPath: folderB,
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingSnykCodeEnabled: {Value: false, Changed: true},
+			},
+		},
+	}
+
+	UpdateSettings(conf, engine, logger, machineSettings, folderConfigs, analytics.TriggerSourceTest, resolver)
+
+	// Wait for the listener goroutine to drain at least one ShowMessage.
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(showMessages) >= 1
+	}, 2*time.Second, 10*time.Millisecond,
+		"expected at least one ShowMessage notification after UpdateSettings with locked fields")
+
+	// Settle window: if any additional notifications were going to fire
+	// (the pre-IDE-1970 bug), they would arrive within this period.
+	time.Sleep(200 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, showMessages, 1,
+		"IDE-1970 regression: a single triggering event with %d locked fields across %d folders must produce exactly one ShowMessage notification — got %d (%v)",
+		3, 2, len(showMessages), showMessages)
+
+	msg := showMessages[0]
+	assert.EqualValues(t, sglsp.MTWarning, msg.Type)
+	// All three locked fields must appear in the single message, deduplicated
+	// (SnykCodeEnabled is rejected by both folders but listed once) and
+	// rendered via their registered display names.
+	assert.Contains(t, msg.Message, "API Endpoint", "machine-scope locked field must be listed")
+	assert.Contains(t, msg.Message, "Snyk Code Enabled", "folder-scope locked field must be listed via display name")
+	assert.Contains(t, msg.Message, "Severity Filter High", "folder-scope locked field must be listed via display name")
+	assert.Equal(t, 1, strings.Count(msg.Message, "Snyk Code Enabled"),
+		"a field locked in multiple folders must appear at most once in the deduplicated message")
 }
