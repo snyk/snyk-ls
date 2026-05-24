@@ -201,7 +201,7 @@ func (a *CliAuthenticationProvider) buildCLICmd(ctx context.Context, args ...str
 	cmd := exec.CommandContext(ctx, cliPath, args...)
 	cmd.Env = cli.AppendCliEnvironmentVariables(a.engine, a.configResolver, os.Environ(), false)
 
-	a.engine.GetLogger().Info().Str("command", cmd.String()).Interface("env", cmd.Env).Msg("running Snyk CLI command")
+	a.engine.GetLogger().Info().Str("command", cmd.String()).Msg("running Snyk CLI command")
 	return cmd
 }
 

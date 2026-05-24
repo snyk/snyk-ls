@@ -318,6 +318,9 @@ func Test_CheckDirectory_ReadOnlyDirectory(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Skipping read-only test on Windows")
 	}
+	if os.Getuid() == 0 {
+		t.Skip("Skipping read-only test when running as root: root ignores file permissions")
+	}
 
 	tmpDir := t.TempDir()
 

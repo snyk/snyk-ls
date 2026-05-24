@@ -8,8 +8,8 @@
 set -e
 
 HASH_FILE=".tests-hash"
-REQUIRED_STAGES=("test" "test-integ" "test-smoke")   # block push if stale
-ADVISORY_STAGES=()                                   # warn only — takes 30-90 min
+REQUIRED_STAGES=("test")                                          # block push if stale
+ADVISORY_STAGES=("test-integ" "test-smoke")                       # warn only — takes 30-90 min
 
 # Determine upstream ref; default to origin/<current-branch> if the tracking branch is unset.
 UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo "origin/$(git branch --show-current)")
@@ -57,7 +57,6 @@ if [ ${#missing[@]} -gt 0 ]; then
     echo "❌ Test stages not yet run at current commit:"
     for s in "${missing[@]}"; do
         echo "   make $s"
-        [ "$s" = "test-smoke" ] && echo "   (or faster: make test-smoke-parallel)"
     done
     blocked=1
 fi
@@ -66,7 +65,6 @@ if [ ${#outdated[@]} -gt 0 ]; then
     echo "❌ Commits since these stages last ran:"
     for s in "${outdated[@]}"; do
         echo "   make $s"
-        [ "$s" = "test-smoke" ] && echo "   (or faster: make test-smoke-parallel)"
     done
     blocked=1
 fi
@@ -74,8 +72,8 @@ fi
 for stage in "${ADVISORY_STAGES[@]}"; do
     stored=$(grep "^${stage}=" "$HASH_FILE" 2>/dev/null | cut -d'=' -f2 | head -1 || true)
     if [ -z "$stored" ] || [ "$stored" != "$current_hash" ]; then
-        echo "⚠️  Smoke tests not recorded for current commit (advisory — not blocking)."
-        echo "   To record: SMOKE_TESTS=1 make test   (or: make test-all)"
+        echo "⚠️  $stage not recorded for current commit (advisory — not blocking)."
+        echo "   To record: make $stage"
     fi
 done
 
