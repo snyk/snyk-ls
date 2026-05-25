@@ -281,7 +281,7 @@ func validateLockedMachineFields(settings map[string]*types.ConfigSetting, confi
 }
 
 // notifyLockedFieldsRejected emits at most one notification for the triggering
-// event (LSP initialize / didChangeConfiguration), summarising every locked
+// event (LSP initialize / didChangeConfiguration), summarizing every locked
 // field that was rejected across machine-scope and folder-scope updates. Field
 // names are deduplicated so that a setting locked in multiple folders only
 // appears once, and each name is rendered with its registered display name
