@@ -4,9 +4,13 @@
   "type": "module",
   "scripts": {
     "test": "node --test --experimental-test-coverage",
+    "test:playwright": "playwright test",
+    "test:playwright:headed": "playwright test --headed",
+    "playwright:install": "playwright install chromium",
     "lint:es5": "eslint .."
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "eslint": "^10.1.0",
     "jsdom": "^26.1.0"
   }
