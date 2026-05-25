@@ -17,10 +17,10 @@
 			organization: ""
 		},
 		filteringDisplay: {
-			enabled_severities_critical: true,
-			enabled_severities_high: true,
-			enabled_severities_medium: true,
-			enabled_severities_low: true,
+			severity_filter_critical: true,
+			severity_filter_high: true,
+			severity_filter_medium: true,
+			severity_filter_low: true,
 			issue_view_open_issues: true,
 			issue_view_ignored_issues: false,
 			risk_score_threshold: "",

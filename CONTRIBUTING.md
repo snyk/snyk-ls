@@ -5,6 +5,17 @@ You'll need
 - Python 3 (incl. requests module)
 - Go 1.26.2
 
+## Linux headless
+
+When running on a headless Linux system (no display server), clipboard-dependent tests
+require a virtual display and clipboard utilities:
+
+```bash
+apt-get install -y xvfb xsel xclip wl-clipboard
+Xvfb :99 -screen 0 1280x1024x24 -ac &
+export DISPLAY=:99
+```
+
 # Architecture
 
 Snyk language server acts as an integration point encompassing the following features:
