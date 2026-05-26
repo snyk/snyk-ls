@@ -90,7 +90,7 @@ process_repo() {
     return 0
   fi
 
-  git -C "$WORK_DIR" config user.email "noreply@snyk.io"
+  git -C "$WORK_DIR" config user.email "team-ide@snyk.io"
   git -C "$WORK_DIR" config user.name "Snyk Team IDE"
   git -C "$WORK_DIR" checkout -B "$BRANCH"
   git -C "$WORK_DIR" add "$DEST_PATH"
