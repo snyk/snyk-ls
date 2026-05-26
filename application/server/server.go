@@ -54,6 +54,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	noti "github.com/snyk/snyk-ls/internal/notification"
@@ -105,6 +106,7 @@ func withContext(
 	authenticationService authentication.AuthenticationService,
 	ldxSyncService command.LdxSyncService,
 	inlineValueProvider snyk.InlineValueProvider,
+	learnService learn.Service,
 ) jrpc2.Handler {
 	return func(ctx context.Context, req *jrpc2.Request) (any, error) {
 		ctx = ctx2.NewContextWithLogger(ctx, logger)
@@ -126,6 +128,9 @@ func withContext(
 		if inlineValueProvider != nil {
 			deps[ctx2.DepInlineValueProvider] = inlineValueProvider
 		}
+		if learnService != nil {
+			deps[ctx2.DepLearnService] = learnService
+		}
 		ctx = ctx2.NewContextWithDependencies(ctx, deps)
 		return h(ctx, req)
 	}
@@ -137,7 +142,7 @@ const textDocumentDidSaveOperation = "textDocument/didSave"
 
 func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, deps di.Dependencies) {
 	enrich := func(h jrpc2.Handler) jrpc2.Handler {
-		return withContext(h, logger, conf, engine, deps.ConfigResolver, deps.AuthenticationService, deps.LdxSyncService, deps.InlineValueProvider)
+		return withContext(h, logger, conf, engine, deps.ConfigResolver, deps.AuthenticationService, deps.LdxSyncService, deps.InlineValueProvider, deps.LearnService)
 	}
 	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv))
 	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv))
