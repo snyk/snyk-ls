@@ -538,6 +538,7 @@
       });
 
       get('cli_release_channel_custom').addEventListener('input', validateCliVersion);
+      get('cli_release_channel_custom').addEventListener('blur', validateCliVersion);
 
       var tooltipTriggers = document.querySelectorAll('[data-toggle="tooltip"]');
       for (var k = 0; k < tooltipTriggers.length; k++) {

@@ -225,13 +225,15 @@ config-dialog-fixture:
 	@go run scripts/config-dialog/main.go --dummy-data -no-panel > js-tests/fixtures/config-page.html
 	@echo "    Written to js-tests/fixtures/config-page.html"
 
-## settings-fallback-fixture: Regenerate settings fallback HTML fixture used by JS tests.
+## settings-fallback-fixture: Regenerate settings fallback HTML fixtures used by JS tests.
 .PHONY: settings-fallback-fixture
 settings-fallback-fixture:
-	@echo "==> Generating settings fallback HTML fixture..."
+	@echo "==> Generating settings fallback HTML fixtures..."
 	@mkdir -p js-tests/fixtures
 	@go run scripts/settings-fallback-fixture/main.go > js-tests/fixtures/settings-fallback.html
-	@echo "    Written to js-tests/fixtures/settings-fallback.html"
+	@go run scripts/settings-fallback-fixture/main.go --release-channel v1.1292.0 > js-tests/fixtures/settings-fallback-custom-valid.html
+	@go run scripts/settings-fallback-fixture/main.go --release-channel not-a-version > js-tests/fixtures/settings-fallback-custom-invalid.html
+	@echo "    Written to js-tests/fixtures/settings-fallback*.html"
 
 ## generate: Regenerate generated files (e.g. mocks).
 .PHONY: generate

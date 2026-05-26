@@ -224,7 +224,29 @@ test("settings-fallback: error message is hidden on load for valid custom versio
   const error = win.document.getElementById("cli-version-error");
   assert.ok(
     error.className.includes("hidden"),
-    "cli-version-error must be hidden on load when channel is not custom"
+    `cli-version-error must be hidden on load when channel is not custom; got class="${error.className}"`
+  );
+});
+
+test("settings-fallback: error message is hidden on load when custom fixture has valid version", async () => {
+  // Fixture rendered with a valid custom version: custom input visible, valid version, no error
+  const win = await buildFallbackDom({ fixtureName: "settings-fallback-custom-valid.html" });
+  const error = win.document.getElementById("cli-version-error");
+  assert.ok(
+    error.className.includes("hidden"),
+    `cli-version-error must be hidden on load for valid custom version; got class="${error.className}"`
+  );
+  const sel = win.document.getElementById("cli_release_channel");
+  assert.strictEqual(sel.value, "custom");
+});
+
+test("settings-fallback: error message is visible on load when custom fixture has invalid version", async () => {
+  // Fixture rendered with an invalid custom version string — error must surface on load
+  const win = await buildFallbackDom({ fixtureName: "settings-fallback-custom-invalid.html" });
+  const error = win.document.getElementById("cli-version-error");
+  assert.ok(
+    !error.className.includes("hidden"),
+    `cli-version-error must be visible on load for invalid custom version; got class="${error.className}"`
   );
 });
 
