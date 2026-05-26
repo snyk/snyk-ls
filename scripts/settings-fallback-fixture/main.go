@@ -79,16 +79,16 @@ func main() {
 	}
 
 	replacements := map[string]string{
-		"{{MANAGE_BINARIES_CHECKED}}":        manageBinariesChecked,
-		"{{CLI_BASE_DOWNLOAD_URL}}":           *baseURL,
-		"{{CLI_PATH}}":                        *cliPath,
-		"{{CHANNEL_STABLE_SELECTED}}":         stableSelected,
-		"{{CHANNEL_RC_SELECTED}}":             rcSelected,
-		"{{CHANNEL_PREVIEW_SELECTED}}":        previewSelected,
-		"{{CHANNEL_CUSTOM_SELECTED}}":         customSelected,
-		"{{CLI_RELEASE_CHANNEL_CUSTOM_VALUE}}": customValue,
+		"{{MANAGE_BINARIES_CHECKED}}":           manageBinariesChecked,
+		"{{CLI_BASE_DOWNLOAD_URL}}":             *baseURL,
+		"{{CLI_PATH}}":                          *cliPath,
+		"{{CHANNEL_STABLE_SELECTED}}":           stableSelected,
+		"{{CHANNEL_RC_SELECTED}}":               rcSelected,
+		"{{CHANNEL_PREVIEW_SELECTED}}":          previewSelected,
+		"{{CHANNEL_CUSTOM_SELECTED}}":           customSelected,
+		"{{CLI_RELEASE_CHANNEL_CUSTOM_VALUE}}":  customValue,
 		"{{CLI_RELEASE_CHANNEL_CUSTOM_HIDDEN}}": customHidden,
-		"{{INSECURE_CHECKED}}":                insecureChecked,
+		"{{INSECURE_CHECKED}}":                  insecureChecked,
 	}
 
 	for placeholder, value := range replacements {
