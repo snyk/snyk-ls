@@ -52,14 +52,19 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenService) Dependencies {
+func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenService, overrideDeps *Dependencies) Dependencies {
 	t.Helper()
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	gafConfiguration := engine.GetConfiguration()
 	types.SetGlobalSystemDefault(gafConfiguration, types.SettingCliPath, filepath.Join(t.TempDir(), "fake-cli"))
 	types.DefaultOpenBrowserFunc = func(url string) {}
-	notifier = domainNotify.NewNotifier()
+
+	if overrideDeps != nil && overrideDeps.Notifier != nil {
+		notifier = overrideDeps.Notifier
+	} else {
+		notifier = domainNotify.NewNotifier()
+	}
 
 	fs := pflag.NewFlagSet("snyk-ls-config-test", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
@@ -67,17 +72,28 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 
 	logger := engine.GetLogger()
-	resolver := types.NewConfigResolver(logger)
-	prefixKeyResolver := configresolver.New(gafConfiguration, fm)
-	resolver.SetPrefixKeyResolver(prefixKeyResolver, gafConfiguration, fm)
-	configResolver = resolver
+
+	if overrideDeps != nil && overrideDeps.ConfigResolver != nil {
+		configResolver = overrideDeps.ConfigResolver
+	} else {
+		resolver := types.NewConfigResolver(logger)
+		prefixKeyResolver := configresolver.New(gafConfiguration, fm)
+		resolver.SetPrefixKeyResolver(prefixKeyResolver, gafConfiguration, fm)
+		configResolver = resolver
+	}
 
 	instrumentor = performance.NewInstrumentor()
 	errorReporter = er.NewTestErrorReporter(engine)
 	installer = install.NewFakeInstaller(engine, configResolver)
 	authProvider := authentication.NewFakeCliAuthenticationProvider(engine)
 	snykApiClient = &snyk_api.FakeApiClient{CodeEnabled: true}
-	authenticationService = authentication.NewAuthenticationService(engine, tokenService, authProvider, errorReporter, notifier, configResolver)
+
+	if overrideDeps != nil && overrideDeps.AuthenticationService != nil {
+		authenticationService = overrideDeps.AuthenticationService
+	} else {
+		authenticationService = authentication.NewAuthenticationService(engine, tokenService, authProvider, errorReporter, notifier, configResolver)
+	}
+
 	snykCli := cli.NewExecutor(engine, errorReporter, notifier, configResolver)
 	cliInitializer = cli.NewInitializer(gafConfiguration, logger, errorReporter, installer, notifier, snykCli, configResolver)
 	authInitializer := authentication.NewInitializer(gafConfiguration, logger, authenticationService, errorReporter, notifier, configResolver)
@@ -88,25 +104,43 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 
 	codeInstrumentor = code.NewCodeInstrumentor()
 	scanNotifier, _ = appNotification.NewScanNotifier(notifier, configResolver)
-	ctrl := gomock.NewController(t)
-	learnMock := mock_learn.NewMockService(ctrl)
-	learnMock.EXPECT().GetAllLessons().Return([]learn.Lesson{{}}, nil).AnyTimes()
-	learnMock.EXPECT().MaintainCacheFunc().AnyTimes()
-	learnMock.
-		EXPECT().
-		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(&learn.Lesson{}, nil).AnyTimes()
-	learnService = learnMock
+
+	if overrideDeps != nil && overrideDeps.LearnService != nil {
+		learnService = overrideDeps.LearnService
+	} else {
+		ctrl := gomock.NewController(t)
+		learnMock := mock_learn.NewMockService(ctrl)
+		learnMock.EXPECT().GetAllLessons().Return([]learn.Lesson{{}}, nil).AnyTimes()
+		learnMock.EXPECT().MaintainCacheFunc().AnyTimes()
+		learnMock.
+			EXPECT().
+			GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(&learn.Lesson{}, nil).AnyTimes()
+		learnService = learnMock
+	}
+
 	scanPersister = persistence.NopScanPersister{}
 	scanStateAggregator = scanstates.NewNoopStateAggregator()
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
-	featureFlagService = featureflag.New(gafConfiguration, logger, engine, configResolver)
+
+	if overrideDeps != nil && overrideDeps.FeatureFlagService != nil {
+		featureFlagService = overrideDeps.FeatureFlagService
+	} else {
+		featureFlagService = featureflag.New(gafConfiguration, logger, engine, configResolver)
+	}
+
 	snykCodeScanner = code.New(engine, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.NewFakeCodeScannerClient, configResolver)
 	openSourceScanner = oss.NewCLIScanner(engine, instrumentor, errorReporter, snykCli, learnService, notifier, configResolver)
 	infrastructureAsCodeScanner = iac.New(gafConfiguration, logger, instrumentor, errorReporter, snykCli, configResolver)
 	scanner = scanner2.NewDelegatingScanner(engine, tokenService, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, configResolver, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
 	hoverService = hover.NewDefaultService(logger)
-	ldxSyncService = command.NewLdxSyncService(configResolver)
+
+	if overrideDeps != nil && overrideDeps.LdxSyncService != nil {
+		ldxSyncService = overrideDeps.LdxSyncService
+	} else {
+		ldxSyncService = command.NewLdxSyncService(configResolver)
+	}
+
 	mockCommandService := types.NewCommandServiceMock()
 	command.SetService(mockCommandService)
 	w := workspace.New(gafConfiguration, logger, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, configResolver, engine)

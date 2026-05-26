@@ -44,7 +44,7 @@ import (
 
 func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServerWithCustomDI(t, engine, tokenService, false)
+	loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
 
 	s := &scanner.TestScanner{}
 	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine))
@@ -61,7 +61,7 @@ func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t
 
 func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceipt(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServerWithCustomDI(t, engine, tokenService, false)
+	loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
 
 	s := &scanner.TestScanner{}
 	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine))
@@ -78,7 +78,7 @@ func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceip
 
 func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostics(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServerWithCustomDI(t, engine, tokenService, false)
+	loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
 
 	scannerForFolder := scanner.NewTestScanner()
 	scannerForDontClear := scanner.NewTestScanner()
@@ -111,7 +111,7 @@ func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostic
 
 func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder := setupServerWithCustomDI(t, engine, tokenService, false)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 
 	s := &scanner.TestScanner{}
 	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine))
@@ -130,7 +130,7 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 
 func Test_executeWorkspaceScanCommand_shouldAcceptScanSourceParam(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder := setupServerWithCustomDI(t, engine, tokenService, false)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 
 	s := &scanner.TestScanner{}
 	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine))
@@ -154,10 +154,10 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockLdxSyncService := mockcommand.NewMockLdxSyncService(ctrl)
-	loc, jsonRPCRecorder, deps := setupCustomServerWithDeps(t, engine, tokenService, nil, func(deps di.Dependencies) di.Dependencies {
-		deps.LdxSyncService = mockLdxSyncService
-		return deps
-	})
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService,
+		WithDeps(di.Dependencies{
+			LdxSyncService: mockLdxSyncService,
+		}))
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 
@@ -238,7 +238,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 
 	t.Run("Doesn't mutate trusted folders, if trusted folders disabled", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
-		loc, _ := setupServerWithCustomDI(t, engine, tokenService, false)
+		loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
 
 		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath1, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine))
 
@@ -254,7 +254,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 
 	t.Run("Updates trusted workspace folders", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
-		loc, _ := setupServerWithCustomDI(t, engine, tokenService, false)
+		loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
 
 		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath1, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine))
 		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath2, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine))
@@ -274,7 +274,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 
 	t.Run("Existing trusted workspace folders are not removed", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
-		loc, _ := setupServerWithCustomDI(t, engine, tokenService, false)
+		loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
 
 		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath1, "dummy", nil, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine))
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
@@ -338,7 +338,7 @@ func (tcs *testCommandService) ExecuteCommandData(ctx context.Context, cmdData t
 
 func Test_ExecuteCommand_CancelRequest(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	testCmd := newWaitForCancelTestCommand(t)
 

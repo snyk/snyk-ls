@@ -50,15 +50,12 @@ func setupLdxSyncTest(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, 
 	xdg.ConfigHome = t.TempDir()
 	t.Cleanup(func() { xdg.ConfigHome = origConfigHome })
 
-	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 
 	// Disable scanning products - only testing cache behavior
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
-
-	cleanupChannels()
-	di.Init(engine, tokenService)
 
 	return engine, tokenService, loc, jsonRpcRecorder
 }
