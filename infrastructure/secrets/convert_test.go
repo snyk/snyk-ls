@@ -88,7 +88,7 @@ func TestToIssues_SingleFinding_SingleLocation(t *testing.T) {
 	rule := newSecretsRuleProblem("hardcoded-secret", "Hardcoded Secret", []string{"Security"})
 	finding := newFinding("test-key", "Hardcoded Secret Found", "A hardcoded secret was detected", testapi.SeverityHigh, []testapi.FindingLocation{loc}, []testapi.Problem{cwe, rule}, nil)
 
-	issues := converter.ToIssues([]testapi.FindingData{finding}, "", "/folder/path")
+	issues := converter.ToIssues(t.Context(), []testapi.FindingData{finding}, "", "/folder/path")
 
 	require.Len(t, issues, 1)
 	issue := issues[0]
@@ -140,7 +140,7 @@ func TestToIssues_MultipleLocations_DuplicatesFinding(t *testing.T) {
 	loc2 := newSourceLocation("src/other.yml", 20, intPtr(5), intPtr(20), intPtr(40))
 	finding := newFinding("dup-key", "Secret Found", "desc", testapi.SeverityMedium, []testapi.FindingLocation{loc1, loc2}, nil, nil)
 
-	issues := converter.ToIssues([]testapi.FindingData{finding}, "", "/folder")
+	issues := converter.ToIssues(t.Context(), []testapi.FindingData{finding}, "", "/folder")
 
 	require.Len(t, issues, 2)
 
@@ -166,7 +166,7 @@ func TestToIssues_MultipleFindings(t *testing.T) {
 	f1 := newFinding("key-1", "Secret 1", "desc1", testapi.SeverityHigh, []testapi.FindingLocation{loc1}, nil, nil)
 	f2 := newFinding("key-2", "Secret 2", "desc2", testapi.SeverityLow, []testapi.FindingLocation{loc2}, nil, nil)
 
-	issues := converter.ToIssues([]testapi.FindingData{f1, f2}, "/scan", "/folder")
+	issues := converter.ToIssues(t.Context(), []testapi.FindingData{f1, f2}, "/scan", "/folder")
 
 	require.Len(t, issues, 2)
 	assert.Equal(t, "key-1", issues[0].GetID())
@@ -179,7 +179,7 @@ func TestToIssues_NilAttributes_Skipped(t *testing.T) {
 	converter := NewFindingsConverter(logger)
 
 	finding := testapi.FindingData{Attributes: nil}
-	issues := converter.ToIssues([]testapi.FindingData{finding}, "/scan", "/folder")
+	issues := converter.ToIssues(t.Context(), []testapi.FindingData{finding}, "/scan", "/folder")
 
 	assert.Empty(t, issues)
 }
@@ -190,7 +190,7 @@ func TestToIssues_EmptyLocations_Skipped(t *testing.T) {
 	converter := NewFindingsConverter(logger)
 
 	finding := newFinding("key", "title", "desc", testapi.SeverityLow, []testapi.FindingLocation{}, nil, nil)
-	issues := converter.ToIssues([]testapi.FindingData{finding}, "/scan", "/folder")
+	issues := converter.ToIssues(t.Context(), []testapi.FindingData{finding}, "/scan", "/folder")
 
 	assert.Empty(t, issues)
 }
@@ -200,7 +200,7 @@ func TestToIssues_EmptyFindings(t *testing.T) {
 	logger := engine.GetLogger()
 	converter := NewFindingsConverter(logger)
 
-	issues := converter.ToIssues([]testapi.FindingData{}, "/scan", "/folder")
+	issues := converter.ToIssues(t.Context(), []testapi.FindingData{}, "/scan", "/folder")
 
 	assert.Empty(t, issues)
 }
@@ -214,7 +214,7 @@ func TestToIssues_RuleIDFallsBackToKey(t *testing.T) {
 	// No secrets rule problem, so ruleID should default to key
 	finding := newFinding("fallback-key", "title", "desc", testapi.SeverityLow, []testapi.FindingLocation{loc}, nil, nil)
 
-	issues := converter.ToIssues([]testapi.FindingData{finding}, "/scan", "/folder")
+	issues := converter.ToIssues(t.Context(), []testapi.FindingData{finding}, "/scan", "/folder")
 
 	require.Len(t, issues, 1)
 	assert.Equal(t, "fallback-key", issues[0].GetID())
@@ -522,7 +522,7 @@ func TestToIssues_IgnoredFinding(t *testing.T) {
 		&testapi.Suppression{Status: testapi.SuppressionStatusIgnored, Justification: strPtr("False positive")},
 	)
 
-	issues := converter.ToIssues([]testapi.FindingData{finding}, "/scan", "/folder")
+	issues := converter.ToIssues(t.Context(), []testapi.FindingData{finding}, "/scan", "/folder")
 
 	require.Len(t, issues, 1)
 	assert.True(t, issues[0].GetIsIgnored())
@@ -539,7 +539,7 @@ func TestToIssues_FindingIdFromUUID(t *testing.T) {
 	loc := newSourceLocation("file.yml", 1, nil, nil, nil)
 	finding := newFinding("my-key", "title", "desc", testapi.SeverityLow, []testapi.FindingLocation{loc}, nil, nil)
 
-	issues := converter.ToIssues([]testapi.FindingData{finding}, "/scan", "/folder")
+	issues := converter.ToIssues(t.Context(), []testapi.FindingData{finding}, "/scan", "/folder")
 
 	require.Len(t, issues, 1)
 	assert.NotEmpty(t, issues[0].GetFindingId())
@@ -562,7 +562,7 @@ func TestToIssues_NilFindingId(t *testing.T) {
 		},
 	}
 
-	issues := converter.ToIssues([]testapi.FindingData{finding}, "/scan", "/folder")
+	issues := converter.ToIssues(t.Context(), []testapi.FindingData{finding}, "/scan", "/folder")
 
 	require.Len(t, issues, 1)
 	assert.Equal(t, "key-no-id", issues[0].GetFindingId())
