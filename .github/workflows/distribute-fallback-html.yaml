@@ -1,0 +1,35 @@
+name: Distribute settings-fallback.html
+
+# Runs whenever settings-fallback.html changes on main, and opens a PR in each
+# IDE plugin repo to keep their bundled copy in sync.
+#
+# Target repos and destination paths are configured in .github/distribute-fallback-html.sh.
+# Each IDE repo has a resource-check CI workflow that verifies the file matches snyk-ls main;
+# this workflow is the proactive counterpart that opens the syncing PRs automatically.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'shared_ide_resources/ui/html/settings-fallback.html'
+  workflow_dispatch:
+
+# Serialize runs so concurrent pushes don't race on the shared sync branch.
+# cancel-in-progress: false ensures the latest change is always distributed.
+concurrency:
+  group: distribute-fallback-html
+  cancel-in-progress: false
+
+jobs:
+  distribute:
+    name: distribute-fallback-html
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout snyk-ls
+        uses: actions/checkout@v4
+
+      - name: Distribute settings-fallback.html to IDE repos
+        env:
+          GH_TOKEN: ${{ secrets.TEAM_IDE_PAT }}
+        run: .github/distribute-fallback-html.sh
