@@ -166,14 +166,14 @@ test("settings-fallback: __isFormDirty__ is false when field reverted to origina
   assert.strictEqual(win.__isFormDirty__(), false);
 });
 
-test("settings-fallback: __onFormDirtyChange__ fires on markDirtyAndSave transitions", async () => {
+test("settings-fallback: __onFormDirtyChange__ fires on markDirty transitions", async () => {
   const win = await buildFallbackDom();
   const dirtyEvents = [];
   win.__onFormDirtyChange__ = (isDirty) => dirtyEvents.push(isDirty);
 
   // Change cli_path — should fire with true (dirty)
   win.document.getElementById("cli_path").value = "/new/path";
-  win.markDirtyAndSave();
+  win.markDirty();
   assert.ok(dirtyEvents.includes(true), "dirty=true must fire after field change");
 });
 
