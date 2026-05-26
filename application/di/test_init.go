@@ -54,6 +54,16 @@ import (
 
 func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenService) Dependencies {
 	t.Helper()
+	return testInit(t, engine, tokenService, scanstates.NewNoopStateAggregator())
+}
+
+func TestInitWithScanStateAggregator(t *testing.T, engine workflow.Engine, tokenService types.TokenService, agg scanstates.Aggregator) Dependencies {
+	t.Helper()
+	return testInit(t, engine, tokenService, agg)
+}
+
+func testInit(t *testing.T, engine workflow.Engine, tokenService types.TokenService, agg scanstates.Aggregator) Dependencies {
+	t.Helper()
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	gafConfiguration := engine.GetConfiguration()
@@ -98,7 +108,7 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 		Return(&learn.Lesson{}, nil).AnyTimes()
 	learnService = learnMock
 	scanPersister = persistence.NopScanPersister{}
-	scanStateAggregator = scanstates.NewNoopStateAggregator()
+	scanStateAggregator = agg
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
 	featureFlagService = featureflag.New(gafConfiguration, logger, engine, configResolver)
 	snykCodeScanner = code.New(engine, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.NewFakeCodeScannerClient, configResolver)
