@@ -120,7 +120,11 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 	}
 
 	scanPersister = persistence.NopScanPersister{}
-	scanStateAggregator = scanstates.NewNoopStateAggregator()
+	if overrideDeps != nil && overrideDeps.ScanStateAggregator != nil {
+		scanStateAggregator = overrideDeps.ScanStateAggregator
+	} else {
+		scanStateAggregator = scanstates.NewNoopStateAggregator()
+	}
 	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
 
 	if overrideDeps != nil && overrideDeps.FeatureFlagService != nil {
