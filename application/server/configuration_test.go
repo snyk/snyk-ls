@@ -2262,12 +2262,14 @@ func TestApplyUserSettingsPath_PersistsValue(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 
+	originalPath := os.Getenv("PATH")
 	settings := map[string]*types.ConfigSetting{
 		types.SettingUserSettingsPath: {Value: "/foo/bar", Changed: true},
 	}
 	applyUserSettingsPath(conf, settings)
 
 	assert.Equal(t, "/foo/bar", types.GetGlobalString(conf, types.SettingUserSettingsPath))
+	assert.Equal(t, originalPath, os.Getenv("PATH"), "didChangeConfiguration must not mutate os PATH — restart required")
 }
 
 func TestApplyUserSettingsPath_IgnoresUnchanged(t *testing.T) {
