@@ -244,7 +244,7 @@ func refreshLdxSyncOnTokenChange(ctx context.Context, conf configuration.Configu
 	if !ok {
 		panic("Notifier missing from context")
 	}
-	ldxSyncService.RefreshConfigFromLdxSync(ctx, conf, engine, logger, folders, notifier)
+	ldxSyncService.RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, folders, notifier)
 }
 
 // validateLockedMachineFields rejects user PATCH attempts for machine-scope settings
@@ -1175,7 +1175,7 @@ func updateFolderOrgIfNeeded(ctx context.Context, conf configuration.Configurati
 			if !ok {
 				panic("LDX-Sync service missing from context")
 			}
-			ldxSyncService.RefreshConfigFromLdxSync(ctx, conf, engine, logger, []types.Folder{folder}, notifier)
+			ldxSyncService.RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, []types.Folder{folder}, notifier)
 		}
 	}
 	return orgSettingsChanged
