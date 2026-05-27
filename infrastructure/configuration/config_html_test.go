@@ -520,10 +520,10 @@ func TestConfigHtmlRenderer_EclipseShowsProjectSettings(t *testing.T) {
 }
 
 func TestConfigHtmlRenderer_EclipsePathField(t *testing.T) {
-	renderForIntegration := func(t *testing.T, integrationName string) string {
+	renderForIDE := func(t *testing.T, ideEnv string) string {
 		t.Helper()
 		engine := testutil.UnitTest(t)
-		engine.GetConfiguration().Set(gafconfiguration.INTEGRATION_NAME, integrationName)
+		engine.GetConfiguration().Set(gafconfiguration.INTEGRATION_ENVIRONMENT, ideEnv)
 		renderer, err := NewConfigHtmlRenderer(engine)
 		require.NoError(t, err)
 		settings := map[string]any{
@@ -532,18 +532,17 @@ func TestConfigHtmlRenderer_EclipsePathField(t *testing.T) {
 		return renderer.GetConfigHtml(settings, nil)
 	}
 
-	// INTEGRATION_NAME is set explicitly by Eclipse plugin as "ECLIPSE" (server.go uppercases it)
-	for _, name := range []string{"ECLIPSE", "Eclipse", "eclipse"} {
-		t.Run(name+" shows path field", func(t *testing.T) {
-			html := renderForIntegration(t, name)
+	for _, env := range []string{"ECLIPSE", "Eclipse", "eclipse", "Eclipse IDE", "eclipse ide", "Eclipse Platform", "ECLIPSE PLATFORM"} {
+		t.Run(env+" shows path field", func(t *testing.T) {
+			html := renderForIDE(t, env)
 			assert.Contains(t, html, `id="user_settings_path"`)
 			assert.Contains(t, html, `/usr/local/bin`)
 		})
 	}
 
-	for _, name := range []string{"VSCODE", "VISUAL_STUDIO", "INTELLIJ"} {
-		t.Run(name+" hides path field", func(t *testing.T) {
-			html := renderForIntegration(t, name)
+	for _, ide := range []string{"VSCODE", "VISUAL_STUDIO", "INTELLIJ"} {
+		t.Run(ide+" hides path field", func(t *testing.T) {
+			html := renderForIDE(t, ide)
 			assert.NotContains(t, html, `id="user_settings_path"`)
 		})
 	}
