@@ -372,7 +372,7 @@ func isVisualStudio(integrationName string) bool {
 }
 
 func isEclipse(integrationName string) bool {
-	return integrationName == "ECLIPSE"
+	return strings.EqualFold(integrationName, "ECLIPSE")
 }
 
 // getCliReleaseChannel derives the CLI release channel from the runtime version
