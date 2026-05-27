@@ -281,7 +281,8 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings map[string]any, folderConfig
 	// For every IDE we'll call them "Projects" even if not technically correct,
 	// as it's more user-friendly. Other than Visual Studio, which we will respect.
 	folderLabel := "Project"
-	if isVisualStudio(conf.GetString(configuration.INTEGRATION_ENVIRONMENT)) {
+	integrationEnv := conf.GetString(configuration.INTEGRATION_ENVIRONMENT)
+	if isVisualStudio(integrationEnv) {
 		folderLabel = "Solution"
 	}
 
@@ -343,6 +344,7 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings map[string]any, folderConfig
 		"FolderNames":             folderNames,
 		"CliReleaseChannel":       cliReleaseChannel,
 		"IsSecretsFeatureEnabled": isAnyFolderSecretsEnabled(folderConfigs),
+		"IsEclipse":               isEclipse(integrationEnv),
 	}
 
 	var buffer bytes.Buffer
@@ -367,6 +369,10 @@ func isAnyFolderSecretsEnabled(folderConfigs []types.FolderConfig) bool {
 // isVisualStudio checks if the integration name indicates Visual Studio
 func isVisualStudio(integrationName string) bool {
 	return integrationName == "VISUAL_STUDIO" || integrationName == "Visual Studio"
+}
+
+func isEclipse(integrationName string) bool {
+	return integrationName == "ECLIPSE"
 }
 
 // getCliReleaseChannel derives the CLI release channel from the runtime version

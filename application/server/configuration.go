@@ -307,6 +307,7 @@ func processConfigSettings(conf configuration.Configuration, engine workflow.Eng
 	applyAutoScan(conf, settings)
 	globalOrgChanged := applyOrganization(conf, engine, logger, settings, triggerSource, configResolver)
 	applyCliConfig(conf, settings)
+	applyUserSettingsPath(conf, settings)
 	applyEnvironment(conf, logger, settings)
 	applyCliBaseDownloadURL(conf, engine, logger, settings, triggerSource, configResolver)
 	applyErrorReporting(conf, engine, logger, settings, triggerSource, configResolver)
@@ -889,6 +890,14 @@ func applyPathToEnv(conf configuration.Configuration, logger *zerolog.Logger, pa
 		subLogger.Err(err).Msgf("couldn't add path %s", path)
 	}
 	subLogger.Debug().Msgf("new PATH is '%s'", os.Getenv("PATH"))
+}
+
+func applyUserSettingsPath(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
+	v, ok := settingStr(settings, types.SettingUserSettingsPath)
+	if !ok {
+		return
+	}
+	types.SetGlobalUser(conf, types.SettingUserSettingsPath, v)
 }
 
 func applySnykLearnCodeActions(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {

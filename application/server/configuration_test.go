@@ -2257,3 +2257,28 @@ func TestResetSummaryPanelForOrgChange_EmptyFolderPaths_DoesNotCallInit(t *testi
 	})
 	assert.Empty(t, agg.initCalls, "Init must not be called when folderPaths is empty")
 }
+
+func TestApplyUserSettingsPath_PersistsValue(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	settings := map[string]*types.ConfigSetting{
+		types.SettingUserSettingsPath: {Value: "/foo/bar", Changed: true},
+	}
+	applyUserSettingsPath(conf, settings)
+
+	assert.Equal(t, "/foo/bar", types.GetGlobalString(conf, types.SettingUserSettingsPath))
+}
+
+func TestApplyUserSettingsPath_IgnoresUnchanged(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	types.SetGlobalUser(conf, types.SettingUserSettingsPath, "/original")
+
+	settings := map[string]*types.ConfigSetting{
+		types.SettingUserSettingsPath: {Value: "/new", Changed: false},
+	}
+	applyUserSettingsPath(conf, settings)
+
+	assert.Equal(t, "/original", types.GetGlobalString(conf, types.SettingUserSettingsPath))
+}
