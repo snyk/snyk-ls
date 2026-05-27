@@ -2092,14 +2092,17 @@ func Test_applyOrganization_ResetsSummaryPanelOnOrgChange(t *testing.T) {
 	const newOrg = "00000000-0000-0000-0000-0000000000a2"
 	scanErr := errors.New("scan failed")
 
-	setupAggregatorWithFinishedScan := func(t *testing.T) (workflow.Engine, types.FilePath, scanstates.Aggregator) {
+	setupAggregatorWithFinishedScan := func(t *testing.T) (workflow.Engine, types.FilePath, scanstates.Aggregator, context.Context) {
 		t.Helper()
 		engine, tokenService := testutil.UnitTestWithEngine(t)
 		ctrl := gomock.NewController(t)
 		emitter := scanstates.NewMockScanStateChangeEmitter(ctrl)
 		emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
 		realAgg := scanstates.NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, testutil.DefaultConfigResolver(engine), engine)
-		di.TestInit(t, engine, tokenService, &di.Dependencies{ScanStateAggregator: realAgg})
+		mockNotifier := notification.NewMockNotifier()
+		mockLdxSync := mock_command.NewMockLdxSyncService(ctrl)
+		mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+		di.TestInit(t, engine, tokenService, &di.Dependencies{ScanStateAggregator: realAgg, Notifier: mockNotifier, LdxSyncService: mockLdxSync})
 
 		tmpDir := types.FilePath(t.TempDir())
 		require.NoError(t, initTestRepo(t, string(tmpDir)))
@@ -2118,15 +2121,19 @@ func Test_applyOrganization_ResetsSummaryPanelOnOrgChange(t *testing.T) {
 			"precondition: aggregator should hold the seeded scan error")
 
 		config.SetOrganization(engine.GetConfiguration(), oldOrg)
-		return engine, folderPath, realAgg
+		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
+			ctx2.DepNotifier:       mockNotifier,
+			ctx2.DepLdxSyncService: mockLdxSync,
+		})
+		return engine, folderPath, realAgg, ctx
 	}
 
 	t.Run("org changed and LSP initialized -> aggregator is reset", func(t *testing.T) {
-		engine, folderPath, realAgg := setupAggregatorWithFinishedScan(t)
+		engine, folderPath, realAgg, ctx := setupAggregatorWithFinishedScan(t)
 		conf := engine.GetConfiguration()
 		conf.Set(types.SettingIsLspInitialized, true)
 
-		UpdateSettings(contextWithNotifier(t.Context()), conf, engine, engine.GetLogger(),
+		UpdateSettings(ctx, conf, engine, engine.GetLogger(),
 			map[string]*types.ConfigSetting{
 				types.SettingOrganization: {Value: newOrg, Changed: true},
 			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
@@ -2136,11 +2143,11 @@ func Test_applyOrganization_ResetsSummaryPanelOnOrgChange(t *testing.T) {
 	})
 
 	t.Run("org unchanged -> aggregator is NOT reset", func(t *testing.T) {
-		engine, folderPath, realAgg := setupAggregatorWithFinishedScan(t)
+		engine, folderPath, realAgg, ctx := setupAggregatorWithFinishedScan(t)
 		conf := engine.GetConfiguration()
 		conf.Set(types.SettingIsLspInitialized, true)
 
-		UpdateSettings(contextWithNotifier(t.Context()), conf, engine, engine.GetLogger(),
+		UpdateSettings(ctx, conf, engine, engine.GetLogger(),
 			map[string]*types.ConfigSetting{
 				types.SettingOrganization: {Value: oldOrg, Changed: true},
 			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
@@ -2150,11 +2157,11 @@ func Test_applyOrganization_ResetsSummaryPanelOnOrgChange(t *testing.T) {
 	})
 
 	t.Run("LSP not initialized -> aggregator is NOT reset", func(t *testing.T) {
-		engine, folderPath, realAgg := setupAggregatorWithFinishedScan(t)
+		engine, folderPath, realAgg, ctx := setupAggregatorWithFinishedScan(t)
 		conf := engine.GetConfiguration()
 		// SettingIsLspInitialized intentionally left false.
 
-		UpdateSettings(contextWithNotifier(t.Context()), conf, engine, engine.GetLogger(),
+		UpdateSettings(ctx, conf, engine, engine.GetLogger(),
 			map[string]*types.ConfigSetting{
 				types.SettingOrganization: {Value: newOrg, Changed: true},
 			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
