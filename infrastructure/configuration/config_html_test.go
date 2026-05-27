@@ -532,7 +532,7 @@ func TestConfigHtmlRenderer_EclipsePathField(t *testing.T) {
 		return renderer.GetConfigHtml(settings, nil)
 	}
 
-	for _, env := range []string{"ECLIPSE", "Eclipse", "eclipse"} {
+	for _, env := range []string{"ECLIPSE", "Eclipse", "eclipse", "Eclipse IDE", "eclipse ide", "ECLIPSE IDE"} {
 		t.Run(env+" shows path field", func(t *testing.T) {
 			html := renderForIDE(t, env)
 			assert.Contains(t, html, `id="user_settings_path"`)
