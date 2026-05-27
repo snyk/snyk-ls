@@ -236,14 +236,8 @@ func refreshLdxSyncOnTokenChange(ctx context.Context, conf configuration.Configu
 		return
 	}
 	logger.Info().Msg("token changed via settings, refreshing LDX-Sync configuration")
-	ldxSyncService, ok := ldxSyncServiceFromContext(ctx)
-	if !ok {
-		panic("LDX-Sync service missing from context")
-	}
-	notifier, ok := notifierFromContext(ctx)
-	if !ok {
-		panic("Notifier missing from context")
-	}
+	ldxSyncService := mustLdxSyncServiceFromContext(ctx)
+	notifier := mustNotifierFromContext(ctx)
 	ldxSyncService.RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, folders, notifier)
 }
 
@@ -367,10 +361,7 @@ func hasFilterChangesInLspConfig(lspConfig *types.LspFolderConfig) bool {
 // resetSummaryPanelForOrgChange call below (avoiding the double-flash that used
 // to occur when applyOrganization reset separately from processFolderConfigs).
 func processFolderConfigs(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, folderConfigs []types.LspFolderConfig, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface, globalOrgChanged bool) {
-	notifier, ok := notifierFromContext(ctx)
-	if !ok {
-		panic("Notifier missing from context")
-	}
+	notifier := mustNotifierFromContext(ctx)
 	incomingMap := buildIncomingLspConfigMap(folderConfigs)
 	allPaths := gatherAllFolderPathsFromLspConfigs(incomingMap, config.GetWorkspace(conf))
 
@@ -1171,11 +1162,7 @@ func updateFolderOrgIfNeeded(ctx context.Context, conf configuration.Configurati
 		ws := config.GetWorkspace(conf)
 		folder := ws.GetFolderContaining(folderConfig.FolderPath)
 		if folder != nil {
-			ldxSyncService, ok := ldxSyncServiceFromContext(ctx)
-			if !ok {
-				panic("LDX-Sync service missing from context")
-			}
-			ldxSyncService.RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, []types.Folder{folder}, notifier)
+			mustLdxSyncServiceFromContext(ctx).RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, []types.Folder{folder}, notifier)
 		}
 	}
 	return orgSettingsChanged
