@@ -52,6 +52,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+//nolint:gocyclo // high branching is inherent: one nil-check per overrideable dependency
 func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenService, overrideDeps *Dependencies) Dependencies {
 	t.Helper()
 	initMutex.Lock()

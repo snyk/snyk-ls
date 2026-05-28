@@ -101,18 +101,18 @@ type Dependencies struct {
 	LdxSyncService        command.LdxSyncService
 	ScanStateAggregator   scanstates.Aggregator
 	InlineValueProvider   snyk.InlineValueProvider
-	// Added fields — all handler-accessed singletons now live here so that
-	// withContext can inject them into the request context rather than handlers
-	// reaching for the package-level globals via di.*() accessor functions.
+	// Handler-accessed dependencies (previously read via di.*() globals).
+	// Note: Installer and Initializer are intentionally absent — they are
+	// process-lifecycle dependencies used during startup, not per-request.
+	// Access them via di.Installer() / di.Initializer() until those global
+	// accessors are retired.
+	Scanner           scanner2.Scanner
+	HoverService      hover.Service
+	ScanNotifier      scanner2.ScanNotifier
+	ScanPersister     persistence.ScanSnapshotPersister
 	FileWatcher       *watcher.FileWatcher
 	ErrorReporter     er.ErrorReporter
-	HoverService      hover.Service
-	Scanner           scanner2.Scanner
-	ScanPersister     persistence.ScanSnapshotPersister
-	ScanNotifier      scanner2.ScanNotifier
-	Installer         install.Installer
 	CodeActionService *codeaction.CodeActionsService
-	Initializer       initialize.Initializer
 }
 
 func currentDependencies() Dependencies {
@@ -129,15 +129,14 @@ func currentDependencies() Dependencies {
 		LdxSyncService:        ldxSyncService,
 		ScanStateAggregator:   scanStateAggregator,
 		InlineValueProvider:   inlineValueProvider,
-		FileWatcher:           fileWatcher,
-		ErrorReporter:         errorReporter,
-		HoverService:          hoverService,
-		Scanner:               scanner,
-		ScanPersister:         scanPersister,
-		ScanNotifier:          scanNotifier,
-		Installer:             installer,
-		CodeActionService:     codeActionService,
-		Initializer:           scanInitializer,
+		// Handler-accessed dependencies:
+		Scanner:           scanner,
+		HoverService:      hoverService,
+		ScanNotifier:      scanNotifier,
+		ScanPersister:     scanPersister,
+		FileWatcher:       fileWatcher,
+		ErrorReporter:     errorReporter,
+		CodeActionService: codeActionService,
 	}
 }
 
