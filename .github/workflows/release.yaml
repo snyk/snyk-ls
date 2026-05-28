@@ -86,9 +86,19 @@ jobs:
         uses: fregante/setup-git-user@v2
 
       - name: Create Release Tag
+        # Check if the tag already exists, and create it if not.
+        # If the tag does exist, only continue if it points to the same commit (this allows re-runs of the workflow).
         run: |
-          VERSION=$(git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)
-          git tag "v$VERSION"
+          TAG="v$(git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            if [ "$(git rev-list -n1 "$TAG")" = "$(git rev-parse HEAD)" ]; then
+              echo "Tag $TAG already on HEAD — skipping"
+            else
+              echo "Tag $TAG exists but points elsewhere"; exit 1
+            fi
+          else
+            git tag "$TAG"
+          fi
           git push --tags
 
       - name: Create License Report
