@@ -101,9 +101,10 @@
 
   // Computes and applies the final overlay position using its measured height,
   // so a tall overlay against a row at the bottom of the viewport flips above
-  // the row instead of being clipped (IDE-1808). Defaults to below; flips above
-  // only when there isn't room below AND there is room above — otherwise the
-  // overlay stays below (clipped is preferable to overlapping the row).
+  // the row instead of being clipped (IDE-1808). Prefers above whenever there
+  // is room above: tree views in IDEs typically have more chrome below them
+  // (status bars, help panels) than above, so above is the safer default and
+  // matches the behavior of the previous VS Code-side shim.
   // Clears `bottom` and `transform` defensively so future style sources can't
   // stretch the overlay between opposing anchors.
   function positionErrorOverlay(overlay, row) {
@@ -116,9 +117,7 @@
 
     var gap = ERROR_OVERLAY_GAP;
     var topPos = rect.bottom + gap;
-    var fitsBelow = topPos + overlayH + gap <= vh;
-    var fitsAbove = rect.top - overlayH - gap >= gap;
-    if (!fitsBelow && fitsAbove) {
+    if (rect.top - overlayH - gap >= gap) {
       topPos = rect.top - overlayH - gap;
     }
     topPos = Math.max(gap, topPos);
