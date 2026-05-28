@@ -69,6 +69,8 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 		assert.NotNil(t, settings[types.SettingCliPath])
 		assert.Equal(t, true, settings[types.SettingAutomaticDownload])
 		assert.NotNil(t, settings[types.SettingBinaryBaseUrl])
+		_, ok := settings[types.SettingUserSettingsPath]
+		assert.True(t, ok, "user_settings_path key must be present in settings map")
 	})
 
 	t.Run("Trusted Folders", func(t *testing.T) {
