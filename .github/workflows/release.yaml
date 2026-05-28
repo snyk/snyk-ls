@@ -98,8 +98,8 @@ jobs:
             fi
           else
             git tag "$TAG"
+            git push --tags
           fi
-          git push --tags
 
       - name: Create License Report
         id: create_license_report
