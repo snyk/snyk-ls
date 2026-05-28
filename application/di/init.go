@@ -205,7 +205,7 @@ func initApplication(conf configuration.Configuration, engine workflow.Engine, l
 	config.SetWorkspace(conf, w)
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(engine, w, fileWatcher, notifier, featureFlagService, configResolver)
-	command.SetService(command.NewService(engine, logger, authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, ldxSyncService, configResolver, scanStateAggregator.StateSnapshot))
+	command.SetService(command.NewService(engine, logger, authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, ldxSyncService, configResolver, scanStateAggregator.StateSnapshot, treeEmitterInstance))
 }
 
 /*

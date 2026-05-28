@@ -50,6 +50,7 @@ func CreateFromCommandData(
 	ldxSyncService LdxSyncService,
 	configResolver types.ConfigResolverInterface,
 	scanStateFunc func() scanstates.StateSnapshot,
+	treeEmitter treeRefresher,
 ) (types.Command, error) {
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
@@ -129,7 +130,7 @@ func CreateFromCommandData(
 			engine:             engine,
 		}, nil
 	case types.SubmitIgnoreRequest:
-		return &submitIgnoreRequest{command: commandData, issueProvider: issueProvider, notifier: notifier, srv: srv, engine: engine, configResolver: configResolver}, nil
+		return &submitIgnoreRequest{command: commandData, issueProvider: issueProvider, notifier: notifier, srv: srv, engine: engine, configResolver: configResolver, treeEmitter: treeEmitter, scanStateFunc: scanStateFunc}, nil
 	case types.WorkspaceConfigurationCommand:
 		return &configurationCommand{command: commandData, srv: srv, logger: logger, engine: engine, configResolver: configResolver}, nil
 	case types.GetTreeView:
