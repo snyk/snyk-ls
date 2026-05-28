@@ -86,23 +86,23 @@ func workspaceDidChangeConfiguration(conf configuration.Configuration, srv *jrpc
 		defer logger.Info().Str("method", "WorkspaceDidChangeConfiguration").Msg("DONE")
 
 		if len(params.Settings.Settings) > 0 || len(params.Settings.FolderConfigs) > 0 {
-			return handlePushModel(conf, engine, logger, params.Settings)
+			return handlePushModel(ctx, conf, engine, logger, params.Settings)
 		}
 
-		return handlePullModel(conf, engine, logger, srv, ctx)
+		return handlePullModel(ctx, conf, engine, logger, srv)
 	})
 }
 
-func handlePushModel(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, params types.LspConfigurationParam) (bool, error) {
+func handlePushModel(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, params types.LspConfigurationParam) (bool, error) {
 	triggerSource := analytics.TriggerSourceIDE
 	if !conf.GetBool(types.SettingIsLspInitialized) {
 		triggerSource = analytics.TriggerSourceInitialize
 	}
-	UpdateSettings(conf, engine, logger, params.Settings, params.FolderConfigs, triggerSource, di.ConfigResolver())
+	UpdateSettings(ctx, conf, engine, logger, params.Settings, params.FolderConfigs, triggerSource, di.ConfigResolver())
 	return true, nil
 }
 
-func handlePullModel(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, srv *jrpc2.Server, ctx context.Context) (bool, error) {
+func handlePullModel(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, srv *jrpc2.Server) (bool, error) {
 	key := types.SettingClientCapabilities
 	capabilities, ok := conf.Get(key).(types.ClientCapabilities)
 	if !ok {
@@ -142,7 +142,7 @@ func handlePullModel(conf configuration.Configuration, engine workflow.Engine, l
 	if !conf.GetBool(types.SettingIsLspInitialized) {
 		triggerSource = analytics.TriggerSourceInitialize
 	}
-	UpdateSettings(conf, engine, logger, fetched.Settings.Settings, fetched.Settings.FolderConfigs, triggerSource, di.ConfigResolver())
+	UpdateSettings(ctx, conf, engine, logger, fetched.Settings.Settings, fetched.Settings.FolderConfigs, triggerSource, di.ConfigResolver())
 	return true, nil
 }
 
@@ -187,18 +187,18 @@ func processInitMetadata(conf configuration.Configuration, engine workflow.Engin
 // InitializeSettings processes settings from the LSP initialize request.
 // Only settings explicitly marked Changed by the IDE are applied; IDE defaults
 // (Changed=false) are left alone so they don't override ldx-sync or GAF defaults.
-func InitializeSettings(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, opts types.InitializationOptions) {
+func InitializeSettings(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, opts types.InitializationOptions) {
 	resolver := di.ConfigResolver()
 
 	processInitMetadata(conf, engine, logger, opts)
 	// global
-	globalOrgChanged := processConfigSettings(conf, engine, logger, opts.Settings, analytics.TriggerSourceInitialize, resolver)
+	globalOrgChanged := processConfigSettings(ctx, conf, engine, logger, opts.Settings, analytics.TriggerSourceInitialize, resolver)
 	// folder
-	processFolderConfigs(conf, engine, logger, opts.FolderConfigs, analytics.TriggerSourceInitialize, resolver, globalOrgChanged)
+	processFolderConfigs(ctx, conf, engine, logger, opts.FolderConfigs, analytics.TriggerSourceInitialize, resolver, globalOrgChanged)
 }
 
 // UpdateSettings processes settings from workspace/didChangeConfiguration.
-func UpdateSettings(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, folderConfigs []types.LspFolderConfig, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
+func UpdateSettings(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, folderConfigs []types.LspFolderConfig, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
 	ws := config.GetWorkspace(conf)
 	oldToken := config.GetToken(conf)
 
@@ -209,8 +209,8 @@ func UpdateSettings(conf configuration.Configuration, engine workflow.Engine, lo
 		}
 	}
 
-	globalOrgChanged := processConfigSettings(conf, engine, logger, settings, triggerSource, configResolver)
-	processFolderConfigs(conf, engine, logger, folderConfigs, triggerSource, configResolver, globalOrgChanged)
+	globalOrgChanged := processConfigSettings(ctx, conf, engine, logger, settings, triggerSource, configResolver)
+	processFolderConfigs(ctx, conf, engine, logger, folderConfigs, triggerSource, configResolver, globalOrgChanged)
 
 	if ws != nil {
 		for _, folder := range ws.Folders() {
@@ -223,10 +223,10 @@ func UpdateSettings(conf configuration.Configuration, engine workflow.Engine, lo
 		}
 	}
 
-	refreshLdxSyncOnTokenChange(conf, engine, logger, ws, oldToken)
+	refreshLdxSyncOnTokenChange(ctx, conf, engine, logger, ws, oldToken)
 }
 
-func refreshLdxSyncOnTokenChange(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, ws types.Workspace, oldToken string) {
+func refreshLdxSyncOnTokenChange(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, ws types.Workspace, oldToken string) {
 	newToken := config.GetToken(conf)
 	if newToken == oldToken || newToken == "" || ws == nil {
 		return
@@ -236,7 +236,9 @@ func refreshLdxSyncOnTokenChange(conf configuration.Configuration, engine workfl
 		return
 	}
 	logger.Info().Msg("token changed via settings, refreshing LDX-Sync configuration")
-	di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, folders, di.Notifier())
+	ldxSyncService := mustLdxSyncServiceFromContext(ctx)
+	notifier := mustNotifierFromContext(ctx)
+	ldxSyncService.RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, folders, notifier)
 }
 
 // validateLockedMachineFields rejects user PATCH attempts for machine-scope settings
@@ -278,7 +280,7 @@ func validateLockedMachineFields(settings map[string]*types.ConfigSetting, confi
 // Returns true when the global organization changed during this call so the
 // caller (processFolderConfigs) can fold the global reset into the single
 // resetSummaryPanelForOrgChange call that covers per-folder org changes.
-func processConfigSettings(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) bool {
+func processConfigSettings(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) bool {
 	conf.ClearCache()
 
 	if len(settings) == 0 {
@@ -359,8 +361,8 @@ func hasFilterChangesInLspConfig(lspConfig *types.LspFolderConfig) bool {
 // org change so the Summary Panel reset is folded into the single
 // resetSummaryPanelForOrgChange call below (avoiding the double-flash that used
 // to occur when applyOrganization reset separately from processFolderConfigs).
-func processFolderConfigs(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, folderConfigs []types.LspFolderConfig, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface, globalOrgChanged bool) {
-	notifier := di.Notifier()
+func processFolderConfigs(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, folderConfigs []types.LspFolderConfig, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface, globalOrgChanged bool) {
+	notifier := mustNotifierFromContext(ctx)
 	incomingMap := buildIncomingLspConfigMap(folderConfigs)
 	allPaths := gatherAllFolderPathsFromLspConfigs(incomingMap, config.GetWorkspace(conf))
 
@@ -386,7 +388,7 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 	}
 
 	for path := range allPaths {
-		result := processSingleLspFolderConfig(conf, engine, logger, path, incomingMap, notifier)
+		result := processSingleLspFolderConfig(ctx, conf, engine, logger, path, incomingMap, notifier)
 		if result.orgSettingsChanged {
 			orgChangedFolderPaths[path] = struct{}{}
 		}
@@ -1046,7 +1048,7 @@ type singleFolderResult struct {
 // - For *LocalConfigField: nil = don't change, Changed+Value = set, Changed+nil = reset
 // It loads the existing FolderConfig (unenriched), applies the LspFolderConfig updates, and returns
 // the processed config without persisting. The caller is responsible for batch-persisting all changes.
-func processSingleLspFolderConfig(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path types.FilePath, incomingMap map[types.FilePath]types.LspFolderConfig, notifier notification.Notifier) singleFolderResult {
+func processSingleLspFolderConfig(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path types.FilePath, incomingMap map[types.FilePath]types.LspFolderConfig, notifier notification.Notifier) singleFolderResult {
 	subLogger := logger.With().Str("method", "processSingleLspFolderConfig").Str("path", string(path)).Logger()
 	resolver := di.ConfigResolver()
 	fc := config.GetUnenrichedFolderConfigFromEngine(engine, resolver, path, logger)
@@ -1068,7 +1070,7 @@ func processSingleLspFolderConfig(conf configuration.Configuration, engine workf
 		applyChanged = fc.ApplyLspUpdate(&incoming)
 	}
 
-	orgSettingsChanged := updateFolderOrgIfNeeded(conf, engine, logger, fc, fc, oldSnapshot, notifier)
+	orgSettingsChanged := updateFolderOrgIfNeeded(ctx, conf, engine, logger, fc, fc, oldSnapshot, notifier)
 	di.FeatureFlagService().PopulateFolderConfig(fc)
 
 	newSnapshot := types.ReadFolderConfigSnapshot(conf, normalizedPath)
@@ -1161,7 +1163,7 @@ func temporarilyApplyNewOrgForValidation(conf configuration.Configuration, folde
 // No SettingIsLspInitialized guard here — the outer check in processFolderConfigs
 // prevents the summary panel reset before init. This function runs unconditionally
 // so that LDX-Sync refresh and orgChangedFolderPaths are always populated.
-func updateFolderOrgIfNeeded(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, fc *types.FolderConfig, folderConfig *types.FolderConfig, oldSnapshot types.FolderConfigSnapshot, notifier notification.Notifier) bool {
+func updateFolderOrgIfNeeded(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, fc *types.FolderConfig, folderConfig *types.FolderConfig, oldSnapshot types.FolderConfigSnapshot, notifier notification.Notifier) bool {
 	orgSettingsChanged := fc != nil && !folderConfigsOrgSettingsEqual(oldSnapshot, *folderConfig)
 
 	if orgSettingsChanged {
@@ -1169,7 +1171,7 @@ func updateFolderOrgIfNeeded(conf configuration.Configuration, engine workflow.E
 		ws := config.GetWorkspace(conf)
 		folder := ws.GetFolderContaining(folderConfig.FolderPath)
 		if folder != nil {
-			di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, []types.Folder{folder}, notifier)
+			mustLdxSyncServiceFromContext(ctx).RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, []types.Folder{folder}, notifier)
 		}
 	}
 	return orgSettingsChanged

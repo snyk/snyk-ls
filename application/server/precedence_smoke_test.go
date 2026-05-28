@@ -54,14 +54,11 @@ func setupPrecedenceTest(t *testing.T) (workflow.Engine, *config.TokenServiceImp
 	xdg.ConfigHome = t.TempDir()
 	t.Cleanup(func() { xdg.ConfigHome = origConfigHome })
 
-	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
-
-	cleanupChannels()
-	di.Init(engine, tokenService)
 
 	return engine, tokenService, loc, jsonRpcRecorder
 }
@@ -523,11 +520,8 @@ func Test_SmokePrecedence_ActivateSnykCodeSecurity_OR_Reconciliation(t *testing.
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
 	testutil.CreateDummyProgressListener(t)
 
-	loc, _ := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
-	di.Init(engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
+	enableOnlyProducts(t, engine)
 
 	folder := types.FilePath(t.TempDir())
 	_ = initTestRepo(t, string(folder))
@@ -574,11 +568,8 @@ func Test_SmokePrecedence_DefaultValues_WhenNoUserOrRemoteConfig(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
 	testutil.CreateDummyProgressListener(t)
 
-	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
-	di.Init(engine, tokenService)
+	loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	enableOnlyProducts(t, engine)
 
 	folder := types.FilePath(t.TempDir())
 	_ = initTestRepo(t, string(folder))
@@ -641,14 +632,11 @@ func setupScanPrecedenceTest(t *testing.T, codeEnabled, ossEnabled, iacEnabled b
 	t.Cleanup(func() { xdg.ConfigHome = origConfigHome })
 
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
-	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), codeEnabled)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), ossEnabled)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), iacEnabled)
-
-	cleanupChannels()
-	di.Init(engine, tokenService)
 	// Pin risk-score flags to false: the ostest scanner path fails on CI because the
 	// dep-graph generation is unreliable for the test org. These flags are only needed
 	// in the unified-test-api smoke test which sets them explicitly.
@@ -832,16 +820,13 @@ func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing
 	t.Cleanup(func() { xdg.ConfigHome = origConfigHome })
 
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
-	loc, jsonRpcRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 
 	restrictedFilter := types.SeverityFilter{Critical: true, High: true, Medium: false, Low: false}
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), &restrictedFilter, engine.GetLogger())
-
-	cleanupChannels()
-	di.Init(engine, tokenService)
 
 	t.Cleanup(func() {
 		waitForAllScansToComplete(t, di.ScanStateAggregator())

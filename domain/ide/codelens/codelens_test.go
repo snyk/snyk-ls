@@ -47,7 +47,7 @@ func Test_GetCodeLensFromCommand(t *testing.T) {
 
 func Test_GetCodeLensForPath(t *testing.T) {
 	engine, tokenService := testutil.IntegTestWithEngine(t)
-	di.TestInit(t, engine, tokenService) // IntegTest doesn't automatically inits DI
+	di.TestInit(t, engine, tokenService, nil) // IntegTest doesn't automatically inits DI
 	testutil.EnableSastAndAutoFix(engine)
 	// this is using the real progress channel, so we need to listen to it
 	dummyProgressListeners(t)

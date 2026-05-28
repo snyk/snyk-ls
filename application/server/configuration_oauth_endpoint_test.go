@@ -100,7 +100,7 @@ func setupOAuthEndpointTest(t *testing.T, customUrl string, tokenToReturn string
 	t.Helper()
 
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	deps := di.TestInit(t, engine, tokenService)
+	deps := di.TestInit(t, engine, tokenService, nil)
 	conf := engine.GetConfiguration()
 
 	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
