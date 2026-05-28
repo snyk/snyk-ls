@@ -16,23 +16,21 @@
 
 package server
 
-// IDE-1898: LSP initialization performance at protocol boundary.
+// LSP initialization performance at protocol boundary.
 //
 // This file contains:
-//   - BenchmarkLSPInitializedWithNFolders — measures wall time of the full
-//     initialize+initialized sequence for N workspace folders; run with
-//     -cpuprofile to locate the actual hotspot before making assertions.
-//   - Test_IDE1898_LSPInitCompletesWithManyFolders — Level-3 requirement test:
-//     the `initialized` handler must complete within a profiling-derived bound
-//     for N=200 folders.
+//   - TestProfileLSPInit — captures a CPU profile of one initialize+initialized
+//     cycle; skipped in -short mode, run explicitly to locate hotspots.
+//   - Test_LSPInitCompletesWithManyFolders — Level-3 requirement test:
+//     the `initialized` handler must complete within 30s for N=200 folders
+//     (fake featureFlagService, CI-safe).
+//   - Test_LSPInitCompletesWithManyFoldersRealHTTP — real-HTTP variant with
+//     a 40s limit; skipped in -short mode.
 //
 // Usage:
 //
-//	go test ./application/server/... \
-//	  -run=^$ -bench=BenchmarkLSPInitializedWithNFolders \
-//	  -benchtime=3x -cpuprofile=/tmp/lsp-init-cpu.prof
-//
-//	go tool pprof -top -nodecount=20 /tmp/lsp-init-cpu.prof
+//	go test ./application/server/... -run TestProfileLSPInit -v -count=1
+//	go tool pprof -top -nodecount=30 /tmp/lsp-init-cpu-*.prof
 
 import (
 	"os"
@@ -91,7 +89,7 @@ func TestProfileLSPInit(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	params := buildInitParams(t, lspInitPerfFolderCount)
 
-	f, err := os.CreateTemp("", "lsp-init-cpu-*.prof")
+	f, err := os.CreateTemp(t.TempDir(), "lsp-init-cpu-*.prof")
 	require.NoError(t, err)
 	t.Logf("CPU profile: %s", f.Name())
 
@@ -124,7 +122,7 @@ func TestProfileLSPInit(t *testing.T) {
 // Design: uses a fake featureFlagService (no HTTP calls) so the test is reliable in CI
 // regardless of network access or token validity.  The test validates the initialization
 // code path — folder processing, JSON config writes, notifier plumbing — for N=200 folders.
-// Real HTTP behaviour is exercised by Test_LSPInitCompletesWithManyFoldersRealHTTP.
+// Real HTTP behavior is exercised by Test_LSPInitCompletesWithManyFoldersRealHTTP.
 //
 // The 30s bound is loose enough to catch O(N²) regressions in folder processing and
 // tight enough to detect hangs in the notification/channel machinery.

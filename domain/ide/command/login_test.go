@@ -374,11 +374,12 @@ func TestLoginCommand_Execute_FeatureFlagsPopulatedBeforeAuthNotification(t *tes
 			"otherwise the IDE triggers a scan before SAST settings are cached (IDE-1901)")
 }
 
-// trackingFeatureFlagService wraps a feature flag service and calls onPopulate
-// each time PopulateFolderConfig is invoked, allowing tests to observe side effects.
+// trackingFeatureFlagService wraps a feature flag service and calls onPopulate / onFlushCache
+// each time PopulateFolderConfig / FlushCache is invoked, allowing tests to observe side effects.
 type trackingFeatureFlagService struct {
-	inner      featureflag.Service
-	onPopulate func()
+	inner        featureflag.Service
+	onPopulate   func()
+	onFlushCache func()
 }
 
 func (t *trackingFeatureFlagService) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
@@ -394,10 +395,64 @@ func (t *trackingFeatureFlagService) PopulateFolderConfig(folderConfig *types.Fo
 
 func (t *trackingFeatureFlagService) FlushCache() {
 	t.inner.FlushCache()
+	if t.onFlushCache != nil {
+		t.onFlushCache()
+	}
 }
 
 func (t *trackingFeatureFlagService) Override(flag string, value bool) {
 	t.inner.Override(flag, value)
+}
+
+func TestLoginCommand_Execute_FlushCacheBeforePopulate(t *testing.T) {
+	// Regression test for IDE-1898: on login, FlushCache must be called before
+	// PopulateFolderConfig so that stale 401 negative-cache entries from the
+	// pre-login session (e.g. expired token) don't block fresh SAST settings calls.
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	sharedNotifier := notification.NewMockNotifier()
+
+	folderPath := types.FilePath(t.TempDir())
+	mockFolder := mock_types.NewMockFolder(ctrl)
+	mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
+	mockFolder.EXPECT().IsTrusted().Return(true).AnyTimes()
+	mockWs := mock_types.NewMockWorkspace(ctrl)
+	mockWs.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
+	mockWs.EXPECT().GetFolderTrust().Return([]types.Folder{mockFolder}, []types.Folder{}).AnyTimes()
+	config.SetWorkspace(conf, mockWs)
+
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), sharedNotifier, testutil.DefaultConfigResolver(engine))
+
+	var callOrder []string
+	fakeFF := &trackingFeatureFlagService{
+		inner:        featureflag.NewFakeService(),
+		onFlushCache: func() { callOrder = append(callOrder, "flush") },
+		onPopulate:   func() { callOrder = append(callOrder, "populate") },
+	}
+
+	mockLdxSync := mock_command.NewMockLdxSyncService(ctrl)
+	mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+
+	cmd := loginCommand{
+		command:            types.CommandData{CommandId: types.LoginCommand},
+		authService:        authService,
+		featureFlagService: fakeFF,
+		notifier:           sharedNotifier,
+		engine:             engine,
+		ldxSyncService:     mockLdxSync,
+		configResolver:     testutil.DefaultConfigResolver(engine),
+	}
+
+	result, err := cmd.Execute(t.Context())
+
+	require.NoError(t, err)
+	assert.NotEmpty(t, result)
+	assert.Equal(t, []string{"flush", "populate"}, callOrder,
+		"FlushCache must precede PopulateFolderConfig and both must be called (IDE-1898)")
 }
 
 func TestLoginCommand_Execute_InvalidArgCount_ReturnsError(t *testing.T) {
