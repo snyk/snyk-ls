@@ -228,12 +228,20 @@ func UpdateSettings(conf configuration.Configuration, engine workflow.Engine, lo
 
 func refreshLdxSyncOnTokenChange(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, ws types.Workspace, oldToken string) {
 	newToken := config.GetToken(conf)
-	if newToken == oldToken || newToken == "" || ws == nil {
+	if newToken == oldToken || newToken == "" {
+		return
+	}
+	if ws == nil {
 		return
 	}
 	folders := ws.Folders()
 	if len(folders) == 0 {
 		return
+	}
+	// Flush stale cached 401 errors so fresh calls use the new token.
+	// Placed here (after ws/folders guards) so flush only fires when populate follows.
+	if svc := di.FeatureFlagService(); svc != nil {
+		svc.FlushCache()
 	}
 	logger.Info().Msg("token changed via settings, refreshing LDX-Sync configuration")
 	di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, folders, di.Notifier())
