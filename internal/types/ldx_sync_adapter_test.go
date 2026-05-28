@@ -19,7 +19,7 @@ package types
 import (
 	"testing"
 
-	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
+	v20260507 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2026-05-07"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -45,17 +45,17 @@ func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
 	})
 
 	t.Run("converts settings with metadata", func(t *testing.T) {
-		response := &v20241015.UserConfigResponse{}
-		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
+		response := &v20260507.UserConfigResponse{}
+		response.Data.Attributes.Settings = &map[string]v20260507.SettingMetadata{
 			"risk_score_threshold": {
 				Value:  500,
 				Locked: util.Ptr(true),
-				Origin: v20241015.SettingMetadataOriginGroup,
+				Origin: v20260507.SettingMetadataOriginGroup,
 			},
 			"scan_automatic": {
 				Value:  true,
 				Locked: util.Ptr(false),
-				Origin: v20241015.SettingMetadataOriginOrg,
+				Origin: v20260507.SettingMetadataOriginOrg,
 			},
 		}
 
@@ -80,11 +80,11 @@ func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
 	})
 
 	t.Run("handles nil locked pointers", func(t *testing.T) {
-		response := &v20241015.UserConfigResponse{}
-		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
+		response := &v20260507.UserConfigResponse{}
+		response.Data.Attributes.Settings = &map[string]v20260507.SettingMetadata{
 			"scan_net_new": {
 				Value:  true,
-				Origin: v20241015.SettingMetadataOriginUser,
+				Origin: v20260507.SettingMetadataOriginUser,
 			},
 		}
 
@@ -96,11 +96,11 @@ func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
 	})
 
 	t.Run("ignores unknown settings", func(t *testing.T) {
-		response := &v20241015.UserConfigResponse{}
-		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
+		response := &v20260507.UserConfigResponse{}
+		response.Data.Attributes.Settings = &map[string]v20260507.SettingMetadata{
 			"unknown_setting": {
 				Value:  "test",
-				Origin: v20241015.SettingMetadataOriginOrg,
+				Origin: v20260507.SettingMetadataOriginOrg,
 			},
 		}
 
@@ -114,12 +114,12 @@ func TestConvertLDXSyncResponseToOrgConfig(t *testing.T) {
 func TestExtractFolderSettings(t *testing.T) {
 	t.Run("extracts folder-specific settings", func(t *testing.T) {
 		locked := true
-		response := &v20241015.UserConfigResponse{}
-		response.Data.Attributes.FolderSettings = &map[string]map[string]v20241015.SettingMetadata{
+		response := &v20260507.UserConfigResponse{}
+		response.Data.Attributes.FolderSettings = &map[string]map[string]v20260507.SettingMetadata{
 			"git@github.com:snyk/test-repo.git": {
 				"scan_automatic": {
 					Value:  false,
-					Origin: v20241015.SettingMetadataOriginOrg,
+					Origin: v20260507.SettingMetadataOriginOrg,
 					Locked: &locked,
 				},
 			},
@@ -135,12 +135,12 @@ func TestExtractFolderSettings(t *testing.T) {
 	})
 
 	t.Run("returns nil for missing remote URL", func(t *testing.T) {
-		response := &v20241015.UserConfigResponse{}
-		response.Data.Attributes.FolderSettings = &map[string]map[string]v20241015.SettingMetadata{
+		response := &v20260507.UserConfigResponse{}
+		response.Data.Attributes.FolderSettings = &map[string]map[string]v20260507.SettingMetadata{
 			"git@github.com:snyk/test-repo.git": {
 				"reference_branch": {
 					Value:  "develop",
-					Origin: v20241015.SettingMetadataOriginOrg,
+					Origin: v20260507.SettingMetadataOriginOrg,
 				},
 			},
 		}
@@ -155,12 +155,12 @@ func TestExtractFolderSettings(t *testing.T) {
 	})
 
 	t.Run("returns nil for empty remote URL", func(t *testing.T) {
-		response := &v20241015.UserConfigResponse{}
-		response.Data.Attributes.FolderSettings = &map[string]map[string]v20241015.SettingMetadata{
+		response := &v20260507.UserConfigResponse{}
+		response.Data.Attributes.FolderSettings = &map[string]map[string]v20260507.SettingMetadata{
 			"git@github.com:snyk/test-repo.git": {
 				"reference_branch": {
 					Value:  "develop",
-					Origin: v20241015.SettingMetadataOriginOrg,
+					Origin: v20260507.SettingMetadataOriginOrg,
 				},
 			},
 		}
@@ -170,7 +170,7 @@ func TestExtractFolderSettings(t *testing.T) {
 	})
 
 	t.Run("returns nil for nil folder settings", func(t *testing.T) {
-		response := &v20241015.UserConfigResponse{}
+		response := &v20260507.UserConfigResponse{}
 		result := ExtractFolderSettings(response, "git@github.com:snyk/test-repo.git")
 		assert.Nil(t, result)
 	})
@@ -178,12 +178,12 @@ func TestExtractFolderSettings(t *testing.T) {
 	t.Run("matches folder settings when API key is normalized HTTPS and remoteUrl is raw SSH", func(t *testing.T) {
 		locked := true
 		normalizedURL := "https://github.com/snyk/test-repo"
-		response := &v20241015.UserConfigResponse{}
-		response.Data.Attributes.FolderSettings = &map[string]map[string]v20241015.SettingMetadata{
+		response := &v20260507.UserConfigResponse{}
+		response.Data.Attributes.FolderSettings = &map[string]map[string]v20260507.SettingMetadata{
 			normalizedURL: {
 				"issue_view_open_issues": {
 					Value:  true,
-					Origin: v20241015.SettingMetadataOriginOrg,
+					Origin: v20260507.SettingMetadataOriginOrg,
 					Locked: &locked,
 				},
 			},
@@ -200,12 +200,12 @@ func TestExtractFolderSettings(t *testing.T) {
 
 	t.Run("matches folder settings when API key is normalized HTTPS and remoteUrl is raw HTTPS with credentials", func(t *testing.T) {
 		normalizedURL := "https://github.com/snyk/test-repo"
-		response := &v20241015.UserConfigResponse{}
-		response.Data.Attributes.FolderSettings = &map[string]map[string]v20241015.SettingMetadata{
+		response := &v20260507.UserConfigResponse{}
+		response.Data.Attributes.FolderSettings = &map[string]map[string]v20260507.SettingMetadata{
 			normalizedURL: {
 				"issue_view_ignored_issues": {
 					Value:  false,
-					Origin: v20241015.SettingMetadataOriginOrg,
+					Origin: v20260507.SettingMetadataOriginOrg,
 				},
 			},
 		}
@@ -219,18 +219,18 @@ func TestExtractFolderSettings(t *testing.T) {
 	})
 
 	t.Run("when two API keys normalize to the same URL, last sorted key wins", func(t *testing.T) {
-		response := &v20241015.UserConfigResponse{}
-		response.Data.Attributes.FolderSettings = &map[string]map[string]v20241015.SettingMetadata{
+		response := &v20260507.UserConfigResponse{}
+		response.Data.Attributes.FolderSettings = &map[string]map[string]v20260507.SettingMetadata{
 			"git@github.com:snyk/test-repo.git": {
 				"scan_automatic": {
 					Value:  false,
-					Origin: v20241015.SettingMetadataOriginOrg,
+					Origin: v20260507.SettingMetadataOriginOrg,
 				},
 			},
 			"https://github.com/snyk/test-repo": {
 				"scan_automatic": {
 					Value:  true,
-					Origin: v20241015.SettingMetadataOriginOrg,
+					Origin: v20260507.SettingMetadataOriginOrg,
 				},
 			},
 		}
@@ -247,18 +247,18 @@ func TestExtractMachineSettings(t *testing.T) {
 	fm := adapterTestFm(t)
 	t.Run("extracts machine-scope settings only", func(t *testing.T) {
 		locked := true
-		response := &v20241015.UserConfigResponse{}
-		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
+		response := &v20260507.UserConfigResponse{}
+		response.Data.Attributes.Settings = &map[string]v20260507.SettingMetadata{
 			// Machine-scope setting
 			"cli_release_channel": {
 				Value:  "stable",
-				Origin: v20241015.SettingMetadataOriginOrg,
+				Origin: v20260507.SettingMetadataOriginOrg,
 				Locked: &locked,
 			},
 			// Org-scope setting (should be excluded)
 			"scan_automatic": {
 				Value:  true,
-				Origin: v20241015.SettingMetadataOriginOrg,
+				Origin: v20260507.SettingMetadataOriginOrg,
 			},
 		}
 
@@ -282,18 +282,18 @@ func TestExtractMachineSettings(t *testing.T) {
 	})
 
 	t.Run("returns nil for nil settings", func(t *testing.T) {
-		response := &v20241015.UserConfigResponse{}
+		response := &v20260507.UserConfigResponse{}
 		result := ExtractMachineSettings(response, fm)
 		assert.Nil(t, result)
 	})
 
 	t.Run("returns nil when no machine-scope settings present", func(t *testing.T) {
-		response := &v20241015.UserConfigResponse{}
-		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
+		response := &v20260507.UserConfigResponse{}
+		response.Data.Attributes.Settings = &map[string]v20260507.SettingMetadata{
 			// Only org-scope setting
 			"scan_automatic": {
 				Value:  true,
-				Origin: v20241015.SettingMetadataOriginOrg,
+				Origin: v20260507.SettingMetadataOriginOrg,
 			},
 		}
 
@@ -303,29 +303,29 @@ func TestExtractMachineSettings(t *testing.T) {
 
 	// TODO - This test can be deleted once the changes done in IDE-1920 for the CB are reverted.
 	t.Run("ignores removed settings and accepts valid ones", func(t *testing.T) {
-		response := &v20241015.UserConfigResponse{}
-		response.Data.Attributes.Settings = &map[string]v20241015.SettingMetadata{
+		response := &v20260507.UserConfigResponse{}
+		response.Data.Attributes.Settings = &map[string]v20260507.SettingMetadata{
 			// Removed settings (commented out in ldxSyncSettingKeyMap)
 			"proxy_no_proxy": {
 				Value:  "localhost,127.0.0.1",
-				Origin: v20241015.SettingMetadataOriginOrg,
+				Origin: v20260507.SettingMetadataOriginOrg,
 			},
 			"api_endpoint": {
 				Value:  "https://api.evil.com",
-				Origin: v20241015.SettingMetadataOriginOrg,
+				Origin: v20260507.SettingMetadataOriginOrg,
 			},
 			"authentication_method": {
 				Value:  "token",
-				Origin: v20241015.SettingMetadataOriginOrg,
+				Origin: v20260507.SettingMetadataOriginOrg,
 			},
 			"cwe_ids": {
 				Value:  "123,456",
-				Origin: v20241015.SettingMetadataOriginOrg,
+				Origin: v20260507.SettingMetadataOriginOrg,
 			},
 			// Valid machine-scope setting
 			"cli_release_channel": {
 				Value:  "stable",
-				Origin: v20241015.SettingMetadataOriginOrg,
+				Origin: v20260507.SettingMetadataOriginOrg,
 			},
 		}
 
@@ -359,14 +359,14 @@ func TestExtractOrgIdFromResponse(t *testing.T) {
 	})
 
 	t.Run("returns empty for nil organizations", func(t *testing.T) {
-		response := &v20241015.UserConfigResponse{}
+		response := &v20260507.UserConfigResponse{}
 		result := ExtractOrgIdFromResponse(response)
 		assert.Empty(t, result)
 	})
 
 	t.Run("returns preferred organization", func(t *testing.T) {
-		response := &v20241015.UserConfigResponse{}
-		response.Data.Attributes.Organizations = &[]v20241015.Organization{
+		response := &v20260507.UserConfigResponse{}
+		response.Data.Attributes.Organizations = &[]v20260507.Organization{
 			{Id: "org1", Name: "Org 1", Slug: "org1", IsDefault: util.Ptr(true)},
 			{Id: "org2", Name: "Org 2", Slug: "org2", PreferredByAlgorithm: util.Ptr(true)},
 		}
@@ -376,8 +376,8 @@ func TestExtractOrgIdFromResponse(t *testing.T) {
 	})
 
 	t.Run("falls back to default organization", func(t *testing.T) {
-		response := &v20241015.UserConfigResponse{}
-		response.Data.Attributes.Organizations = &[]v20241015.Organization{
+		response := &v20260507.UserConfigResponse{}
+		response.Data.Attributes.Organizations = &[]v20260507.Organization{
 			{Id: "org1", Name: "Org 1", Slug: "org1", IsDefault: util.Ptr(true)},
 			{Id: "org2", Name: "Org 2", Slug: "org2"},
 		}
@@ -387,8 +387,8 @@ func TestExtractOrgIdFromResponse(t *testing.T) {
 	})
 
 	t.Run("falls back to first organization", func(t *testing.T) {
-		response := &v20241015.UserConfigResponse{}
-		response.Data.Attributes.Organizations = &[]v20241015.Organization{
+		response := &v20260507.UserConfigResponse{}
+		response.Data.Attributes.Organizations = &[]v20260507.Organization{
 			{Id: "org1", Name: "Org 1", Slug: "org1"},
 			{Id: "org2", Name: "Org 2", Slug: "org2"},
 		}
