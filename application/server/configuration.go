@@ -1114,12 +1114,12 @@ func gatherAllFolderPathsFromLspConfigs(incomingMap map[types.FilePath]types.Lsp
 // singleFolderResult is the structured return value of processSingleLspFolderConfig.
 // Fields are exposed by name so callers don't have to positionally destructure a tuple.
 type singleFolderResult struct {
-	config               types.FolderConfig
-	oldSnapshot          types.FolderConfigSnapshot
-	newSnapshot          types.FolderConfigSnapshot
-	configChanged        bool
-	orgSettingsChanged   bool
-	lockedFields []string
+	config             types.FolderConfig
+	oldSnapshot        types.FolderConfigSnapshot
+	newSnapshot        types.FolderConfigSnapshot
+	configChanged      bool
+	orgSettingsChanged bool
+	lockedFields       []string
 }
 
 // processSingleLspFolderConfig processes an incoming LspFolderConfig from the IDE using PATCH semantics:
@@ -1149,12 +1149,12 @@ func processSingleLspFolderConfig(ctx context.Context, conf configuration.Config
 	newSnapshot := types.ReadFolderConfigSnapshot(conf, normalizedPath)
 
 	return singleFolderResult{
-		config:               *fc,
-		oldSnapshot:          oldSnapshot,
-		newSnapshot:          newSnapshot,
-		configChanged:        applyChanged,
-		orgSettingsChanged:   orgSettingsChanged,
-		lockedFields: lockedFields,
+		config:             *fc,
+		oldSnapshot:        oldSnapshot,
+		newSnapshot:        newSnapshot,
+		configChanged:      applyChanged,
+		orgSettingsChanged: orgSettingsChanged,
+		lockedFields:       lockedFields,
 	}
 }
 
