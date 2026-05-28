@@ -358,6 +358,13 @@ func (f *Folder) scan(ctx context.Context, path types.FilePath) {
 func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 	if scanData.Err != nil {
 		f.sendScanError(scanData.Product, scanData.Err)
+		// IDE-1668: emit failure analytics so the "Is Snyk OK?" dashboard's
+		// IDE panel reflects scan errors. Skip for reference baselines, matching
+		// the success path's IsReferenceScan guard (baseline scans aren't a
+		// user-meaningful "scan done" interaction).
+		if !scanData.IsReferenceScan || f.configResolver.GetBool(types.SettingScanNetNew, f.FolderConfigReadOnly()) {
+			go sendAnalytics(ctx, f.engine, f.configResolver, f.logger, &scanData)
+		}
 		return
 	}
 
@@ -459,11 +466,6 @@ func sendAnalytics(ctx context.Context, engine workflow.Engine, configResolver t
 		return
 	}
 
-	if data.Err != nil {
-		log.Debug().Err(data.Err).Msg("Skipping analytics for error")
-		return
-	}
-
 	// this information is not filled automatically, so we need to collect it
 	folderConfig := config.GetFolderConfigFromEngine(engine, configResolver, data.Path, logger)
 	categories := setupCategories(data, configResolver, engine, folderConfig)
@@ -485,10 +487,23 @@ func sendAnalytics(ctx context.Context, engine workflow.Engine, configResolver t
 		extension["scan_type"] = deltaScanType.String()
 	}
 
+	// IDE-1668: emit failure analytics events alongside success ones so the
+	// "Is Snyk OK?" dashboard's IDE panel reflects scan errors. categorizeError
+	// returns a low-cardinality catalog prefix (e.g. "SNYK-CLI") for rollups;
+	// errorCode adds the full code (e.g. "SNYK-CLI-0008") for drill-downs.
+	status := gafanalytics.Success
+	if data.Err != nil {
+		status = gafanalytics.Failure
+		extension["error_category"] = categorizeError(data.Err)
+		if code := errorCode(data.Err); code != "" {
+			extension["error_code"] = code
+		}
+	}
+
 	param := types.AnalyticsEventParam{
 		InteractionType: "Scan done",
 		Category:        categories,
-		Status:          string(gafanalytics.Success),
+		Status:          string(status),
 		TargetId:        targetId,
 		TimestampMs:     data.TimestampFinished.UnixMilli(),
 		DurationMs:      int64(data.Duration),
