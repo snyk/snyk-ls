@@ -33,7 +33,7 @@ import (
 func ApplyEndpointChange(ctx context.Context, conf gafConfig.Configuration, authService authentication.AuthenticationService, logger *zerolog.Logger, endpoint string) bool {
 	oldEndpoint := types.GetGlobalString(conf, types.SettingApiEndpoint)
 	changed := config.UpdateApiEndpointsOnConfig(conf, endpoint)
-	if changed && conf.GetBool(types.SettingIsLspInitialized) {
+	if changed && conf.GetBool(types.SettingIsLspInitialized) && authService != nil {
 		logger.Info().
 			Str("old_endpoint", oldEndpoint).
 			Str("new_endpoint", endpoint).
@@ -55,7 +55,7 @@ func ApplyInsecureSetting(conf gafConfig.Configuration, insecure bool) {
 // ApplyAuthMethodChange sets the auth method and calls ConfigureProviders.
 // Returns true if the method actually changed.
 func ApplyAuthMethodChange(conf gafConfig.Configuration, authService authentication.AuthenticationService, logger *zerolog.Logger, authMethod types.AuthenticationMethod) bool {
-	if authMethod == types.EmptyAuthenticationMethod {
+	if authMethod == types.EmptyAuthenticationMethod || authService == nil {
 		return false
 	}
 

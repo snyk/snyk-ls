@@ -105,6 +105,10 @@ const DepWorkspace = "workspace"
 const DepEngine = "engine"
 const DepConfiguration = "configuration"
 const DepLdxSyncService = "ldxSyncService"
+const DepHoverService = "hoverService"
+const DepFileWatcher = "fileWatcher"
+const DepCodeActionService = "codeActionService"
+const DepFeatureFlagService = "featureFlagService"
 
 // New dep keys — added so that withContext can inject all handler deps into ctx.
 const DepHoverService = "hoverService"
