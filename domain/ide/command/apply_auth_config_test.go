@@ -88,6 +88,17 @@ func TestApplyEndpointChange_EndpointSame_ReturnsFalse(t *testing.T) {
 	assert.Equal(t, "some-token", config.GetToken(conf), "token must be preserved when endpoint is unchanged")
 }
 
+func TestApplyEndpointChange_NilAuthService_LSPInitialized_ReturnsChangedWithoutPanic(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(types.SettingIsLspInitialized, true)
+
+	// Must not panic and must still report changed=true so callers (e.g. analytics) observe the update.
+	changed := ApplyEndpointChange(t.Context(), conf, nil, engine.GetLogger(), "https://api.custom.io")
+
+	assert.True(t, changed)
+}
+
 func TestApplyInsecureSetting_SetsInsecureFlag(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()
