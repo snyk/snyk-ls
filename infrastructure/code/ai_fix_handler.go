@@ -17,39 +17,28 @@
 package code
 
 import (
-	"context"
 	"fmt"
-	"net/url"
 	"sync"
-	"time"
 
-	codeClientHTTP "github.com/snyk/code-client-go/http"
 	"github.com/snyk/code-client-go/llm"
-	"github.com/snyk/go-application-framework/pkg/workflow"
 
-	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type AiFixHandler struct {
-	aiFixDiffState    aiResultState
-	currentIssueId    string
-	explainCancelFunc context.CancelFunc
-	autoTriggerAiFix  bool
-	mu                sync.RWMutex
+	aiFixDiffState   aiResultState
+	currentIssueId   string
+	autoTriggerAiFix bool
+	mu               sync.RWMutex
 }
 
 type AiStatus string
 
 const (
-	AiFixNotStarted  AiStatus = "NOT_STARTED"
-	AiFixInProgress  AiStatus = "IN_PROGRESS"
-	AiFixSuccess     AiStatus = "SUCCESS"
-	AiFixError       AiStatus = "ERROR"
-	shouldRunExplain          = true
-)
-const (
-	ExplainApiVersion string = "2024-10-15"
+	AiFixNotStarted AiStatus = "NOT_STARTED"
+	AiFixInProgress AiStatus = "IN_PROGRESS"
+	AiFixSuccess    AiStatus = "SUCCESS"
+	AiFixError      AiStatus = "ERROR"
 )
 
 type aiResultState struct {
@@ -57,8 +46,6 @@ type aiResultState struct {
 	err    error
 	result []llm.AutofixUnifiedDiffSuggestion
 }
-
-const explainTimeout = 5 * time.Minute
 
 func (fixHandler *AiFixHandler) GetCurrentIssueId() string {
 	fixHandler.mu.RLock()
@@ -82,81 +69,6 @@ func (fixHandler *AiFixHandler) GetResults(fixId string) (filePath string, diff 
 	return "", "", fmt.Errorf("no suggestion found for fixId: %s", fixId)
 }
 
-func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, engine workflow.Engine, issue types.Issue, suggestions []llm.AutofixUnifiedDiffSuggestion) {
-	if !shouldRunExplain {
-		return
-	}
-	logger := engine.GetLogger().With().Str("method", "EnrichWithExplain").Logger()
-	if ctx.Err() != nil {
-		logger.Debug().Msgf("EnrichWithExplain context canceled")
-		return
-	}
-	contextWithCancel, cancelFunc := context.WithTimeout(ctx, explainTimeout)
-	defer cancelFunc()
-
-	fixHandler.mu.Lock()
-	fixHandler.explainCancelFunc = cancelFunc
-	fixHandler.mu.Unlock()
-
-	if len(suggestions) == 0 {
-		return
-	}
-	var diffs []string
-	diffs = getDiffListFromSuggestions(suggestions, diffs)
-	deepCodeLLMBinding := llm.NewDeepcodeLLMBinding(
-		llm.WithLogger(engine.GetLogger()),
-		llm.WithOutputFormat(llm.HTML),
-		llm.WithHTTPClient(func() codeClientHTTP.HTTPClient {
-			return engine.GetNetworkAccess().GetHttpClient()
-		}),
-	)
-	endpoint, err := getExplainEndpoint(engine, issue.GetContentRoot())
-	if err != nil {
-		logger.Error().Err(err).Msgf("Failed to get explain endpoint for issue %s", issue.GetID())
-		return
-	}
-	explanations, err := deepCodeLLMBinding.ExplainWithOptions(contextWithCancel, llm.ExplainOptions{RuleKey: issue.GetID(), Diffs: diffs, Endpoint: endpoint})
-	if err != nil {
-		logger.Error().Err(err).Msgf("Failed to explain with explain for issue %s", issue.GetID())
-		return
-	}
-	for i, diff := range diffs {
-		if i >= len(explanations) {
-			logger.Debug().Msgf("Failed to get explanation for issue with diff index %v diff %s", i, diff)
-			break
-		}
-		suggestions[i].Explanation = explanations[i]
-	}
-}
-
-func getExplainEndpoint(engine workflow.Engine, folder types.FilePath) (*url.URL, error) {
-	conf := engine.GetConfiguration()
-	org, err := config.FolderOrganizationForSubPath(config.GetWorkspace(conf), conf, folder, engine.GetLogger())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get folder organization: %w", err)
-	}
-	endpoint, err := url.Parse(fmt.Sprintf("%s/rest/orgs/%s/explain-fix", types.GetGlobalString(conf, types.SettingApiEndpoint), org))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse explain endpoint URL: %w", err)
-	}
-	queryParams := url.Values{}
-	queryParams.Add("version", ExplainApiVersion)
-	endpoint.RawQuery = queryParams.Encode()
-
-	return endpoint, nil
-}
-
-func getDiffListFromSuggestions(suggestions []llm.AutofixUnifiedDiffSuggestion, diffs []string) []string {
-	// Suggestion diffs may be coming from different files
-	for i := range suggestions {
-		diff := ""
-		for _, v := range suggestions[i].UnifiedDiffsPerFile {
-			diff += v
-		}
-		diffs = append(diffs, diff)
-	}
-	return diffs
-}
 
 func (fixHandler *AiFixHandler) SetAiFixDiffState(state AiStatus, suggestions []llm.AutofixUnifiedDiffSuggestion, err error, callback func()) {
 	fixHandler.mu.Lock()
@@ -212,13 +124,5 @@ func (fixHandler *AiFixHandler) resetAiFixCacheIfDifferent(issue types.Issue) {
 	fixHandler.mu.Lock()
 	fixHandler.aiFixDiffState = aiResultState{status: AiFixNotStarted}
 	fixHandler.currentIssueId = issueKey
-
-	// Make a copy of the explain cancel function to avoid race conditions
-	localExplainCancelFunc := fixHandler.explainCancelFunc
-	fixHandler.explainCancelFunc = nil
 	fixHandler.mu.Unlock()
-
-	if localExplainCancelFunc != nil {
-		localExplainCancelFunc()
-	}
 }
