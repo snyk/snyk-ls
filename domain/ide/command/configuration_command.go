@@ -100,6 +100,7 @@ func ConstructSettingsFromConfig(engine workflow.Engine, r types.ConfigResolverI
 		types.SettingAutomaticDownload:      r.GetBool(types.SettingAutomaticDownload, nil),
 		types.SettingBinaryBaseUrl:          r.GetString(types.SettingBinaryBaseUrl, nil),
 		types.SettingTrustedFolders:         trustedFoldersAsStrings(r),
+		types.SettingUserSettingsPath:       r.GetString(types.SettingUserSettingsPath, nil),
 	}
 
 	folderConfigs := collectFolderConfigs(conf, logger, engine, r)

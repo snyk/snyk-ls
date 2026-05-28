@@ -182,6 +182,14 @@ func ldxSyncServiceFromContext(ctx context.Context) (command.LdxSyncService, boo
 	return ldxSyncService, ok
 }
 
+func mustLdxSyncServiceFromContext(ctx context.Context) command.LdxSyncService {
+	ldxSyncService, ok := ldxSyncServiceFromContext(ctx)
+	if !ok {
+		panic("LDX-Sync service missing from context")
+	}
+	return ldxSyncService
+}
+
 func notifierFromContext(ctx context.Context) (noti.Notifier, bool) {
 	deps, ok := ctx2.DependenciesFromContext(ctx)
 	if !ok {
@@ -189,6 +197,14 @@ func notifierFromContext(ctx context.Context) (noti.Notifier, bool) {
 	}
 	notifier, ok := deps[ctx2.DepNotifier].(noti.Notifier)
 	return notifier, ok
+}
+
+func mustNotifierFromContext(ctx context.Context) noti.Notifier {
+	notifier, ok := notifierFromContext(ctx)
+	if !ok {
+		panic("Notifier missing from context")
+	}
+	return notifier
 }
 
 func inlineValueProviderFromContext(ctx context.Context) (snyk.InlineValueProvider, bool) {

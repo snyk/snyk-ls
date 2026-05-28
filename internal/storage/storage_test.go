@@ -110,6 +110,9 @@ func Test_StorageCallsRegisterCallbacks_InvalidJsonContent_ShouldClean(t *testin
 }
 
 func Test_ParallelFileLocking(t *testing.T) {
+	if !flockEnforced(t) {
+		t.Skip("Skipping: filesystem does not enforce exclusive file locks (overlay fs)")
+	}
 	t.Run("should respect locking order", func(t *testing.T) {
 		file := filepath.Join(t.TempDir(), testsupport.PathSafeTestName(t))
 		err := os.MkdirAll(filepath.Dir(file), 0755)
