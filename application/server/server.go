@@ -45,7 +45,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
-	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -122,56 +121,68 @@ func withContext(
 		if !found {
 			ctxDeps = map[string]any{}
 		}
-		if deps.AuthenticationService != nil {
-			ctxDeps[ctx2.DepAuthService] = deps.AuthenticationService
-		}
-		if deps.LdxSyncService != nil {
-			ctxDeps[ctx2.DepLdxSyncService] = deps.LdxSyncService
-		}
-		if deps.Notifier != nil {
-			ctxDeps[ctx2.DepNotifier] = deps.Notifier
-		}
-		if deps.InlineValueProvider != nil {
-			ctxDeps[ctx2.DepInlineValueProvider] = deps.InlineValueProvider
-		}
-		if deps.Scanner != nil {
-			ctxDeps[ctx2.DepScanners] = deps.Scanner
-		}
-		if deps.HoverService != nil {
-			ctxDeps[ctx2.DepHoverService] = deps.HoverService
-		}
-		if deps.ScanPersister != nil {
-			ctxDeps[ctx2.DepScanPersister] = deps.ScanPersister
-		}
-		if deps.ScanNotifier != nil {
-			ctxDeps[ctx2.DepScanNotifier] = deps.ScanNotifier
-		}
-		if deps.ErrorReporter != nil {
-			ctxDeps[ctx2.DepErrorReporter] = deps.ErrorReporter
-		}
-		if deps.Installer != nil {
-			ctxDeps[ctx2.DepInstaller] = deps.Installer
-		}
-		if deps.CodeActionService != nil {
-			ctxDeps[ctx2.DepCodeActionService] = deps.CodeActionService
-		}
-		if deps.Initializer != nil {
-			ctxDeps[ctx2.DepInitializer] = deps.Initializer
-		}
-		if deps.FeatureFlagService != nil {
-			ctxDeps[ctx2.DepFeatureFlagService] = deps.FeatureFlagService
-		}
-		if deps.LearnService != nil {
-			ctxDeps[ctx2.DepLearnService] = deps.LearnService
-		}
-		if deps.ScanStateAggregator != nil {
-			ctxDeps[ctx2.DepScanStateAggregator] = deps.ScanStateAggregator
-		}
-		if deps.FileWatcher != nil {
-			ctxDeps[ctx2.DepFileWatcher] = deps.FileWatcher
-		}
+		injectCoreServicesIntoMap(ctxDeps, deps)
+		injectScanServicesIntoMap(ctxDeps, deps)
 		ctx = ctx2.NewContextWithDependencies(ctx, ctxDeps)
 		return h(ctx, req)
+	}
+}
+
+// injectCoreServicesIntoMap and injectScanServicesIntoMap together inject all
+// di.Dependencies fields into the context dep map. The split is purely to keep
+// each function's cyclomatic complexity below the gocyclo limit (15); it does
+// not reflect a semantic boundary between the services.
+func injectCoreServicesIntoMap(m map[string]any, deps di.Dependencies) {
+	if deps.AuthenticationService != nil {
+		m[ctx2.DepAuthService] = deps.AuthenticationService
+	}
+	if deps.LdxSyncService != nil {
+		m[ctx2.DepLdxSyncService] = deps.LdxSyncService
+	}
+	if deps.Notifier != nil {
+		m[ctx2.DepNotifier] = deps.Notifier
+	}
+	if deps.InlineValueProvider != nil {
+		m[ctx2.DepInlineValueProvider] = deps.InlineValueProvider
+	}
+	if deps.ErrorReporter != nil {
+		m[ctx2.DepErrorReporter] = deps.ErrorReporter
+	}
+	if deps.Installer != nil {
+		m[ctx2.DepInstaller] = deps.Installer
+	}
+	if deps.CodeActionService != nil {
+		m[ctx2.DepCodeActionService] = deps.CodeActionService
+	}
+	if deps.Initializer != nil {
+		m[ctx2.DepInitializer] = deps.Initializer
+	}
+	if deps.FeatureFlagService != nil {
+		m[ctx2.DepFeatureFlagService] = deps.FeatureFlagService
+	}
+	if deps.LearnService != nil {
+		m[ctx2.DepLearnService] = deps.LearnService
+	}
+	if deps.FileWatcher != nil {
+		m[ctx2.DepFileWatcher] = deps.FileWatcher
+	}
+}
+
+func injectScanServicesIntoMap(m map[string]any, deps di.Dependencies) {
+	if deps.Scanner != nil {
+		m[ctx2.DepScanners] = deps.Scanner
+	}
+	if deps.HoverService != nil {
+		m[ctx2.DepHoverService] = deps.HoverService
+	}
+	if deps.ScanPersister != nil {
+		m[ctx2.DepScanPersister] = deps.ScanPersister
+	}
+	if deps.ScanNotifier != nil {
+		m[ctx2.DepScanNotifier] = deps.ScanNotifier
+	}
+	if deps.ScanStateAggregator != nil {
+		m[ctx2.DepScanStateAggregator] = deps.ScanStateAggregator
 	}
 }
 
@@ -358,49 +369,6 @@ func mustScanNotifierFromContext(ctx context.Context) scanner2.ScanNotifier {
 		panic("ScanNotifier missing from context")
 	}
 	return sn
-}
-
-func installerFromContext(ctx context.Context) (install.Installer, bool) {
-	deps, ok := ctx2.DependenciesFromContext(ctx)
-	if !ok {
-		return nil, false
-	}
-	inst, ok := deps[ctx2.DepInstaller].(install.Installer)
-	return inst, ok
-}
-
-func codeActionServiceFromContext(ctx context.Context) (*codeaction.CodeActionsService, bool) {
-	deps, ok := ctx2.DependenciesFromContext(ctx)
-	if !ok {
-		return nil, false
-	}
-	svc, ok := deps[ctx2.DepCodeActionService].(*codeaction.CodeActionsService)
-	return svc, ok
-}
-
-func mustCodeActionServiceFromContext(ctx context.Context) *codeaction.CodeActionsService {
-	svc, ok := codeActionServiceFromContext(ctx)
-	if !ok {
-		panic("CodeActionService missing from context")
-	}
-	return svc
-}
-
-func initializerFromContext(ctx context.Context) (initialize.Initializer, bool) {
-	deps, ok := ctx2.DependenciesFromContext(ctx)
-	if !ok {
-		return nil, false
-	}
-	init, ok := deps[ctx2.DepInitializer].(initialize.Initializer)
-	return init, ok
-}
-
-func mustInitializerFromContext(ctx context.Context) initialize.Initializer {
-	init, ok := initializerFromContext(ctx)
-	if !ok {
-		panic("Initializer missing from context")
-	}
-	return init
 }
 
 func featureFlagServiceFromContext(ctx context.Context) (featureflag.Service, bool) {

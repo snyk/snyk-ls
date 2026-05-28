@@ -201,9 +201,9 @@ type sentinelHoverService struct {
 	called bool
 }
 
-func (s *sentinelHoverService) DeleteHover(_ product.Product, _ types.FilePath)      {}
-func (s *sentinelHoverService) Channel() chan hover.DocumentHovers                    { return nil }
-func (s *sentinelHoverService) ClearAllHovers()                                      {}
+func (s *sentinelHoverService) DeleteHover(_ product.Product, _ types.FilePath) {}
+func (s *sentinelHoverService) Channel() chan hover.DocumentHovers              { return nil }
+func (s *sentinelHoverService) ClearAllHovers()                                 {}
 func (s *sentinelHoverService) GetHover(_ types.FilePath, _ types.Position) hover.Result {
 	s.called = true
 	return hover.Result{}

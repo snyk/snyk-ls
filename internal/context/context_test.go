@@ -36,16 +36,16 @@ import (
 // are distinct non-empty strings, preventing accidental key collisions.
 func TestNewDepConstants(t *testing.T) {
 	constants := map[string]string{
-		"DepHoverService":     DepHoverService,
-		"DepInstaller":        DepInstaller,
-		"DepCodeActionService": DepCodeActionService,
+		"DepHoverService":       DepHoverService,
+		"DepInstaller":          DepInstaller,
+		"DepCodeActionService":  DepCodeActionService,
 		"DepFeatureFlagService": DepFeatureFlagService,
-		"DepFileWatcher":      DepFileWatcher,
-		"DepScanner":          DepScanners,
-		"DepScanNotifier":     DepScanNotifier,
-		"DepScanPersister":    DepScanPersister,
-		"DepErrorReporter":    DepErrorReporter,
-		"DepInitializer":      DepInitializer,
+		"DepFileWatcher":        DepFileWatcher,
+		"DepScanner":            DepScanners,
+		"DepScanNotifier":       DepScanNotifier,
+		"DepScanPersister":      DepScanPersister,
+		"DepErrorReporter":      DepErrorReporter,
+		"DepInitializer":        DepInitializer,
 	}
 	seen := map[string]string{}
 	for name, val := range constants {
@@ -63,9 +63,9 @@ func TestGenericDepRoundTrip(t *testing.T) {
 	type sentinel struct{ id int }
 
 	cases := []struct {
-		name   string
-		key    string
-		value  any
+		name  string
+		key   string
+		value any
 	}{
 		{name: "HoverService", key: DepHoverService, value: &sentinel{1}},
 		{name: "Installer", key: DepInstaller, value: &sentinel{2}},
