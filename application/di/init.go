@@ -297,6 +297,15 @@ func FeatureFlagService() featureflag.Service {
 	return featureFlagService
 }
 
+// SetFeatureFlagService replaces the global featureFlagService for future calls
+// to FeatureFlagService(). Objects already constructed before this call retain
+// their previous reference. Intended for test use only.
+func SetFeatureFlagService(service featureflag.Service) {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	featureFlagService = service
+}
+
 func LdxSyncService() command.LdxSyncService {
 	initMutex.Lock()
 	defer initMutex.Unlock()

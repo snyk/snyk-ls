@@ -299,3 +299,38 @@ func TestShowMessageRequest(t *testing.T) {
 		)
 	})
 }
+
+func Test_NotifierWaitsForLspInitializedChannel(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conf := engine.GetConfiguration()
+	// Replace the channel set by initializeHandler; the previous channel has no waiters and is GC'd.
+	types.NewLspInitializedChannel(conf)
+
+	expected := types.AuthenticationParams{Token: "channel-wait-test", ApiUrl: "https://api.snyk.io"}
+	di.Notifier().Send(expected)
+
+	delivered := func() bool {
+		for _, n := range jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasAuthenticated") {
+			var actual types.AuthenticationParams
+			_ = n.UnmarshalParams(&actual)
+			if actual == expected {
+				return true
+			}
+		}
+		return false
+	}
+	assert.Never(t, delivered, 200*time.Millisecond, 10*time.Millisecond,
+		"notification must not be delivered before LspInitialized is signaled")
+
+	types.SignalLspInitialized(conf)
+
+	assert.Eventually(t, delivered, 2*time.Second, time.Millisecond,
+		"notification must be delivered after LspInitialized is signaled")
+}
