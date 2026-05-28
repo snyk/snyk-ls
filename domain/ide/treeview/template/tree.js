@@ -75,6 +75,9 @@
   var activeErrorOverlay = null;
   var activeErrorKeyDown = null;
   var activeErrorOutsideClick = null;
+  var activeErrorResize = null;
+  var activeErrorRow = null;
+  var ERROR_OVERLAY_GAP = 4;
 
   function dismissErrorOverlay() {
     if (activeErrorOverlay && activeErrorOverlay.parentNode) {
@@ -88,7 +91,47 @@
       document.removeEventListener('click', activeErrorOutsideClick);
       activeErrorOutsideClick = null;
     }
+    if (activeErrorResize) {
+      window.removeEventListener('resize', activeErrorResize);
+      activeErrorResize = null;
+    }
     activeErrorOverlay = null;
+    activeErrorRow = null;
+  }
+
+  // Computes and applies the final overlay position using its measured height,
+  // so a tall overlay against a row at the bottom of the viewport flips above
+  // the row instead of being clipped (IDE-1808). Defaults to below; flips above
+  // only when there isn't room below AND there is room above — otherwise the
+  // overlay stays below (clipped is preferable to overlapping the row).
+  // Clears `bottom` and `transform` defensively so future style sources can't
+  // stretch the overlay between opposing anchors.
+  function positionErrorOverlay(overlay, row) {
+    if (!overlay || !row) return;
+    var rect = row.getBoundingClientRect();
+    var vw = window.innerWidth || document.documentElement.clientWidth || 600;
+    var vh = window.innerHeight || document.documentElement.clientHeight || 400;
+    var overlayH = overlay.getBoundingClientRect().height;
+    if (overlayH <= 0) return;
+
+    var gap = ERROR_OVERLAY_GAP;
+    var topPos = rect.bottom + gap;
+    var fitsBelow = topPos + overlayH + gap <= vh;
+    var fitsAbove = rect.top - overlayH - gap >= gap;
+    if (!fitsBelow && fitsAbove) {
+      topPos = rect.top - overlayH - gap;
+    }
+    topPos = Math.max(gap, topPos);
+
+    var overlayW = Math.min(520, vw - 16);
+    var leftPos = Math.max(gap, Math.min(rect.left, vw - overlayW - 8));
+
+    overlay.style.position = 'fixed';
+    overlay.style.top = topPos + 'px';
+    overlay.style.bottom = '';
+    overlay.style.transform = '';
+    overlay.style.left = leftPos + 'px';
+    overlay.style.width = overlayW + 'px';
   }
 
   function showErrorOverlay(row, productLabel, errorMessage) {
@@ -118,23 +161,18 @@
     });
     overlay.appendChild(closeBtn);
 
-    // Position below the clicked row using fixed positioning so the overlay is
-    // viewport-relative and not clipped by the scrollable tree container.
-    var rect = row.getBoundingClientRect();
-    var vw = window.innerWidth || document.documentElement.clientWidth || 600;
-    var vh = window.innerHeight || document.documentElement.clientHeight || 400;
-    var overlayW = Math.min(520, vw - 16);
-    var topPos = rect.bottom + 4;
-    // Flip above the row if not enough space below
-    if (topPos + 200 > vh) { topPos = Math.max(4, rect.top - 4); }
-    var leftPos = Math.max(4, Math.min(rect.left, vw - overlayW - 8));
+    // Insert offscreen so we can measure the real height without a visible
+    // flash, then reposition correctly using `positionErrorOverlay`.
     overlay.style.position = 'fixed';
-    overlay.style.top = topPos + 'px';
-    overlay.style.left = leftPos + 'px';
-    overlay.style.width = overlayW + 'px';
-
+    overlay.style.top = '0px';
+    overlay.style.left = '0px';
+    overlay.style.visibility = 'hidden';
     document.body.appendChild(overlay);
+    positionErrorOverlay(overlay, row);
+    overlay.style.visibility = '';
+
     activeErrorOverlay = overlay;
+    activeErrorRow = row;
 
     activeErrorKeyDown = function(ev) {
       if (ev.key === 'Escape' || ev.key === 'Esc' || ev.keyCode === 27) {
@@ -142,6 +180,13 @@
       }
     };
     document.addEventListener('keydown', activeErrorKeyDown);
+
+    activeErrorResize = function() {
+      if (activeErrorOverlay && activeErrorRow) {
+        positionErrorOverlay(activeErrorOverlay, activeErrorRow);
+      }
+    };
+    window.addEventListener('resize', activeErrorResize);
 
     setTimeout(function() {
       if (!activeErrorOverlay) return;
