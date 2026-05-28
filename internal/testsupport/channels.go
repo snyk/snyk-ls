@@ -49,3 +49,18 @@ func RequireEventuallyReceive[T any](t *testing.T, ch <-chan T, waitFor, tick ti
 
 	return capturedValue
 }
+
+// RequireEventuallyClosed asserts that ch is closed within waitFor, polling every tick.
+// It is the closed-channel analogue of RequireEventuallyReceive: use it when the test
+// coordinate expects a close signal rather than a value send.
+func RequireEventuallyClosed[T any](t *testing.T, ch <-chan T, waitFor, tick time.Duration, msgAndArgs ...any) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		select {
+		case _, ok := <-ch:
+			return !ok
+		default:
+			return false
+		}
+	}, waitFor, tick, msgAndArgs...)
+}

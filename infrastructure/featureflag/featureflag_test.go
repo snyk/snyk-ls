@@ -34,6 +34,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -301,10 +302,10 @@ func TestFetch(t *testing.T) {
 		}()
 
 		// Wait for the first flag goroutine to signal it's mid-fetch, then flush.
-		<-mockProvider.flagReadyCh
+		testsupport.RequireEventuallyReceive(t, mockProvider.flagReadyCh, 5*time.Second, time.Millisecond, "flag fetch did not start in time")
 		service.FlushCache()
 
-		<-done // wait for in-flight goroutines to finish
+		testsupport.RequireEventuallyClosed(t, done, 5*time.Second, time.Millisecond, "in-flight fetch goroutine did not finish in time")
 
 		// The gen guard must have prevented stale flags from being written back.
 		_, found := service.orgToFlag.Get(org)
@@ -864,8 +865,8 @@ func TestFetchSastSettings_NegativeCache(t *testing.T) {
 		engine, mockProvider := setupMockProvider(t)
 		mockProvider.sastErr = fmt.Errorf("401 unauthorized")
 		mockProvider.sastDelay = 50 * time.Millisecond
-		sastReady := make(chan struct{})
-		mockProvider.sastReadyCh = sastReady // captured before goroutine starts; mock nils field under lock
+		sastReady := make(chan struct{}, 1)
+		mockProvider.sastReadyCh = sastReady
 
 		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
 		org := "toctou-org"
@@ -878,24 +879,14 @@ func TestFetchSastSettings_NegativeCache(t *testing.T) {
 		}()
 
 		// Wait for getSastSettings to signal it is mid-sleep, then flush.
-		<-sastReady
+		testsupport.RequireEventuallyReceive(t, sastReady, 5*time.Second, time.Millisecond, "getSastSettings did not signal in time")
 		service.FlushCache()
 
-		<-done // wait for the in-flight goroutine to finish
+		testsupport.RequireEventuallyClosed(t, done, 5*time.Second, time.Millisecond, "in-flight getSastSettings goroutine did not finish in time")
 
-		// A second call must hit the provider again, not the re-poisoned cache.
-		mockProvider.mu.Lock()
-		before := mockProvider.sastSettingsCalls
-		mockProvider.mu.Unlock()
-
-		_, _ = service.fetchSastSettings(org)
-
-		mockProvider.mu.Lock()
-		after := mockProvider.sastSettingsCalls
-		mockProvider.mu.Unlock()
-
-		assert.Equal(t, before+1, after,
-			"error must not be cached after concurrent FlushCache (TOCTOU guard)")
+		// The gen guard must have prevented the stale error from being written back.
+		_, found := service.orgToSastSettingsErr.Get(org)
+		assert.False(t, found, "error must not be cached after concurrent FlushCache (TOCTOU guard)")
 	})
 }
 
