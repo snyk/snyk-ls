@@ -33,7 +33,14 @@ import (
 func ApplyEndpointChange(ctx context.Context, conf gafConfig.Configuration, authService authentication.AuthenticationService, logger *zerolog.Logger, endpoint string) bool {
 	oldEndpoint := types.GetGlobalString(conf, types.SettingApiEndpoint)
 	changed := config.UpdateApiEndpointsOnConfig(conf, endpoint)
-	if changed && conf.GetBool(types.SettingIsLspInitialized) && authService != nil {
+	if changed && conf.GetBool(types.SettingIsLspInitialized) {
+		if authService == nil {
+			logger.Error().
+				Str("old_endpoint", oldEndpoint).
+				Str("new_endpoint", endpoint).
+				Msg("authService is nil; skipping logout on endpoint change — credentials may persist against wrong endpoint")
+			return changed
+		}
 		logger.Info().
 			Str("old_endpoint", oldEndpoint).
 			Str("new_endpoint", endpoint).

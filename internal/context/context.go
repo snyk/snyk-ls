@@ -109,13 +109,7 @@ const DepHoverService = "hoverService"
 const DepFileWatcher = "fileWatcher"
 const DepCodeActionService = "codeActionService"
 const DepFeatureFlagService = "featureFlagService"
-
-// New dep keys — added so that withContext can inject all handler deps into ctx.
-const DepHoverService = "hoverService"
 const DepInstaller = "installer"
-const DepCodeActionService = "codeActionService"
-const DepFeatureFlagService = "featureFlagService"
-const DepFileWatcher = "fileWatcher"
 
 // NewContextWithDependencies returns a new Context that carries dependencies.
 // This can be used to pass pointers to injected (service) dependencies, e.g. a pointer

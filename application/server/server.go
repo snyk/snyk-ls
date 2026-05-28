@@ -120,6 +120,15 @@ func withContext(
 		ctxDeps, found := ctx2.DependenciesFromContext(ctx)
 		if !found {
 			ctxDeps = map[string]any{}
+		} else {
+			// Clone defensively: the map was created by NewContextWithConfigResolver moments
+			// earlier in this closure, but a future jrpc2 NewContext option could pass a
+			// shared parent context carrying a deps map — cloning prevents cross-request mutation.
+			cloned := make(map[string]any, len(ctxDeps))
+			for k, v := range ctxDeps {
+				cloned[k] = v
+			}
+			ctxDeps = cloned
 		}
 		injectCoreServicesIntoMap(ctxDeps, deps)
 		injectScanServicesIntoMap(ctxDeps, deps)
@@ -148,14 +157,8 @@ func injectCoreServicesIntoMap(m map[string]any, deps di.Dependencies) {
 	if deps.ErrorReporter != nil {
 		m[ctx2.DepErrorReporter] = deps.ErrorReporter
 	}
-	if deps.Installer != nil {
-		m[ctx2.DepInstaller] = deps.Installer
-	}
 	if deps.CodeActionService != nil {
 		m[ctx2.DepCodeActionService] = deps.CodeActionService
-	}
-	if deps.Initializer != nil {
-		m[ctx2.DepInitializer] = deps.Initializer
 	}
 	if deps.FeatureFlagService != nil {
 		m[ctx2.DepFeatureFlagService] = deps.FeatureFlagService
@@ -510,21 +513,23 @@ func workspaceDidChangeWorkspaceFoldersHandler(conf configuration.Configuration,
 		defer logger.Info().Msg("SENDING")
 		changedFolders := config.GetWorkspace(conf).ChangeWorkspaceFolders(params)
 
-		authSvc, _ := authenticationServiceFromContext(ctx)
-		if authSvc != nil && authSvc.IsAuthenticated() {
-			ldxSvc, _ := ldxSyncServiceFromContext(ctx)
-			notifier, _ := notifierFromContext(ctx)
-			if ldxSvc != nil {
-				ldxSvc.RefreshConfigFromLdxSync(bgCtx, conf, engine, &logger, changedFolders, notifier)
-			}
-		}
-
-		notifier, _ := notifierFromContext(ctx)
+		// Deps below are injected by withContext if non-nil in DI wiring; each is checked
+		// before use below. HandleFolders guards nil featureFlagService internally, and a
+		// missing dep here surfaces as a no-op in HandleFolders — acceptable because
+		// workspace-folder changes are non-destructive and the handler can be retried.
+		authService, _ := authenticationServiceFromContext(ctx)
+		notifier := mustNotifierFromContext(ctx)
+		ldxSyncSvc, _ := ldxSyncServiceFromContext(ctx)
 		scanPersister, _ := scanPersisterFromContext(ctx)
 		scanStateAgg, _ := scanStateAggregatorFromContext(ctx)
-		ffService, _ := featureFlagServiceFromContext(ctx)
-		configRes, _ := configResolverFromContext(ctx)
-		command.HandleFolders(conf, engine, &logger, bgCtx, srv, notifier, scanPersister, scanStateAgg, ffService, configRes)
+		featureFlags, _ := featureFlagServiceFromContext(ctx)
+		configResolver, _ := ctx2.ConfigResolverFromContext(ctx)
+
+		if authService != nil && authService.IsAuthenticated() && ldxSyncSvc != nil {
+			ldxSyncSvc.RefreshConfigFromLdxSync(bgCtx, conf, engine, &logger, changedFolders, notifier)
+		}
+
+		command.HandleFolders(conf, engine, &logger, bgCtx, srv, notifier, scanPersister, scanStateAgg, featureFlags, configResolver)
 		for _, f := range changedFolders {
 			if f.IsAutoScanEnabled() {
 				go f.ScanFolder(bgCtx)
@@ -901,17 +906,30 @@ func addWorkspaceFolders(ctx context.Context, conf configuration.Configuration, 
 	const method = "addWorkspaceFolders"
 	w := config.GetWorkspace(conf)
 
-	sc := mustScannerFromContext(ctx)
-	hoverSvc := mustHoverServiceFromContext(ctx)
-	scanNotifier := mustScanNotifierFromContext(ctx)
-	notifier := mustNotifierFromContext(ctx)
-	scanPersister := mustScanPersisterFromContext(ctx)
-	scanStateAgg := mustScanStateAggregatorFromContext(ctx)
-	ffService := mustFeatureFlagServiceFromContext(ctx)
-	configRes := mustConfigResolverFromContext(ctx)
+	scn, scnOk := scannerFromContext(ctx)
+	hs, hsOk := hoverServiceFromContext(ctx)
+	scanNotifier, snOk := scanNotifierFromContext(ctx)
+	notifier, nOk := notifierFromContext(ctx)
+	scanPersister, spOk := scanPersisterFromContext(ctx)
+	scanStateAgg, ssaOk := scanStateAggregatorFromContext(ctx)
+	featureFlags, ffOk := featureFlagServiceFromContext(ctx)
+	configResolver, crOk := ctx2.ConfigResolverFromContext(ctx)
+	if !scnOk || !hsOk || !snOk || !nOk || !spOk || !ssaOk || !ffOk || !crOk {
+		logger.Error().Str("method", method).
+			Bool("scanner", scnOk).
+			Bool("hoverService", hsOk).
+			Bool("scanNotifier", snOk).
+			Bool("notifier", nOk).
+			Bool("scanPersister", spOk).
+			Bool("scanStateAggregator", ssaOk).
+			Bool("featureFlagService", ffOk).
+			Bool("configResolver", crOk).
+			Msg("missing mandatory dependency in context; aborting workspace folder creation")
+		return
+	}
 
 	newFolder := func(path types.FilePath, name string) *workspace.Folder {
-		return workspace.NewFolder(conf, logger, path, name, sc, hoverSvc, scanNotifier, notifier, scanPersister, scanStateAgg, ffService, configRes, engine)
+		return workspace.NewFolder(conf, logger, path, name, scn, hs, scanNotifier, notifier, scanPersister, scanStateAgg, featureFlags, configResolver, engine)
 	}
 
 	if len(params.WorkspaceFolders) > 0 {
