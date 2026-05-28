@@ -137,7 +137,11 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 	openSourceScanner = oss.NewCLIScanner(engine, instrumentor, errorReporter, snykCli, learnService, notifier, configResolver)
 	infrastructureAsCodeScanner = iac.New(gafConfiguration, logger, instrumentor, errorReporter, snykCli, configResolver)
 	scanner = scanner2.NewDelegatingScanner(engine, tokenService, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, configResolver, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
-	hoverService = hover.NewDefaultService(logger)
+	if overrideDeps != nil && overrideDeps.HoverService != nil {
+		hoverService = overrideDeps.HoverService
+	} else {
+		hoverService = hover.NewDefaultService(logger)
+	}
 
 	if overrideDeps != nil && overrideDeps.LdxSyncService != nil {
 		ldxSyncService = overrideDeps.LdxSyncService

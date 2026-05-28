@@ -364,7 +364,10 @@ func Test_UpdateSettings(t *testing.T) {
 		// Path is init-only; apply via InitializeSettings first.
 		// TrustedFolders now goes through the settings map.
 		settingsMap[types.SettingTrustedFolders] = &types.ConfigSetting{Value: []interface{}{"trustedPath1", "trustedPath2"}, Changed: true}
-		ctx := contextWithNotifier(t.Context())
+		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
+			ctx2.DepNotifier:    notification.NewMockNotifier(),
+			ctx2.DepAuthService: di.AuthenticationService(),
+		})
 		InitializeSettings(ctx, engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{
 			Path:           "addPath",
 			OsPlatform:     "windows",
@@ -703,6 +706,7 @@ func Test_UpdateSettings_TokenChange_TriggersLdxSyncRefresh(t *testing.T) {
 		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
 			ctx2.DepLdxSyncService: mockLdx,
 			ctx2.DepNotifier:       notification.NewMockNotifier(),
+			ctx2.DepAuthService:    di.AuthenticationService(),
 		})
 
 		folderPath := types.FilePath(t.TempDir())
@@ -1151,6 +1155,7 @@ func Test_processFolderConfigs_AutoMode_DoesNotLeakGlobalOrgToLdxSync(t *testing
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
 		ctx2.DepLdxSyncService: realService,
 		ctx2.DepNotifier:       notification.NewMockNotifier(),
+		ctx2.DepAuthService:    di.AuthenticationService(),
 	})
 
 	folders := config.GetWorkspace(setup.engine.GetConfiguration()).Folders()
@@ -1392,12 +1397,13 @@ func Test_FC105_WriteSettings_OldFormat_ProcessesSettingsStruct(t *testing.T) {
 	mockLdx.EXPECT().
 		RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Times(1)
+	di.TestInit(t, engine, tokenService, &di.Dependencies{
+		LdxSyncService: mockLdx,
+	})
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
 		ctx2.DepLdxSyncService: mockLdx,
 		ctx2.DepNotifier:       notification.NewMockNotifier(),
-	})
-	di.TestInit(t, engine, tokenService, &di.Dependencies{
-		LdxSyncService: mockLdx,
+		ctx2.DepAuthService:    di.AuthenticationService(),
 	})
 
 	folderPath := types.FilePath(t.TempDir())
@@ -1507,7 +1513,7 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 
 		folderConfig := setup.getUpdatedConfig()
 
-		rejected := validateLockedFields(setup.engine.GetConfiguration(), folderConfig, &incoming, setup.logger, resolver)
+		rejected := validateLockedFields(resolver, setup.engine.GetConfiguration(), folderConfig, &incoming, setup.logger)
 
 		assert.ElementsMatch(t, []string{types.SettingSnykCodeEnabled}, rejected,
 			"should report the locked setting name so the caller can dedupe into one notification")
@@ -1544,7 +1550,7 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 
 		folderConfig := setup.getUpdatedConfig()
 
-		rejected := validateLockedFields(setup.engine.GetConfiguration(), folderConfig, &incoming, setup.logger, resolver)
+		rejected := validateLockedFields(resolver, setup.engine.GetConfiguration(), folderConfig, &incoming, setup.logger)
 
 		assert.Empty(t, rejected, "should allow changes when new org has no locks")
 		assert.NotNil(t, incoming.Settings[types.SettingSnykCodeEnabled], "setting should remain since new org doesn't lock it")
@@ -1693,7 +1699,7 @@ func Test_validateLockedFields_RestoresConfigAfterValidation(t *testing.T) {
 	}
 
 	folderConfig := setup.getUpdatedConfig()
-	validateLockedFields(prefixKeyConf, folderConfig, &incoming, setup.logger, resolver)
+	validateLockedFields(resolver, prefixKeyConf, folderConfig, &incoming, setup.logger)
 
 	// Config should be restored to original state after validation
 	assert.Equal(t, origOrgVal, prefixKeyConf.Get(orgKey), "OrgSetByUser config key should be restored after validation")
@@ -2126,8 +2132,9 @@ func Test_applyOrganization_ResetsSummaryPanelOnOrgChange(t *testing.T) {
 
 		config.SetOrganization(engine.GetConfiguration(), oldOrg)
 		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-			ctx2.DepNotifier:       mockNotifier,
-			ctx2.DepLdxSyncService: mockLdxSync,
+			ctx2.DepNotifier:            mockNotifier,
+			ctx2.DepLdxSyncService:      mockLdxSync,
+			ctx2.DepScanStateAggregator: realAgg,
 		})
 		return engine, folderPath, realAgg, ctx
 	}
@@ -2193,8 +2200,9 @@ func Test_updateFolderConfig_PreferredOrgChange_ResetsSummaryPanelOnOrgChange(t 
 		mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 		di.TestInit(t, engine, tokenService, &di.Dependencies{ScanStateAggregator: realAgg, Notifier: mockNotifier, LdxSyncService: mockLdxSync})
 		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-			ctx2.DepNotifier:       mockNotifier,
-			ctx2.DepLdxSyncService: mockLdxSync,
+			ctx2.DepNotifier:            mockNotifier,
+			ctx2.DepLdxSyncService:      mockLdxSync,
+			ctx2.DepScanStateAggregator: realAgg,
 		})
 
 		engineConfig := engine.GetConfiguration()
@@ -2286,8 +2294,9 @@ func Test_updateFolderConfig_PreferredOrgChange_ResetsSummaryPanelOnOrgChange(t 
 		mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 		di.TestInit(t, engine, tokenService, &di.Dependencies{ScanStateAggregator: realAgg, Notifier: mockNotifier, LdxSyncService: mockLdxSync})
 		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-			ctx2.DepNotifier:       mockNotifier,
-			ctx2.DepLdxSyncService: mockLdxSync,
+			ctx2.DepNotifier:            mockNotifier,
+			ctx2.DepLdxSyncService:      mockLdxSync,
+			ctx2.DepScanStateAggregator: realAgg,
 		})
 
 		conf := engine.GetConfiguration()
@@ -2520,12 +2529,11 @@ func Test_notifyLockedFieldsRejected_DeduplicatesAcrossGroupsAndEmitsOnce(t *tes
 // Test_UpdateSettings_LockedFields_EmitsExactlyOneNotification is the
 // end-to-end regression test for IDE-1970. It drives `UpdateSettings` through
 // the full pipeline (machine-scope validation + multi-folder accumulator +
-// notification emission) and asserts that the real `di.Notifier()` channel
-// receives exactly one ShowMessageParams covering every locked field across
-// every folder. If a future refactor re-introduces an inline `SendShowMessage`
-// call in `processConfigSettings` or `processSingleLspFolderConfig` (the bug
-// IDE-1970 fixed), this test fails — the helper-level unit tests above would
-// not.
+// notification emission) and asserts that exactly one ShowMessageParams is
+// emitted covering every locked field across every folder. If a future refactor
+// re-introduces an inline `SendShowMessage` call in `processConfigSettings` or
+// `processSingleLspFolderConfig` (the bug IDE-1970 fixed), this test fails —
+// the helper-level unit tests above would not.
 // Test_validateLockedMachineFields_EarlyReturns pins the two early-return
 // paths that the integration suite exercises only indirectly. Catching a
 // regression on either path here is much faster than running the full
@@ -2588,20 +2596,21 @@ func Test_UpdateSettings_LockedFields_EmitsExactlyOneNotification(t *testing.T) 
 	resolver := testutil.DefaultConfigResolver(engine)
 	di.SetConfigResolver(resolver)
 
-	// Subscribe to the real notifier before driving the change so we don't miss
-	// any messages produced on the request goroutine.
+	// Use a local notifier so this test is fully isolated from the global DI
+	// singleton and can run in parallel without cross-test interference.
+	localNotifier := notification.NewNotifier()
 	var (
 		mu           sync.Mutex
 		showMessages []sglsp.ShowMessageParams
 	)
-	di.Notifier().CreateListener(func(params any) {
+	localNotifier.CreateListener(func(params any) {
 		if sm, ok := params.(sglsp.ShowMessageParams); ok {
 			mu.Lock()
 			defer mu.Unlock()
 			showMessages = append(showMessages, sm)
 		}
 	})
-	t.Cleanup(func() { di.Notifier().DisposeListener() })
+	t.Cleanup(func() { localNotifier.DisposeListener() })
 
 	// One triggering event that tries to PATCH every locked setting across
 	// machine scope and both folders. folderB also tries to change
@@ -2626,7 +2635,10 @@ func Test_UpdateSettings_LockedFields_EmitsExactlyOneNotification(t *testing.T) 
 		},
 	}
 
-	UpdateSettings(contextWithNotifier(t.Context()), conf, engine, logger, machineSettings, folderConfigs, analytics.TriggerSourceTest, resolver)
+	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
+		ctx2.DepNotifier: localNotifier,
+	})
+	UpdateSettings(ctx, conf, engine, logger, machineSettings, folderConfigs, analytics.TriggerSourceTest, resolver)
 
 	// Wait for the listener goroutine to drain at least one ShowMessage.
 	require.Eventually(t, func() bool {
