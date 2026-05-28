@@ -100,7 +100,7 @@ func TestProfileLSPInit(t *testing.T) {
 		t.Logf("profile written; inspect with: go tool pprof -top -nodecount=30 %s", f.Name())
 	}()
 
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	_, err = loc.Client.Call(t.Context(), "initialize", params)
 	require.NoError(t, err)
@@ -132,7 +132,7 @@ func Test_LSPInitCompletesWithManyFolders(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	params := buildInitParams(t, lspInitPerfFolderCount)
 
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	_, err := loc.Client.Call(t.Context(), "initialize", params)
 	require.NoError(t, err)
@@ -180,7 +180,7 @@ func Test_LSPInitCompletesWithManyFoldersRealHTTP(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	params := buildInitParams(t, lspInitPerfFolderCount)
 
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	_, err := loc.Client.Call(t.Context(), "initialize", params)
 	require.NoError(t, err)

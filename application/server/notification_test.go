@@ -302,7 +302,7 @@ func TestShowMessageRequest(t *testing.T) {
 
 func Test_NotifierWaitsForLspInitializedChannel(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
