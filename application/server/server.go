@@ -332,6 +332,9 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 
 		startClientMonitor(params, logger)
 
+		// NewLspInitializedChannel must precede registerNotifier: the notifier
+		// goroutine reads this channel on its first message.
+		types.NewLspInitializedChannel(conf)
 		go createProgressListener(progress.ToServerProgressChannel, srv, &logger)
 		registerNotifier(conf, &logger, srv)
 
@@ -501,6 +504,7 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 		initialLogger := ctx2.LoggerFromContext(ctx)
 		defer func() {
 			conf.Set(types.SettingIsLspInitialized, true)
+			types.SignalLspInitialized(conf)
 		}()
 		initialLogger.Info().Msg("snyk-ls: " + config.Version + " (" + util.Result(os.Executable()) + ")")
 		cliPath := di.ConfigResolver().GetString(types.SettingCliPath, nil)

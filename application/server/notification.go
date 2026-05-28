@@ -88,9 +88,7 @@ func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, 
 	callbackFunction := func(params any) {
 		if !conf.GetBool(types.SettingIsLspInitialized) {
 			l.Debug().Msg("waiting for lsp initialization to be finished...")
-			for !conf.GetBool(types.SettingIsLspInitialized) {
-				time.Sleep(time.Millisecond)
-			}
+			types.WaitForLspInitialized(conf)
 			l.Debug().Msg("lsp initialization finished.")
 		}
 
