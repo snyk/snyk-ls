@@ -57,6 +57,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
 var sampleSettings = map[string]*types.ConfigSetting{
@@ -1473,7 +1474,7 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 
 		folderConfig := setup.getUpdatedConfig()
 
-		rejected := validateLockedFields(setup.engine.GetConfiguration(), folderConfig, &incoming, setup.logger)
+		rejected := validateLockedFields(setup.engine.GetConfiguration(), folderConfig, &incoming, setup.logger, resolver)
 
 		assert.ElementsMatch(t, []string{types.SettingSnykCodeEnabled}, rejected,
 			"should report the locked setting name so the caller can dedupe into one notification")
@@ -1510,7 +1511,7 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 
 		folderConfig := setup.getUpdatedConfig()
 
-		rejected := validateLockedFields(setup.engine.GetConfiguration(), folderConfig, &incoming, setup.logger)
+		rejected := validateLockedFields(setup.engine.GetConfiguration(), folderConfig, &incoming, setup.logger, resolver)
 
 		assert.Empty(t, rejected, "should allow changes when new org has no locks")
 		assert.NotNil(t, incoming.Settings[types.SettingSnykCodeEnabled], "setting should remain since new org doesn't lock it")
@@ -1621,7 +1622,7 @@ func Test_validateLockedFields_RestoresConfigAfterValidation(t *testing.T) {
 	}
 
 	folderConfig := setup.getUpdatedConfig()
-	validateLockedFields(prefixKeyConf, folderConfig, &incoming, setup.logger)
+	validateLockedFields(prefixKeyConf, folderConfig, &incoming, setup.logger, resolver)
 
 	// Config should be restored to original state after validation
 	assert.Equal(t, origOrgVal, prefixKeyConf.Get(orgKey), "OrgSetByUser config key should be restored after validation")
@@ -2262,6 +2263,31 @@ func TestResetSummaryPanelForOrgChange_EmptyFolderPaths_DoesNotCallInit(t *testi
 	assert.Empty(t, agg.initCalls, "Init must not be called when folderPaths is empty")
 }
 
+// collidingDisplayNameMetadata is a minimal ConfigurationOptionsMetaData fake
+// used to drive the "two raw keys → same display name" dedup subtest. Returns
+// the mapped display name (if any) via GetConfigurationOptionAnnotation when
+// asked for AnnotationDisplayName; the other interface methods are unused by
+// notifyLockedFieldsRejected so they return zero values.
+type collidingDisplayNameMetadata struct {
+	alias map[string]string
+}
+
+func (c *collidingDisplayNameMetadata) GetConfigurationOptionAnnotation(name, annotation string) (string, bool) {
+	if annotation != configresolver.AnnotationDisplayName {
+		return "", false
+	}
+	dn, ok := c.alias[name]
+	return dn, ok
+}
+func (c *collidingDisplayNameMetadata) ConfigurationOptionsByAnnotation(_, _ string) []string {
+	return nil
+}
+func (c *collidingDisplayNameMetadata) ConfigurationOptionNameByAnnotation(_, _ string) (string, bool) {
+	return "", false
+}
+func (c *collidingDisplayNameMetadata) GetConfigurationOptionType(_ string) string  { return "" }
+func (c *collidingDisplayNameMetadata) GetConfigurationOptionUsage(_ string) string { return "" }
+
 // Test_notifyLockedFieldsRejected_DeduplicatesAcrossGroupsAndEmitsOnce covers
 // the IDE-1970 acceptance criteria for the locked-fields warning notification:
 //
@@ -2346,24 +2372,30 @@ func Test_notifyLockedFieldsRejected_DeduplicatesAcrossGroupsAndEmitsOnce(t *tes
 			"flattened multi-folder rejections must still dedupe and sort")
 	})
 
-	t.Run("flat group ordering is irrelevant; sort is deterministic", func(t *testing.T) {
-		// Same inputs, different group order — the sorted message must be identical.
-		mockA := notification.NewMockNotifier()
-		notifyLockedFieldsRejected(mockA, nil,
-			[]string{types.SettingSeverityFilterHigh}, // "machine" arg
-			[]string{types.SettingSnykCodeEnabled},    // "folder" arg
+	t.Run("two raw keys that resolve to the same display name collapse to one entry", func(t *testing.T) {
+		// Guard against a subtle dedup hole: deduping only on the raw setting
+		// identifier lets two distinct raw keys that share a display name leak
+		// duplicate entries into the user-facing message. The helper must dedup
+		// on the resolved display name.
+		mock := notification.NewMockNotifier()
+		fm := &collidingDisplayNameMetadata{
+			alias: map[string]string{
+				"raw.alpha": "Same Display Name",
+				"raw.beta":  "Same Display Name",
+				"raw.gamma": "Other Name",
+			},
+		}
+		notifyLockedFieldsRejected(mock, fm,
+			[]string{"raw.alpha", "raw.beta"},
+			[]string{"raw.gamma"},
 		)
-		mockB := notification.NewMockNotifier()
-		notifyLockedFieldsRejected(mockB, nil,
-			[]string{types.SettingSnykCodeEnabled},    // "machine" arg
-			[]string{types.SettingSeverityFilterHigh}, // "folder" arg
-		)
-		require.Equal(t, 1, mockA.SendShowMessageCount())
-		require.Equal(t, 1, mockB.SendShowMessageCount())
+
+		require.Equal(t, 1, mock.SendShowMessageCount())
+		msg := mock.SentMessages()[0].(sglsp.ShowMessageParams)
 		assert.Equal(t,
-			mockA.SentMessages()[0].(sglsp.ShowMessageParams).Message,
-			mockB.SentMessages()[0].(sglsp.ShowMessageParams).Message,
-			"caller-side argument ordering must not affect the user-visible message — sort guarantees determinism")
+			"Failed to update some settings: locked by your organization's policy (Other Name, Same Display Name)",
+			msg.Message,
+			"two raw keys resolving to the same display name must collapse to one entry in the notification")
 	})
 
 	t.Run("setting identifiers are rendered as registered display names when fm is provided", func(t *testing.T) {
@@ -2402,6 +2434,35 @@ func Test_notifyLockedFieldsRejected_DeduplicatesAcrossGroupsAndEmitsOnce(t *tes
 // call in `processConfigSettings` or `processSingleLspFolderConfig` (the bug
 // IDE-1970 fixed), this test fails — the helper-level unit tests above would
 // not.
+// Test_validateLockedMachineFields_EarlyReturns pins the two early-return
+// paths that the integration suite exercises only indirectly. Catching a
+// regression on either path here is much faster than running the full
+// UpdateSettings flow (see IDE-1970).
+func Test_validateLockedMachineFields_EarlyReturns(t *testing.T) {
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+
+	t.Run("nil configResolver returns nil without panicking", func(t *testing.T) {
+		settings := map[string]*types.ConfigSetting{
+			types.SettingSnykCodeEnabled: {Value: false, Changed: true},
+		}
+		got := validateLockedMachineFields(settings, nil, nil, &logger)
+		assert.Nil(t, got, "nil resolver must short-circuit to nil — without it, IsLockedMachine would dereference a nil pointer")
+		assert.NotEmpty(t, settings, "settings must be left untouched when no validation runs")
+	})
+
+	t.Run("empty settings map returns nil without consulting the resolver", func(t *testing.T) {
+		// Configure the mock with no EXPECT() calls — any method invocation on
+		// it would fail the test, which is exactly the contract we want to pin:
+		// the early return must not touch the resolver.
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		resolver := mock_types.NewMockConfigResolverInterface(ctrl)
+
+		got := validateLockedMachineFields(map[string]*types.ConfigSetting{}, resolver, nil, &logger)
+		assert.Nil(t, got, "empty settings must short-circuit to nil")
+	})
+}
+
 func Test_UpdateSettings_LockedFields_EmitsExactlyOneNotification(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	di.TestInit(t, engine, tokenService)
@@ -2438,16 +2499,10 @@ func Test_UpdateSettings_LockedFields_EmitsExactlyOneNotification(t *testing.T) 
 	// Subscribe to the real notifier before driving the change so we don't miss
 	// any messages produced on the request goroutine.
 	var (
-		mu              sync.Mutex
-		showMessages    []sglsp.ShowMessageParams
-		listenerStarted = make(chan struct{})
+		mu           sync.Mutex
+		showMessages []sglsp.ShowMessageParams
 	)
 	di.Notifier().CreateListener(func(params any) {
-		select {
-		case <-listenerStarted:
-		default:
-			close(listenerStarted)
-		}
 		if sm, ok := params.(sglsp.ShowMessageParams); ok {
 			mu.Lock()
 			defer mu.Unlock()
@@ -2489,15 +2544,22 @@ func Test_UpdateSettings_LockedFields_EmitsExactlyOneNotification(t *testing.T) 
 	}, 2*time.Second, 10*time.Millisecond,
 		"expected at least one ShowMessage notification after UpdateSettings with locked fields")
 
-	// Settle window: if any additional notifications were going to fire
-	// (the pre-IDE-1970 bug), they would arrive within this period.
-	time.Sleep(200 * time.Millisecond)
+	// IDE-1970 regression guard: assert that no *additional* notification
+	// arrives within the polling window. require.Never fails fast if a second
+	// message lands (the pre-fix behavior) and is bounded by the timeout if
+	// none does — strictly better than time.Sleep+require.Len which has the
+	// same upper bound but blocks linearly and cannot fail early.
+	require.Never(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(showMessages) > 1
+	}, 200*time.Millisecond, 10*time.Millisecond,
+		"IDE-1970 regression: a single triggering event with locked fields across multiple folders must produce exactly one ShowMessage notification")
 
 	mu.Lock()
 	defer mu.Unlock()
 	require.Len(t, showMessages, 1,
-		"IDE-1970 regression: a single triggering event with %d locked fields across %d folders must produce exactly one ShowMessage notification — got %d (%v)",
-		3, 2, len(showMessages), showMessages)
+		"expected exactly one ShowMessage; got %d (%v)", len(showMessages), showMessages)
 
 	msg := showMessages[0]
 	assert.EqualValues(t, sglsp.MTWarning, msg.Type)

@@ -192,11 +192,15 @@ func InitializeSettings(conf configuration.Configuration, engine workflow.Engine
 
 	processInitMetadata(conf, engine, logger, opts)
 	// global
-	globalOrgChanged, rejectedMachineFields := processConfigSettings(conf, engine, logger, opts.Settings, analytics.TriggerSourceInitialize, resolver)
+	globalOrgChanged, lockedMachineFields := processConfigSettings(conf, engine, logger, opts.Settings, analytics.TriggerSourceInitialize, resolver)
 	// folder
-	rejectedFolderFields := processFolderConfigs(conf, engine, logger, opts.FolderConfigs, analytics.TriggerSourceInitialize, resolver, globalOrgChanged)
+	lockedFolderFields := processFolderConfigs(conf, engine, logger, opts.FolderConfigs, analytics.TriggerSourceInitialize, resolver, globalOrgChanged)
 
-	notifyLockedFieldsRejected(di.Notifier(), configOptionsMetaData(resolver), rejectedMachineFields, rejectedFolderFields)
+	var fm workflow.ConfigurationOptionsMetaData
+	if resolver != nil {
+		fm = resolver.ConfigurationOptionsMetaData()
+	}
+	notifyLockedFieldsRejected(di.Notifier(), fm, lockedMachineFields, lockedFolderFields)
 }
 
 // UpdateSettings processes settings from workspace/didChangeConfiguration.
@@ -211,10 +215,14 @@ func UpdateSettings(conf configuration.Configuration, engine workflow.Engine, lo
 		}
 	}
 
-	globalOrgChanged, rejectedMachineFields := processConfigSettings(conf, engine, logger, settings, triggerSource, configResolver)
-	rejectedFolderFields := processFolderConfigs(conf, engine, logger, folderConfigs, triggerSource, configResolver, globalOrgChanged)
+	globalOrgChanged, lockedMachineFields := processConfigSettings(conf, engine, logger, settings, triggerSource, configResolver)
+	lockedFolderFields := processFolderConfigs(conf, engine, logger, folderConfigs, triggerSource, configResolver, globalOrgChanged)
 
-	notifyLockedFieldsRejected(di.Notifier(), configOptionsMetaData(configResolver), rejectedMachineFields, rejectedFolderFields)
+	var fm workflow.ConfigurationOptionsMetaData
+	if configResolver != nil {
+		fm = configResolver.ConfigurationOptionsMetaData()
+	}
+	notifyLockedFieldsRejected(di.Notifier(), fm, lockedMachineFields, lockedFolderFields)
 
 	if ws != nil {
 		for _, folder := range ws.Folders() {
@@ -260,7 +268,7 @@ func validateLockedMachineFields(settings map[string]*types.ConfigSetting, confi
 	if configResolver == nil || len(settings) == 0 {
 		return nil
 	}
-	var rejected []string
+	var locked []string
 	for name, cs := range settings {
 		if cs == nil || !cs.Changed {
 			continue
@@ -275,9 +283,9 @@ func validateLockedMachineFields(settings map[string]*types.ConfigSetting, confi
 			Str("setting", name).
 			Msg("Rejecting machine-scope change to locked setting - locked by organization policy")
 		delete(settings, name)
-		rejected = append(rejected, name)
+		locked = append(locked, name)
 	}
-	return rejected
+	return locked
 }
 
 // notifyLockedFieldsRejected emits at most one notification for the triggering
@@ -287,16 +295,23 @@ func validateLockedMachineFields(settings map[string]*types.ConfigSetting, confi
 // appears once, and each name is rendered with its registered display name
 // (e.g. "Snyk Code Enabled") rather than the internal snake_case identifier.
 // See [IDE-1970].
-func notifyLockedFieldsRejected(notifier notification.Notifier, fm workflow.ConfigurationOptionsMetaData, rejectedFieldGroups ...[]string) {
-	seen := make(map[string]struct{})
+func notifyLockedFieldsRejected(notifier notification.Notifier, fm workflow.ConfigurationOptionsMetaData, lockedFieldGroups ...[]string) {
+	// Dedup on the resolved display name rather than the raw identifier so two
+	// distinct raw keys that resolve to the same display name (e.g. legacy and
+	// canonical identifiers for the same setting) collapse to a single entry
+	// in the user-facing message. Raw-name dedup is still handled because
+	// displayNameFor falls back to the raw identifier when no annotation is
+	// registered.
+	seenDisplay := make(map[string]struct{})
 	var displayNames []string
-	for _, group := range rejectedFieldGroups {
+	for _, group := range lockedFieldGroups {
 		for _, name := range group {
-			if _, ok := seen[name]; ok {
+			dn := displayNameFor(fm, name)
+			if _, ok := seenDisplay[dn]; ok {
 				continue
 			}
-			seen[name] = struct{}{}
-			displayNames = append(displayNames, displayNameFor(fm, name))
+			seenDisplay[dn] = struct{}{}
+			displayNames = append(displayNames, dn)
 		}
 	}
 	if len(displayNames) == 0 {
@@ -310,17 +325,6 @@ func notifyLockedFieldsRejected(notifier notification.Notifier, fm workflow.Conf
 	notifier.SendShowMessage(sglsp.MTWarning,
 		fmt.Sprintf("Failed to update some settings: locked by your organization's policy (%s)",
 			strings.Join(displayNames, ", ")))
-}
-
-// configOptionsMetaData safely extracts ConfigurationOptionsMetaData from a
-// possibly-nil ConfigResolverInterface. Returns nil when the resolver is nil so
-// callers can still emit notifications using raw setting identifiers as a
-// fallback (e.g. in tests without a fully-wired resolver).
-func configOptionsMetaData(resolver types.ConfigResolverInterface) workflow.ConfigurationOptionsMetaData {
-	if resolver == nil {
-		return nil
-	}
-	return resolver.ConfigurationOptionsMetaData()
 }
 
 // displayNameFor resolves a setting's user-facing display name from its
@@ -357,7 +361,7 @@ func processConfigSettings(conf configuration.Configuration, engine workflow.Eng
 	if configResolver != nil {
 		fm = configResolver.ConfigurationOptionsMetaData()
 	}
-	rejectedMachineFields := validateLockedMachineFields(settings, configResolver, fm, &subLogger)
+	lockedMachineFields := validateLockedMachineFields(settings, configResolver, fm, &subLogger)
 
 	applyApiEndpoints(conf, engine, logger, settings, triggerSource, configResolver)
 	applyAuthenticationMethod(conf, engine, logger, settings, triggerSource, configResolver)
@@ -387,7 +391,7 @@ func processConfigSettings(conf configuration.Configuration, engine workflow.Eng
 	applyCodeEndpoint(conf, settings)
 	applyCliReleaseChannel(conf, settings)
 
-	return globalOrgChanged, rejectedMachineFields
+	return globalOrgChanged, lockedMachineFields
 }
 
 // hasFilterChangesInLspConfig detects if any filter settings are marked as Changed in the incoming LspFolderConfig.
@@ -441,7 +445,7 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 
 	var processedConfigs []types.FolderConfig
 	var changedConfigs []*types.FolderConfig
-	var rejectedLockedFields []string
+	var lockedFields []string
 	filterChanged := false
 	orgChangedFolderPaths := make(map[types.FilePath]struct{})
 
@@ -455,7 +459,7 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 	}
 
 	for path := range allPaths {
-		result := processSingleLspFolderConfig(conf, engine, logger, path, incomingMap, notifier)
+		result := processSingleLspFolderConfig(conf, engine, logger, path, incomingMap, notifier, configResolver)
 		if result.orgSettingsChanged {
 			orgChangedFolderPaths[path] = struct{}{}
 		}
@@ -465,9 +469,7 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 			changedConfigs = append(changedConfigs, &cfg)
 		}
 
-		if len(result.rejectedLockedFields) > 0 {
-			rejectedLockedFields = append(rejectedLockedFields, result.rejectedLockedFields...)
-		}
+		lockedFields = append(lockedFields, result.lockedFields...)
 
 		// Check for filter changes INDEPENDENTLY of configChanged
 		// Filter changes are folder-scope settings, so we need to detect them separately
@@ -502,7 +504,7 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 
 	sendFolderConfigUpdateIfNeeded(conf, engine, logger, notifier, processedConfigs, len(changedConfigs) > 0, triggerSource, configResolver)
 
-	return rejectedLockedFields
+	return lockedFields
 }
 
 // --- Value extraction helpers ---
@@ -1106,7 +1108,7 @@ type singleFolderResult struct {
 	newSnapshot          types.FolderConfigSnapshot
 	configChanged        bool
 	orgSettingsChanged   bool
-	rejectedLockedFields []string
+	lockedFields []string
 }
 
 // processSingleLspFolderConfig processes an incoming LspFolderConfig from the IDE using PATCH semantics:
@@ -1114,10 +1116,9 @@ type singleFolderResult struct {
 // - For *LocalConfigField: nil = don't change, Changed+Value = set, Changed+nil = reset
 // It loads the existing FolderConfig (unenriched), applies the LspFolderConfig updates, and returns
 // the processed config without persisting. The caller is responsible for batch-persisting all changes.
-func processSingleLspFolderConfig(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path types.FilePath, incomingMap map[types.FilePath]types.LspFolderConfig, notifier notification.Notifier) singleFolderResult {
+func processSingleLspFolderConfig(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path types.FilePath, incomingMap map[types.FilePath]types.LspFolderConfig, notifier notification.Notifier, configResolver types.ConfigResolverInterface) singleFolderResult {
 	subLogger := logger.With().Str("method", "processSingleLspFolderConfig").Str("path", string(path)).Logger()
-	resolver := di.ConfigResolver()
-	fc := config.GetUnenrichedFolderConfigFromEngine(engine, resolver, path, logger)
+	fc := config.GetUnenrichedFolderConfigFromEngine(engine, configResolver, path, logger)
 
 	// Capture old snapshot BEFORE applying updates
 	oldSnapshot := types.ReadFolderConfigSnapshot(conf, types.PathKey(path))
@@ -1125,9 +1126,9 @@ func processSingleLspFolderConfig(conf configuration.Configuration, engine workf
 	// Validate that the changes are allowed, then apply the new config.
 	normalizedPath := fc.FolderPath
 	applyChanged := false
-	var rejectedLockedFields []string
+	var lockedFields []string
 	if incoming, hasIncoming := incomingMap[normalizedPath]; hasIncoming {
-		rejectedLockedFields = validateLockedFields(conf, fc, &incoming, &subLogger)
+		lockedFields = validateLockedFields(conf, fc, &incoming, &subLogger, configResolver)
 		applyChanged = fc.ApplyLspUpdate(&incoming)
 	}
 
@@ -1142,7 +1143,7 @@ func processSingleLspFolderConfig(conf configuration.Configuration, engine workf
 		newSnapshot:          newSnapshot,
 		configChanged:        applyChanged,
 		orgSettingsChanged:   orgSettingsChanged,
-		rejectedLockedFields: rejectedLockedFields,
+		lockedFields: lockedFields,
 	}
 }
 
@@ -1150,10 +1151,14 @@ func processSingleLspFolderConfig(conf configuration.Configuration, engine workf
 // Returns the names of rejected (locked) settings so the caller can fold them
 // into the single deduplicated locked-fields notification per triggering event
 // (see [IDE-1970]).
+//
+// The resolver is passed in (not fetched via di.ConfigResolver()) so that
+// machine-scope and folder-scope validation share the same resolver instance
+// when a caller injects one through UpdateSettings/InitializeSettings.
+//
 // If the incoming update changes PreferredOrg, locks are evaluated against the NEW org's policies
 // to prevent bypassing stricter locks during an org switch.
-func validateLockedFields(conf configuration.Configuration, folderConfig *types.FolderConfig, incoming *types.LspFolderConfig, subLogger *zerolog.Logger) []string {
-	resolver := di.ConfigResolver()
+func validateLockedFields(conf configuration.Configuration, folderConfig *types.FolderConfig, incoming *types.LspFolderConfig, subLogger *zerolog.Logger, resolver types.ConfigResolverInterface) []string {
 	if resolver == nil || incoming.Settings == nil {
 		return nil
 	}
@@ -1165,7 +1170,7 @@ func validateLockedFields(conf configuration.Configuration, folderConfig *types.
 		}
 	}()
 
-	var rejected []string
+	var locked []string
 	for settingName, cs := range incoming.Settings {
 		if cs == nil || !cs.Changed {
 			continue
@@ -1177,12 +1182,12 @@ func validateLockedFields(conf configuration.Configuration, folderConfig *types.
 			subLogger.Info().
 				Str("setting", settingName).
 				Msg("Rejecting change to locked setting - locked by organization policy")
-			rejected = append(rejected, settingName)
+			locked = append(locked, settingName)
 			delete(incoming.Settings, settingName)
 		}
 	}
 
-	return rejected
+	return locked
 }
 
 // temporarilyApplyNewOrgForValidation sets the new org in conf so ConfigResolver
