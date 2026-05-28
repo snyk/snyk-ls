@@ -84,7 +84,7 @@ func TestCreateProgressListener(t *testing.T) {
 
 func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
 
 	clientParams := types.InitializeParams{
 		Capabilities: types.ClientCapabilities{
@@ -126,7 +126,7 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 
 func TestCancelProgress(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
@@ -148,7 +148,7 @@ func TestCancelProgress(t *testing.T) {
 
 func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
@@ -182,7 +182,7 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 
 func Test_IsAvailableCliNotification(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
@@ -215,7 +215,7 @@ func Test_IsAvailableCliNotification(t *testing.T) {
 func TestShowMessageRequest(t *testing.T) {
 	t.Run("should send request to client", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
-		loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+		loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
 
 		_, err := loc.Client.Call(t.Context(), "initialize", nil)
 		if err != nil {
@@ -264,11 +264,11 @@ func TestShowMessageRequest(t *testing.T) {
 	t.Run("should execute a command when action item is selected", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
 		selectedAction := "Open browser"
-		loc, _ := setupCustomServer(t, engine, tokenService, func(_ context.Context, _ *jrpc2.Request) (any, error) {
+		loc, _, _ := setupServer(t, engine, tokenService, WithCallback(func(_ context.Context, _ *jrpc2.Request) (any, error) {
 			return types.MessageActionItem{
 				Title: selectedAction,
 			}, nil
-		})
+		}))
 		_, err := loc.Client.Call(t.Context(), "initialize", nil)
 		if err != nil {
 			t.Fatal(err)

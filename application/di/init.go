@@ -99,6 +99,7 @@ type Dependencies struct {
 	Notifier              domainNotify.Notifier
 	LearnService          learn.Service
 	LdxSyncService        command.LdxSyncService
+	ScanStateAggregator   scanstates.Aggregator
 	InlineValueProvider   snyk.InlineValueProvider
 }
 
@@ -114,6 +115,7 @@ func currentDependencies() Dependencies {
 		Notifier:              notifier,
 		LearnService:          learnService,
 		LdxSyncService:        ldxSyncService,
+		ScanStateAggregator:   scanStateAggregator,
 		InlineValueProvider:   inlineValueProvider,
 	}
 }
