@@ -373,7 +373,7 @@ func startE2ELocalServer(
 	t.Helper()
 
 	testutil.DisableOutboundAnalyticsForTest(t, engine)
-	deps := di.TestInit(t, engine, tokenService)
+	deps := di.TestInit(t, engine, tokenService, nil)
 	if configureDeps != nil {
 		deps = configureDeps(deps)
 	}
