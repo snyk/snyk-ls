@@ -114,18 +114,6 @@ func TestProfileLSPInit(t *testing.T) {
 	t.Logf("initialized with %d folders took %v", lspInitPerfFolderCount, time.Since(start))
 }
 
-// Test_LSPInitCompletesWithManyFolders is the Level-3 requirement test.
-//
-// Requirement: The LSP server shall successfully complete initialization regardless
-// of the number of workspace folders.
-//
-// Design: uses a fake featureFlagService (no HTTP calls) so the test is reliable in CI
-// regardless of network access or token validity.  The test validates the initialization
-// code path — folder processing, JSON config writes, notifier plumbing — for N=200 folders.
-// Real HTTP behavior is exercised by Test_LSPInitCompletesWithManyFoldersRealHTTP.
-//
-// The 30s bound is loose enough to catch O(N²) regressions in folder processing and
-// tight enough to detect hangs in the notification/channel machinery.
 const lspInitMaxDuration = 30 * time.Second
 
 func Test_LSPInitCompletesWithManyFolders(t *testing.T) {

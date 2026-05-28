@@ -107,10 +107,12 @@ func (m *mockExternalCallsProvider) getSastSettings(org string) (*sast_contract.
 	m.sastSettingsCalls++
 	delay := m.sastDelay
 	readyCh := m.sastReadyCh
-	m.sastReadyCh = nil // nil atomically with the capture to prevent double-close
 	m.mu.Unlock()
 	if readyCh != nil {
-		close(readyCh)
+		select {
+		case readyCh <- struct{}{}:
+		default:
+		}
 	}
 	if delay > 0 {
 		time.Sleep(delay)
@@ -818,7 +820,7 @@ func TestFetchSastSettings_NegativeCache(t *testing.T) {
 		assert.Equal(t, 1, calls, "provider should only be called once; subsequent calls should use the negative cache")
 	})
 
-	t.Run("negative cache does not affect success path", func(t *testing.T) {
+	t.Run("GoldenPath_WorksWithNegativeCachePresent", func(t *testing.T) {
 		engine, mockProvider := setupMockProvider(t)
 		mockProvider.sastSettingsByOrg = map[string]*sast_contract.SastResponse{
 			"good-org": {SastEnabled: true},
@@ -876,7 +878,7 @@ func TestFetchSastSettings_NegativeCache(t *testing.T) {
 		}()
 
 		// Wait for getSastSettings to signal it is mid-sleep, then flush.
-		<-sastReady // use local var — mock nils the field under lock before closing
+		<-sastReady
 		service.FlushCache()
 
 		<-done // wait for the in-flight goroutine to finish
