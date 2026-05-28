@@ -37,23 +37,31 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/application/watcher"
 	"github.com/snyk/snyk-ls/domain/ide/codelens"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	scanner2 "github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
 	noti "github.com/snyk/snyk-ls/internal/notification"
+	er "github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/progress"
 	storage2 "github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -93,42 +101,76 @@ func Start(engine workflow.Engine, tokenService *config.TokenServiceImpl) {
 	}
 }
 
-// withContext wraps a jrpc2.Handler to inject logger, configuration, engine, and request dependencies into the context.
+// withContext wraps a jrpc2.Handler to inject logger, configuration, engine,
+// and all handler dependencies into the context so that handlers can read them
+// from ctx rather than reaching for package-level di.* globals.
 func withContext(
 	h jrpc2.Handler,
 	logger *zerolog.Logger,
 	conf configuration.Configuration,
 	engine workflow.Engine,
-	configResolver types.ConfigResolverInterface,
-	authenticationService authentication.AuthenticationService,
-	ldxSyncService command.LdxSyncService,
-	notifier noti.Notifier,
-	inlineValueProvider snyk.InlineValueProvider,
+	deps di.Dependencies,
 ) jrpc2.Handler {
 	return func(ctx context.Context, req *jrpc2.Request) (any, error) {
 		ctx = ctx2.NewContextWithLogger(ctx, logger)
 		ctx = ctx2.NewContextWithConfiguration(ctx, conf)
 		ctx = ctx2.NewContextWithEngine(ctx, engine)
-		if configResolver != nil {
-			ctx = ctx2.NewContextWithConfigResolver(ctx, configResolver)
+		if deps.ConfigResolver != nil {
+			ctx = ctx2.NewContextWithConfigResolver(ctx, deps.ConfigResolver)
 		}
-		deps, found := ctx2.DependenciesFromContext(ctx)
+		ctxDeps, found := ctx2.DependenciesFromContext(ctx)
 		if !found {
-			deps = map[string]any{}
+			ctxDeps = map[string]any{}
 		}
-		if authenticationService != nil {
-			deps[ctx2.DepAuthService] = authenticationService
+		if deps.AuthenticationService != nil {
+			ctxDeps[ctx2.DepAuthService] = deps.AuthenticationService
 		}
-		if ldxSyncService != nil {
-			deps[ctx2.DepLdxSyncService] = ldxSyncService
+		if deps.LdxSyncService != nil {
+			ctxDeps[ctx2.DepLdxSyncService] = deps.LdxSyncService
 		}
-		if notifier != nil {
-			deps[ctx2.DepNotifier] = notifier
+		if deps.Notifier != nil {
+			ctxDeps[ctx2.DepNotifier] = deps.Notifier
 		}
-		if inlineValueProvider != nil {
-			deps[ctx2.DepInlineValueProvider] = inlineValueProvider
+		if deps.InlineValueProvider != nil {
+			ctxDeps[ctx2.DepInlineValueProvider] = deps.InlineValueProvider
 		}
-		ctx = ctx2.NewContextWithDependencies(ctx, deps)
+		if deps.Scanner != nil {
+			ctxDeps[ctx2.DepScanners] = deps.Scanner
+		}
+		if deps.HoverService != nil {
+			ctxDeps[ctx2.DepHoverService] = deps.HoverService
+		}
+		if deps.ScanPersister != nil {
+			ctxDeps[ctx2.DepScanPersister] = deps.ScanPersister
+		}
+		if deps.ScanNotifier != nil {
+			ctxDeps[ctx2.DepScanNotifier] = deps.ScanNotifier
+		}
+		if deps.ErrorReporter != nil {
+			ctxDeps[ctx2.DepErrorReporter] = deps.ErrorReporter
+		}
+		if deps.Installer != nil {
+			ctxDeps[ctx2.DepInstaller] = deps.Installer
+		}
+		if deps.CodeActionService != nil {
+			ctxDeps[ctx2.DepCodeActionService] = deps.CodeActionService
+		}
+		if deps.Initializer != nil {
+			ctxDeps[ctx2.DepInitializer] = deps.Initializer
+		}
+		if deps.FeatureFlagService != nil {
+			ctxDeps[ctx2.DepFeatureFlagService] = deps.FeatureFlagService
+		}
+		if deps.LearnService != nil {
+			ctxDeps[ctx2.DepLearnService] = deps.LearnService
+		}
+		if deps.ScanStateAggregator != nil {
+			ctxDeps[ctx2.DepScanStateAggregator] = deps.ScanStateAggregator
+		}
+		if deps.FileWatcher != nil {
+			ctxDeps[ctx2.DepFileWatcher] = deps.FileWatcher
+		}
+		ctx = ctx2.NewContextWithDependencies(ctx, ctxDeps)
 		return h(ctx, req)
 	}
 }
@@ -139,7 +181,7 @@ const textDocumentDidSaveOperation = "textDocument/didSave"
 
 func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, deps di.Dependencies) {
 	enrich := func(h jrpc2.Handler) jrpc2.Handler {
-		return withContext(h, logger, conf, engine, deps.ConfigResolver, deps.AuthenticationService, deps.LdxSyncService, deps.Notifier, deps.InlineValueProvider)
+		return withContext(h, logger, conf, engine, deps)
 	}
 	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv))
 	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv))
@@ -148,12 +190,12 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	handlers[textDocumentDidOpenOperation] = enrich(textDocumentDidOpenHandler(conf))
 	handlers[textDocumentDidSaveOperation] = enrich(textDocumentDidSaveHandler(conf))
 	handlers["textDocument/hover"] = enrich(textDocumentHover())
-	handlers["textDocument/codeAction"] = enrich(textDocumentCodeActionHandler(logger))
+	handlers["textDocument/codeAction"] = enrich(textDocumentCodeActionHandler(logger, deps.CodeActionService))
 	handlers["textDocument/codeLens"] = enrich(codeLensHandler())
 	handlers["textDocument/inlineValue"] = enrich(textDocumentInlineValueHandler())
 	handlers["textDocument/willSave"] = enrich(noOpHandler())
 	handlers["textDocument/willSaveWaitUntil"] = enrich(noOpHandler())
-	handlers["codeAction/resolve"] = enrich(codeActionResolveHandler(logger, srv))
+	handlers["codeAction/resolve"] = enrich(codeActionResolveHandler(logger, deps.CodeActionService, srv))
 	handlers["shutdown"] = enrich(shutdownHandler())
 	handlers["exit"] = enrich(exitHandler(srv))
 	handlers["workspace/didChangeWorkspaceFolders"] = enrich(workspaceDidChangeWorkspaceFoldersHandler(conf, engine, srv))
@@ -216,6 +258,214 @@ func inlineValueProviderFromContext(ctx context.Context) (snyk.InlineValueProvid
 	return p, ok
 }
 
+func fileWatcherFromContext(ctx context.Context) (*watcher.FileWatcher, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	fw, ok := deps[ctx2.DepFileWatcher].(*watcher.FileWatcher)
+	return fw, ok
+}
+
+func mustFileWatcherFromContext(ctx context.Context) *watcher.FileWatcher {
+	fw, ok := fileWatcherFromContext(ctx)
+	if !ok {
+		panic("FileWatcher missing from context")
+	}
+	return fw
+}
+
+func errorReporterFromContext(ctx context.Context) (er.ErrorReporter, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	reporter, ok := deps[ctx2.DepErrorReporter].(er.ErrorReporter)
+	return reporter, ok
+}
+
+func mustErrorReporterFromContext(ctx context.Context) er.ErrorReporter {
+	reporter, ok := errorReporterFromContext(ctx)
+	if !ok {
+		panic("ErrorReporter missing from context")
+	}
+	return reporter
+}
+
+func hoverServiceFromContext(ctx context.Context) (hover.Service, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	svc, ok := deps[ctx2.DepHoverService].(hover.Service)
+	return svc, ok
+}
+
+func mustHoverServiceFromContext(ctx context.Context) hover.Service {
+	svc, ok := hoverServiceFromContext(ctx)
+	if !ok {
+		panic("HoverService missing from context")
+	}
+	return svc
+}
+
+func scannerFromContext(ctx context.Context) (scanner2.Scanner, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	s, ok := deps[ctx2.DepScanners].(scanner2.Scanner)
+	return s, ok
+}
+
+func mustScannerFromContext(ctx context.Context) scanner2.Scanner {
+	s, ok := scannerFromContext(ctx)
+	if !ok {
+		panic("Scanner missing from context")
+	}
+	return s
+}
+
+func scanPersisterFromContext(ctx context.Context) (persistence.ScanSnapshotPersister, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	sp, ok := deps[ctx2.DepScanPersister].(persistence.ScanSnapshotPersister)
+	return sp, ok
+}
+
+func mustScanPersisterFromContext(ctx context.Context) persistence.ScanSnapshotPersister {
+	sp, ok := scanPersisterFromContext(ctx)
+	if !ok {
+		panic("ScanPersister missing from context")
+	}
+	return sp
+}
+
+func scanNotifierFromContext(ctx context.Context) (scanner2.ScanNotifier, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	sn, ok := deps[ctx2.DepScanNotifier].(scanner2.ScanNotifier)
+	return sn, ok
+}
+
+func mustScanNotifierFromContext(ctx context.Context) scanner2.ScanNotifier {
+	sn, ok := scanNotifierFromContext(ctx)
+	if !ok {
+		panic("ScanNotifier missing from context")
+	}
+	return sn
+}
+
+func installerFromContext(ctx context.Context) (install.Installer, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	inst, ok := deps[ctx2.DepInstaller].(install.Installer)
+	return inst, ok
+}
+
+func codeActionServiceFromContext(ctx context.Context) (*codeaction.CodeActionsService, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	svc, ok := deps[ctx2.DepCodeActionService].(*codeaction.CodeActionsService)
+	return svc, ok
+}
+
+func mustCodeActionServiceFromContext(ctx context.Context) *codeaction.CodeActionsService {
+	svc, ok := codeActionServiceFromContext(ctx)
+	if !ok {
+		panic("CodeActionService missing from context")
+	}
+	return svc
+}
+
+func initializerFromContext(ctx context.Context) (initialize.Initializer, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	init, ok := deps[ctx2.DepInitializer].(initialize.Initializer)
+	return init, ok
+}
+
+func mustInitializerFromContext(ctx context.Context) initialize.Initializer {
+	init, ok := initializerFromContext(ctx)
+	if !ok {
+		panic("Initializer missing from context")
+	}
+	return init
+}
+
+func featureFlagServiceFromContext(ctx context.Context) (featureflag.Service, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	svc, ok := deps[ctx2.DepFeatureFlagService].(featureflag.Service)
+	return svc, ok
+}
+
+func mustFeatureFlagServiceFromContext(ctx context.Context) featureflag.Service {
+	svc, ok := featureFlagServiceFromContext(ctx)
+	if !ok {
+		panic("FeatureFlagService missing from context")
+	}
+	return svc
+}
+
+func learnServiceFromContext(ctx context.Context) (learn.Service, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	svc, ok := deps[ctx2.DepLearnService].(learn.Service)
+	return svc, ok
+}
+
+func mustLearnServiceFromContext(ctx context.Context) learn.Service {
+	svc, ok := learnServiceFromContext(ctx)
+	if !ok {
+		panic("LearnService missing from context")
+	}
+	return svc
+}
+
+func scanStateAggregatorFromContext(ctx context.Context) (scanstates.Aggregator, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	agg, ok := deps[ctx2.DepScanStateAggregator].(scanstates.Aggregator)
+	return agg, ok
+}
+
+func mustScanStateAggregatorFromContext(ctx context.Context) scanstates.Aggregator {
+	agg, ok := scanStateAggregatorFromContext(ctx)
+	if !ok {
+		panic("ScanStateAggregator missing from context")
+	}
+	return agg
+}
+
+func configResolverFromContext(ctx context.Context) (types.ConfigResolverInterface, bool) {
+	return ctx2.ConfigResolverFromContext(ctx)
+}
+
+func mustConfigResolverFromContext(ctx context.Context) types.ConfigResolverInterface {
+	cr, ok := configResolverFromContext(ctx)
+	if !ok {
+		panic("ConfigResolver missing from context")
+	}
+	return cr
+}
+
 func textDocumentDidChangeHandler(conf configuration.Configuration) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidChangeTextDocumentParams) (any, error) {
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "TextDocumentDidChangeHandler").Logger()
@@ -233,7 +483,7 @@ func textDocumentDidChangeHandler(conf configuration.Configuration) jrpc2.Handle
 			return nil, nil
 		}
 
-		di.FileWatcher().SetFileAsChanged(params.TextDocument.URI)
+		mustFileWatcherFromContext(ctx).SetFileAsChanged(params.TextDocument.URI)
 
 		return nil, nil
 	})
@@ -267,7 +517,7 @@ func codeLensHandler() jrpc2.Handler {
 		}
 		lenses := codelens.GetFor(conf, logger, uri.PathFromUri(params.TextDocument.URI))
 
-		isDirtyFile := di.FileWatcher().IsDirty(params.TextDocument.URI)
+		isDirtyFile := mustFileWatcherFromContext(ctx).IsDirty(params.TextDocument.URI)
 
 		defer logger.Debug().Str("method", "CodeLensHandler").
 			Bool("isDirtyFile", isDirtyFile).
@@ -292,11 +542,21 @@ func workspaceDidChangeWorkspaceFoldersHandler(conf configuration.Configuration,
 		defer logger.Info().Msg("SENDING")
 		changedFolders := config.GetWorkspace(conf).ChangeWorkspaceFolders(params)
 
-		if di.AuthenticationService().IsAuthenticated() {
-			di.LdxSyncService().RefreshConfigFromLdxSync(bgCtx, conf, engine, &logger, changedFolders, di.Notifier())
+		authSvc, _ := authenticationServiceFromContext(ctx)
+		if authSvc != nil && authSvc.IsAuthenticated() {
+			ldxSvc, _ := ldxSyncServiceFromContext(ctx)
+			notifier, _ := notifierFromContext(ctx)
+			if ldxSvc != nil {
+				ldxSvc.RefreshConfigFromLdxSync(bgCtx, conf, engine, &logger, changedFolders, notifier)
+			}
 		}
 
-		command.HandleFolders(conf, engine, &logger, bgCtx, srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver())
+		notifier, _ := notifierFromContext(ctx)
+		scanPersister, _ := scanPersisterFromContext(ctx)
+		scanStateAgg, _ := scanStateAggregatorFromContext(ctx)
+		ffService, _ := featureFlagServiceFromContext(ctx)
+		configRes, _ := configResolverFromContext(ctx)
+		command.HandleFolders(conf, engine, &logger, bgCtx, srv, notifier, scanPersister, scanStateAgg, ffService, configRes)
 		for _, f := range changedFolders {
 			if f.IsAutoScanEnabled() {
 				go f.ScanFolder(bgCtx)
@@ -345,7 +605,7 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		}
 		authentication.RegisterOAuthStorageBridge(storage, authenticationService)
 
-		addWorkspaceFolders(conf, &logger, engine, params)
+		addWorkspaceFolders(ctx, conf, &logger, engine, params)
 		// Prime ORGANIZATION for hot-path GlobalOrg(); see GetGlobalOrganization.
 		// Must run before RefreshConfigFromLdxSync and HandleFolders, which rely
 		// on the resolver's global-org fallback for folders without a preferred org.
@@ -363,7 +623,7 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		// goroutine reads this channel on its first message.
 		types.NewLspInitializedChannel(conf)
 		go createProgressListener(progress.ToServerProgressChannel, srv, &logger)
-		registerNotifier(conf, &logger, srv)
+		registerNotifier(conf, &logger, srv, mustNotifierFromContext(ctx))
 
 		result := types.InitializeResult{
 			ServerInfo: types.ServerInfo{
@@ -533,8 +793,11 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 			conf.Set(types.SettingIsLspInitialized, true)
 			types.SignalLspInitialized(conf)
 		}()
+		configRes := mustConfigResolverFromContext(ctx)
+		notifier := mustNotifierFromContext(ctx)
+
 		initialLogger.Info().Msg("snyk-ls: " + config.Version + " (" + util.Result(os.Executable()) + ")")
-		cliPath := di.ConfigResolver().GetString(types.SettingCliPath, nil)
+		cliPath := configRes.GetString(types.SettingCliPath, nil)
 		if cliPath != "" {
 			cliPath = filepath.Clean(cliPath)
 		}
@@ -558,10 +821,10 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 
 		logger := initialLogger.With().Str("method", "initializedHandler").Logger()
 
-		handleProtocolVersion(conf, engine, di.Notifier(), &logger, config.LsProtocolVersion, di.ConfigResolver().GetString(types.SettingClientProtocolVersion, nil))
+		handleProtocolVersion(conf, engine, notifier, &logger, config.LsProtocolVersion, configRes.GetString(types.SettingClientProtocolVersion, nil))
 
 		go func() {
-			learnService := di.LearnService()
+			learnService := mustLearnServiceFromContext(ctx)
 			_, err := learnService.GetAllLessons()
 			if err != nil {
 				logger.Err(err).Msg("Error initializing lessons cache")
@@ -569,19 +832,22 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 			go learnService.MaintainCacheFunc()
 		}()
 
-		err := di.Scanner().Init(ctx)
+		err := mustScannerFromContext(ctx).Init(ctx)
 		if err != nil {
 			logger.Error().Err(err).Msg("Scan initialization error, canceling scan")
 			return nil, nil
 		}
-		command.HandleFolders(conf, engine, &logger, context.Background(), srv, di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver())
+		scanPersister := mustScanPersisterFromContext(ctx)
+		scanStateAgg := mustScanStateAggregatorFromContext(ctx)
+		ffService := mustFeatureFlagServiceFromContext(ctx)
+		command.HandleFolders(conf, engine, &logger, context.Background(), srv, notifier, scanPersister, scanStateAgg, ffService, configRes)
 
 		deleteExpiredCache(conf)
 		cacheCtx, cancel := context.WithCancel(context.Background())
 		cacheCheckCancel = cancel
 		go periodicallyCheckForExpiredCache(cacheCtx, conf)
 
-		autoScanEnabled := di.ConfigResolver().GetBool(types.SettingScanAutomatic, nil)
+		autoScanEnabled := configRes.GetBool(types.SettingScanAutomatic, nil)
 		if autoScanEnabled {
 			logger.Info().Msg("triggering workspace scan after successful initialization")
 			config.GetWorkspace(conf).ScanWorkspace(context.Background())
@@ -597,7 +863,7 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 	})
 }
 
-func startOfflineDetection(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) { //nolint:unused // this is gonna be used soon
+func startOfflineDetection(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, configRes types.ConfigResolverInterface, notifier noti.Notifier) { //nolint:unused // this is gonna be used soon
 	go func() {
 		timeout := time.Second * 10
 		client := engine.GetNetworkAccess().GetUnauthorizedHttpClient()
@@ -618,17 +884,17 @@ func startOfflineDetection(conf configuration.Configuration, engine workflow.Eng
 			u := "https://downloads.snyk.io/cli/stable/version" // FIXME: which URL to use?
 			response, err := client.Get(u)
 			if err != nil {
-				if !di.ConfigResolver().GetBool(types.SettingOffline, nil) {
+				if !configRes.GetBool(types.SettingOffline, nil) {
 					msg := fmt.Sprintf("Cannot connect to %s. You need to fix your networking for Snyk to work.", u)
 					reportedErr := errors.Join(err, errors.New(msg))
 					logger.Err(reportedErr).Send()
-					di.Notifier().SendShowMessage(sglsp.Warning, msg)
+					notifier.SendShowMessage(sglsp.Warning, msg)
 				}
 				types.SetGlobalSystemDefault(conf, types.SettingOffline, true)
 			} else {
-				if di.ConfigResolver().GetBool(types.SettingOffline, nil) {
+				if configRes.GetBool(types.SettingOffline, nil) {
 					msg := fmt.Sprintf("Snyk is active again. We were able to reach %s", u)
-					di.Notifier().SendShowMessage(sglsp.Info, msg)
+					notifier.SendShowMessage(sglsp.Info, msg)
 					logger.Info().Msg(msg)
 				}
 				types.SetGlobalSystemDefault(conf, types.SettingOffline, false)
@@ -663,63 +929,33 @@ func periodicallyCheckForExpiredCache(ctx context.Context, conf configuration.Co
 	}
 }
 
-func addWorkspaceFolders(conf configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, params types.InitializeParams) {
+func addWorkspaceFolders(ctx context.Context, conf configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, params types.InitializeParams) {
 	const method = "addWorkspaceFolders"
 	w := config.GetWorkspace(conf)
+
+	sc := mustScannerFromContext(ctx)
+	hoverSvc := mustHoverServiceFromContext(ctx)
+	scanNotifier := mustScanNotifierFromContext(ctx)
+	notifier := mustNotifierFromContext(ctx)
+	scanPersister := mustScanPersisterFromContext(ctx)
+	scanStateAgg := mustScanStateAggregatorFromContext(ctx)
+	ffService := mustFeatureFlagServiceFromContext(ctx)
+	configRes := mustConfigResolverFromContext(ctx)
+
+	newFolder := func(path types.FilePath, name string) *workspace.Folder {
+		return workspace.NewFolder(conf, logger, path, name, sc, hoverSvc, scanNotifier, notifier, scanPersister, scanStateAgg, ffService, configRes, engine)
+	}
 
 	if len(params.WorkspaceFolders) > 0 {
 		for _, workspaceFolder := range params.WorkspaceFolders {
 			logger.Info().Str("method", method).Msgf("Adding workspaceFolder %v", workspaceFolder)
-
-			f := workspace.NewFolder(
-				conf,
-				logger,
-				types.PathKey(uri.PathFromUri(workspaceFolder.Uri)),
-				workspaceFolder.Name,
-				di.Scanner(),
-				di.HoverService(),
-				di.ScanNotifier(),
-				di.Notifier(),
-				di.ScanPersister(),
-				di.ScanStateAggregator(),
-				di.FeatureFlagService(),
-				di.ConfigResolver(),
-				engine)
-			w.AddFolder(f)
+			w.AddFolder(newFolder(types.PathKey(uri.PathFromUri(workspaceFolder.Uri)), workspaceFolder.Name))
 		}
 	} else {
 		if params.RootURI != "" {
-			f := workspace.NewFolder(
-				conf,
-				logger,
-				types.PathKey(uri.PathFromUri(params.RootURI)),
-				params.ClientInfo.Name,
-				di.Scanner(),
-				di.HoverService(),
-				di.ScanNotifier(),
-				di.Notifier(),
-				di.ScanPersister(),
-				di.ScanStateAggregator(),
-				di.FeatureFlagService(),
-				di.ConfigResolver(),
-				engine)
-			w.AddFolder(f)
+			w.AddFolder(newFolder(types.PathKey(uri.PathFromUri(params.RootURI)), params.ClientInfo.Name))
 		} else if params.RootPath != "" {
-			f := workspace.NewFolder(
-				conf,
-				logger,
-				types.FilePath(params.RootPath),
-				params.ClientInfo.Name,
-				di.Scanner(),
-				di.HoverService(),
-				di.ScanNotifier(),
-				di.Notifier(),
-				di.ScanPersister(),
-				di.ScanStateAggregator(),
-				di.FeatureFlagService(),
-				di.ConfigResolver(),
-				engine)
-			w.AddFolder(f)
+			w.AddFolder(newFolder(types.FilePath(params.RootPath), params.ClientInfo.Name))
 		}
 	}
 }
@@ -778,14 +1014,14 @@ func shutdownHandler() jrpc2.Handler {
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "Shutdown").Logger()
 		logger.Info().Msg("ENTERING")
 		defer logger.Info().Msg("RETURNING")
-		di.ErrorReporter().FlushErrorReporting()
+		mustErrorReporterFromContext(ctx).FlushErrorReporting()
 
 		if cacheCheckCancel != nil {
 			cacheCheckCancel()
 		}
 		di.DisposeTreeEmitter()
 		disposeProgressListener()
-		di.Notifier().DisposeListener()
+		mustNotifierFromContext(ctx).DisposeListener()
 		command.StopPendingRescanTimers()
 		return nil, nil
 	})
@@ -796,17 +1032,19 @@ func exitHandler(srv *jrpc2.Server) jrpc2.Handler {
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "Exit").Logger()
 		logger.Info().Msg("ENTERING")
 		logger.Info().Msg("Flushing error reporting...")
-		di.ErrorReporter().FlushErrorReporting()
+		mustErrorReporterFromContext(ctx).FlushErrorReporting()
 		logger.Info().Msg("Stopping server...")
 		srv.Stop()
 		return nil, nil
 	})
 }
 
-func logError(logger *zerolog.Logger, err error, method string) {
+func logError(logger *zerolog.Logger, reporter er.ErrorReporter, err error, method string) {
 	if err != nil {
 		logger.Err(err).Str("method", method)
-		di.ErrorReporter().CaptureError(err)
+		if reporter != nil {
+			reporter.CaptureError(err)
+		}
 	}
 }
 
@@ -842,7 +1080,7 @@ func textDocumentDidOpenHandler(conf configuration.Configuration) jrpc2.Handler 
 				URI:         params.TextDocument.URI,
 				Diagnostics: converter.ToDiagnostics(filteredIssues[filePath]),
 			}
-			di.Notifier().Send(diagnosticParams)
+			mustNotifierFromContext(ctx).Send(diagnosticParams)
 		}
 
 		return nil, nil
@@ -855,7 +1093,7 @@ func textDocumentDidSaveHandler(conf configuration.Configuration) jrpc2.Handler 
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "TextDocumentDidSaveHandler").Logger()
 		logger.Debug().Interface("params", params).Msg("Receiving")
 
-		di.FileWatcher().SetFileAsSaved(params.TextDocument.URI)
+		mustFileWatcherFromContext(ctx).SetFileAsSaved(params.TextDocument.URI)
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 
 		folder := config.GetWorkspace(conf).GetFolderContaining(filePath)
@@ -888,7 +1126,7 @@ func textDocumentHover() jrpc2.Handler {
 		ctx2.LoggerFromContext(ctx).Debug().Str("method", "TextDocumentHover").Interface("params", params).Msg("RECEIVING")
 
 		pathFromUri := uri.PathFromUri(params.TextDocument.URI)
-		hoverResult := di.HoverService().GetHover(pathFromUri, converter.FromPosition(params.Position))
+		hoverResult := mustHoverServiceFromContext(ctx).GetHover(pathFromUri, converter.FromPosition(params.Position))
 		return hoverResult, nil
 	})
 }
@@ -901,12 +1139,12 @@ func windowWorkDoneProgressCancelHandler() jrpc2.Handler {
 	})
 }
 
-func codeActionResolveHandler(logger *zerolog.Logger, server types.Server) handler.Func {
-	return handler.New(ResolveCodeActionHandler(logger, di.CodeActionService(), server))
+func codeActionResolveHandler(logger *zerolog.Logger, svc *codeaction.CodeActionsService, server types.Server) handler.Func {
+	return handler.New(ResolveCodeActionHandler(logger, svc, server))
 }
 
-func textDocumentCodeActionHandler(logger *zerolog.Logger) handler.Func {
-	return handler.New(GetCodeActionHandler(logger))
+func textDocumentCodeActionHandler(logger *zerolog.Logger, svc *codeaction.CodeActionsService) handler.Func {
+	return handler.New(GetCodeActionHandler(logger, svc))
 }
 
 func cancelRequestHandler(srv *jrpc2.Server) jrpc2.Handler {

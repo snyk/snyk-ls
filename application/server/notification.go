@@ -24,15 +24,15 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
+	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 func notifier(logger *zerolog.Logger, srv types.Server, method string, params any) {
 	err := srv.Notify(context.Background(), method, params)
-	logError(logger, err, "notifier")
+	logError(logger, nil, err, "notifier")
 }
 
 var progressStopChan = make(chan bool, 1000)
@@ -83,7 +83,7 @@ func disposeProgressListener() {
 }
 
 //nolint:gocyclo // this is ok, as it's so high because of forwarding the calls
-func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, srv types.Server) {
+func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, srv types.Server, n noti.Notifier) {
 	l := logger.With().Str("method", "registerNotifier").Logger()
 	callbackFunction := func(params any) {
 		if !conf.GetBool(types.SettingIsLspInitialized) {
@@ -160,7 +160,7 @@ func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, 
 				Msg("received unconfigured notification object")
 		}
 	}
-	di.Notifier().CreateListener(callbackFunction)
+	n.CreateListener(callbackFunction)
 	l.Debug().Str("method", "registerNotifier").Msg("registered notifier")
 }
 
