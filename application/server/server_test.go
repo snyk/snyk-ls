@@ -1633,3 +1633,15 @@ func Test_shouldHandleFilesOutsideWorkspace(t *testing.T) {
 		assert.NoError(t, err)
 	})
 }
+
+func TestAddWorkspaceFolders_MissingDeps_ReturnsError(t *testing.T) {
+	// Empty context — no deps injected — so all ok-checks return false.
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	err := addWorkspaceFolders(t.Context(), conf, logger, engine, types.InitializeParams{})
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "missing mandatory DI dependency")
+}

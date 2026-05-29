@@ -348,8 +348,8 @@ func mustScanPersisterFromContext(ctx context.Context) persistence.ScanSnapshotP
 	return sp
 }
 
-// scanNotifierFromContext uses the (ok) pattern rather than a must* variant because
-// addWorkspaceFolders does graceful error-log-and-return on missing deps.
+// scanNotifierFromContext uses the (ok) pattern; addWorkspaceFolders returns an
+// error to initializeHandler when the dep is absent.
 func scanNotifierFromContext(ctx context.Context) (scanner2.ScanNotifier, bool) {
 	deps, ok := ctx2.DependenciesFromContext(ctx)
 	if !ok {
@@ -563,7 +563,9 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		}
 		authentication.RegisterOAuthStorageBridge(storage, authenticationService)
 
-		addWorkspaceFolders(ctx, conf, &logger, engine, params)
+		if err := addWorkspaceFolders(ctx, conf, &logger, engine, params); err != nil {
+			return nil, err
+		}
 		// Prime ORGANIZATION for hot-path GlobalOrg(); see GetGlobalOrganization.
 		// Must run before RefreshConfigFromLdxSync and HandleFolders, which rely
 		// on the resolver's global-org fallback for folders without a preferred org.
@@ -887,7 +889,7 @@ func periodicallyCheckForExpiredCache(ctx context.Context, conf configuration.Co
 	}
 }
 
-func addWorkspaceFolders(ctx context.Context, conf configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, params types.InitializeParams) {
+func addWorkspaceFolders(ctx context.Context, conf configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, params types.InitializeParams) error {
 	const method = "addWorkspaceFolders"
 	w := config.GetWorkspace(conf)
 
@@ -909,8 +911,8 @@ func addWorkspaceFolders(ctx context.Context, conf configuration.Configuration, 
 			Bool("scanStateAggregator", ssaOk).
 			Bool("featureFlagService", ffOk).
 			Bool("configResolver", crOk).
-			Msg("missing mandatory dependency in context; aborting workspace folder creation")
-		return
+			Msg("missing mandatory dependency in context; LSP initialize will fail")
+		return errors.New("snyk-ls: missing mandatory DI dependency at initialize")
 	}
 
 	newFolder := func(path types.FilePath, name string) *workspace.Folder {
@@ -929,6 +931,7 @@ func addWorkspaceFolders(ctx context.Context, conf configuration.Configuration, 
 			w.AddFolder(newFolder(types.FilePath(params.RootPath), params.ClientInfo.Name))
 		}
 	}
+	return nil
 }
 
 // setClientInformation sets the integration name and version from the client information.
