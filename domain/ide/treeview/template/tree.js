@@ -76,6 +76,7 @@
   var activeErrorKeyDown = null;
   var activeErrorOutsideClick = null;
   var activeErrorResize = null;
+  var activeErrorScroll = null;
   var activeErrorRow = null;
 
   function dismissErrorOverlay() {
@@ -93,6 +94,11 @@
     if (activeErrorResize) {
       window.removeEventListener('resize', activeErrorResize);
       activeErrorResize = null;
+    }
+    if (activeErrorScroll) {
+      // Match the `capture: true` used when adding the listener.
+      document.removeEventListener('scroll', activeErrorScroll, true);
+      activeErrorScroll = null;
     }
     activeErrorOverlay = null;
     activeErrorRow = null;
@@ -112,6 +118,21 @@
     // 600 = sensible fallback viewport width when neither window.innerWidth
     // nor documentElement.clientWidth is reported (very old WebViews / tests).
     var vw = window.innerWidth || document.documentElement.clientWidth || 600;
+
+    // 520 = preferred max overlay width (keeps error text at a comfortable
+    // reading width); 16 = total horizontal viewport padding (8px each side)
+    // so a narrow viewport still leaves a small margin.
+    var overlayW = Math.min(520, vw - 16);
+
+    // Apply width and clear stale top/bottom before measuring height: the
+    // <pre> message wraps, so width determines height. Measuring height first
+    // would use the pre-wrap layout and place the overlay incorrectly once
+    // the width is applied.
+    overlay.style.position = 'fixed';
+    overlay.style.bottom = '';
+    overlay.style.transform = '';
+    overlay.style.width = overlayW + 'px';
+
     var overlayH = overlay.getBoundingClientRect().height;
     if (overlayH <= 0) return;
 
@@ -124,20 +145,12 @@
     }
     topPos = Math.max(gap, topPos);
 
-    // 520 = preferred max overlay width (keeps error text at a comfortable
-    // reading width); 16 = total horizontal viewport padding (8px each side)
-    // so a narrow viewport still leaves a small margin.
-    var overlayW = Math.min(520, vw - 16);
     // 8 = right-edge margin: when the row is far right, pin the overlay so
     // there is still ~8px between its right edge and the viewport.
     var leftPos = Math.max(gap, Math.min(rect.left, vw - overlayW - 8));
 
-    overlay.style.position = 'fixed';
     overlay.style.top = topPos + 'px';
-    overlay.style.bottom = '';
-    overlay.style.transform = '';
     overlay.style.left = leftPos + 'px';
-    overlay.style.width = overlayW + 'px';
   }
 
   function showErrorOverlay(row, productLabel, errorMessage) {
@@ -193,6 +206,17 @@
       }
     };
     window.addEventListener('resize', activeErrorResize);
+
+    // Reposition on scroll so the overlay tracks its row when any scrollable
+    // ancestor (e.g. the tree container) scrolls. `capture: true` is required
+    // because scroll events do not bubble; capturing on the document catches
+    // them from any element.
+    activeErrorScroll = function() {
+      if (activeErrorOverlay && activeErrorRow) {
+        positionErrorOverlay(activeErrorOverlay, activeErrorRow);
+      }
+    };
+    document.addEventListener('scroll', activeErrorScroll, true);
 
     setTimeout(function() {
       if (!activeErrorOverlay) return;
