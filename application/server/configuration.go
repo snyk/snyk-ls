@@ -216,6 +216,16 @@ func UpdateSettings(ctx context.Context, conf configuration.Configuration, engin
 	}
 
 	globalOrgChanged, lockedMachineFields := processConfigSettings(ctx, conf, engine, logger, settings, triggerSource, configResolver)
+
+	// Flush stale cached errors (e.g. 401s from a previous token) before
+	// PopulateFolderConfig runs inside processFolderConfigs. Flushing here
+	// ensures every folder sees fresh results with the new token.
+	if newToken := config.GetToken(conf); newToken != "" && newToken != oldToken {
+		if svc := di.FeatureFlagService(); svc != nil {
+			svc.FlushCache()
+		}
+	}
+
 	lockedFolderFields := processFolderConfigs(ctx, conf, engine, logger, folderConfigs, triggerSource, configResolver, globalOrgChanged)
 
 	var fm workflow.ConfigurationOptionsMetaData
@@ -240,7 +250,10 @@ func UpdateSettings(ctx context.Context, conf configuration.Configuration, engin
 
 func refreshLdxSyncOnTokenChange(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, ws types.Workspace, oldToken string) {
 	newToken := config.GetToken(conf)
-	if newToken == oldToken || newToken == "" || ws == nil {
+	if newToken == oldToken || newToken == "" {
+		return
+	}
+	if ws == nil {
 		return
 	}
 	folders := ws.Folders()
@@ -387,7 +400,8 @@ func processConfigSettings(ctx context.Context, conf configuration.Configuration
 	applySnykLearnCodeActions(conf, engine, logger, settings, triggerSource, configResolver)
 	applySnykOssQuickFixCodeActions(conf, engine, logger, settings, triggerSource, configResolver)
 	applySnykOpenBrowserActions(conf, settings)
-	applyMcpConfiguration(conf, engine, logger, settings, triggerSource, configResolver)
+	n, _ := notifierFromContext(ctx)
+	applyMcpConfiguration(n, conf, engine, logger, settings, triggerSource, configResolver)
 	applyPublishSecurityAtInceptionRules(conf, settings)
 	// this is without function right now, we do not use/distribute proxy settings from/to IDEs
 	applyProxyConfig(conf, settings)
@@ -1010,8 +1024,7 @@ func applySnykOpenBrowserActions(conf configuration.Configuration, settings map[
 	}
 }
 
-func applyMcpConfiguration(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
-	n := di.Notifier()
+func applyMcpConfiguration(n notification.Notifier, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
 	if v, ok := settingBool(settings, types.SettingAutoConfigureMcpServer); ok {
 		oldValue := types.GetGlobalBool(conf, types.SettingAutoConfigureMcpServer)
 		types.SetGlobalUser(conf, types.SettingAutoConfigureMcpServer, v)
@@ -1019,7 +1032,7 @@ func applyMcpConfiguration(conf configuration.Configuration, engine workflow.Eng
 			if conf.GetBool(types.SettingIsLspInitialized) {
 				go analytics.SendConfigChangedAnalytics(conf, engine, logger, configAutoConfigureSnykMcpServer, oldValue, v, triggerSource, configResolver)
 			}
-			mcpWorkflow.CallMcpConfigWorkflow(conf, di.ConfigResolver(), engine, logger, n, true, false)
+			mcpWorkflow.CallMcpConfigWorkflow(conf, configResolver, engine, logger, n, true, false)
 		}
 	}
 
@@ -1030,7 +1043,7 @@ func applyMcpConfiguration(conf configuration.Configuration, engine workflow.Eng
 			if conf.GetBool(types.SettingIsLspInitialized) {
 				go analytics.SendConfigChangedAnalytics(conf, engine, logger, configSecureAtInceptionExecutionFrequency, oldValue, v, triggerSource, configResolver)
 			}
-			mcpWorkflow.CallMcpConfigWorkflow(conf, di.ConfigResolver(), engine, logger, n, false, true)
+			mcpWorkflow.CallMcpConfigWorkflow(conf, configResolver, engine, logger, n, false, true)
 		}
 	}
 }
