@@ -77,7 +77,6 @@
   var activeErrorOutsideClick = null;
   var activeErrorResize = null;
   var activeErrorRow = null;
-  var ERROR_OVERLAY_GAP = 4;
 
   function dismissErrorOverlay() {
     if (activeErrorOverlay && activeErrorOverlay.parentNode) {
@@ -110,19 +109,27 @@
   function positionErrorOverlay(overlay, row) {
     if (!overlay || !row) return;
     var rect = row.getBoundingClientRect();
+    // 600 = sensible fallback viewport width when neither window.innerWidth
+    // nor documentElement.clientWidth is reported (very old WebViews / tests).
     var vw = window.innerWidth || document.documentElement.clientWidth || 600;
-    var vh = window.innerHeight || document.documentElement.clientHeight || 400;
     var overlayH = overlay.getBoundingClientRect().height;
     if (overlayH <= 0) return;
 
-    var gap = ERROR_OVERLAY_GAP;
+    // 4 = gap in px between the row and the overlay (and a minimum margin
+    // from the viewport edge).
+    var gap = 4;
     var topPos = rect.bottom + gap;
     if (rect.top - overlayH - gap >= gap) {
       topPos = rect.top - overlayH - gap;
     }
     topPos = Math.max(gap, topPos);
 
+    // 520 = preferred max overlay width (keeps error text at a comfortable
+    // reading width); 16 = total horizontal viewport padding (8px each side)
+    // so a narrow viewport still leaves a small margin.
     var overlayW = Math.min(520, vw - 16);
+    // 8 = right-edge margin: when the row is far right, pin the overlay so
+    // there is still ~8px between its right edge and the viewport.
     var leftPos = Math.max(gap, Math.min(rect.left, vw - overlayW - 8));
 
     overlay.style.position = 'fixed';
