@@ -39,7 +39,7 @@ func ApplyEndpointChange(ctx context.Context, conf gafConfig.Configuration, auth
 				Str("old_endpoint", oldEndpoint).
 				Str("new_endpoint", endpoint).
 				Msg("authService is nil; skipping logout on endpoint change — credentials may persist against wrong endpoint")
-			return changed
+			return false
 		}
 		logger.Info().
 			Str("old_endpoint", oldEndpoint).
@@ -61,8 +61,10 @@ func ApplyInsecureSetting(conf gafConfig.Configuration, insecure bool) {
 
 // ApplyAuthMethodChange sets the auth method and calls ConfigureProviders.
 // Returns true if the method actually changed.
+// SetGlobalUser is called unconditionally so the new method persists across restarts even
+// when authService is nil. ConfigureProviders is skipped when authService is nil.
 func ApplyAuthMethodChange(conf gafConfig.Configuration, authService authentication.AuthenticationService, logger *zerolog.Logger, authMethod types.AuthenticationMethod) bool {
-	if authMethod == types.EmptyAuthenticationMethod || authService == nil {
+	if authMethod == types.EmptyAuthenticationMethod {
 		return false
 	}
 
@@ -72,6 +74,12 @@ func ApplyAuthMethodChange(conf gafConfig.Configuration, authService authenticat
 		Str("new_auth_method", string(authMethod)).
 		Msg("auth method change requested")
 	types.SetGlobalUser(conf, types.SettingAuthenticationMethod, string(authMethod))
+	if authService == nil {
+		logger.Warn().
+			Str("auth_method", string(authMethod)).
+			Msg("authService is nil; auth method persisted but ConfigureProviders skipped")
+		return false
+	}
 	authService.ConfigureProviders(conf, logger)
 
 	return authMethod != previousMethod
