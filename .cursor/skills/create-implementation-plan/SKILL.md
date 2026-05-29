@@ -18,7 +18,7 @@ Creates implementation plans using the official project template with session ha
 
 ## Template Location
 
-Use template from: `.github/IMPLEMENTATION_PLAN_TEMPLATE.md`
+Use template from: `docs/templates/IMPLEMENTATION_PLAN_TEMPLATE.md`
 
 Replace all `{{TICKET_ID}}` and `{{TICKET_TITLE}}` placeholders with actual values.
 
