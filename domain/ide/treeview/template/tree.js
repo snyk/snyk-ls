@@ -51,6 +51,21 @@
     }
   }
 
+  function scrollRowIntoViewVerticalOnly(row) {
+    if (!row) return;
+    if (!row.scrollIntoView) return;
+    // Preserve horizontal scroll — scrollIntoView may shift it even with inline:'nearest'
+    // if the row is horizontally out of view. Capture and restore unconditionally.
+    var savedScrollLeft = container.scrollLeft;
+    // block:'nearest' is a no-op when the row is already fully visible, so manual clicks
+    // that trigger a programmatic __selectTreeNode__ round-trip don't cause any scroll jump.
+    // inline:'nearest' minimises horizontal movement, but we restore scrollLeft anyway.
+    row.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    // scroll-behavior: smooth on #treeContainer would run after this line and overwrite
+    // the restored value. tree.css must not set scroll-behavior: smooth on this element.
+    container.scrollLeft = savedScrollLeft;
+  }
+
   window.__selectTreeNode__ = function(issueId) {
     if (!issueId) return;
     var row = container.querySelector('[data-issue-id="' + issueId + '"]');
@@ -68,7 +83,7 @@
       parent = parent.parentElement;
     }
     selectNodeRow(row);
-    if (row.scrollIntoView) row.scrollIntoView(false);
+    scrollRowIntoViewVerticalOnly(row);
   };
 
   // Scan error overlay for product error nodes.
