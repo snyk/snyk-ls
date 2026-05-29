@@ -181,13 +181,13 @@
   max-width: 320px;
   cursor: pointer;
   border: 1px solid var(--input-border);
-  background-color: var(--input-border);
+  background-color: var(--input-background);
   color: var(--text-color);
 }
 
 .sn-input {
   border: 1px solid var(--input-border);
-  background-color: var(--input-border);
+  background-color: var(--input-background);
   color: var(--text-color);
   padding: 4px 6px;
   appearance: textfield;
@@ -215,7 +215,7 @@
 
 .sn-textarea {
   border: 1px solid var(--input-border);
-  background-color: var(--input-border);
+  background-color: var(--input-background);
   color: var(--text-color);
   box-sizing: border-box;
   display: inline-block;

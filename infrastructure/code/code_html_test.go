@@ -447,6 +447,59 @@ func Test_Code_Html_hasErrorBadgeCSS(t *testing.T) {
 	assert.Contains(t, codePanelHtml, ".sn-error-badge")
 }
 
+func Test_Code_Html_hiddenClassIsImportant(t *testing.T) {
+	// IDE-2019: ignore_styles.css is concatenated AFTER the panel stylesheet,
+	// so an equal-specificity component rule (.sn-ignore-issue-container { display: flex })
+	// wins over .hidden { display: none } on source order. Pinning !important keeps
+	// the form invisible on load until JS removes the hidden class.
+	engine := testutil.UnitTest(t)
+
+	issue := &snyk.Issue{
+		ID:             "java/DontUsePrintStackTrace",
+		Severity:       2,
+		AdditionalData: snyk.CodeIssueData{HasAIFix: true},
+	}
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
+
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
+	assert.NoError(t, err)
+
+	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	assert.Regexp(t, `\.hidden\s*\{\s*display:\s*none\s*!important\s*;?\s*\}`, codePanelHtml)
+}
+
+func Test_Code_Html_formInputsDoNotUseBorderAsBackground(t *testing.T) {
+	// IDE-2019: .sn-select / .sn-input / .sn-textarea must not use --input-border
+	// as their background-color (the border variable produces a flat appearance
+	// where background and border collapse to the same color, particularly in
+	// Eclipse). They should use --input-background instead.
+	engine := testutil.UnitTest(t)
+
+	issue := &snyk.Issue{
+		ID:             "java/DontUsePrintStackTrace",
+		Severity:       2,
+		AdditionalData: snyk.CodeIssueData{HasAIFix: true},
+	}
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
+
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
+	assert.NoError(t, err)
+
+	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+
+	assert.NotRegexp(t, `\.sn-select[^}]*background-color:\s*var\(--input-border\)`, codePanelHtml)
+	assert.NotRegexp(t, `\.sn-input[^}]*background-color:\s*var\(--input-border\)`, codePanelHtml)
+	assert.NotRegexp(t, `\.sn-textarea[^}]*background-color:\s*var\(--input-border\)`, codePanelHtml)
+
+	assert.Regexp(t, `\.sn-select[^}]*background-color:\s*var\(--input-background\)`, codePanelHtml)
+	assert.Regexp(t, `\.sn-input[^}]*background-color:\s*var\(--input-background\)`, codePanelHtml)
+	assert.Regexp(t, `\.sn-textarea[^}]*background-color:\s*var\(--input-background\)`, codePanelHtml)
+}
+
 func getDataFlowElements() []snyk.DataFlowElement {
 	return []snyk.DataFlowElement{
 		{

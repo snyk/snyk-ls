@@ -801,8 +801,9 @@ button.sn-apply-fix:hover {
   }
 }
 
+/* !important pins this over component rules concatenated after this file (e.g. ignore_styles.css's .sn-ignore-issue-container { display: flex }). */
 .hidden {
-  display: none;
+  display: none !important;
 }
 
 .explain-wrapper{
