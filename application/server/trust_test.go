@@ -71,13 +71,13 @@ func Test_handleUntrustedFolders_shouldNotTriggerTrustRequestWhenAlreadyRequesti
 
 func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmation(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithCallback(func(_ context.Context, _ *jrpc2.Request) (any, error) {
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithCallback(func(_ context.Context, _ *jrpc2.Request) (any, error) {
 		return types.MessageActionItem{
 			Title: command.DoTrust,
 		}, nil
 	}))
 	conf := engine.GetConfiguration()
-	registerNotifier(conf, engine.GetLogger(), loc.Server)
+	registerNotifier(conf, engine.GetLogger(), loc.Server, deps.Notifier)
 
 	w := config.GetWorkspace(engine.GetConfiguration())
 	sc := &scanner.TestScanner{}
@@ -95,12 +95,12 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmati
 
 func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativeConfirmation(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _, _ := setupServer(t, engine, tokenService, WithCallback(func(_ context.Context, _ *jrpc2.Request) (any, error) {
+	loc, _, deps := setupServer(t, engine, tokenService, WithCallback(func(_ context.Context, _ *jrpc2.Request) (any, error) {
 		return types.MessageActionItem{
 			Title: command.DontTrust,
 		}, nil
 	}))
-	registerNotifier(engine.GetConfiguration(), engine.GetLogger(), loc.Server)
+	registerNotifier(engine.GetConfiguration(), engine.GetLogger(), loc.Server, deps.Notifier)
 	w := config.GetWorkspace(engine.GetConfiguration())
 	sc := &scanner.TestScanner{}
 	w.AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("/trusted/dummy"), "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), testutil.DefaultConfigResolver(engine), engine))

@@ -31,7 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config"
-	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
+	v20260507 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2026-05-07"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -49,7 +49,7 @@ func defaultResolver(engine workflow.Engine) types.ConfigResolverInterface {
 
 // createLdxSyncResultWithOrg is a helper to create a LdxSyncConfigResult with an org ID for tests
 func createLdxSyncResultWithOrg(orgId string) ldx_sync_config.LdxSyncConfigResult {
-	orgs := []v20241015.Organization{
+	orgs := []v20260507.Organization{
 		{
 			Id:                   orgId,
 			Name:                 "Test Org",
@@ -62,26 +62,26 @@ func createLdxSyncResultWithOrg(orgId string) ldx_sync_config.LdxSyncConfigResul
 	configId := uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
 	return ldx_sync_config.LdxSyncConfigResult{
-		Config: &v20241015.UserConfigResponse{
+		Config: &v20260507.UserConfigResponse{
 			Data: struct {
 				Attributes struct {
 					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
-					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					FolderSettings *map[string]map[string]v20260507.SettingMetadata `json:"folder_settings,omitempty"`
 					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
-					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
-					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
-					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
+					Organizations  *[]v20260507.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20260507.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20260507.SettingMetadata            `json:"settings,omitempty"`
 				} `json:"attributes"`
 				Id   uuid.UUID                            `json:"id"`
-				Type v20241015.UserConfigResponseDataType `json:"type"`
+				Type v20260507.UserConfigResponseDataType `json:"type"`
 			}{
 				Attributes: struct {
 					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
-					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					FolderSettings *map[string]map[string]v20260507.SettingMetadata `json:"folder_settings,omitempty"`
 					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
-					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
-					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
-					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
+					Organizations  *[]v20260507.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20260507.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20260507.SettingMetadata            `json:"settings,omitempty"`
 				}{
 					Organizations: &orgs,
 				},
@@ -496,7 +496,7 @@ func Test_RefreshConfigFromLdxSync_PreservesNonLockedOverrides(t *testing.T) {
 
 // createLdxSyncResultWithLockedField creates a LdxSyncConfigResult with a locked field
 func createLdxSyncResultWithLockedField(orgId string, lockedFieldName string) ldx_sync_config.LdxSyncConfigResult {
-	orgs := []v20241015.Organization{
+	orgs := []v20260507.Organization{
 		{
 			Id:                   orgId,
 			Name:                 "Test Org",
@@ -507,10 +507,10 @@ func createLdxSyncResultWithLockedField(orgId string, lockedFieldName string) ld
 	}
 
 	// Create settings with a locked field using the correct API field names
-	settings := map[string]v20241015.SettingMetadata{
+	settings := map[string]v20260507.SettingMetadata{
 		lockedFieldName: {
 			Locked: util.Ptr(true),
-			Origin: v20241015.SettingMetadataOriginOrg,
+			Origin: v20260507.SettingMetadataOriginOrg,
 			Value:  []string{"low", "medium", "high", "critical"},
 		},
 	}
@@ -518,26 +518,26 @@ func createLdxSyncResultWithLockedField(orgId string, lockedFieldName string) ld
 	configId := uuid.MustParse("00000000-0000-0000-0000-000000000002")
 
 	return ldx_sync_config.LdxSyncConfigResult{
-		Config: &v20241015.UserConfigResponse{
+		Config: &v20260507.UserConfigResponse{
 			Data: struct {
 				Attributes struct {
 					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
-					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					FolderSettings *map[string]map[string]v20260507.SettingMetadata `json:"folder_settings,omitempty"`
 					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
-					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
-					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
-					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
+					Organizations  *[]v20260507.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20260507.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20260507.SettingMetadata            `json:"settings,omitempty"`
 				} `json:"attributes"`
 				Id   uuid.UUID                            `json:"id"`
-				Type v20241015.UserConfigResponseDataType `json:"type"`
+				Type v20260507.UserConfigResponseDataType `json:"type"`
 			}{
 				Attributes: struct {
 					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
-					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					FolderSettings *map[string]map[string]v20260507.SettingMetadata `json:"folder_settings,omitempty"`
 					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
-					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
-					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
-					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
+					Organizations  *[]v20260507.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20260507.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20260507.SettingMetadata            `json:"settings,omitempty"`
 				}{
 					Organizations: &orgs,
 					Settings:      &settings,
@@ -552,13 +552,13 @@ func createLdxSyncResultWithLockedField(orgId string, lockedFieldName string) ld
 
 // createLdxSyncResultWithOrgSettings creates a result with org-scope product_code_enabled setting
 func createLdxSyncResultWithOrgSettings(orgId string, products []string) ldx_sync_config.LdxSyncConfigResult {
-	settings := map[string]v20241015.SettingMetadata{}
+	settings := map[string]v20260507.SettingMetadata{}
 	for _, p := range products {
 		switch p {
 		case "code":
-			settings["product_code_enabled"] = v20241015.SettingMetadata{
+			settings["product_code_enabled"] = v20260507.SettingMetadata{
 				Locked: util.Ptr(true),
-				Origin: v20241015.SettingMetadataOriginOrg,
+				Origin: v20260507.SettingMetadataOriginOrg,
 				Value:  true,
 			}
 		}
@@ -568,18 +568,18 @@ func createLdxSyncResultWithOrgSettings(orgId string, products []string) ldx_syn
 
 // createLdxSyncResultWithMachineSettings creates a result with machine-scope settings
 func createLdxSyncResultWithMachineSettings(orgId string, cliReleaseChannel string) ldx_sync_config.LdxSyncConfigResult {
-	settings := map[string]v20241015.SettingMetadata{
+	settings := map[string]v20260507.SettingMetadata{
 		"cli_release_channel": {
 			Locked: util.Ptr(true),
-			Origin: v20241015.SettingMetadataOriginOrg,
+			Origin: v20260507.SettingMetadataOriginOrg,
 			Value:  cliReleaseChannel,
 		},
 	}
 	return createLdxSyncResultWithSettings(orgId, settings, "00000000-0000-0000-0000-000000000003")
 }
 
-func createLdxSyncResultWithSettings(orgId string, settings map[string]v20241015.SettingMetadata, configIdStr string) ldx_sync_config.LdxSyncConfigResult {
-	orgs := []v20241015.Organization{
+func createLdxSyncResultWithSettings(orgId string, settings map[string]v20260507.SettingMetadata, configIdStr string) ldx_sync_config.LdxSyncConfigResult {
+	orgs := []v20260507.Organization{
 		{
 			Id:                   orgId,
 			Name:                 "Test Org",
@@ -590,26 +590,26 @@ func createLdxSyncResultWithSettings(orgId string, settings map[string]v20241015
 	}
 	configId := uuid.MustParse(configIdStr)
 	return ldx_sync_config.LdxSyncConfigResult{
-		Config: &v20241015.UserConfigResponse{
+		Config: &v20260507.UserConfigResponse{
 			Data: struct {
 				Attributes struct {
 					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
-					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					FolderSettings *map[string]map[string]v20260507.SettingMetadata `json:"folder_settings,omitempty"`
 					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
-					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
-					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
-					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
+					Organizations  *[]v20260507.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20260507.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20260507.SettingMetadata            `json:"settings,omitempty"`
 				} `json:"attributes"`
 				Id   uuid.UUID                            `json:"id"`
-				Type v20241015.UserConfigResponseDataType `json:"type"`
+				Type v20260507.UserConfigResponseDataType `json:"type"`
 			}{
 				Attributes: struct {
 					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
-					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					FolderSettings *map[string]map[string]v20260507.SettingMetadata `json:"folder_settings,omitempty"`
 					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
-					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
-					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
-					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
+					Organizations  *[]v20260507.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20260507.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20260507.SettingMetadata            `json:"settings,omitempty"`
 				}{
 					Organizations: &orgs,
 					Settings:      &settings,
@@ -716,9 +716,9 @@ func Test_RefreshConfigFromLdxSync_NoNotificationWhenNoChanges(t *testing.T) {
 
 // createLdxSyncResultWithFolderSettings creates a LdxSyncConfigResult with folder-specific settings
 // The folderSettingsURL is the normalized URL key in the FolderSettings map (as the backend would return)
-func createLdxSyncResultWithFolderSettings(orgId string, folderSettingsURL string, folderSettings map[string]v20241015.SettingMetadata, remoteUrl string) ldx_sync_config.LdxSyncConfigResult {
+func createLdxSyncResultWithFolderSettings(orgId string, folderSettingsURL string, folderSettings map[string]v20260507.SettingMetadata, remoteUrl string) ldx_sync_config.LdxSyncConfigResult {
 	result := createLdxSyncResultWithOrg(orgId)
-	fs := map[string]map[string]v20241015.SettingMetadata{
+	fs := map[string]map[string]v20260507.SettingMetadata{
 		folderSettingsURL: folderSettings,
 	}
 	result.Config.Data.Attributes.FolderSettings = &fs
@@ -737,10 +737,10 @@ func Test_RefreshConfigFromLdxSync_WritesFolderSettings(t *testing.T) {
 
 	orgId := "test-org-folder-settings"
 	normalizedURL := "https://github.com/snyk/test-repo"
-	folderSettings := map[string]v20241015.SettingMetadata{
+	folderSettings := map[string]v20260507.SettingMetadata{
 		"issue_view_open_issues": {
 			Value:  true,
-			Origin: v20241015.SettingMetadataOriginOrg,
+			Origin: v20260507.SettingMetadataOriginOrg,
 			Locked: util.Ptr(true),
 		},
 	}
@@ -777,15 +777,15 @@ func Test_RefreshConfigFromLdxSync_FolderSettingsWithURLNormalization(t *testing
 	orgId := "test-org-url-norm"
 	normalizedURL := "https://github.com/snyk/test-repo"
 	rawSSHURL := "git@github.com:snyk/test-repo.git"
-	folderSettings := map[string]v20241015.SettingMetadata{
+	folderSettings := map[string]v20260507.SettingMetadata{
 		"issue_view_open_issues": {
 			Value:  true,
-			Origin: v20241015.SettingMetadataOriginOrg,
+			Origin: v20260507.SettingMetadataOriginOrg,
 			Locked: util.Ptr(false),
 		},
 		"issue_view_ignored_issues": {
 			Value:  false,
-			Origin: v20241015.SettingMetadataOriginOrg,
+			Origin: v20260507.SettingMetadataOriginOrg,
 			Locked: util.Ptr(true),
 		},
 	}
@@ -830,10 +830,10 @@ func Test_RefreshConfigFromLdxSync_FolderSettingsNoRemoteUrl(t *testing.T) {
 
 	orgId := "test-org-no-remote"
 	normalizedURL := "https://github.com/snyk/test-repo"
-	folderSettings := map[string]v20241015.SettingMetadata{
+	folderSettings := map[string]v20260507.SettingMetadata{
 		"issue_view_open_issues": {
 			Value:  true,
-			Origin: v20241015.SettingMetadataOriginOrg,
+			Origin: v20260507.SettingMetadataOriginOrg,
 		},
 	}
 
@@ -874,15 +874,15 @@ func Test_RefreshConfigFromLdxSync_LegacyMigration_PreservesExistingConfig(t *te
 
 	orgId := "legacy-org-id"
 	// LDX-Sync returns NON-locked machine settings — should not overwrite existing user values
-	settings := map[string]v20241015.SettingMetadata{
-		string(v20241015.AutomaticDownload): {
+	settings := map[string]v20260507.SettingMetadata{
+		string(v20260507.AutomaticDownload): {
 			Locked: util.Ptr(false),
-			Origin: v20241015.SettingMetadataOriginOrg,
+			Origin: v20260507.SettingMetadataOriginOrg,
 			Value:  false,
 		},
-		string(v20241015.CliReleaseChannel): {
+		string(v20260507.CliReleaseChannel): {
 			Locked: util.Ptr(false),
-			Origin: v20241015.SettingMetadataOriginOrg,
+			Origin: v20260507.SettingMetadataOriginOrg,
 			Value:  "preview",
 		},
 	}
@@ -917,15 +917,15 @@ func Test_RefreshConfigFromLdxSync_FirstRunDefaults_PopulatesConfig(t *testing.T
 	// No prior config set — fresh install scenario.
 	// Use real LDX-Sync machine settings: automatic_download (bool), cli_release_channel (string).
 	orgId := "fresh-org-id"
-	settings := map[string]v20241015.SettingMetadata{
-		string(v20241015.AutomaticDownload): {
+	settings := map[string]v20260507.SettingMetadata{
+		string(v20260507.AutomaticDownload): {
 			Locked: util.Ptr(false),
-			Origin: v20241015.SettingMetadataOriginOrg,
+			Origin: v20260507.SettingMetadataOriginOrg,
 			Value:  true,
 		},
-		string(v20241015.CliReleaseChannel): {
+		string(v20260507.CliReleaseChannel): {
 			Locked: util.Ptr(false),
-			Origin: v20241015.SettingMetadataOriginOrg,
+			Origin: v20260507.SettingMetadataOriginOrg,
 			Value:  "stable",
 		},
 	}
@@ -977,9 +977,9 @@ func Test_RefreshConfigFromLdxSync_BypassAttempt_LockedSettingRevertedOnSync(t *
 	orgId := "bypass-org"
 	// LDX-Sync returns locked per-flag settings — user overrides must be cleared
 	result := createLdxSyncResultWithLockedField(orgId, types.GetLDXSyncKey(types.SettingSeverityFilterCritical))
-	(*result.Config.Data.Attributes.Settings)[types.GetLDXSyncKey(types.SettingSnykCodeEnabled)] = v20241015.SettingMetadata{
+	(*result.Config.Data.Attributes.Settings)[types.GetLDXSyncKey(types.SettingSnykCodeEnabled)] = v20260507.SettingMetadata{
 		Locked: util.Ptr(true),
-		Origin: v20241015.SettingMetadataOriginOrg,
+		Origin: v20260507.SettingMetadataOriginOrg,
 		Value:  true,
 	}
 
@@ -1190,26 +1190,26 @@ func Test_RefreshConfigFromLdxSync_InvalidConfig_EmptyAttributesHandledGracefull
 	// Result with Config but nil Organizations and nil Settings
 	configId := uuid.MustParse("00000000-0000-0000-0000-000000000099")
 	emptyResult := ldx_sync_config.LdxSyncConfigResult{
-		Config: &v20241015.UserConfigResponse{
+		Config: &v20260507.UserConfigResponse{
 			Data: struct {
 				Attributes struct {
 					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
-					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					FolderSettings *map[string]map[string]v20260507.SettingMetadata `json:"folder_settings,omitempty"`
 					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
-					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
-					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
-					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
+					Organizations  *[]v20260507.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20260507.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20260507.SettingMetadata            `json:"settings,omitempty"`
 				} `json:"attributes"`
 				Id   uuid.UUID                            `json:"id"`
-				Type v20241015.UserConfigResponseDataType `json:"type"`
+				Type v20260507.UserConfigResponseDataType `json:"type"`
 			}{
 				Attributes: struct {
 					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
-					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					FolderSettings *map[string]map[string]v20260507.SettingMetadata `json:"folder_settings,omitempty"`
 					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
-					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
-					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
-					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
+					Organizations  *[]v20260507.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20260507.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20260507.SettingMetadata            `json:"settings,omitempty"`
 				}{
 					Organizations: nil,
 					Settings:      nil,
@@ -1249,28 +1249,28 @@ func Test_RefreshConfigFromLdxSync_NoMapping_FallsBackToGlobalOrg(t *testing.T) 
 
 	// API returns a result with NO organizations (project not tracked)
 	configId := uuid.MustParse("00000000-0000-0000-0000-000000000012")
-	emptyOrgs := []v20241015.Organization{}
+	emptyOrgs := []v20260507.Organization{}
 	noMappingResult := ldx_sync_config.LdxSyncConfigResult{
-		Config: &v20241015.UserConfigResponse{
+		Config: &v20260507.UserConfigResponse{
 			Data: struct {
 				Attributes struct {
 					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
-					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					FolderSettings *map[string]map[string]v20260507.SettingMetadata `json:"folder_settings,omitempty"`
 					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
-					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
-					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
-					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
+					Organizations  *[]v20260507.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20260507.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20260507.SettingMetadata            `json:"settings,omitempty"`
 				} `json:"attributes"`
 				Id   uuid.UUID                            `json:"id"`
-				Type v20241015.UserConfigResponseDataType `json:"type"`
+				Type v20260507.UserConfigResponseDataType `json:"type"`
 			}{
 				Attributes: struct {
 					CreatedAt      *time.Time                                       `json:"created_at,omitempty"`
-					FolderSettings *map[string]map[string]v20241015.SettingMetadata `json:"folder_settings,omitempty"`
+					FolderSettings *map[string]map[string]v20260507.SettingMetadata `json:"folder_settings,omitempty"`
 					LastModifiedAt *time.Time                                       `json:"last_modified_at,omitempty"`
-					Organizations  *[]v20241015.Organization                        `json:"organizations,omitempty"`
-					Scope          *v20241015.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
-					Settings       *map[string]v20241015.SettingMetadata            `json:"settings,omitempty"`
+					Organizations  *[]v20260507.Organization                        `json:"organizations,omitempty"`
+					Scope          *v20260507.UserConfigResponseDataAttributesScope `json:"scope,omitempty"`
+					Settings       *map[string]v20260507.SettingMetadata            `json:"settings,omitempty"`
 				}{
 					Organizations: &emptyOrgs,
 				},
@@ -1325,10 +1325,10 @@ func Test_RefreshConfigFromLdxSync_FolderSettingsLockedClearsOverrides(t *testin
 
 	orgId := "test-org-folder-locked"
 	normalizedURL := "https://github.com/snyk/test-repo"
-	folderSettings := map[string]v20241015.SettingMetadata{
+	folderSettings := map[string]v20260507.SettingMetadata{
 		"issue_view_open_issues": {
 			Value:  false,
-			Origin: v20241015.SettingMetadataOriginOrg,
+			Origin: v20260507.SettingMetadataOriginOrg,
 			Locked: util.Ptr(true),
 		},
 	}

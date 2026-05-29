@@ -107,6 +107,13 @@ const DepConfiguration = "configuration"
 const DepLdxSyncService = "ldxSyncService"
 const DepTreeEmitter = "treeEmitter"
 
+// New dep keys — added so that withContext can inject all handler deps into ctx.
+const DepHoverService = "hoverService"
+const DepInstaller = "installer"
+const DepCodeActionService = "codeActionService"
+const DepFeatureFlagService = "featureFlagService"
+const DepFileWatcher = "fileWatcher"
+
 // NewContextWithDependencies returns a new Context that carries dependencies.
 // This can be used to pass pointers to injected (service) dependencies, e.g. a pointer
 // to the learn service or the cli scanner.

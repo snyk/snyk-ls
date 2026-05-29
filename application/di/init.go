@@ -102,6 +102,18 @@ type Dependencies struct {
 	ScanStateAggregator   scanstates.Aggregator
 	InlineValueProvider   snyk.InlineValueProvider
 	TreeEmitter           command.TreeEmitter
+	// Added fields — all handler-accessed singletons now live here so that
+	// withContext can inject them into the request context rather than handlers
+	// reaching for the package-level globals via di.*() accessor functions.
+	FileWatcher       *watcher.FileWatcher
+	ErrorReporter     er.ErrorReporter
+	HoverService      hover.Service
+	Scanner           scanner2.Scanner
+	ScanPersister     persistence.ScanSnapshotPersister
+	ScanNotifier      scanner2.ScanNotifier
+	Installer         install.Installer
+	CodeActionService *codeaction.CodeActionsService
+	Initializer       initialize.Initializer
 }
 
 func currentDependencies() Dependencies {
@@ -119,6 +131,15 @@ func currentDependencies() Dependencies {
 		ScanStateAggregator:   scanStateAggregator,
 		InlineValueProvider:   inlineValueProvider,
 		TreeEmitter:           treeEmitterInstance,
+		FileWatcher:           fileWatcher,
+		ErrorReporter:         errorReporter,
+		HoverService:          hoverService,
+		Scanner:               scanner,
+		ScanPersister:         scanPersister,
+		ScanNotifier:          scanNotifier,
+		Installer:             installer,
+		CodeActionService:     codeActionService,
+		Initializer:           scanInitializer,
 	}
 }
 
@@ -297,6 +318,15 @@ func FeatureFlagService() featureflag.Service {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return featureFlagService
+}
+
+// SetFeatureFlagService replaces the global featureFlagService for future calls
+// to FeatureFlagService(). Objects already constructed before this call retain
+// their previous reference. Intended for test use only.
+func SetFeatureFlagService(service featureflag.Service) {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	featureFlagService = service
 }
 
 func LdxSyncService() command.LdxSyncService {

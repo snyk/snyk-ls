@@ -24,7 +24,6 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/application/codeaction"
-	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -53,7 +52,7 @@ func ResolveCodeActionHandler(logger *zerolog.Logger, service *codeaction.CodeAc
 }
 
 // GetCodeActionHandler returns a jrpc2.Handler that can be used to handle the "textDocument/codeAction" LSP method
-func GetCodeActionHandler(logger *zerolog.Logger) TextDocumentCodeActionHandler {
+func GetCodeActionHandler(logger *zerolog.Logger, svc *codeaction.CodeActionsService) TextDocumentCodeActionHandler {
 	const debounceDuration = 50 * time.Millisecond
 
 	var mu = &sync.Mutex{}
@@ -85,7 +84,7 @@ func GetCodeActionHandler(logger *zerolog.Logger) TextDocumentCodeActionHandler 
 		default:
 		}
 
-		codeActions := di.CodeActionService().GetCodeActions(params)
+		codeActions := svc.GetCodeActions(params)
 		l.Debug().Any("response", codeActions).Msg("SENDING")
 		return codeActions, nil
 	}
