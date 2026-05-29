@@ -508,7 +508,7 @@ test("__selectTreeNode__ calls scrollIntoView with block:nearest", async () => {
   dom.window.__selectTreeNode__("vuln-1");
 
   assert.ok(scrollArgs !== null, "scrollIntoView should be called");
-  assert.equal(scrollArgs.block, "center", "block should be 'center' to scroll the row to the vertical centre of the viewport");
+  assert.equal(scrollArgs.block, "nearest", "block should be 'nearest' — no-op when row is already visible, scrolls minimum otherwise");
   assert.equal(scrollArgs.inline, "nearest", "inline should be 'nearest' to minimise horizontal movement");
 });
 

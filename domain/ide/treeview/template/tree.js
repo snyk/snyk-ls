@@ -57,9 +57,10 @@
     // Preserve horizontal scroll — scrollIntoView may shift it even with inline:'nearest'
     // if the row is horizontally out of view. Capture and restore unconditionally.
     var savedScrollLeft = container.scrollLeft;
-    // block:'center' scrolls the row to the vertical centre of the viewport.
+    // block:'nearest' is a no-op when the row is already fully visible, so manual clicks
+    // that trigger a programmatic __selectTreeNode__ round-trip don't cause any scroll jump.
     // inline:'nearest' minimises horizontal movement, but we restore scrollLeft anyway.
-    row.scrollIntoView({ block: 'center', inline: 'nearest' });
+    row.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     // scroll-behavior: smooth on #treeContainer would run after this line and overwrite
     // the restored value. tree.css must not set scroll-behavior: smooth on this element.
     container.scrollLeft = savedScrollLeft;

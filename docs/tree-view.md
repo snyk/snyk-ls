@@ -172,7 +172,7 @@ window.__selectTreeNode__(issueId)
 
 This finds the node by `data-issue-id`, expands any collapsed ancestors so the node is visible, applies the `.selected` class, and removes it from any previously selected node.
 
-**Scroll behavior on programmatic selection:** if the selected row is already fully visible vertically within `#treeContainer`, the scroll position is preserved unchanged. If the row is off-screen, the container scrolls vertically to center the row in the viewport. The horizontal scroll position (`scrollLeft`) is never changed.
+**Scroll behavior on programmatic selection:** the container scrolls the minimum amount needed to make the row visible (`block: 'nearest'`); if the row is already fully visible, no scroll occurs. The horizontal scroll position (`scrollLeft`) is never changed.
 
 ### Issue Badges
 
