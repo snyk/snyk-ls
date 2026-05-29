@@ -88,16 +88,28 @@ func TestApplyEndpointChange_EndpointSame_ReturnsFalse(t *testing.T) {
 	assert.Equal(t, "some-token", config.GetToken(conf), "token must be preserved when endpoint is unchanged")
 }
 
-func TestApplyEndpointChange_NilAuthService_LSPInitialized_ReturnsChangedAndSkipsLogout(t *testing.T) {
+func TestApplyEndpointChange_NilAuthService_LSPNotInitialized_MutationProceeds(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
-	conf.Set(types.SettingIsLspInitialized, true)
-
-	// When authService is nil we skip logout, but the config mutation already happened —
-	// returning changed (true) lets the caller report the endpoint update in telemetry.
+	// LSP not initialized — no logout needed, so nil authService must not block the change.
 	changed := ApplyEndpointChange(t.Context(), conf, nil, engine.GetLogger(), "https://api.custom.io")
 
 	assert.True(t, changed)
+	assert.Equal(t, "https://api.custom.io", types.GetGlobalString(conf, types.SettingApiEndpoint))
+}
+
+func TestApplyEndpointChange_NilAuthService_LSPInitialized_SkipsMutationAndReturnsFalse(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(types.SettingIsLspInitialized, true)
+	originalEndpoint := types.GetGlobalString(conf, types.SettingApiEndpoint)
+
+	// When authService is nil and LSP is initialized, the config must NOT be mutated —
+	// switching endpoints without logging out would leave credentials pointing at the wrong endpoint.
+	changed := ApplyEndpointChange(t.Context(), conf, nil, engine.GetLogger(), "https://api.custom.io")
+
+	assert.False(t, changed)
+	assert.Equal(t, originalEndpoint, types.GetGlobalString(conf, types.SettingApiEndpoint), "endpoint must not be mutated when logout cannot be performed")
 }
 
 func TestApplyInsecureSetting_SetsInsecureFlag(t *testing.T) {
@@ -151,15 +163,16 @@ func TestApplyAuthMethodChange_MethodSame_ReturnsFalse(t *testing.T) {
 	assert.Equal(t, "some-token", config.GetToken(conf), "token must be preserved when auth method is unchanged")
 }
 
-func TestApplyAuthMethodChange_NilAuthService_PersistsMethodButReturnsFalse(t *testing.T) {
+func TestApplyAuthMethodChange_NilAuthService_PersistsMethodAndReturnsChanged(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 
 	// Even when authService is nil (ConfigureProviders cannot run), SetGlobalUser must
-	// still be called so the auth method persists across restarts.
+	// still be called so the auth method persists across restarts. The return value must
+	// reflect whether the method actually changed — not suppress it due to the nil authService.
 	changed := ApplyAuthMethodChange(conf, nil, engine.GetLogger(), types.TokenAuthentication)
 
-	assert.False(t, changed, "must return false when authService is nil")
+	assert.True(t, changed, "must return true when method changed, even if authService is nil")
 	assert.Equal(t, types.TokenAuthentication, config.GetAuthenticationMethodFromConfig(conf),
 		"auth method must be persisted even when authService is nil")
 }

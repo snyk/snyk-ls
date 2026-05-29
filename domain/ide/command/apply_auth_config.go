@@ -32,15 +32,18 @@ import (
 // Logout internally calls configureProviders, so no explicit ConfigureProviders call is needed.
 func ApplyEndpointChange(ctx context.Context, conf gafConfig.Configuration, authService authentication.AuthenticationService, logger *zerolog.Logger, endpoint string) bool {
 	oldEndpoint := types.GetGlobalString(conf, types.SettingApiEndpoint)
+	// When LSP is initialized, an endpoint switch requires logout to clear credentials.
+	// Mutating config without logout would leave the system with new-endpoint config
+	// but old-environment credentials — a session leakage risk.
+	if conf.GetBool(types.SettingIsLspInitialized) && authService == nil {
+		logger.Error().
+			Str("old_endpoint", oldEndpoint).
+			Str("new_endpoint", endpoint).
+			Msg("authService is nil; skipping endpoint switch to prevent session leakage")
+		return false
+	}
 	changed := config.UpdateApiEndpointsOnConfig(conf, endpoint)
 	if changed && conf.GetBool(types.SettingIsLspInitialized) {
-		if authService == nil {
-			logger.Error().
-				Str("old_endpoint", oldEndpoint).
-				Str("new_endpoint", endpoint).
-				Msg("authService is nil; skipping logout on endpoint change — credentials may persist against wrong endpoint")
-			return changed
-		}
 		logger.Info().
 			Str("old_endpoint", oldEndpoint).
 			Str("new_endpoint", endpoint).
@@ -78,7 +81,7 @@ func ApplyAuthMethodChange(conf gafConfig.Configuration, authService authenticat
 		logger.Warn().
 			Str("auth_method", string(authMethod)).
 			Msg("authService is nil; auth method persisted but ConfigureProviders skipped")
-		return false
+		return authMethod != previousMethod
 	}
 	authService.ConfigureProviders(conf, logger)
 

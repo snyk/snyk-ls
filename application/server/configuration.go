@@ -230,7 +230,7 @@ func UpdateSettings(ctx context.Context, conf configuration.Configuration, engin
 		if ffs, ok := featureFlagServiceFromContext(ctx); ok {
 			ffs.FlushCache()
 		} else {
-			logger.Debug().Str("method", "UpdateSettings").Msg("feature flag service not in context; skipping cache flush on token change")
+			logger.Error().Str("method", "UpdateSettings").Msg("feature flag service not in context; stale feature flag state may persist for new token")
 		}
 	}
 
