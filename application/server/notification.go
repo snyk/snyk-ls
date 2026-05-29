@@ -84,6 +84,9 @@ func disposeProgressListener() {
 
 //nolint:gocyclo // this is ok, as it's so high because of forwarding the calls
 func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, srv types.Server, n noti.Notifier) {
+	if n == nil {
+		panic("registerNotifier: Notifier must not be nil — check server startup wiring")
+	}
 	l := logger.With().Str("method", "registerNotifier").Logger()
 	callbackFunction := func(params any) {
 		if !conf.GetBool(types.SettingIsLspInitialized) {
