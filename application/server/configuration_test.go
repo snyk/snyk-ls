@@ -306,7 +306,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 	t.Run("All settings are updated", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
-		di.TestInit(t, engine, tokenService, nil)
+		deps := di.TestInit(t, engine, tokenService, nil)
 
 		tempDir1 := filepath.Join(t.TempDir(), "tempDir1")
 		tempDir2 := filepath.Join(t.TempDir(), "tempDir2")
@@ -364,9 +364,12 @@ func Test_UpdateSettings(t *testing.T) {
 		// Path is init-only; apply via InitializeSettings first.
 		// TrustedFolders now goes through the settings map.
 		settingsMap[types.SettingTrustedFolders] = &types.ConfigSetting{Value: []interface{}{"trustedPath1", "trustedPath2"}, Changed: true}
+		// Build the context from the deps returned by di.TestInit rather than manually
+		// instantiating services, so the context always uses the same instances that
+		// di.TestInit wired together.
 		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-			ctx2.DepNotifier:    notification.NewMockNotifier(),
-			ctx2.DepAuthService: di.AuthenticationService(),
+			ctx2.DepNotifier:    deps.Notifier,
+			ctx2.DepAuthService: deps.AuthenticationService,
 		})
 		InitializeSettings(ctx, engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{
 			Path:           "addPath",
@@ -783,6 +786,41 @@ func Test_UpdateSettings_TokenChange_TriggersLdxSyncRefresh(t *testing.T) {
 			types.SettingToken: {Value: "new-token", Changed: true},
 		}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 	})
+}
+
+func Test_refreshLdxSyncOnTokenChange_NotifierAbsentFromContext_StillCallsRefresh(t *testing.T) {
+	// When the notifier is not in context, refreshLdxSyncOnTokenChange must log a warning
+	// but must still call RefreshConfigFromLdxSync (nil notifier is tolerated by that function).
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	di.TestInit(t, engine, tokenService, nil)
+
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockLdx := mock_command.NewMockLdxSyncService(ctrl)
+	// Notifier is intentionally absent from the context.
+	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
+		ctx2.DepLdxSyncService: mockLdx,
+	})
+
+	folderPath := types.FilePath(t.TempDir())
+	workspaceutil.SetupWorkspace(t, engine, folderPath)
+
+	conf := engine.GetConfiguration()
+	tokenService.SetToken(conf, "old-token")
+	conf.Set(types.SettingIsLspInitialized, false) // ws check passes if folders exist
+
+	folders := config.GetWorkspace(conf).Folders()
+	// RefreshConfigFromLdxSync must still be called even though notifier is absent (nil is OK).
+	mockLdx.EXPECT().
+		RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Eq(folders), gomock.Nil()).
+		Times(1)
+
+	// Set a new token directly into conf to simulate a token change.
+	// (We bypass UpdateSettings to avoid the processFolderConfigs → mustNotifierFromContext path.)
+	tokenService.SetToken(conf, "new-token")
+	// Explicitly call the function under test.
+	refreshLdxSyncOnTokenChange(ctx, conf, engine, engine.GetLogger(), config.GetWorkspace(conf), "old-token")
 }
 
 func Test_UpdateSettings_BlankOrganizationResetsToDefault_Integration(t *testing.T) {
