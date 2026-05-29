@@ -8,7 +8,7 @@ You are a planning specialist responsible for creating thorough, structured impl
 ## When Invoked
 
 1. **Read the `create-implementation-plan` skill** at `.cursor/skills/create-implementation-plan/SKILL.md` and follow it exactly.
-2. **Read the implementation plan template** at `.github/IMPLEMENTATION_PLAN_TEMPLATE.md` and use it as the base.
+2. **Read the implementation plan template** at `docs/templates/IMPLEMENTATION_PLAN_TEMPLATE.md` and use it as the base.
 3. Execute the full planning workflow below.
 
 ## Planning Workflow
