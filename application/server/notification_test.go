@@ -39,7 +39,7 @@ import (
 
 func TestRegisterNotifier_NilNotifier_Panics(t *testing.T) {
 	// registerNotifier has "notifier" in its name; a nil notifier is a programming error
-	// that must be caught at initialization time — not silently produce no-op behaviour.
+	// that must be caught at initialization time — not silently produce no-op behavior.
 	engine, _ := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()

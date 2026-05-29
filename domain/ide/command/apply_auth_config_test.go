@@ -88,17 +88,16 @@ func TestApplyEndpointChange_EndpointSame_ReturnsFalse(t *testing.T) {
 	assert.Equal(t, "some-token", config.GetToken(conf), "token must be preserved when endpoint is unchanged")
 }
 
-func TestApplyEndpointChange_NilAuthService_LSPInitialized_ReturnsFalseAndNoLogout(t *testing.T) {
+func TestApplyEndpointChange_NilAuthService_LSPInitialized_ReturnsChangedAndSkipsLogout(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	conf.Set(types.SettingIsLspInitialized, true)
 
-	// When authService is nil we cannot perform logout, so we must not signal "changed"
-	// to the caller — returning true would cause downstream actions (e.g. analytics, workspace
-	// clear) to proceed as if the change succeeded, which is misleading.
+	// When authService is nil we skip logout, but the config mutation already happened —
+	// returning changed (true) lets the caller report the endpoint update in telemetry.
 	changed := ApplyEndpointChange(t.Context(), conf, nil, engine.GetLogger(), "https://api.custom.io")
 
-	assert.False(t, changed)
+	assert.True(t, changed)
 }
 
 func TestApplyInsecureSetting_SetsInsecureFlag(t *testing.T) {

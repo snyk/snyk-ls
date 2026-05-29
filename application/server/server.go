@@ -112,24 +112,9 @@ func withContext(
 ) jrpc2.Handler {
 	return func(ctx context.Context, req *jrpc2.Request) (any, error) {
 		ctx = ctx2.NewContextWithLogger(ctx, logger)
-		ctx = ctx2.NewContextWithConfiguration(ctx, conf)
-		ctx = ctx2.NewContextWithEngine(ctx, engine)
-		if deps.ConfigResolver != nil {
-			ctx = ctx2.NewContextWithConfigResolver(ctx, deps.ConfigResolver)
-		}
-		ctxDeps, found := ctx2.DependenciesFromContext(ctx)
-		if !found {
-			ctxDeps = map[string]any{}
-		} else {
-			// Clone defensively: the map was created by NewContextWithConfigResolver moments
-			// earlier in this closure, but a future jrpc2 NewContext option could pass a
-			// shared parent context carrying a deps map — cloning prevents cross-request mutation.
-			cloned := make(map[string]any, len(ctxDeps))
-			for k, v := range ctxDeps {
-				cloned[k] = v
-			}
-			ctxDeps = cloned
-		}
+		ctxDeps := make(map[string]any)
+		ctxDeps[ctx2.DepConfiguration] = conf
+		ctxDeps[ctx2.DepEngine] = engine
 		injectCoreServicesIntoMap(ctxDeps, deps)
 		injectScanServicesIntoMap(ctxDeps, deps)
 		ctx = ctx2.NewContextWithDependencies(ctx, ctxDeps)
@@ -142,6 +127,9 @@ func withContext(
 // each function's cyclomatic complexity below the gocyclo limit (15); it does
 // not reflect a semantic boundary between the services.
 func injectCoreServicesIntoMap(m map[string]any, deps di.Dependencies) {
+	if deps.ConfigResolver != nil {
+		m[ctx2.DepConfigResolver] = deps.ConfigResolver
+	}
 	if deps.AuthenticationService != nil {
 		m[ctx2.DepAuthService] = deps.AuthenticationService
 	}

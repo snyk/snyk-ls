@@ -39,7 +39,7 @@ func ApplyEndpointChange(ctx context.Context, conf gafConfig.Configuration, auth
 				Str("old_endpoint", oldEndpoint).
 				Str("new_endpoint", endpoint).
 				Msg("authService is nil; skipping logout on endpoint change — credentials may persist against wrong endpoint")
-			return false
+			return changed
 		}
 		logger.Info().
 			Str("old_endpoint", oldEndpoint).
