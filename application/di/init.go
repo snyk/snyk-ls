@@ -101,6 +101,7 @@ type Dependencies struct {
 	LdxSyncService        command.LdxSyncService
 	ScanStateAggregator   scanstates.Aggregator
 	InlineValueProvider   snyk.InlineValueProvider
+	TreeEmitter           command.TreeEmitter
 	// Added fields — all handler-accessed singletons now live here so that
 	// withContext can inject them into the request context rather than handlers
 	// reaching for the package-level globals via di.*() accessor functions.
@@ -129,6 +130,7 @@ func currentDependencies() Dependencies {
 		LdxSyncService:        ldxSyncService,
 		ScanStateAggregator:   scanStateAggregator,
 		InlineValueProvider:   inlineValueProvider,
+		TreeEmitter:           treeEmitterInstance,
 		FileWatcher:           fileWatcher,
 		ErrorReporter:         errorReporter,
 		HoverService:          hoverService,

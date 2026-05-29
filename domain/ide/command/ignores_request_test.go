@@ -3,6 +3,7 @@ package command
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -13,15 +14,28 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
+
+type fakeTreeRefresher struct {
+	calls     int
+	lastState scanstates.StateSnapshot
+}
+
+func (f *fakeTreeRefresher) Emit(state scanstates.StateSnapshot) {
+	f.calls++
+	f.lastState = state
+}
 
 func Test_submitIgnoreRequest_Execute(t *testing.T) {
 	tests := []struct {
@@ -493,4 +507,141 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration_FallsBackToGlobalOrg
 	configOrg := engineConfig.GetString(configuration.ORGANIZATION)
 	// When FolderOrganization returns the global org, initializeCreateConfiguration sets it in the config
 	assert.Equal(t, globalOrg, configOrg, "Config should use global org when folder org is not configured (fallback behavior)")
+}
+
+func Test_submitIgnoreRequest_TriggersTreeRefreshOnSuccess(t *testing.T) {
+	workflowTypes := []struct {
+		name       string
+		args       []any
+		workflowID workflow.Identifier
+	}{
+		{"create", []any{"create", "issueId", "wont_fix", "reason", "2099-01-01"}, ignore_workflow.WORKFLOWID_IGNORE_CREATE},
+		{"update", []any{"update", "issueId", "wont_fix", "reason", "2099-01-01", "ignoreId"}, ignore_workflow.WORKFLOWID_IGNORE_EDIT},
+		{"delete", []any{"delete", "issueId", "wont_fix", "reason", "2099-01-01", "ignoreId"}, ignore_workflow.WORKFLOWID_IGNORE_DELETE},
+	}
+
+	for _, tt := range workflowTypes {
+		t.Run(tt.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			ctrl := gomock.NewController(t)
+			t.Cleanup(ctrl.Finish)
+
+			mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
+
+			folderPath := types.FilePath(t.TempDir())
+			issue := testutil.NewMockIssue("issueId", types.FilePath(filepath.Join(string(folderPath), "test.js")))
+			issue.ContentRoot = folderPath
+			_, _ = workspaceutil.SetupWorkspace(t, mockEngine, folderPath)
+			types.SetPreferredOrgAndOrgSetByUser(mockConf, folderPath, "test-org", true)
+
+			issueProvider := mock_snyk.NewMockIssueProvider(ctrl)
+			issueProvider.EXPECT().Issue("issueId").Return(issue).AnyTimes()
+
+			mockEngine.EXPECT().InvokeWithConfig(tt.workflowID, gomock.Any()).
+				Return([]workflow.Data{workflow.NewData(workflow.NewTypeIdentifier(tt.workflowID, "test"), "json", []byte(`{"id":"ignoreId"}`))}, nil).
+				Times(1)
+			mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
+				Return(nil, nil).AnyTimes()
+
+			server := mock_types.NewMockServer(ctrl)
+			server.EXPECT().Callback(gomock.Any(), "window/showDocument", gomock.Any()).Return(nil, nil).AnyTimes()
+
+			knownState := scanstates.StateSnapshot{}
+			fake := &fakeTreeRefresher{}
+
+			cmd := &submitIgnoreRequest{
+				command:        types.CommandData{Arguments: tt.args},
+				issueProvider:  issueProvider,
+				notifier:       notification.NewMockNotifier(),
+				srv:            server,
+				engine:         mockEngine,
+				configResolver: testutil.DefaultConfigResolver(mockEngine),
+				treeEmitter:    fake,
+				scanStateFunc:  func() scanstates.StateSnapshot { return knownState },
+			}
+
+			_, err := cmd.Execute(t.Context())
+			require.NoError(t, err)
+			assert.Equal(t, 1, fake.calls, "tree should be refreshed once after successful ignore")
+			assert.Equal(t, knownState, fake.lastState)
+		})
+	}
+}
+
+func Test_submitIgnoreRequest_NoTreeRefreshOnFailure(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
+
+	folderPath := types.FilePath(t.TempDir())
+	issue := testutil.NewMockIssue("issueId", types.FilePath(filepath.Join(string(folderPath), "test.js")))
+	issue.ContentRoot = folderPath
+	_, _ = workspaceutil.SetupWorkspace(t, mockEngine, folderPath)
+	types.SetPreferredOrgAndOrgSetByUser(mockConf, folderPath, "test-org", true)
+
+	issueProvider := mock_snyk.NewMockIssueProvider(ctrl)
+	issueProvider.EXPECT().Issue("issueId").Return(issue).AnyTimes()
+
+	mockEngine.EXPECT().InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gomock.Any()).
+		Return(nil, errors.New("ignore failed")).Times(1)
+	mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
+		Return(nil, nil).AnyTimes()
+
+	fake := &fakeTreeRefresher{}
+
+	cmd := &submitIgnoreRequest{
+		command:        types.CommandData{Arguments: []any{"create", "issueId", "wont_fix", "reason", "2099-01-01"}},
+		issueProvider:  issueProvider,
+		notifier:       notification.NewMockNotifier(),
+		engine:         mockEngine,
+		configResolver: testutil.DefaultConfigResolver(mockEngine),
+		treeEmitter:    fake,
+		scanStateFunc:  func() scanstates.StateSnapshot { return scanstates.StateSnapshot{} },
+	}
+
+	_, err := cmd.Execute(t.Context())
+	assert.Error(t, err)
+	assert.Equal(t, 0, fake.calls, "tree must not be refreshed when ignore fails")
+}
+
+func Test_submitIgnoreRequest_NilTreeRefresher_DoesNotPanic(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
+
+	folderPath := types.FilePath(t.TempDir())
+	issue := testutil.NewMockIssue("issueId", types.FilePath(filepath.Join(string(folderPath), "test.js")))
+	issue.ContentRoot = folderPath
+	_, _ = workspaceutil.SetupWorkspace(t, mockEngine, folderPath)
+	types.SetPreferredOrgAndOrgSetByUser(mockConf, folderPath, "test-org", true)
+
+	issueProvider := mock_snyk.NewMockIssueProvider(ctrl)
+	issueProvider.EXPECT().Issue("issueId").Return(issue).AnyTimes()
+
+	mockEngine.EXPECT().InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gomock.Any()).
+		Return([]workflow.Data{workflow.NewData(workflow.NewTypeIdentifier(ignore_workflow.WORKFLOWID_IGNORE_CREATE, "test"), "json", []byte(`{"id":"ignoreId"}`))}, nil).
+		Times(1)
+	mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
+		Return(nil, nil).AnyTimes()
+
+	server := mock_types.NewMockServer(ctrl)
+	server.EXPECT().Callback(gomock.Any(), "window/showDocument", gomock.Any()).Return(nil, nil).AnyTimes()
+
+	cmd := &submitIgnoreRequest{
+		command:        types.CommandData{Arguments: []any{"create", "issueId", "wont_fix", "reason", "2099-01-01"}},
+		issueProvider:  issueProvider,
+		notifier:       notification.NewMockNotifier(),
+		srv:            server,
+		engine:         mockEngine,
+		configResolver: testutil.DefaultConfigResolver(mockEngine),
+		// treeEmitter and scanStateFunc intentionally nil
+	}
+
+	assert.NotPanics(t, func() {
+		_, _ = cmd.Execute(t.Context())
+	})
 }
