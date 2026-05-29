@@ -463,6 +463,76 @@ test("window.__selectTreeNode__ expands collapsed ancestor nodes", async () => {
   assert.ok(row.className.includes('selected'), 'issue row should be selected');
 });
 
+test("__selectTreeNode__ preserves container.scrollLeft after programmatic select", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const nodesHtml = productNodeHtml(
+    fileNodeHtml("file-1", { childrenHtml: issueNodeHtml("vuln-1") })
+  );
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml, runtimeScript }),
+    { runScripts: "dangerously", pretendToBeVisual: true }
+  );
+  const { document } = dom.window;
+  const container = document.getElementById("treeContainer");
+  const row = document.querySelector('[data-issue-id="vuln-1"]');
+
+  // Stub scrollIntoView to simulate it shifting scrollLeft (as browsers may do)
+  var scrollIntoViewCalled = false;
+  row.scrollIntoView = function() {
+    scrollIntoViewCalled = true;
+    container.scrollLeft = 0; // simulate browser shifting horizontal scroll
+  };
+  container.scrollLeft = 100;
+
+  dom.window.__selectTreeNode__("vuln-1");
+
+  assert.ok(scrollIntoViewCalled, "scrollIntoView should be called");
+  assert.equal(container.scrollLeft, 100, "scrollLeft must be restored after scrollIntoView");
+});
+
+test("__selectTreeNode__ calls scrollIntoView with block:nearest", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const nodesHtml = productNodeHtml(
+    fileNodeHtml("file-1", { childrenHtml: issueNodeHtml("vuln-1") })
+  );
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml, runtimeScript }),
+    { runScripts: "dangerously", pretendToBeVisual: true }
+  );
+  const { document } = dom.window;
+  const row = document.querySelector('[data-issue-id="vuln-1"]');
+
+  var scrollArgs = null;
+  row.scrollIntoView = function(opts) { scrollArgs = opts; };
+
+  dom.window.__selectTreeNode__("vuln-1");
+
+  assert.ok(scrollArgs !== null, "scrollIntoView should be called");
+  assert.equal(scrollArgs.block, "nearest", "block should be 'nearest' to avoid scrolling when already visible");
+  assert.equal(scrollArgs.inline, "nearest", "inline should be 'nearest' to minimise horizontal movement");
+});
+
+test("__selectTreeNode__ does not throw when scrollIntoView absent", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const nodesHtml = productNodeHtml(
+    fileNodeHtml("file-1", { childrenHtml: issueNodeHtml("vuln-1") })
+  );
+  const dom = new JSDOM(
+    buildHtml({ totalIssues: 0, nodesHtml, runtimeScript }),
+    { runScripts: "dangerously", pretendToBeVisual: true }
+  );
+  const { document } = dom.window;
+  const row = document.querySelector('[data-issue-id="vuln-1"]');
+
+  // Remove scrollIntoView to simulate older environment
+  delete row.scrollIntoView;
+
+  assert.doesNotThrow(() => {
+    dom.window.__selectTreeNode__("vuln-1");
+  }, "should not throw when scrollIntoView is absent");
+  assert.ok(row.className.includes("selected"), "row should still be selected");
+});
+
 test("clicking delta-enabled folder node still toggles expand/collapse", async () => {
   const runtimeScript = await loadRuntimeScript();
   const calls = [];

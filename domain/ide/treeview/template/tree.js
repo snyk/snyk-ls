@@ -51,6 +51,18 @@
     }
   }
 
+  function scrollRowIntoViewVerticalOnly(row) {
+    if (!row || !container) return;
+    if (!row.scrollIntoView) return;
+    // Preserve horizontal scroll — scrollIntoView may shift it even with inline:'nearest'
+    // if the row is horizontally out of view. Capture and restore unconditionally.
+    var savedScrollLeft = container.scrollLeft;
+    // block:'nearest' scrolls vertically only when the row is not already visible.
+    // inline:'nearest' minimises horizontal movement, but we restore scrollLeft anyway.
+    row.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    container.scrollLeft = savedScrollLeft;
+  }
+
   window.__selectTreeNode__ = function(issueId) {
     if (!issueId) return;
     var row = container.querySelector('[data-issue-id="' + issueId + '"]');
@@ -68,7 +80,7 @@
       parent = parent.parentElement;
     }
     selectNodeRow(row);
-    if (row.scrollIntoView) row.scrollIntoView(false);
+    scrollRowIntoViewVerticalOnly(row);
   };
 
   // Scan error overlay for product error nodes.

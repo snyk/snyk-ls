@@ -162,15 +162,17 @@ Disabled products (not in `SupportedIssueTypes`) are rendered with `opacity: 0.5
 
 ### Node Selection
 
-Clicking an issue node highlights it with the `.selected` CSS class. Only one node can be selected at a time.
+Clicking an issue node highlights it with the `.selected` CSS class. Only one node can be selected at a time. Manual clicks (mouse) do not change the scroll position.
 
 The IDE can programmatically select a node by calling:
 
 ```javascript
-window.__selectTreeNode__(nodeId)
+window.__selectTreeNode__(issueId)
 ```
 
-This finds the node by `data-node-id`, applies the `.selected` class, and removes it from any previously selected node.
+This finds the node by `data-issue-id`, expands any collapsed ancestors so the node is visible, applies the `.selected` class, and removes it from any previously selected node.
+
+**Scroll behavior on programmatic selection:** if the selected row is already fully visible vertically within `#treeContainer`, the scroll position is preserved unchanged. If the row is off-screen, the container scrolls vertically to center the row. The horizontal scroll position (`scrollLeft`) is never changed.
 
 ### Issue Badges
 
