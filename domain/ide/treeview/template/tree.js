@@ -52,14 +52,16 @@
   }
 
   function scrollRowIntoViewVerticalOnly(row) {
-    if (!row || !container) return;
+    if (!row) return;
     if (!row.scrollIntoView) return;
     // Preserve horizontal scroll — scrollIntoView may shift it even with inline:'nearest'
     // if the row is horizontally out of view. Capture and restore unconditionally.
     var savedScrollLeft = container.scrollLeft;
-    // block:'nearest' scrolls vertically only when the row is not already visible.
+    // block:'center' scrolls the row to the vertical centre of the viewport.
     // inline:'nearest' minimises horizontal movement, but we restore scrollLeft anyway.
-    row.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    row.scrollIntoView({ block: 'center', inline: 'nearest' });
+    // scroll-behavior: smooth on #treeContainer would run after this line and overwrite
+    // the restored value. tree.css must not set scroll-behavior: smooth on this element.
     container.scrollLeft = savedScrollLeft;
   }
 
