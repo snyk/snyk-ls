@@ -357,6 +357,8 @@ func mustScanPersisterFromContext(ctx context.Context) persistence.ScanSnapshotP
 	return sp
 }
 
+// scanNotifierFromContext uses the (ok) pattern rather than a must* variant because
+// addWorkspaceFolders does graceful error-log-and-return on missing deps.
 func scanNotifierFromContext(ctx context.Context) (scanner2.ScanNotifier, bool) {
 	deps, ok := ctx2.DependenciesFromContext(ctx)
 	if !ok {
@@ -364,14 +366,6 @@ func scanNotifierFromContext(ctx context.Context) (scanner2.ScanNotifier, bool) 
 	}
 	sn, ok := deps[ctx2.DepScanNotifier].(scanner2.ScanNotifier)
 	return sn, ok
-}
-
-func mustScanNotifierFromContext(ctx context.Context) scanner2.ScanNotifier {
-	sn, ok := scanNotifierFromContext(ctx)
-	if !ok {
-		panic("ScanNotifier missing from context")
-	}
-	return sn
 }
 
 func featureFlagServiceFromContext(ctx context.Context) (featureflag.Service, bool) {
