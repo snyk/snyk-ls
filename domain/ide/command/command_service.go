@@ -50,12 +50,11 @@ type serviceImpl struct {
 	ldxSyncService     LdxSyncService
 	configResolver     types.ConfigResolverInterface
 	scanStateFunc      func() scanstates.StateSnapshot
-	treeEmitter        treeRefresher
 	engine             workflow.Engine
 	logger             *zerolog.Logger
 }
 
-func NewService(engine workflow.Engine, logger *zerolog.Logger, authService authentication.AuthenticationService, featureFlagService featureflag.Service, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor, ldxSyncService LdxSyncService, configResolver types.ConfigResolverInterface, scanStateFunc func() scanstates.StateSnapshot, treeEmitter treeRefresher) types.CommandService {
+func NewService(engine workflow.Engine, logger *zerolog.Logger, authService authentication.AuthenticationService, featureFlagService featureflag.Service, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor, ldxSyncService LdxSyncService, configResolver types.ConfigResolverInterface, scanStateFunc func() scanstates.StateSnapshot) types.CommandService {
 	return &serviceImpl{
 		authService:        authService,
 		featureFlagService: featureFlagService,
@@ -67,7 +66,6 @@ func NewService(engine workflow.Engine, logger *zerolog.Logger, authService auth
 		ldxSyncService:     ldxSyncService,
 		configResolver:     configResolver,
 		scanStateFunc:      scanStateFunc,
-		treeEmitter:        treeEmitter,
 		engine:             engine,
 		logger:             logger,
 	}
@@ -92,7 +90,7 @@ func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.
 
 	logger.Debug().Msgf("executing command %s", commandData.CommandId)
 	// TODO: move to DI
-	command, err := CreateFromCommandData(s.engine, commandData, server, s.authService, s.featureFlagService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli, s.ldxSyncService, s.configResolver, s.scanStateFunc, s.treeEmitter)
+	command, err := CreateFromCommandData(ctx, s.engine, commandData, server, s.authService, s.featureFlagService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli, s.ldxSyncService, s.configResolver, s.scanStateFunc)
 	if err != nil {
 		logger.Err(err).Msg("failed to create command")
 		return nil, err

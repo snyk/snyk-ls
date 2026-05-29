@@ -101,6 +101,7 @@ type Dependencies struct {
 	LdxSyncService        command.LdxSyncService
 	ScanStateAggregator   scanstates.Aggregator
 	InlineValueProvider   snyk.InlineValueProvider
+	TreeEmitter           command.TreeEmitter
 }
 
 func currentDependencies() Dependencies {
@@ -117,6 +118,7 @@ func currentDependencies() Dependencies {
 		LdxSyncService:        ldxSyncService,
 		ScanStateAggregator:   scanStateAggregator,
 		InlineValueProvider:   inlineValueProvider,
+		TreeEmitter:           treeEmitterInstance,
 	}
 }
 
@@ -205,7 +207,7 @@ func initApplication(conf configuration.Configuration, engine workflow.Engine, l
 	config.SetWorkspace(conf, w)
 	fileWatcher = watcher.NewFileWatcher()
 	codeActionService = codeaction.NewService(engine, w, fileWatcher, notifier, featureFlagService, configResolver)
-	command.SetService(command.NewService(engine, logger, authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, ldxSyncService, configResolver, scanStateAggregator.StateSnapshot, treeEmitterInstance))
+	command.SetService(command.NewService(engine, logger, authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, ldxSyncService, configResolver, scanStateAggregator.StateSnapshot))
 }
 
 /*

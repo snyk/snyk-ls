@@ -104,6 +104,7 @@ func withContext(
 	ldxSyncService command.LdxSyncService,
 	notifier noti.Notifier,
 	inlineValueProvider snyk.InlineValueProvider,
+	treeEmitter command.TreeEmitter,
 ) jrpc2.Handler {
 	return func(ctx context.Context, req *jrpc2.Request) (any, error) {
 		ctx = ctx2.NewContextWithLogger(ctx, logger)
@@ -128,6 +129,9 @@ func withContext(
 		if inlineValueProvider != nil {
 			deps[ctx2.DepInlineValueProvider] = inlineValueProvider
 		}
+		if treeEmitter != nil {
+			deps[ctx2.DepTreeEmitter] = treeEmitter
+		}
 		ctx = ctx2.NewContextWithDependencies(ctx, deps)
 		return h(ctx, req)
 	}
@@ -139,7 +143,7 @@ const textDocumentDidSaveOperation = "textDocument/didSave"
 
 func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, deps di.Dependencies) {
 	enrich := func(h jrpc2.Handler) jrpc2.Handler {
-		return withContext(h, logger, conf, engine, deps.ConfigResolver, deps.AuthenticationService, deps.LdxSyncService, deps.Notifier, deps.InlineValueProvider)
+		return withContext(h, logger, conf, engine, deps.ConfigResolver, deps.AuthenticationService, deps.LdxSyncService, deps.Notifier, deps.InlineValueProvider, deps.TreeEmitter)
 	}
 	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv))
 	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv))

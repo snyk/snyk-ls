@@ -17,6 +17,7 @@
 package command
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -37,6 +38,7 @@ import (
 // CreateFromCommandData gets a command based on the given parameters that can be passed to the CommandService
 // nolint: gocyclo, nolintlint // this is a factory, it's ok to have high cyclomatic complexity here
 func CreateFromCommandData(
+	ctx context.Context,
 	engine workflow.Engine,
 	commandData types.CommandData,
 	srv types.Server,
@@ -50,7 +52,6 @@ func CreateFromCommandData(
 	ldxSyncService LdxSyncService,
 	configResolver types.ConfigResolverInterface,
 	scanStateFunc func() scanstates.StateSnapshot,
-	treeEmitter treeRefresher,
 ) (types.Command, error) {
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
@@ -130,7 +131,8 @@ func CreateFromCommandData(
 			engine:             engine,
 		}, nil
 	case types.SubmitIgnoreRequest:
-		return &submitIgnoreRequest{command: commandData, issueProvider: issueProvider, notifier: notifier, srv: srv, engine: engine, configResolver: configResolver, treeEmitter: treeEmitter, scanStateFunc: scanStateFunc}, nil
+		te, _ := treeEmitterFromContext(ctx)
+		return &submitIgnoreRequest{command: commandData, issueProvider: issueProvider, notifier: notifier, srv: srv, engine: engine, configResolver: configResolver, treeEmitter: te, scanStateFunc: scanStateFunc}, nil
 	case types.WorkspaceConfigurationCommand:
 		return &configurationCommand{command: commandData, srv: srv, logger: logger, engine: engine, configResolver: configResolver}, nil
 	case types.GetTreeView:
