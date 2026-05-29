@@ -166,6 +166,9 @@ func injectCoreServicesIntoMap(m map[string]any, deps di.Dependencies) {
 	if deps.FileWatcher != nil {
 		m[ctx2.DepFileWatcher] = deps.FileWatcher
 	}
+	if deps.TreeEmitter != nil {
+		m[ctx2.DepTreeEmitter] = deps.TreeEmitter
+	}
 }
 
 func injectScanServicesIntoMap(m map[string]any, deps di.Dependencies) {

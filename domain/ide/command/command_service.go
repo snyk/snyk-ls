@@ -90,7 +90,7 @@ func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.
 
 	logger.Debug().Msgf("executing command %s", commandData.CommandId)
 	// TODO: move to DI
-	command, err := CreateFromCommandData(s.engine, commandData, server, s.authService, s.featureFlagService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli, s.ldxSyncService, s.configResolver, s.scanStateFunc)
+	command, err := CreateFromCommandData(ctx, s.engine, commandData, server, s.authService, s.featureFlagService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli, s.ldxSyncService, s.configResolver, s.scanStateFunc)
 	if err != nil {
 		logger.Err(err).Msg("failed to create command")
 		return nil, err
