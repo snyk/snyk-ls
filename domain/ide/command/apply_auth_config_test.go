@@ -88,15 +88,17 @@ func TestApplyEndpointChange_EndpointSame_ReturnsFalse(t *testing.T) {
 	assert.Equal(t, "some-token", config.GetToken(conf), "token must be preserved when endpoint is unchanged")
 }
 
-func TestApplyEndpointChange_NilAuthService_LSPInitialized_ReturnsChangedWithoutPanic(t *testing.T) {
+func TestApplyEndpointChange_NilAuthService_LSPInitialized_ReturnsFalseAndNoLogout(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	conf.Set(types.SettingIsLspInitialized, true)
 
-	// Must not panic and must still report changed=true so callers (e.g. analytics) observe the update.
+	// When authService is nil we cannot perform logout, so we must not signal "changed"
+	// to the caller — returning true would cause downstream actions (e.g. analytics, workspace
+	// clear) to proceed as if the change succeeded, which is misleading.
 	changed := ApplyEndpointChange(t.Context(), conf, nil, engine.GetLogger(), "https://api.custom.io")
 
-	assert.True(t, changed)
+	assert.False(t, changed)
 }
 
 func TestApplyInsecureSetting_SetsInsecureFlag(t *testing.T) {
@@ -148,6 +150,19 @@ func TestApplyAuthMethodChange_MethodSame_ReturnsFalse(t *testing.T) {
 	assert.False(t, changed)
 	assert.Equal(t, types.FakeAuthentication, config.GetAuthenticationMethodFromConfig(conf))
 	assert.Equal(t, "some-token", config.GetToken(conf), "token must be preserved when auth method is unchanged")
+}
+
+func TestApplyAuthMethodChange_NilAuthService_PersistsMethodButReturnsFalse(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	// Even when authService is nil (ConfigureProviders cannot run), SetGlobalUser must
+	// still be called so the auth method persists across restarts.
+	changed := ApplyAuthMethodChange(conf, nil, engine.GetLogger(), types.TokenAuthentication)
+
+	assert.False(t, changed, "must return false when authService is nil")
+	assert.Equal(t, types.TokenAuthentication, config.GetAuthenticationMethodFromConfig(conf),
+		"auth method must be persisted even when authService is nil")
 }
 
 func TestApplyAuthMethodChange_EmptyMethod_NoEffect(t *testing.T) {
