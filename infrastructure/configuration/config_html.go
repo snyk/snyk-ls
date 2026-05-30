@@ -32,6 +32,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/infrastructure/oss"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -174,6 +175,13 @@ func tmplIsSecretsFeatureEnabled(fc types.FolderConfig) bool {
 	return fc.GetFeatureFlag(featureflag.SnykSecretsEnabled)
 }
 
+// tmplHasUnmanagedArtefacts reports whether the folder contains C/C++ source,
+// header, or build-system files. Used to hide the "unmanaged mode" sub-toggle
+// for folders where it would never apply. Result is cached per process.
+func tmplHasUnmanagedArtefacts(folderPath types.FilePath) bool {
+	return oss.HasCPPArtefactsCached(string(folderPath))
+}
+
 // tmplSourceIndicator returns HTML for source indicators (icons with tooltips).
 // Returns: "🏢🔒" for locked, "🏢" for organization, empty for override (instead indicated by CSS border), empty for global/default.
 func tmplSourceIndicator(effectiveConfig map[string]types.EffectiveValue, settingName string) template.HTML {
@@ -205,6 +213,7 @@ func NewConfigHtmlRenderer(engine workflow.Engine) (*ConfigHtmlRenderer, error) 
 		"getSourceClass":          tmplGetSourceClass,
 		"isSecretsFeatureEnabled": tmplIsSecretsFeatureEnabled,
 		"sourceIndicator":         tmplSourceIndicator,
+		"hasUnmanagedArtefacts":   tmplHasUnmanagedArtefacts,
 	}
 
 	tmpl, err := template.New("config").Funcs(funcMap).Parse(configHtmlTemplate)

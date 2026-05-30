@@ -362,7 +362,42 @@ func (fc *FolderConfig) applyFolderScopeUpdates(update *LspFolderConfig) bool {
 	if fc.applyGenericFolderOverrides(update.Settings, handled, fm) {
 		changed = true
 	}
+
+	// Side-effect: re-arm the unmanaged-scan auto-detect prompt for this folder
+	// when the user explicitly disables unmanaged mode via the panel. Runs after
+	// the generic write so the persisted state is consistent before we touch the
+	// prompted latch.
+	fc.maybeRearmUnmanagedPrompt(update.Settings)
+
 	return changed
+}
+
+// maybeRearmUnmanagedPrompt clears SettingSnykOssUnmanagedPrompted for this
+// folder when the panel writes SettingSnykOssUnmanagedEnabled = false (or
+// resets it to the default, which is false). This is the explicit user signal
+// that they want unmanaged mode off, distinct from dismissing the auto-detect
+// prompt — so the prompt should re-appear on the next scan that finds C/C++
+// artefacts in the folder.
+func (fc *FolderConfig) maybeRearmUnmanagedPrompt(settings map[string]*ConfigSetting) {
+	cs, ok := settings[SettingSnykOssUnmanagedEnabled]
+	if !ok || cs == nil || !cs.Changed {
+		return
+	}
+	enabled, isBool := cs.Value.(bool)
+	if cs.Value != nil && (!isBool || enabled) {
+		return
+	}
+	conf := fc.Conf()
+	if conf == nil {
+		return
+	}
+	fp := string(PathKey(fc.FolderPath))
+	if fp == "" {
+		return
+	}
+	if HasUserOverride(conf, fc.FolderPath, SettingSnykOssUnmanagedPrompted) {
+		conf.Unset(configresolver.UserFolderKey(fp, SettingSnykOssUnmanagedPrompted))
+	}
 }
 
 func (fc *FolderConfig) applyGenericFolderOverrides(settings map[string]*ConfigSetting, handled map[string]bool, fm workflow.ConfigurationOptionsMetaData) bool {

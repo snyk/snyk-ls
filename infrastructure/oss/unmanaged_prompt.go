@@ -58,7 +58,7 @@ func maybePromptForUnmanagedScan(
 		return false
 	}
 	if detect == nil {
-		detect = HasCPPArtefacts
+		detect = HasCPPArtefactsCached
 	}
 	if !detect(string(folder.FolderPath)) {
 		return false

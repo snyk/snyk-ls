@@ -109,3 +109,39 @@ func TestHasCPPArtefacts(t *testing.T) {
 		assert.False(t, HasCPPArtefacts(dir), "directories deeper than cppDetectMaxDepth must be skipped")
 	})
 }
+
+func TestHasCPPArtefactsCached(t *testing.T) {
+	t.Run("returns the same result as the uncached detector", func(t *testing.T) {
+		ClearCPPArtefactCache()
+		t.Cleanup(ClearCPPArtefactCache)
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "main.c"), []byte("int main(){}"), 0o600))
+		assert.True(t, HasCPPArtefactsCached(dir))
+
+		jsDir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(jsDir, "index.js"), []byte("//"), 0o600))
+		assert.False(t, HasCPPArtefactsCached(jsDir))
+	})
+
+	t.Run("memoizes — subsequent calls return cached value even if the disk changes", func(t *testing.T) {
+		ClearCPPArtefactCache()
+		t.Cleanup(ClearCPPArtefactCache)
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "index.js"), []byte("//"), 0o600))
+		assert.False(t, HasCPPArtefactsCached(dir), "first call: JS only → false")
+
+		// Add a .c file AFTER the cache miss — the cached value should still be false.
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "added.c"), []byte("//"), 0o600))
+		assert.False(t, HasCPPArtefactsCached(dir), "cache should be returned, not re-scanned")
+
+		// After clearing, the fresh scan should see the .c file.
+		ClearCPPArtefactCache()
+		assert.True(t, HasCPPArtefactsCached(dir), "after clear, fresh scan picks up new files")
+	})
+
+	t.Run("empty root short-circuits", func(t *testing.T) {
+		ClearCPPArtefactCache()
+		t.Cleanup(ClearCPPArtefactCache)
+		assert.False(t, HasCPPArtefactsCached(""))
+	})
+}

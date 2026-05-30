@@ -20,7 +20,43 @@ import (
 	"io/fs"
 	"path/filepath"
 	"strings"
+	"sync"
 )
+
+// cppArtefactCache memoizes HasCPPArtefacts results for the lifetime of the
+// process. C/C++ artefacts rarely appear/disappear within a session and a full
+// WalkDir per folder per panel render would be wasteful.
+var (
+	cppArtefactCache   = make(map[string]bool)
+	cppArtefactCacheMu sync.RWMutex
+)
+
+// HasCPPArtefactsCached returns the cached HasCPPArtefacts result for root,
+// running the detector on a cache miss. Safe for concurrent use. Clear with
+// ClearCPPArtefactCache (e.g. after a workspace folder change).
+func HasCPPArtefactsCached(root string) bool {
+	if root == "" {
+		return false
+	}
+	cppArtefactCacheMu.RLock()
+	v, ok := cppArtefactCache[root]
+	cppArtefactCacheMu.RUnlock()
+	if ok {
+		return v
+	}
+	result := HasCPPArtefacts(root)
+	cppArtefactCacheMu.Lock()
+	cppArtefactCache[root] = result
+	cppArtefactCacheMu.Unlock()
+	return result
+}
+
+// ClearCPPArtefactCache removes all cached detection results. Primarily for tests.
+func ClearCPPArtefactCache() {
+	cppArtefactCacheMu.Lock()
+	cppArtefactCache = make(map[string]bool)
+	cppArtefactCacheMu.Unlock()
+}
 
 const (
 	cppDetectMaxFiles = 5000
