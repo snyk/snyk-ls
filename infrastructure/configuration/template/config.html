@@ -382,6 +382,13 @@
                                             {{sourceIndicator $folder.EffectiveConfig "snyk_oss_enabled"}}
                                         </label>
                                     </div>
+                                    <div class="checkbox-sub override-indicator-wrapper {{getSourceClass $folder.EffectiveConfig "snyk_oss_unmanaged_enabled"}}">
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" name="folder_{{$index}}_snyk_oss_unmanaged_enabled" data-setting="snyk_oss_unmanaged_enabled" {{with getEffectiveValue $folder.EffectiveConfig "snyk_oss_unmanaged_enabled"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "snyk_oss_unmanaged_enabled"}}disabled{{end}}>
+                                            <span data-toggle="tooltip" title="Also scan unmanaged C/C++ projects (passes --unmanaged to the OSS CLI). Only takes effect when Snyk Open Source is enabled.">Also scan unmanaged C/C++ (<code>--unmanaged</code>)</span>
+                                            {{sourceIndicator $folder.EffectiveConfig "snyk_oss_unmanaged_enabled"}}
+                                        </label>
+                                    </div>
                                     <div class="override-indicator-wrapper {{getSourceClass $folder.EffectiveConfig "snyk_code_enabled"}}">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="folder_{{$index}}_snyk_code_enabled" data-setting="snyk_code_enabled" {{with getEffectiveValue $folder.EffectiveConfig "snyk_code_enabled"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "snyk_code_enabled"}}disabled{{end}}>

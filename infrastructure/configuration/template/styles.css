@@ -284,6 +284,11 @@ label {
     margin-bottom: 0;
 }
 
+.checkbox-sub {
+    margin-left: 22px;
+    font-size: var(--nested-toggle-font-size);
+}
+
 .config-scope-slot:empty {
     display: none;
 }
