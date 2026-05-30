@@ -203,6 +203,11 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePat
 		logger.Debug().Msg("Open Source scan skipped: path is not a supported manifest, lockfile, or directory")
 		return []types.Issue{}, nil
 	}
+
+	// Auto-detect C/C++ workspaces and prompt the user once. The prompt is
+	// fire-and-forget; the user's choice applies to subsequent scans.
+	maybePromptForUnmanagedScan(cliScanner.notifier, cliScanner.engine.GetConfiguration(), cliScanner.configResolver, workspaceFolderConfig, HasCPPArtefacts)
+
 	return cliScanner.scanInternal(ctx, cliScanner.prepareScanCommand)
 }
 
@@ -391,6 +396,11 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 	args, env := cliScanner.updateArgs(path, args, folderConfig)
 	if params := cliScanner.configResolver.GetStringSlice(types.SettingCliAdditionalOssParameters, folderConfig); len(params) > 0 {
 		args = append(args, params...)
+	}
+	if cliScanner.configResolver.GetBool(types.SettingSnykOssUnmanagedEnabled, folderConfig) &&
+		!folderconfig.SliceContainsParam(cmd, "--unmanaged") &&
+		!folderconfig.SliceContainsParam(args, "--unmanaged") {
+		args = append(args, "--unmanaged")
 	}
 
 	processedArgs := []string{}

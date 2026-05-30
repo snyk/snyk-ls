@@ -257,6 +257,16 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"Snyk Secrets Enabled"},
 		configresolver.AnnotationDescription: {"Enable Snyk Secrets detection"},
 	})
+	registerFlag(fs, SettingSnykOssUnmanagedEnabled, false, "Enable Snyk OSS unmanaged C/C++ scan", map[string][]string{
+		configresolver.AnnotationScope:       {folderScope},
+		configresolver.AnnotationDisplayName: {"Snyk OSS Unmanaged (C/C++) Scan"},
+		configresolver.AnnotationDescription: {"Scan unmanaged C/C++ projects by passing --unmanaged to the Snyk OSS CLI"},
+	})
+	registerFlag(fs, SettingSnykOssUnmanagedPrompted, false, "User has been asked about enabling unmanaged scanning", map[string][]string{
+		configresolver.AnnotationScope:       {folderScope},
+		configresolver.AnnotationDisplayName: {"Snyk OSS Unmanaged Prompted"},
+		configresolver.AnnotationDescription: {"Internal — true once the user has been prompted about enabling unmanaged C/C++ scanning for this folder"},
+	})
 	registerFlag(fs, SettingScanAutomatic, true, "Automatic scan mode", map[string][]string{
 		configresolver.AnnotationScope:       {folderScope},
 		configresolver.AnnotationRemoteKey:   {"scan_automatic"},

@@ -33,11 +33,13 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -450,6 +452,128 @@ func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
 	ignoredPackageKey := "package2@2.0.0"
 	_, ignoredExists := packageIssueCache[ignoredPackageKey]
 	assert.False(t, ignoredExists, "Expected the ignored issue to not be in the package issue cache")
+}
+
+func TestCLIScanner_prepareScanCommand_AppendsUnmanagedWhenEnabled(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliExecutor := cli.NewTestExecutorWithResponse(engine, "{}")
+	notifier := notification.NewMockNotifier()
+	resolver := defaultResolver(t, engine)
+
+	cliScanner := &CLIScanner{
+		engine:            engine,
+		cli:               cliExecutor,
+		instrumentor:      performance.NewInstrumentor(),
+		errorReporter:     error_reporting.NewTestErrorReporter(engine),
+		learnService:      mock_learn.NewMockService(gomock.NewController(t)),
+		notifier:          notifier,
+		configResolver:    resolver,
+		mutex:             &sync.RWMutex{},
+		inlineValueMutex:  &sync.RWMutex{},
+		packageScanMutex:  &sync.Mutex{},
+		runningScans:      make(map[types.FilePath]*scans.ScanProgress),
+		supportedFiles:    make(map[string]bool),
+		packageIssueCache: make(map[string][]types.Issue),
+	}
+
+	folderPath := types.FilePath("/path/to/project")
+
+	t.Run("setting true → --unmanaged appended", func(t *testing.T) {
+		fc := &types.FolderConfig{FolderPath: folderPath, ConfigResolver: resolver}
+		types.SetFolderUserSetting(engine.GetConfiguration(), folderPath, types.SettingSnykOssUnmanagedEnabled, true)
+		t.Cleanup(func() {
+			engine.GetConfiguration().Unset(configresolver.UserFolderKey(string(folderPath), types.SettingSnykOssUnmanagedEnabled))
+		})
+
+		result, _ := cliScanner.prepareScanCommand([]string{}, map[string]bool{}, folderPath, fc)
+
+		assert.Contains(t, result, "--unmanaged")
+	})
+
+	t.Run("setting false → no --unmanaged", func(t *testing.T) {
+		fc := &types.FolderConfig{FolderPath: folderPath, ConfigResolver: resolver}
+
+		result, _ := cliScanner.prepareScanCommand([]string{}, map[string]bool{}, folderPath, fc)
+
+		assert.NotContains(t, result, "--unmanaged")
+	})
+
+	t.Run("setting true and additional_parameters already contains --unmanaged → only once", func(t *testing.T) {
+		fc := &types.FolderConfig{FolderPath: folderPath, ConfigResolver: resolver}
+		types.SetFolderUserSetting(engine.GetConfiguration(), folderPath, types.SettingSnykOssUnmanagedEnabled, true)
+		types.SetFolderUserSetting(engine.GetConfiguration(), folderPath, types.SettingCliAdditionalOssParameters, []string{"--unmanaged"})
+		t.Cleanup(func() {
+			engine.GetConfiguration().Unset(configresolver.UserFolderKey(string(folderPath), types.SettingSnykOssUnmanagedEnabled))
+			engine.GetConfiguration().Unset(configresolver.UserFolderKey(string(folderPath), types.SettingCliAdditionalOssParameters))
+		})
+
+		result, _ := cliScanner.prepareScanCommand([]string{}, map[string]bool{}, folderPath, fc)
+
+		count := 0
+		for _, a := range result {
+			if a == "--unmanaged" {
+				count++
+			}
+		}
+		assert.Equal(t, 1, count, "--unmanaged should be present exactly once")
+	})
+}
+
+func TestCLIScanner_Scan_PromptsForUnmanagedWhenCPPDetected(t *testing.T) {
+	t.Run("CMakeLists.txt in folder triggers prompt", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		workspaceDir := t.TempDir()
+		workspacePath := types.FilePath(workspaceDir)
+		require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "CMakeLists.txt"), []byte("project(x)"), 0o600))
+
+		notifier := notification.NewMockNotifier()
+		resolver := defaultResolver(t, engine)
+		scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutorWithResponse(engine, "{}"), getLearnMock(t), notifier, resolver)
+
+		folderConfig := config.GetFolderConfigFromEngine(engine, resolver, workspacePath, engine.GetLogger())
+		ctx := EnrichContextForTest(t, t.Context(), engine, workspaceDir)
+		ctx = ctx2.NewContextWithFolderConfig(ctx, folderConfig)
+
+		_, _ = scanner.Scan(ctx, workspacePath)
+
+		var prompt *types.ShowMessageRequest
+		for _, m := range notifier.SentMessages() {
+			if req, ok := m.(types.ShowMessageRequest); ok {
+				if yes, present := req.Actions.Get(types.MessageAction(unmanagedPromptYes)); present && yes.CommandId == types.EnableUnmanagedScanCommand {
+					p := req
+					prompt = &p
+					break
+				}
+			}
+		}
+		require.NotNil(t, prompt, "Scan should have emitted the unmanaged-scan prompt")
+		assert.Equal(t, types.Info, prompt.Type)
+	})
+
+	t.Run("JS-only folder does not trigger prompt", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		workspaceDir := t.TempDir()
+		workspacePath := types.FilePath(workspaceDir)
+		require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "package.json"), []byte(`{"name":"x"}`), 0o600))
+
+		notifier := notification.NewMockNotifier()
+		resolver := defaultResolver(t, engine)
+		scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutorWithResponse(engine, "{}"), getLearnMock(t), notifier, resolver)
+
+		folderConfig := config.GetFolderConfigFromEngine(engine, resolver, workspacePath, engine.GetLogger())
+		ctx := EnrichContextForTest(t, t.Context(), engine, workspaceDir)
+		ctx = ctx2.NewContextWithFolderConfig(ctx, folderConfig)
+
+		_, _ = scanner.Scan(ctx, workspacePath)
+
+		for _, m := range notifier.SentMessages() {
+			if req, ok := m.(types.ShowMessageRequest); ok {
+				if _, present := req.Actions.Get(types.MessageAction(unmanagedPromptYes)); present {
+					t.Fatalf("Scan emitted an unmanaged-scan prompt for a JS-only folder")
+				}
+			}
+		}
+	})
 }
 
 func Test_isForceLegacyCLI(t *testing.T) {
