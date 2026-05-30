@@ -285,8 +285,11 @@ label {
 }
 
 .checkbox-sub {
-    margin-left: 22px;
+    margin-left: 24px;
+    padding-left: 10px;
+    border-left: 2px solid var(--disabled-foreground);
     font-size: var(--nested-toggle-font-size);
+    opacity: 0.9;
 }
 
 .config-scope-slot:empty {

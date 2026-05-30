@@ -25,8 +25,8 @@ import (
 )
 
 const (
-	unmanagedPromptMessage = "Snyk detected C/C++ files in this project. Snyk Open Source can scan unmanaged C/C++ projects (passing --unmanaged to the CLI). Enable unmanaged scanning for this folder?"
-	unmanagedPromptYes     = "Yes, enable unmanaged scan"
+	unmanagedPromptMessage = "Snyk detected C/C++ files in this folder. Snyk Open Source can switch to unmanaged mode (--unmanaged) for it, which REPLACES manifest-based dependency scanning with file-hash matching against known open-source C/C++ releases. If this folder also contains a supported manifest (package.json, pom.xml, requirements.txt, etc.), that manifest will no longer be scanned for OSS issues while unmanaged mode is on. Switch this folder to unmanaged mode?"
+	unmanagedPromptYes     = "Yes, use unmanaged mode"
 	unmanagedPromptNo      = "No, thanks"
 )
 
