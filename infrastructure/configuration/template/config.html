@@ -382,7 +382,7 @@
                                             {{sourceIndicator $folder.EffectiveConfig "snyk_oss_enabled"}}
                                         </label>
                                     </div>
-    <div class="override-indicator-wrapper {{getSourceClass $folder.EffectiveConfig "snyk_code_enabled"}}">
+                                    <div class="override-indicator-wrapper {{getSourceClass $folder.EffectiveConfig "snyk_code_enabled"}}">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="folder_{{$index}}_snyk_code_enabled" data-setting="snyk_code_enabled" {{with getEffectiveValue $folder.EffectiveConfig "snyk_code_enabled"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "snyk_code_enabled"}}disabled{{end}}>
                                             <span data-toggle="tooltip" title="<p>Find and fix security issues in your application code in real time.</p><p><strong>Note:</strong> Snyk Code must be enabled for your organization in Snyk settings.</p>">Snyk Code</span>

@@ -123,22 +123,22 @@ var expectedAnnotations = map[string]struct {
 	SettingAutomaticDownload:               {machineScope, "automatic_download", "Automatic Download", "manageBinariesAutomatically", false},
 	SettingCliReleaseChannel:               {machineScope, "cli_release_channel", "CLI Release Channel", "cliReleaseChannel", false},
 	// Org-scope
-	SettingSeverityFilterCritical:   {folderScope, "severity_critical_enabled", "Severity Filter Critical", "", false},
-	SettingSeverityFilterHigh:       {folderScope, "severity_high_enabled", "Severity Filter High", "", false},
-	SettingSeverityFilterMedium:     {folderScope, "severity_medium_enabled", "Severity Filter Medium", "", false},
-	SettingSeverityFilterLow:        {folderScope, "severity_low_enabled", "Severity Filter Low", "", false},
-	SettingRiskScoreThreshold:       {folderScope, "risk_score_threshold", "Risk Score Threshold", "riskScoreThreshold", false},
-	SettingCweIds:                   {folderScope, "cwe_ids", "CWE IDs", "", false},
-	SettingCveIds:                   {folderScope, "cve_ids", "CVE IDs", "", false},
-	SettingRuleIds:                  {folderScope, "rule_ids", "Rule IDs", "", false},
-	SettingSnykCodeEnabled:          {folderScope, "product_code_enabled", "Snyk Code Enabled", "activateSnykCode", false},
-	SettingSnykOssEnabled:           {folderScope, "product_oss_enabled", "Snyk OSS Enabled", "activateSnykOpenSource", false},
-	SettingSnykIacEnabled:           {folderScope, "product_iac_enabled", "Snyk IaC Enabled", "activateSnykIac", false},
+	SettingSeverityFilterCritical: {folderScope, "severity_critical_enabled", "Severity Filter Critical", "", false},
+	SettingSeverityFilterHigh:     {folderScope, "severity_high_enabled", "Severity Filter High", "", false},
+	SettingSeverityFilterMedium:   {folderScope, "severity_medium_enabled", "Severity Filter Medium", "", false},
+	SettingSeverityFilterLow:      {folderScope, "severity_low_enabled", "Severity Filter Low", "", false},
+	SettingRiskScoreThreshold:     {folderScope, "risk_score_threshold", "Risk Score Threshold", "riskScoreThreshold", false},
+	SettingCweIds:                 {folderScope, "cwe_ids", "CWE IDs", "", false},
+	SettingCveIds:                 {folderScope, "cve_ids", "CVE IDs", "", false},
+	SettingRuleIds:                {folderScope, "rule_ids", "Rule IDs", "", false},
+	SettingSnykCodeEnabled:        {folderScope, "product_code_enabled", "Snyk Code Enabled", "activateSnykCode", false},
+	SettingSnykOssEnabled:         {folderScope, "product_oss_enabled", "Snyk OSS Enabled", "activateSnykOpenSource", false},
+	SettingSnykIacEnabled:         {folderScope, "product_iac_enabled", "Snyk IaC Enabled", "activateSnykIac", false},
 	SettingSnykSecretsEnabled:     {folderScope, "product_secrets_enabled", "Snyk Secrets Enabled", "activateSnykSecrets", false},
 	SettingScanAutomatic:          {folderScope, "scan_automatic", "Scan Automatic", "scanningMode", false},
-	SettingScanNetNew:               {folderScope, "scan_net_new", "Scan Net New", "enableDeltaFindings", false},
-	SettingIssueViewOpenIssues:      {folderScope, "issue_view_open_issues", "Issue View Open Issues", "", false},
-	SettingIssueViewIgnoredIssues:   {folderScope, "issue_view_ignored_issues", "Issue View Ignored Issues", "", false},
+	SettingScanNetNew:             {folderScope, "scan_net_new", "Scan Net New", "enableDeltaFindings", false},
+	SettingIssueViewOpenIssues:    {folderScope, "issue_view_open_issues", "Issue View Open Issues", "", false},
+	SettingIssueViewIgnoredIssues: {folderScope, "issue_view_ignored_issues", "Issue View Ignored Issues", "", false},
 	// Folder-scope
 	SettingReferenceFolder:            {folderScope, "reference_folder", "Reference Folder", "", false},
 	SettingReferenceBranch:            {folderScope, "reference_branch", "Reference Branch", "", false},
@@ -182,7 +182,7 @@ func TestRegisterAllConfigurations_FC048_ProducesFlagsWithCorrectAnnotations(t *
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	RegisterAllConfigurations(fs)
 
-	assert.Len(t, allSettings, 61, "allSettings should have 61 entries (28 machine + 5 write-only + 18 org + 10 folder)")
+	assert.Len(t, allSettings, 61, "allSettings should have 61 entries (28 machine + 5 write-only + 16 org + 12 folder)")
 
 	for _, name := range allSettings {
 		t.Run(name, func(t *testing.T) {

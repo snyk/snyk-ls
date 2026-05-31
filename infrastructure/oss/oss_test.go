@@ -1001,10 +1001,6 @@ func Test_scheduleRefreshScan_FallsBackToStructFieldWhenNoResolverInContext(t *t
 		Return("").
 		AnyTimes()
 	mockResolver.EXPECT().
-		GetBool(gomock.Any(), gomock.Any()).
-		Return(false).
-		AnyTimes()
-	mockResolver.EXPECT().
 		Configuration().
 		Return(engine.GetConfiguration()).
 		AnyTimes()

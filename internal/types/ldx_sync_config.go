@@ -118,10 +118,10 @@ const (
 	SettingBaseBranch             = "base_branch"
 	SettingLocalBranches          = "local_branches"
 	SettingPreferredOrg           = "preferred_org"
-	SettingAutoDeterminedOrg        = "auto_determined_org"
-	SettingOrgSetByUser             = "org_set_by_user"
-	SettingScanCommandConfig        = "scan_command_config"
-	SettingSastSettings             = "sast_settings"
+	SettingAutoDeterminedOrg      = "auto_determined_org"
+	SettingOrgSetByUser           = "org_set_by_user"
+	SettingScanCommandConfig      = "scan_command_config"
+	SettingSastSettings           = "sast_settings"
 
 	// Internal settings (not registered as pflag, but stored in GAF configuration)
 	SettingSnykCodeAnalysisTimeout    = "snyk_code_analysis_timeout"

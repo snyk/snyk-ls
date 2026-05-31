@@ -362,7 +362,6 @@ func (fc *FolderConfig) applyFolderScopeUpdates(update *LspFolderConfig) bool {
 	if fc.applyGenericFolderOverrides(update.Settings, handled, fm) {
 		changed = true
 	}
-
 	return changed
 }
 
