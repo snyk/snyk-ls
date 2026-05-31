@@ -56,11 +56,6 @@ const (
 	ShowScanErrorDetails = "snyk.showScanErrorDetails"
 	UpdateFolderConfig   = "snyk.updateFolderConfig"
 
-	// EnableUnmanagedScanCommand sets snyk_oss_unmanaged_enabled = true for the
-	// folder passed as args[0]. Used by the C/C++ auto-detect prompt to act on
-	// the user's "Yes" response.
-	EnableUnmanagedScanCommand = "snyk.enableUnmanagedScan"
-
 	// bridging commands
 	ExecuteCLICommand = "snyk.executeCLI"
 

@@ -382,16 +382,7 @@
                                             {{sourceIndicator $folder.EffectiveConfig "snyk_oss_enabled"}}
                                         </label>
                                     </div>
-                                    {{if hasUnmanagedArtefacts $folder.FolderPath}}
-                                    <div class="checkbox-sub override-indicator-wrapper {{getSourceClass $folder.EffectiveConfig "snyk_oss_unmanaged_enabled"}}">
-                                        <label class="checkbox-label">
-                                            <input type="checkbox" name="folder_{{$index}}_snyk_oss_unmanaged_enabled" data-setting="snyk_oss_unmanaged_enabled" {{with getEffectiveValue $folder.EffectiveConfig "snyk_oss_unmanaged_enabled"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "snyk_oss_unmanaged_enabled"}}disabled{{end}}>
-                                            <span data-toggle="tooltip" title="Switches Snyk Open Source into unmanaged mode for this folder (passes --unmanaged to the OSS CLI). REPLACES manifest-based scanning with file-hash matching against known open-source releases — use for C/C++ projects without a supported manifest. Only takes effect when Snyk Open Source is enabled. Unchecking re-arms the auto-detect prompt for this folder.">Use unmanaged mode for this folder (<code>--unmanaged</code>, replaces manifest scan)</span>
-                                            {{sourceIndicator $folder.EffectiveConfig "snyk_oss_unmanaged_enabled"}}
-                                        </label>
-                                    </div>
-                                    {{end}}
-                                    <div class="override-indicator-wrapper {{getSourceClass $folder.EffectiveConfig "snyk_code_enabled"}}">
+    <div class="override-indicator-wrapper {{getSourceClass $folder.EffectiveConfig "snyk_code_enabled"}}">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="folder_{{$index}}_snyk_code_enabled" data-setting="snyk_code_enabled" {{with getEffectiveValue $folder.EffectiveConfig "snyk_code_enabled"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "snyk_code_enabled"}}disabled{{end}}>
                                             <span data-toggle="tooltip" title="<p>Find and fix security issues in your application code in real time.</p><p><strong>Note:</strong> Snyk Code must be enabled for your organization in Snyk settings.</p>">Snyk Code</span>

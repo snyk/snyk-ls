@@ -158,7 +158,6 @@ func computeEffectiveConfig(fc *types.FolderConfig) map[string]types.EffectiveVa
 		types.SettingScanNetNew,
 		types.SettingSnykCodeEnabled,
 		types.SettingSnykOssEnabled,
-		types.SettingSnykOssUnmanagedEnabled,
 		types.SettingSnykIacEnabled,
 		types.SettingSnykSecretsEnabled,
 		types.SettingRiskScoreThreshold,

@@ -233,7 +233,6 @@
 				fc.severity_filter_medium = null;
 				fc.severity_filter_low = null;
 				fc.snyk_oss_enabled = null;
-				fc.snyk_oss_unmanaged_enabled = null;
 				fc.snyk_code_enabled = null;
 				fc.snyk_iac_enabled = null;
 				fc.snyk_secrets_enabled = null;

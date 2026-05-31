@@ -10,7 +10,6 @@
 	var sectionDefaults = {
 		scanConfiguration: {
 			snyk_oss_enabled: false,
-			snyk_oss_unmanaged_enabled: false,
 			snyk_code_enabled: false,
 			snyk_iac_enabled: false,
 			snyk_secrets_enabled: false,

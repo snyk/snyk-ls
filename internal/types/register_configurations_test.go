@@ -76,8 +76,6 @@ var allSettings = []string{
 	SettingSnykOssEnabled,
 	SettingSnykIacEnabled,
 	SettingSnykSecretsEnabled,
-	SettingSnykOssUnmanagedEnabled,
-	SettingSnykOssUnmanagedPrompted,
 	SettingScanAutomatic,
 	SettingScanNetNew,
 	SettingIssueViewOpenIssues,
@@ -136,10 +134,8 @@ var expectedAnnotations = map[string]struct {
 	SettingSnykCodeEnabled:          {folderScope, "product_code_enabled", "Snyk Code Enabled", "activateSnykCode", false},
 	SettingSnykOssEnabled:           {folderScope, "product_oss_enabled", "Snyk OSS Enabled", "activateSnykOpenSource", false},
 	SettingSnykIacEnabled:           {folderScope, "product_iac_enabled", "Snyk IaC Enabled", "activateSnykIac", false},
-	SettingSnykSecretsEnabled:       {folderScope, "product_secrets_enabled", "Snyk Secrets Enabled", "activateSnykSecrets", false},
-	SettingSnykOssUnmanagedEnabled:  {folderScope, "", "Snyk OSS Unmanaged (C/C++) Scan", "", false},
-	SettingSnykOssUnmanagedPrompted: {folderScope, "", "Snyk OSS Unmanaged Prompted", "", false},
-	SettingScanAutomatic:            {folderScope, "scan_automatic", "Scan Automatic", "scanningMode", false},
+	SettingSnykSecretsEnabled:     {folderScope, "product_secrets_enabled", "Snyk Secrets Enabled", "activateSnykSecrets", false},
+	SettingScanAutomatic:          {folderScope, "scan_automatic", "Scan Automatic", "scanningMode", false},
 	SettingScanNetNew:               {folderScope, "scan_net_new", "Scan Net New", "enableDeltaFindings", false},
 	SettingIssueViewOpenIssues:      {folderScope, "issue_view_open_issues", "Issue View Open Issues", "", false},
 	SettingIssueViewIgnoredIssues:   {folderScope, "issue_view_ignored_issues", "Issue View Ignored Issues", "", false},
@@ -186,7 +182,7 @@ func TestRegisterAllConfigurations_FC048_ProducesFlagsWithCorrectAnnotations(t *
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	RegisterAllConfigurations(fs)
 
-	assert.Len(t, allSettings, 63, "allSettings should have 63 entries (28 machine + 5 write-only + 18 org + 12 folder)")
+	assert.Len(t, allSettings, 61, "allSettings should have 61 entries (28 machine + 5 write-only + 18 org + 10 folder)")
 
 	for _, name := range allSettings {
 		t.Run(name, func(t *testing.T) {

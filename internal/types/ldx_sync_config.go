@@ -107,26 +107,17 @@ const (
 	SettingSnykOssEnabled         = "snyk_oss_enabled"
 	SettingSnykIacEnabled         = "snyk_iac_enabled"
 	SettingSnykSecretsEnabled     = "snyk_secrets_enabled"
-
-	// SettingSnykOssUnmanagedEnabled, when true, makes the OSS scanner append
-	// `--unmanaged` to the CLI invocation so projects without a recognised
-	// manifest (notably C/C++) are still scanned.
-	SettingSnykOssUnmanagedEnabled = "snyk_oss_unmanaged_enabled"
-	// SettingSnykOssUnmanagedPrompted is `true` once the user has been asked
-	// (once per folder) whether to enable the unmanaged scan. It exists to
-	// prevent re-prompting after the user has decided.
-	SettingSnykOssUnmanagedPrompted = "snyk_oss_unmanaged_prompted"
-	SettingScanAutomatic            = "scan_automatic"
-	SettingScanNetNew               = "scan_net_new"
-	SettingIssueViewOpenIssues      = "issue_view_open_issues"
-	SettingIssueViewIgnoredIssues   = "issue_view_ignored_issues"
-	SettingReferenceFolder          = "reference_folder"
-	SettingReferenceBranch          = "reference_branch"
-	SettingAdditionalParameters     = "additional_parameters"
-	SettingAdditionalEnvironment    = "additional_environment"
-	SettingBaseBranch               = "base_branch"
-	SettingLocalBranches            = "local_branches"
-	SettingPreferredOrg             = "preferred_org"
+	SettingScanAutomatic          = "scan_automatic"
+	SettingScanNetNew             = "scan_net_new"
+	SettingIssueViewOpenIssues    = "issue_view_open_issues"
+	SettingIssueViewIgnoredIssues = "issue_view_ignored_issues"
+	SettingReferenceFolder        = "reference_folder"
+	SettingReferenceBranch        = "reference_branch"
+	SettingAdditionalParameters   = "additional_parameters"
+	SettingAdditionalEnvironment  = "additional_environment"
+	SettingBaseBranch             = "base_branch"
+	SettingLocalBranches          = "local_branches"
+	SettingPreferredOrg           = "preferred_org"
 	SettingAutoDeterminedOrg        = "auto_determined_org"
 	SettingOrgSetByUser             = "org_set_by_user"
 	SettingScanCommandConfig        = "scan_command_config"

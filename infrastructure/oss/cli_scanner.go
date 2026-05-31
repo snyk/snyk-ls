@@ -204,10 +204,6 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePat
 		return []types.Issue{}, nil
 	}
 
-	// Auto-detect C/C++ workspaces and prompt the user once. The prompt is
-	// fire-and-forget; the user's choice applies to subsequent scans.
-	maybePromptForUnmanagedScan(cliScanner.notifier, cliScanner.engine.GetConfiguration(), cliScanner.configResolver, workspaceFolderConfig, HasCPPArtefacts)
-
 	return cliScanner.scanInternal(ctx, cliScanner.prepareScanCommand)
 }
 
@@ -397,11 +393,14 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 	if params := cliScanner.configResolver.GetStringSlice(types.SettingCliAdditionalOssParameters, folderConfig); len(params) > 0 {
 		args = append(args, params...)
 	}
-	if cliScanner.configResolver.GetBool(types.SettingSnykOssUnmanagedEnabled, folderConfig) &&
-		!folderconfig.SliceContainsParam(cmd, "--unmanaged") &&
-		!folderconfig.SliceContainsParam(args, "--unmanaged") {
-		args = append(args, "--unmanaged")
+	// Opt the CLI's os-flows extension into auto-detecting C/C++ projects:
+	// when set, it runs an extra unmanaged scan alongside the managed scan
+	// for folders that look unmanaged-eligible, so the LS doesn't need to
+	// prompt or expose a per-folder toggle.
+	if env == nil {
+		env = gotenv.Env{}
 	}
+	env["SNYK_AUTODETECT_OSS"] = "1"
 
 	processedArgs := []string{}
 	// now add all additional parameters, skipping blacklisted ones

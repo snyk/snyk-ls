@@ -284,19 +284,6 @@ label {
     margin-bottom: 0;
 }
 
-.checkbox-sub {
-    font-size: var(--nested-toggle-font-size);
-    opacity: 0.9;
-}
-
-/* Compound selector beats `.override-indicator-wrapper { margin-left: -8px }`
-   so the sub-toggle actually indents under its parent. */
-.checkbox-sub.override-indicator-wrapper {
-    margin-left: 28px;
-    padding-left: 12px;
-    border-left: 2px solid var(--disabled-foreground);
-}
-
 .config-scope-slot:empty {
     display: none;
 }
