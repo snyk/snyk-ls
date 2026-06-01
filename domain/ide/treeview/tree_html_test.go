@@ -709,7 +709,7 @@ func TestTreeHtmlRenderer_TreeHoverRow_PairsBackgroundAndForeground(t *testing.T
 	html := renderer.RenderTreeView(TreeViewData{})
 
 	// The embedded CSS must define the hover-foreground variable so that hover
-	// text colour is paired with the hover background across IDE themes (IDE-2078).
+	// text color is paired with the hover background across IDE themes (IDE-2078).
 	assert.Contains(t, html, "--list-hover-foreground", "CSS must define --list-hover-foreground variable")
 
 	// The .tree-node-row:hover block must set BOTH background-color AND color so
