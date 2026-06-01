@@ -234,11 +234,7 @@ func UpdateSettings(ctx context.Context, conf configuration.Configuration, engin
 	// PopulateFolderConfig runs inside processFolderConfigs. Flushing here
 	// ensures every folder sees fresh results with the new token.
 	if newToken := config.GetToken(conf); newToken != "" && newToken != oldToken {
-		if ffs, ok := featureFlagServiceFromContext(ctx); ok {
-			ffs.FlushCache()
-		} else {
-			logger.Error().Str("method", "UpdateSettings").Msg("feature flag service not in context; stale feature flag state may persist for new token")
-		}
+		mustFeatureFlagServiceFromContext(ctx).FlushCache()
 	}
 
 	lockedFolderFields := processFolderConfigs(ctx, conf, engine, logger, folderConfigs, triggerSource, configResolver, globalOrgChanged)
@@ -247,7 +243,8 @@ func UpdateSettings(ctx context.Context, conf configuration.Configuration, engin
 	if configResolver != nil {
 		fm = configResolver.ConfigurationOptionsMetaData()
 	}
-	notifyLockedFieldsRejected(mustNotifierFromContext(ctx), fm, lockedMachineFields, lockedFolderFields)
+	n := mustNotifierFromContext(ctx)
+	notifyLockedFieldsRejected(n, fm, lockedMachineFields, lockedFolderFields)
 
 	if ws != nil {
 		for _, folder := range ws.Folders() {
@@ -260,10 +257,12 @@ func UpdateSettings(ctx context.Context, conf configuration.Configuration, engin
 		}
 	}
 
-	refreshLdxSyncOnTokenChange(ctx, conf, engine, logger, ws, oldToken)
+	refreshLdxSyncOnTokenChange(ctx, conf, engine, logger, ws, oldToken, n)
 }
 
-func refreshLdxSyncOnTokenChange(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, ws types.Workspace, oldToken string) {
+// refreshLdxSyncOnTokenChange triggers an LDX-Sync refresh when the token changes.
+// ldxSyncService is read from ctx via mustLdxSyncServiceFromContext; notifier is passed by the caller.
+func refreshLdxSyncOnTokenChange(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, ws types.Workspace, oldToken string, notifier notification.Notifier) {
 	newToken := config.GetToken(conf)
 	if newToken == oldToken || newToken == "" {
 		return
@@ -276,16 +275,7 @@ func refreshLdxSyncOnTokenChange(ctx context.Context, conf configuration.Configu
 		return
 	}
 	logger.Info().Msg("token changed via settings, refreshing LDX-Sync configuration")
-	ldxSyncService, ok := ldxSyncServiceFromContext(ctx)
-	if !ok {
-		logger.Warn().Msg("ldxSyncService not in context; skipping LDX-Sync refresh on token change")
-		return
-	}
-	n, ok := notifierFromContext(ctx)
-	if !ok {
-		logger.Warn().Msg("notifier not in context; LDX-Sync refresh will proceed without locked-field notifications")
-	}
-	ldxSyncService.RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, folders, n)
+	mustLdxSyncServiceFromContext(ctx).RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, folders, notifier)
 }
 
 // validateLockedMachineFields rejects user PATCH attempts for machine-scope settings

@@ -710,16 +710,17 @@ func initTestRepo(t *testing.T, tempDir string) error {
 func Test_UpdateSettings_TokenChange_TriggersLdxSyncRefresh(t *testing.T) {
 	t.Run("new token triggers refresh", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
-		di.TestInit(t, engine, tokenService, nil)
+		deps := di.TestInit(t, engine, tokenService, nil)
 
 		ctrl := gomock.NewController(t)
 		t.Cleanup(ctrl.Finish)
 
 		mockLdx := mock_command.NewMockLdxSyncService(ctrl)
 		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-			ctx2.DepLdxSyncService: mockLdx,
-			ctx2.DepNotifier:       notification.NewMockNotifier(),
-			ctx2.DepAuthService:    di.AuthenticationService(),
+			ctx2.DepLdxSyncService:     mockLdx,
+			ctx2.DepNotifier:           notification.NewMockNotifier(),
+			ctx2.DepAuthService:        deps.AuthenticationService,
+			ctx2.DepFeatureFlagService: deps.FeatureFlagService,
 		})
 
 		folderPath := types.FilePath(t.TempDir())
@@ -747,15 +748,16 @@ func Test_UpdateSettings_TokenChange_TriggersLdxSyncRefresh(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			engine, tokenService := testutil.UnitTestWithEngine(t)
-			di.TestInit(t, engine, tokenService, nil)
+			deps := di.TestInit(t, engine, tokenService, nil)
 
 			ctrl := gomock.NewController(t)
 			t.Cleanup(ctrl.Finish)
 
 			mockLdx := mock_command.NewMockLdxSyncService(ctrl)
 			ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-				ctx2.DepLdxSyncService: mockLdx,
-				ctx2.DepNotifier:       notification.NewMockNotifier(),
+				ctx2.DepLdxSyncService:     mockLdx,
+				ctx2.DepNotifier:           notification.NewMockNotifier(),
+				ctx2.DepFeatureFlagService: deps.FeatureFlagService,
 			})
 
 			folderPath := types.FilePath(t.TempDir())
@@ -775,15 +777,16 @@ func Test_UpdateSettings_TokenChange_TriggersLdxSyncRefresh(t *testing.T) {
 
 	t.Run("no workspace folders skips refresh", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
-		di.TestInit(t, engine, tokenService, nil)
+		deps := di.TestInit(t, engine, tokenService, nil)
 
 		ctrl := gomock.NewController(t)
 		t.Cleanup(ctrl.Finish)
 
 		mockLdx := mock_command.NewMockLdxSyncService(ctrl)
 		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-			ctx2.DepLdxSyncService: mockLdx,
-			ctx2.DepNotifier:       notification.NewMockNotifier(),
+			ctx2.DepLdxSyncService:     mockLdx,
+			ctx2.DepNotifier:           notification.NewMockNotifier(),
+			ctx2.DepFeatureFlagService: deps.FeatureFlagService,
 		})
 
 		tokenService.SetToken(engine.GetConfiguration(), "old-token")
@@ -798,9 +801,8 @@ func Test_UpdateSettings_TokenChange_TriggersLdxSyncRefresh(t *testing.T) {
 	})
 }
 
-func Test_refreshLdxSyncOnTokenChange_NotifierAbsentFromContext_StillCallsRefresh(t *testing.T) {
-	// When the notifier is not in context, refreshLdxSyncOnTokenChange must log a warning
-	// but must still call RefreshConfigFromLdxSync (nil notifier is tolerated by that function).
+func Test_refreshLdxSyncOnTokenChange_NilNotifier_StillCallsRefresh(t *testing.T) {
+	// Passing nil for the notifier must still call RefreshConfigFromLdxSync — it tolerates nil.
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	di.TestInit(t, engine, tokenService, nil)
 
@@ -830,7 +832,8 @@ func Test_refreshLdxSyncOnTokenChange_NotifierAbsentFromContext_StillCallsRefres
 	// (We bypass UpdateSettings to avoid the processFolderConfigs → mustNotifierFromContext path.)
 	tokenService.SetToken(conf, "new-token")
 	// Explicitly call the function under test.
-	refreshLdxSyncOnTokenChange(ctx, conf, engine, engine.GetLogger(), config.GetWorkspace(conf), "old-token")
+	// nil notifier: verifies that RefreshConfigFromLdxSync is still called even without one.
+	refreshLdxSyncOnTokenChange(ctx, conf, engine, engine.GetLogger(), config.GetWorkspace(conf), "old-token", nil)
 }
 
 func Test_UpdateSettings_BlankOrganizationResetsToDefault_Integration(t *testing.T) {
@@ -887,12 +890,13 @@ type folderConfigTestSetup struct {
 	engineConfig configuration.Configuration
 	logger       *zerolog.Logger
 	folderPath   types.FilePath
+	deps         di.Dependencies
 }
 
 func setupFolderConfigTest(t *testing.T) *folderConfigTestSetup {
 	t.Helper()
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	di.TestInit(t, engine, tokenService, nil)
+	deps := di.TestInit(t, engine, tokenService, nil)
 
 	engineConfig := engine.GetConfiguration()
 
@@ -914,6 +918,7 @@ func setupFolderConfigTest(t *testing.T) *folderConfigTestSetup {
 		engineConfig: engineConfig,
 		logger:       logger,
 		folderPath:   folderPath,
+		deps:         deps,
 	}
 }
 
@@ -1199,9 +1204,10 @@ func Test_processFolderConfigs_AutoMode_DoesNotLeakGlobalOrgToLdxSync(t *testing
 	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
 	realService := command.NewLdxSyncServiceWithApiClient(mockApiClient, testutil.DefaultConfigResolver(setup.engine))
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-		ctx2.DepLdxSyncService: realService,
-		ctx2.DepNotifier:       notification.NewMockNotifier(),
-		ctx2.DepAuthService:    di.AuthenticationService(),
+		ctx2.DepLdxSyncService:     realService,
+		ctx2.DepNotifier:           notification.NewMockNotifier(),
+		ctx2.DepAuthService:        setup.deps.AuthenticationService,
+		ctx2.DepFeatureFlagService: setup.deps.FeatureFlagService,
 	})
 
 	folders := config.GetWorkspace(setup.engine.GetConfiguration()).Folders()
