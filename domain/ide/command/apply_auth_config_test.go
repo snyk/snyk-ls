@@ -88,6 +88,30 @@ func TestApplyEndpointChange_EndpointSame_ReturnsFalse(t *testing.T) {
 	assert.Equal(t, "some-token", config.GetToken(conf), "token must be preserved when endpoint is unchanged")
 }
 
+func TestApplyEndpointChange_NilAuthService_LSPNotInitialized_MutationProceeds(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	// LSP not initialized — no logout needed, so nil authService must not block the change.
+	changed := ApplyEndpointChange(t.Context(), conf, nil, engine.GetLogger(), "https://api.custom.io")
+
+	assert.True(t, changed)
+	assert.Equal(t, "https://api.custom.io", types.GetGlobalString(conf, types.SettingApiEndpoint))
+}
+
+func TestApplyEndpointChange_NilAuthService_LSPInitialized_SkipsMutationAndReturnsFalse(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(types.SettingIsLspInitialized, true)
+	originalEndpoint := types.GetGlobalString(conf, types.SettingApiEndpoint)
+
+	// When authService is nil and LSP is initialized, the config must NOT be mutated —
+	// switching endpoints without logging out would leave credentials pointing at the wrong endpoint.
+	changed := ApplyEndpointChange(t.Context(), conf, nil, engine.GetLogger(), "https://api.custom.io")
+
+	assert.False(t, changed)
+	assert.Equal(t, originalEndpoint, types.GetGlobalString(conf, types.SettingApiEndpoint), "endpoint must not be mutated when logout cannot be performed")
+}
+
 func TestApplyInsecureSetting_SetsInsecureFlag(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()
@@ -138,6 +162,9 @@ func TestApplyAuthMethodChange_MethodSame_ReturnsFalse(t *testing.T) {
 	assert.Equal(t, types.FakeAuthentication, config.GetAuthenticationMethodFromConfig(conf))
 	assert.Equal(t, "some-token", config.GetToken(conf), "token must be preserved when auth method is unchanged")
 }
+
+// TestApplyAuthMethodChange_NilAuthService removed: authService is now guaranteed
+// non-nil by withContext.validateMandatoryDeps before any handler runs.
 
 func TestApplyAuthMethodChange_EmptyMethod_NoEffect(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)

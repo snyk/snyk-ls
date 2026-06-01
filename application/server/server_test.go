@@ -213,17 +213,14 @@ func (s *sentinelHoverService) GetHover(_ types.FilePath, _ types.Position) hove
 // reads HoverService from the request context (injected via withContext) rather than
 // calling the di.HoverService() global.
 func TestTextDocumentHover_UsesHoverServiceFromContext(t *testing.T) {
-	engine, _ := testutil.UnitTestWithEngine(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	logger := zerolog.Nop()
 	conf := engine.GetConfiguration()
 
 	sentinel := &sentinelHoverService{}
+	deps := di.TestInit(t, engine, tokenService, &di.Dependencies{HoverService: sentinel})
 
-	deps := di.Dependencies{
-		HoverService: sentinel,
-	}
-
-	h := withContext(textDocumentHover(), &logger, conf, engine, deps)
+	h := withContext(textDocumentHover(), &logger, conf, engine, deps, nil)
 
 	hoverParams := hover.Params{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: "file:///foo.go"},
@@ -239,6 +236,8 @@ func TestTextDocumentHover_UsesHoverServiceFromContext(t *testing.T) {
 func TestWithContext_InjectsAuthenticationService(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	logger := zerolog.Nop()
+
+	// Build a concrete authService to assert identity after injection.
 	configResolver := testutil.DefaultConfigResolver(engine)
 	notifier := notification.NewNotifier()
 	authService := authentication.NewAuthenticationService(
@@ -249,12 +248,9 @@ func TestWithContext_InjectsAuthenticationService(t *testing.T) {
 		notifier,
 		configResolver,
 	)
-
-	deps := di.Dependencies{
-		ConfigResolver:        configResolver,
+	deps := di.TestInit(t, engine, tokenService, &di.Dependencies{
 		AuthenticationService: authService,
-		Notifier:              notifier,
-	}
+	})
 
 	var gotAuthService authentication.AuthenticationService
 	wrapped := withContext(func(ctx context.Context, _ *jrpc2.Request) (any, error) {
@@ -263,12 +259,31 @@ func TestWithContext_InjectsAuthenticationService(t *testing.T) {
 		gotAuthService, ok = ctxDeps[ctx2.DepAuthService].(authentication.AuthenticationService)
 		require.True(t, ok)
 		return nil, nil
-	}, &logger, engine.GetConfiguration(), engine, deps)
+	}, &logger, engine.GetConfiguration(), engine, deps, nil)
 
 	_, err := wrapped(t.Context(), nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, authService, gotAuthService)
+}
+
+// TestWithContext_HandlerPanic_ReturnsJRPC2Error verifies that a synchronous panic
+// inside a handler is caught by withContext's defer/recover, returned as a jrpc2
+// error to the LSP client, and does not crash the process.
+func TestWithContext_HandlerPanic_ReturnsJRPC2Error(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	logger := zerolog.Nop()
+	deps := di.TestInit(t, engine, tokenService, nil)
+
+	panicking := withContext(func(_ context.Context, _ *jrpc2.Request) (any, error) {
+		panic("test panic from handler")
+	}, &logger, engine.GetConfiguration(), engine, deps, nil)
+
+	_, err := panicking(t.Context(), nil)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "internal server error")
+	assert.Contains(t, err.Error(), "test panic from handler")
 }
 
 type onCallbackFn = func(ctx context.Context, request *jrpc2.Request) (any, error)
@@ -1632,4 +1647,65 @@ func Test_shouldHandleFilesOutsideWorkspace(t *testing.T) {
 		_, err := loc.Client.Call(t.Context(), "textDocument/didOpen", didOpenParams)
 		assert.NoError(t, err)
 	})
+}
+
+func TestAddWorkspaceFolders_MissingDeps_ReturnsError(t *testing.T) {
+	// Empty context — no deps injected — so all ok-checks return false.
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	err := addWorkspaceFolders(t.Context(), conf, logger, engine, types.InitializeParams{})
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "missing mandatory DI dependency")
+}
+
+// TestInitializeHandler_MissingDep_PropagatesLSPError verifies that when a required
+// dependency is absent from the DI wiring, the initializeHandler returns an error that
+// propagates through the jrpc2 layer back to the LSP client as a protocol-level error
+// response — not a silent no-op or a server crash.
+func TestInitializeHandler_MissingDep_PropagatesLSPError(t *testing.T) {
+	cases := []struct {
+		name        string
+		mutate      func(deps *di.Dependencies)
+		wantMessage string
+	}{
+		{
+			name:        "missing AuthenticationService",
+			mutate:      func(d *di.Dependencies) { d.AuthenticationService = nil },
+			wantMessage: "mandatory DI dependency missing: AuthenticationService",
+		},
+		{
+			name:        "missing LdxSyncService",
+			mutate:      func(d *di.Dependencies) { d.LdxSyncService = nil },
+			wantMessage: "mandatory DI dependency missing: LdxSyncService",
+		},
+		{
+			name:        "missing ConfigResolver",
+			mutate:      func(d *di.Dependencies) { d.ConfigResolver = nil },
+			wantMessage: "mandatory DI dependency missing: ConfigResolver",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			engine, tokenService := testutil.UnitTestWithEngine(t)
+			deps := di.TestInit(t, engine, tokenService, nil)
+
+			// Remove the dep under test so withContext does not inject it.
+			tc.mutate(&deps)
+
+			jsonRPCRecorder := &testsupport.JsonRPCRecorder{}
+			loc := startServer(engine, tokenService, nil, jsonRPCRecorder, deps)
+			t.Cleanup(func() { _ = loc.Close() })
+
+			_, err := loc.Client.Call(t.Context(), "initialize", nil)
+
+			require.Error(t, err)
+			var rpcErr *jrpc2.Error
+			require.ErrorAs(t, err, &rpcErr, "expected a jrpc2 protocol error, not a transport failure")
+			assert.Contains(t, rpcErr.Message, tc.wantMessage)
+		})
+	}
 }
