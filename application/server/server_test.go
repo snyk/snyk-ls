@@ -267,6 +267,25 @@ func TestWithContext_InjectsAuthenticationService(t *testing.T) {
 	assert.Equal(t, authService, gotAuthService)
 }
 
+// TestWithContext_HandlerPanic_ReturnsJRPC2Error verifies that a synchronous panic
+// inside a handler is caught by withContext's defer/recover, returned as a jrpc2
+// error to the LSP client, and does not crash the process.
+func TestWithContext_HandlerPanic_ReturnsJRPC2Error(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	logger := zerolog.Nop()
+	deps := di.TestInit(t, engine, tokenService, nil)
+
+	panicking := withContext(func(_ context.Context, _ *jrpc2.Request) (any, error) {
+		panic("test panic from handler")
+	}, &logger, engine.GetConfiguration(), engine, deps, nil)
+
+	_, err := panicking(t.Context(), nil)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "internal server error")
+	assert.Contains(t, err.Error(), "test panic from handler")
+}
+
 type onCallbackFn = func(ctx context.Context, request *jrpc2.Request) (any, error)
 
 func startServer(engine workflow.Engine, tokenService *config.TokenServiceImpl, callBackFn onCallbackFn, jsonRPCRecorder *testsupport.JsonRPCRecorder, deps di.Dependencies) server.Local {

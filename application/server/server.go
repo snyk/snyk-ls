@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -151,22 +152,35 @@ func withContext(
 	srv *jrpc2.Server,
 ) jrpc2.Handler {
 	var stopOnce sync.Once
-	return func(ctx context.Context, req *jrpc2.Request) (any, error) {
-		if err := validateMandatoryDeps(deps); err != nil {
-			logger.Error().Err(err).Msg("stopping server: mandatory DI dependency missing")
-			if srv != nil {
-				// stopOnce ensures only one Stop() goroutine per handler registration
-				// regardless of concurrent requests hitting the same missing-dep error.
-				// The 100ms delay gives jrpc2 time to transmit the error response before
-				// the channel closes; this is a best-effort guarantee on a fast local
-				// transport — inherently racy on slow pipes.
-				stopOnce.Do(func() {
-					go func() {
-						time.Sleep(100 * time.Millisecond)
-						srv.Stop()
-					}()
-				})
+	// stop closes over logger, stopOnce, and srv — no parameters needed.
+	stop := func(reason string) {
+		logger.Error().Str("reason", reason).Msg("stopping server")
+		if srv != nil {
+			// stopOnce ensures only one Stop() goroutine per handler registration.
+			// The 100ms delay gives jrpc2 time to transmit the error response before
+			// the channel closes; best-effort on a fast local transport.
+			stopOnce.Do(func() {
+				go func() {
+					time.Sleep(100 * time.Millisecond)
+					srv.Stop()
+				}()
+			})
+		}
+	}
+	return func(ctx context.Context, req *jrpc2.Request) (res any, rerr error) {
+		// Single enforcement point for all failure modes: both explicit dep
+		// validation and synchronous panics in h's call stack are caught here,
+		// converted to a jrpc2 error (returned to the LSP client) and trigger
+		// server stop. Panics in goroutines launched by h are not covered.
+		defer func() {
+			if r := recover(); r != nil {
+				rerr = fmt.Errorf("snyk-ls: internal server error: %v", r)
+				logger.Error().Str("stack", string(debug.Stack())).Msg(rerr.Error())
+				stop(rerr.Error())
 			}
+		}()
+		if err := validateMandatoryDeps(deps); err != nil {
+			stop(err.Error())
 			return nil, err
 		}
 		ctx = ctx2.NewContextWithLogger(ctx, logger)
@@ -176,7 +190,8 @@ func withContext(
 		injectCoreServicesIntoMap(ctxDeps, deps)
 		injectScanServicesIntoMap(ctxDeps, deps)
 		ctx = ctx2.NewContextWithDependencies(ctx, ctxDeps)
-		return h(ctx, req)
+		res, rerr = h(ctx, req)
+		return
 	}
 }
 
