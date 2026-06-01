@@ -375,11 +375,11 @@ func Test_UpdateSettings(t *testing.T) {
 		// TrustedFolders now goes through the settings map.
 		settingsMap[types.SettingTrustedFolders] = &types.ConfigSetting{Value: []interface{}{"trustedPath1", "trustedPath2"}, Changed: true}
 		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-			ctx2.DepNotifier:          deps.Notifier,
-			ctx2.DepAuthService:       deps.AuthenticationService,
-			ctx2.DepConfigResolver:    deps.ConfigResolver,
+			ctx2.DepNotifier:           deps.Notifier,
+			ctx2.DepAuthService:        deps.AuthenticationService,
+			ctx2.DepConfigResolver:     deps.ConfigResolver,
 			ctx2.DepFeatureFlagService: deps.FeatureFlagService,
-			ctx2.DepLdxSyncService:    deps.LdxSyncService,
+			ctx2.DepLdxSyncService:     deps.LdxSyncService,
 		})
 		require.NoError(t, InitializeSettings(ctx, engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{
 			Path:           "addPath",

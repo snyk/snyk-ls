@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/creachadair/jrpc2"
@@ -149,14 +150,22 @@ func withContext(
 	deps di.Dependencies,
 	srv *jrpc2.Server,
 ) jrpc2.Handler {
+	var stopOnce sync.Once
 	return func(ctx context.Context, req *jrpc2.Request) (any, error) {
 		if err := validateMandatoryDeps(deps); err != nil {
 			logger.Error().Err(err).Msg("stopping server: mandatory DI dependency missing")
 			if srv != nil {
-				go func() {
-					time.Sleep(100 * time.Millisecond)
-					srv.Stop()
-				}()
+				// stopOnce ensures only one Stop() goroutine per handler registration
+				// regardless of concurrent requests hitting the same missing-dep error.
+				// The 100ms delay gives jrpc2 time to transmit the error response before
+				// the channel closes; this is a best-effort guarantee on a fast local
+				// transport — inherently racy on slow pipes.
+				stopOnce.Do(func() {
+					go func() {
+						time.Sleep(100 * time.Millisecond)
+						srv.Stop()
+					}()
+				})
 			}
 			return nil, err
 		}
