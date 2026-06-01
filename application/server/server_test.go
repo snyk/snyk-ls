@@ -213,17 +213,14 @@ func (s *sentinelHoverService) GetHover(_ types.FilePath, _ types.Position) hove
 // reads HoverService from the request context (injected via withContext) rather than
 // calling the di.HoverService() global.
 func TestTextDocumentHover_UsesHoverServiceFromContext(t *testing.T) {
-	engine, _ := testutil.UnitTestWithEngine(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	logger := zerolog.Nop()
 	conf := engine.GetConfiguration()
 
 	sentinel := &sentinelHoverService{}
+	deps := di.TestInit(t, engine, tokenService, &di.Dependencies{HoverService: sentinel})
 
-	deps := di.Dependencies{
-		HoverService: sentinel,
-	}
-
-	h := withContext(textDocumentHover(), &logger, conf, engine, deps)
+	h := withContext(textDocumentHover(), &logger, conf, engine, deps, nil)
 
 	hoverParams := hover.Params{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: "file:///foo.go"},
@@ -239,6 +236,8 @@ func TestTextDocumentHover_UsesHoverServiceFromContext(t *testing.T) {
 func TestWithContext_InjectsAuthenticationService(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	logger := zerolog.Nop()
+
+	// Build a concrete authService to assert identity after injection.
 	configResolver := testutil.DefaultConfigResolver(engine)
 	notifier := notification.NewNotifier()
 	authService := authentication.NewAuthenticationService(
@@ -249,12 +248,9 @@ func TestWithContext_InjectsAuthenticationService(t *testing.T) {
 		notifier,
 		configResolver,
 	)
-
-	deps := di.Dependencies{
-		ConfigResolver:        configResolver,
+	deps := di.TestInit(t, engine, tokenService, &di.Dependencies{
 		AuthenticationService: authService,
-		Notifier:              notifier,
-	}
+	})
 
 	var gotAuthService authentication.AuthenticationService
 	wrapped := withContext(func(ctx context.Context, _ *jrpc2.Request) (any, error) {
@@ -263,7 +259,7 @@ func TestWithContext_InjectsAuthenticationService(t *testing.T) {
 		gotAuthService, ok = ctxDeps[ctx2.DepAuthService].(authentication.AuthenticationService)
 		require.True(t, ok)
 		return nil, nil
-	}, &logger, engine.GetConfiguration(), engine, deps)
+	}, &logger, engine.GetConfiguration(), engine, deps, nil)
 
 	_, err := wrapped(t.Context(), nil)
 
@@ -1659,17 +1655,17 @@ func TestInitializeHandler_MissingDep_PropagatesLSPError(t *testing.T) {
 		{
 			name:        "missing AuthenticationService",
 			mutate:      func(d *di.Dependencies) { d.AuthenticationService = nil },
-			wantMessage: "authentication service missing",
+			wantMessage: "mandatory DI dependency missing: AuthenticationService",
 		},
 		{
 			name:        "missing LdxSyncService",
 			mutate:      func(d *di.Dependencies) { d.LdxSyncService = nil },
-			wantMessage: "LDX Sync service missing",
+			wantMessage: "mandatory DI dependency missing: LdxSyncService",
 		},
 		{
 			name:        "missing ConfigResolver",
 			mutate:      func(d *di.Dependencies) { d.ConfigResolver = nil },
-			wantMessage: "missing mandatory DI dependency",
+			wantMessage: "mandatory DI dependency missing: ConfigResolver",
 		},
 	}
 

@@ -212,11 +212,7 @@ func InitializeSettings(ctx context.Context, conf configuration.Configuration, e
 	if resolver != nil {
 		fm = resolver.ConfigurationOptionsMetaData()
 	}
-	n, nOk := notifierFromContext(ctx)
-	if !nOk {
-		logger.Warn().Str("method", "InitializeSettings").Msg("notifier not in context; locked-field notifications will not be sent")
-	}
-	notifyLockedFieldsRejected(n, fm, lockedMachineFields, lockedFolderFields)
+	notifyLockedFieldsRejected(mustNotifierFromContext(ctx), fm, lockedMachineFields, lockedFolderFields)
 	return nil
 }
 
@@ -251,11 +247,7 @@ func UpdateSettings(ctx context.Context, conf configuration.Configuration, engin
 	if configResolver != nil {
 		fm = configResolver.ConfigurationOptionsMetaData()
 	}
-	n, ok := notifierFromContext(ctx)
-	if !ok {
-		logger.Warn().Str("method", "UpdateSettings").Msg("notifier not in context; locked-field notifications will not be sent")
-	}
-	notifyLockedFieldsRejected(n, fm, lockedMachineFields, lockedFolderFields)
+	notifyLockedFieldsRejected(mustNotifierFromContext(ctx), fm, lockedMachineFields, lockedFolderFields)
 
 	if ws != nil {
 		for _, folder := range ws.Folders() {
@@ -289,11 +281,11 @@ func refreshLdxSyncOnTokenChange(ctx context.Context, conf configuration.Configu
 		logger.Warn().Msg("ldxSyncService not in context; skipping LDX-Sync refresh on token change")
 		return
 	}
-	notifier, ok := notifierFromContext(ctx)
+	n, ok := notifierFromContext(ctx)
 	if !ok {
 		logger.Warn().Msg("notifier not in context; LDX-Sync refresh will proceed without locked-field notifications")
 	}
-	ldxSyncService.RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, folders, notifier)
+	ldxSyncService.RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, folders, n)
 }
 
 // validateLockedMachineFields rejects user PATCH attempts for machine-scope settings
@@ -434,11 +426,7 @@ func processConfigSettings(ctx context.Context, conf configuration.Configuration
 	applySnykLearnCodeActions(conf, engine, logger, settings, triggerSource, configResolver)
 	applySnykOssQuickFixCodeActions(conf, engine, logger, settings, triggerSource, configResolver)
 	applySnykOpenBrowserActions(conf, settings)
-	n, ok := notifierFromContext(ctx)
-	if !ok {
-		subLogger.Warn().Msg("notifier not in context; MCP configuration notifications will not be sent")
-	}
-	applyMcpConfiguration(n, conf, engine, logger, settings, triggerSource, configResolver)
+	applyMcpConfiguration(mustNotifierFromContext(ctx), conf, engine, logger, settings, triggerSource, configResolver)
 	applyPublishSecurityAtInceptionRules(conf, settings)
 	// this is without function right now, we do not use/distribute proxy settings from/to IDEs
 	applyProxyConfig(conf, settings)

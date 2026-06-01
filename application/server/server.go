@@ -100,17 +100,66 @@ func Start(engine workflow.Engine, tokenService *config.TokenServiceImpl) {
 	}
 }
 
+// validateMandatoryDeps returns an error if any mandatory DI dependency is nil.
+// All deps in this list are always created by di.Init and di.TestInit; a nil value
+// means the server was started with broken wiring and cannot function correctly.
+func validateMandatoryDeps(deps di.Dependencies) error {
+	switch {
+	case deps.ConfigResolver == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: ConfigResolver")
+	case deps.AuthenticationService == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: AuthenticationService")
+	case deps.LdxSyncService == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: LdxSyncService")
+	case deps.Notifier == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: Notifier")
+	case deps.FeatureFlagService == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: FeatureFlagService")
+	case deps.ErrorReporter == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: ErrorReporter")
+	case deps.LearnService == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: LearnService")
+	case deps.Scanner == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: Scanner")
+	case deps.HoverService == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: HoverService")
+	case deps.ScanNotifier == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: ScanNotifier")
+	case deps.ScanPersister == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: ScanPersister")
+	case deps.ScanStateAggregator == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: ScanStateAggregator")
+	case deps.FileWatcher == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: FileWatcher")
+	default:
+		return nil
+	}
+}
+
 // withContext wraps a jrpc2.Handler to inject logger, configuration, engine,
 // and all handler dependencies into the context so that handlers can read them
 // from ctx rather than reaching for package-level di.* globals.
+// If any mandatory dependency is nil, it returns a jrpc2 error to the client
+// and stops the server — a server with broken DI wiring cannot function correctly.
 func withContext(
 	h jrpc2.Handler,
 	logger *zerolog.Logger,
 	conf configuration.Configuration,
 	engine workflow.Engine,
 	deps di.Dependencies,
+	srv *jrpc2.Server,
 ) jrpc2.Handler {
 	return func(ctx context.Context, req *jrpc2.Request) (any, error) {
+		if err := validateMandatoryDeps(deps); err != nil {
+			logger.Error().Err(err).Msg("stopping server: mandatory DI dependency missing")
+			if srv != nil {
+				go func() {
+					time.Sleep(100 * time.Millisecond)
+					srv.Stop()
+				}()
+			}
+			return nil, err
+		}
 		ctx = ctx2.NewContextWithLogger(ctx, logger)
 		ctxDeps := make(map[string]any)
 		ctxDeps[ctx2.DepConfiguration] = conf
@@ -186,7 +235,7 @@ const textDocumentDidSaveOperation = "textDocument/didSave"
 
 func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, deps di.Dependencies) {
 	enrich := func(h jrpc2.Handler) jrpc2.Handler {
-		return withContext(h, logger, conf, engine, deps)
+		return withContext(h, logger, conf, engine, deps, srv)
 	}
 	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv))
 	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv))
@@ -218,6 +267,14 @@ func authenticationServiceFromContext(ctx context.Context) (authentication.Authe
 	}
 	authService, ok := deps[ctx2.DepAuthService].(authentication.AuthenticationService)
 	return authService, ok
+}
+
+func mustAuthenticationServiceFromContext(ctx context.Context) authentication.AuthenticationService {
+	svc, ok := authenticationServiceFromContext(ctx)
+	if !ok {
+		panic("AuthenticationService missing from context")
+	}
+	return svc
 }
 
 func ldxSyncServiceFromContext(ctx context.Context) (command.LdxSyncService, bool) {
@@ -557,11 +614,8 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		// Register the OAuth storage bridge before any pre-initialization API
 		// call so a rotated refresh token is reliably propagated to the IDE
 		// (queued until SettingIsLspInitialized turns true).
-		authenticationService, ok := authenticationServiceFromContext(ctx)
-		if !ok {
-			return nil, errors.New("authentication service missing from request context")
-		}
-		authentication.RegisterOAuthStorageBridge(storage, authenticationService)
+		// withContext guarantees AuthenticationService is non-nil before any handler runs.
+		authentication.RegisterOAuthStorageBridge(storage, mustAuthenticationServiceFromContext(ctx))
 
 		if err := addWorkspaceFolders(ctx, conf, &logger, engine, params); err != nil {
 			return nil, err
@@ -570,11 +624,8 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		// Must run before RefreshConfigFromLdxSync and HandleFolders, which rely
 		// on the resolver's global-org fallback for folders without a preferred org.
 		_ = types.GetGlobalOrganization(conf)
-		ldxSyncService, ok := ldxSyncServiceFromContext(ctx)
-		if !ok {
-			return nil, errors.New("LDX Sync service missing from request context")
-		}
-		ldxSyncService.RefreshConfigFromLdxSync(ctx, conf, engine, &logger, config.GetWorkspace(conf).Folders(), nil)
+		// withContext guarantees LdxSyncService is non-nil before any handler runs.
+		mustLdxSyncServiceFromContext(ctx).RefreshConfigFromLdxSync(ctx, conf, engine, &logger, config.GetWorkspace(conf).Folders(), nil)
 		if err := InitializeSettings(ctx, conf, engine, &logger, params.InitializationOptions); err != nil {
 			return nil, err
 		}
