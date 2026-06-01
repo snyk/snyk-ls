@@ -261,6 +261,17 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 		}
 		// else: no scan registered yet → empty description (initial state)
 
+		// IDE-1864: hover tooltip explaining a non-running scanner. Disabled
+		// scanners explain how to re-enable; errored scanners hint the row is
+		// clickable for the full error overlay. Mirrors the description precedence
+		// above (disabled wins over error, since a disabled product never scans).
+		var tooltip string
+		if !enabled {
+			tooltip = fmt.Sprintf("%s scanning is disabled in Snyk plugin settings. Click the gear icon to re-enable it.", productDisplayName(p))
+		} else if scanError != "" {
+			tooltip = fmt.Sprintf("%s couldn't be scanned. Click for details.", productDisplayName(p))
+		}
+
 		// Build children: info nodes first, then file nodes (only for enabled products with completed scans)
 		productKey := fmt.Sprintf("product:%s:%s", fd.FolderPath, p)
 		var children []TreeNode
@@ -290,6 +301,7 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 			WithIssueCount(totalIssues),
 			WithEnabled(&enabled),
 			WithErrorMessage(scanError),
+			WithTooltip(tooltip),
 			WithChildren(children),
 		)
 		productNodes = append(productNodes, productNode)

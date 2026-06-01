@@ -67,12 +67,11 @@
       </div>
     </div>
   {{else if eq .Type "product"}}
-    <div class="tree-node{{if .Expanded}} expanded{{end}}{{if not (isEnabled .Enabled)}} tree-node-disabled{{end}}{{if .ErrorMessage}} tree-node-error{{end}}" data-node-id="{{.ID}}"{{if .ErrorMessage}} data-error-message="{{.ErrorMessage}}"{{end}}>
-      <div class="tree-node-row">
+    <div class="tree-node{{if .Expanded}} expanded{{end}}{{if not (isEnabled .Enabled)}} tree-node-disabled{{end}}{{if .ErrorMessage}} tree-node-error{{end}}" data-node-id="{{.ID}}" data-product-id="{{.Product.ToProductCodename}}"{{if .ErrorMessage}} data-error-message="{{.ErrorMessage}}"{{end}}>
+      <div class="tree-node-row"{{if .Tooltip}} title="{{.Tooltip}}"{{end}}>
         <span class="tree-chevron"></span>
-        <span class="product-icon">{{productSVG .Product}}</span>
-        <span class="tree-label"><strong>{{.Label}}</strong></span>
-        {{if .Description}}<span class="tree-label"><strong> {{.Description}}</strong></span>{{end}}
+        <span class="product-icon product-icon--abbreviated">{{productSVG .Product}}</span>
+        <span class="tree-label tree-label-product-name"><strong>{{.Label}}</strong></span>{{if .Description}} <span class="tree-description tree-description-product">{{.Description}}</span>{{end}}
       </div>
       <div class="tree-node-children">
         {{range .Children}}{{template "treeNode" .}}{{end}}
@@ -144,10 +143,27 @@
       </div>
     </div>
   {{else if eq .Type "info"}}
-    <div class="tree-node tree-node-info" data-node-id="{{.ID}}">
+    {{if eq .InfoVariant "untrusted-folder"}}
+    <div class="tree-node tree-node-info tree-node-info--untrusted-folder" data-node-id="{{.ID}}">
+      <div class="tree-node-row tree-node-row-info untrusted-rationale-row">
+        <span class="tree-label">{{.Label}} <a class="untrusted-learn-more" href="{{untrustedLearnMoreURL}}" target="_blank" rel="noopener noreferrer">Learn more</a></span>
+      </div>
+      <div class="tree-node-row tree-node-row-info untrusted-folder-list-row">
+        <span class="untrusted-folder-list-heading">Untrusted Folders:</span>
+        <ul class="untrusted-folder-paths">
+          {{range .FolderPaths}}<li class="untrusted-folder-path" title="{{.}}"><span class="tree-label" data-truncate-middle="1" data-full-label="{{.}}">{{.}}</span></li>{{end}}
+        </ul>
+      </div>
+      <div class="tree-node-row tree-node-row-info untrusted-action-row">
+        <button type="button" class="untrusted-trust-btn" data-action="trust-folder">Trust folders and continue</button>
+      </div>
+    </div>
+    {{else}}
+    <div class="tree-node tree-node-info{{if eq .InfoVariant "filter-empty"}} tree-node-info--filter-empty{{end}}" data-node-id="{{.ID}}"{{if eq .InfoVariant "filter-empty"}} hidden{{end}}>
       <div class="tree-node-row tree-node-row-info">
         <span class="tree-label">{{.Label}}</span>
       </div>
     </div>
+    {{end}}
   {{end}}
 {{end}}

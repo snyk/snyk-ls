@@ -538,6 +538,15 @@
       var isActive = hasClass(btn, 'filter-active');
       var enabled = !isActive;
 
+      // Optimistically reflect the toggle in the button's class so the active
+      // state updates immediately, rather than waiting for the LS to re-render
+      // the tree in response to the command below.
+      if (enabled) {
+        btn.classList.add('filter-active');
+      } else {
+        btn.classList.remove('filter-active');
+      }
+
       executeCommand('snyk.toggleTreeFilter', [filterType, filterValue, enabled]);
     });
   }
@@ -585,4 +594,146 @@
   if (collapseAllBtn) {
     collapseAllBtn.addEventListener('click', function() { collapseAllNodes(); });
   }
+
+  // File-path middle truncation.
+  // File rows show the full project-relative path as the label
+  // (e.g. "frontend/src/app/app.component.ts"). When the sidebar narrows, the
+  // CSS fallback clips the right edge — hiding the filename, which is usually
+  // the most informative part. This block measures the label's available
+  // width and rewrites the text into a middle-truncated form that keeps the
+  // filename intact: "frontend/…/app.component.ts". The companion flex
+  // layout in styles.css gives us label.clientWidth directly.
+  var measureCanvas = null;
+  var measureCtx = null;
+  var measureFontKey = '';
+  var retruncatePending = false;
+
+  function getMeasureCtx() {
+    if (!measureCtx) {
+      measureCanvas = document.createElement('canvas');
+      measureCtx = measureCanvas.getContext('2d');
+    }
+    return measureCtx;
+  }
+
+  function ensureMeasureFont(labelEl) {
+    if (!labelEl) return;
+    var cs = window.getComputedStyle(labelEl);
+    // `cs.font` returns "" in Firefox when longhand values diverge from the
+    // shorthand defaults, so compose the shorthand by hand for portability.
+    var font = (cs.fontStyle || 'normal') + ' ' +
+               (cs.fontVariant || 'normal') + ' ' +
+               (cs.fontWeight || 'normal') + ' ' +
+               (cs.fontSize || '13px') + ' ' +
+               (cs.fontFamily || 'sans-serif');
+    if (font !== measureFontKey) {
+      measureFontKey = font;
+      getMeasureCtx().font = font;
+    }
+  }
+
+  function measureWidth(text) {
+    return getMeasureCtx().measureText(text).width;
+  }
+
+  function truncateMiddleByWidth(text, maxWidth) {
+    if (maxWidth <= 0) return text;
+    if (measureWidth(text) <= maxWidth) return text;
+
+    var lastSlash = text.lastIndexOf('/');
+    if (lastSlash < 0) return text; // no path structure — let CSS end-truncate
+    // Filename includes the leading slash so the ellipsis sits flush:
+    // "foo/…/bar.ts" rather than "foo…/bar.ts".
+    var filename = text.substring(lastSlash);
+    var prefix = text.substring(0, lastSlash);
+    var ellipsis = '…';
+    var reserved = measureWidth(filename) + measureWidth(ellipsis);
+    if (reserved >= maxWidth) return text;
+
+    var availForPrefix = maxWidth - reserved;
+    var lo = 0;
+    var hi = prefix.length;
+    var best = 0;
+    while (lo <= hi) {
+      var mid = (lo + hi) >> 1;
+      if (measureWidth(prefix.substring(0, mid)) <= availForPrefix) {
+        best = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    if (best === prefix.length) return text;
+    return prefix.substring(0, best) + ellipsis + filename;
+  }
+
+  function applyTruncation() {
+    retruncatePending = false;
+    // File rows + any opt-in label marked data-truncate-middle (IDE-1882 uses
+    // this for the untrusted-folder path list so each line stays middle-
+    // truncated rather than end-clipped — keeping the folder basename visible).
+    var labels = container.querySelectorAll(
+      '.tree-node-file > .tree-node-row > .tree-label, .tree-label[data-truncate-middle]'
+    );
+    if (!labels.length) return;
+    for (var i = 0; i < labels.length; i++) {
+      var label = labels[i];
+      // Skip labels in collapsed branches — clientWidth is 0 so a measurement
+      // round-trip would be wasted, and they'll be re-evaluated on expand.
+      if (label.clientWidth === 0) continue;
+      // File rows and the IDE-1882 path list use different font families;
+      // ensure the canvas font matches each label before measuring. The call
+      // short-circuits when the font key hasn't changed, so the only real cost
+      // is one getComputedStyle per visible label.
+      ensureMeasureFont(label);
+      var full = label.getAttribute('data-full-label');
+      if (full === null) {
+        full = label.textContent;
+        label.setAttribute('data-full-label', full);
+        label.setAttribute('title', full);
+      }
+      var next = truncateMiddleByWidth(full, label.clientWidth);
+      if (label.textContent !== next) {
+        label.textContent = next;
+      }
+    }
+  }
+
+  function scheduleRetruncate() {
+    if (retruncatePending) return;
+    retruncatePending = true;
+    if (window.requestAnimationFrame) {
+      window.requestAnimationFrame(applyTruncation);
+    } else {
+      setTimeout(applyTruncation, 16);
+    }
+  }
+
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(scheduleRetruncate).observe(container);
+  } else {
+    window.addEventListener('resize', scheduleRetruncate);
+  }
+
+  // Expand/collapse mutates .expanded on .tree-node elements, which changes
+  // which file rows are laid out. Watch class changes on tree-node elements
+  // and re-run; selection toggling on .tree-node-row is filtered out below.
+  if (typeof MutationObserver !== 'undefined') {
+    new MutationObserver(function(records) {
+      for (var i = 0; i < records.length; i++) {
+        var t = records[i].target;
+        if (t && t.classList && t.classList.contains('tree-node')) {
+          scheduleRetruncate();
+          return;
+        }
+      }
+    }).observe(container, { attributes: true, attributeFilter: ['class'], subtree: true });
+  }
+
+  // Re-run once webfonts settle so measurements aren't off by a few pixels.
+  if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
+    document.fonts.ready.then(scheduleRetruncate);
+  }
+
+  scheduleRetruncate();
 })();
