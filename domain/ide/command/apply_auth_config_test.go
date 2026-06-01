@@ -163,19 +163,8 @@ func TestApplyAuthMethodChange_MethodSame_ReturnsFalse(t *testing.T) {
 	assert.Equal(t, "some-token", config.GetToken(conf), "token must be preserved when auth method is unchanged")
 }
 
-func TestApplyAuthMethodChange_NilAuthService_PersistsMethodAndReturnsChanged(t *testing.T) {
-	engine, _ := testutil.UnitTestWithEngine(t)
-	conf := engine.GetConfiguration()
-
-	// Even when authService is nil (ConfigureProviders cannot run), SetGlobalUser must
-	// still be called so the auth method persists across restarts. The return value must
-	// reflect whether the method actually changed — not suppress it due to the nil authService.
-	changed := ApplyAuthMethodChange(conf, nil, engine.GetLogger(), types.TokenAuthentication)
-
-	assert.True(t, changed, "must return true when method changed, even if authService is nil")
-	assert.Equal(t, types.TokenAuthentication, config.GetAuthenticationMethodFromConfig(conf),
-		"auth method must be persisted even when authService is nil")
-}
+// TestApplyAuthMethodChange_NilAuthService removed: authService is now guaranteed
+// non-nil by withContext.validateMandatoryDeps before any handler runs.
 
 func TestApplyAuthMethodChange_EmptyMethod_NoEffect(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
