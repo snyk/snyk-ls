@@ -37,6 +37,21 @@ import (
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
+func TestRegisterNotifier_NilNotifier_Panics(t *testing.T) {
+	// registerNotifier has "notifier" in its name; a nil notifier is a programming error
+	// that must be caught at initialization time — not silently produce no-op behavior.
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+	srv := mock_types.NewMockServer(ctrl)
+
+	assert.Panics(t, func() {
+		registerNotifier(conf, logger, srv, nil)
+	}, "registerNotifier must panic when notifier is nil")
+}
+
 func TestCreateProgressListener(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
