@@ -282,16 +282,17 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 			err := sc.executePreScanCommand(span.Context(), sc.engine, s.Product(), workspaceFolderConfig, folderPath, true)
 			if err != nil {
 				scanLogger.Err(err).Send()
+				sc.scanNotifier.SendError(scanner.Product(), folderPath, err.Error())
 				sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), false, err)
-				// Route the pre-scan-command failure through processResults so it surfaces
-				// on the "Is Snyk OK?" dashboard alongside other scan failures.
-				// processResults handles the scanNotifier.SendError side-effect via sendScanError.
+				// Route through processResults purely for failure analytics; UserNotified
+				// suppresses the duplicate SendError that sendScanError would otherwise emit.
 				processResults(span.Context(), types.ScanData{
 					Product:           s.Product(),
 					Err:               err,
 					TimestampFinished: time.Now().UTC(),
 					Path:              folderPath,
 					SendAnalytics:     true,
+					UserNotified:      true,
 				})
 				return
 			}

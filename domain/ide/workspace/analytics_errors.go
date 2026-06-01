@@ -22,11 +22,33 @@ import (
 	"strings"
 
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+
+	"github.com/snyk/snyk-ls/infrastructure/utils"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
+// shouldEmitAnalytics centralizes the "do we record this scan on the
+// 'Is Snyk OK?' dashboard?" policy. Checked at the call site so cancelled and
+// non-failing scans skip the goroutine entirely instead of spawning one that
+// bails after categorization work.
+func shouldEmitAnalytics(data *types.ScanData) bool {
+	if data == nil || !data.SendAnalytics || data.Product == "" {
+		return false
+	}
+	if data.Err != nil {
+		if utils.IsNonFailingScanError(data.Err.Error()) {
+			return false
+		}
+		if isCancellationError(data.Err) {
+			return false
+		}
+	}
+	return true
+}
+
 // isCancellationError reports whether err represents a routine cancellation
-// (user abort, credential rotation, timeout). Analytics callers skip emission
-// for these so cancellations don't count on the "Is Snyk OK?" rollup.
+// (user abort, credential rotation, timeout). Routine cancellations are not
+// scan failures and must not count on the "Is Snyk OK?" rollup.
 func isCancellationError(err error) bool {
 	return err != nil && (stderrors.Is(err, context.Canceled) || stderrors.Is(err, context.DeadlineExceeded))
 }

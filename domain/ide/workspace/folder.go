@@ -358,12 +358,8 @@ func (f *Folder) scan(ctx context.Context, path types.FilePath) {
 
 func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 	if scanData.Err != nil {
-		f.sendScanError(scanData.Product, scanData.Err)
-		// Mirror sendScanError's filter — auth-not-set and "product disabled" outcomes
-		// are user state, not failures, and would inflate the dashboard failure rate one
-		// event per enabled product per scan. Reference scans short-circuit inside
-		// sendAnalytics via SendAnalytics:false.
-		if !utils.IsNonFailingScanError(scanData.Err.Error()) {
+		f.sendScanError(scanData.Product, scanData.Err, scanData.UserNotified)
+		if shouldEmitAnalytics(&scanData) {
 			go sendAnalytics(ctx, f.engine, f.configResolver, f.logger, &scanData)
 		}
 		return
@@ -383,14 +379,18 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 		return
 	}
 
-	go sendAnalytics(ctx, f.engine, f.configResolver, f.logger, &scanData)
+	if shouldEmitAnalytics(&scanData) {
+		go sendAnalytics(ctx, f.engine, f.configResolver, f.logger, &scanData)
+	}
 
 	// Filter and publish cached diagnostics
 	f.FilterAndPublishDiagnostics(scanData.Product)
 }
 
-func (f *Folder) sendScanError(product product.Product, err error) {
-	f.scanNotifier.SendError(product, f.path, err.Error())
+func (f *Folder) sendScanError(product product.Product, err error, userAlreadyNotified bool) {
+	if !userAlreadyNotified {
+		f.scanNotifier.SendError(product, f.path, err.Error())
+	}
 
 	if utils.IsNonFailingScanError(err.Error()) {
 		f.logger.Debug().
@@ -457,15 +457,11 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *types.ScanData) {
 	}
 }
 
+// sendAnalytics emits a "Scan done" analytics event for data. Callers MUST gate
+// the call with shouldEmitAnalytics — this function does not re-check the
+// SendAnalytics / Product / cancellation / non-failing-error policy.
 func sendAnalytics(ctx context.Context, engine workflow.Engine, configResolver types.ConfigResolverInterface, logger *zerolog.Logger, data *types.ScanData) {
 	log := logger.With().Str("method", "folder.sendAnalytics").Logger()
-	if !data.SendAnalytics {
-		return
-	}
-	if data.Product == "" {
-		log.Debug().Any("data", data).Msg("Skipping analytics for empty product")
-		return
-	}
 
 	// this information is not filled automatically, so we need to collect it
 	folderConfig := config.GetFolderConfigFromEngine(engine, configResolver, data.Path, logger)
@@ -488,16 +484,7 @@ func sendAnalytics(ctx context.Context, engine workflow.Engine, configResolver t
 		extension["scan_type"] = deltaScanType.String()
 	}
 
-	// IDE-1668: routine cancellations (credential rotation, user abort via
-	// scanner.cancelFunc) surface as context.Canceled / DeadlineExceeded. These
-	// are not scan failures — skip emission entirely so they don't show up as
-	// either status on the "Is Snyk OK?" rollup.
-	if isCancellationError(data.Err) {
-		log.Debug().Err(data.Err).Msg("skipping analytics emission for canceled scan")
-		return
-	}
-
-	// IDE-1668: emit failure analytics events alongside success ones so the
+	// Emit failure analytics events alongside success ones so the
 	// "Is Snyk OK?" dashboard's IDE panel reflects scan errors. classifyError
 	// returns (category, code): the category is a low-cardinality catalog
 	// prefix (e.g. "SNYK-CLI") for rollups, the code is the full catalog code
@@ -860,7 +847,7 @@ func (f *Folder) publishDiagnostics(p product.Product, issuesToSendByProduct sny
 	f.sendDiagnostics(issuesToSendByProduct.AggregateFromAllProducts(p))
 	scanErr := f.scanStateAggregator.GetScanErr(f.path, p, f.IsDeltaFindingsEnabled())
 	if scanErr != nil {
-		f.sendScanError(p, scanErr)
+		f.sendScanError(p, scanErr, false)
 	} else {
 		f.sendSuccess(p)
 	}
