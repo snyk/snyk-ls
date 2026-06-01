@@ -17,6 +17,7 @@
 package workspace
 
 import (
+	"context"
 	stderrors "errors"
 	"testing"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -40,8 +42,17 @@ import (
 // These tests cover the contract: sendAnalytics() must produce a
 // `interaction.status:"Failure"` event with `error_category` (catalog prefix,
 // e.g. "SNYK-CLI") and, when available, `error_code` (full catalog code).
-// The empty-product and SendAnalytics=false guards must continue to suppress
-// emission even on the failure path.
+// The empty-product, SendAnalytics=false, non-failing-error and
+// context-cancellation guards must continue to suppress emission even on the
+// failure path.
+
+// negativeAssertionWindow is how long negative tests wait while polling the
+// captured workflow channel before declaring "no emission". With gomock
+// Times(0), any incorrect emission fails the test the moment it occurs, so
+// this window only needs to cover the analytics goroutine's typical startup
+// time. 200ms is comfortably above realistic goroutine scheduling latency on
+// slow CI boxes.
+const negativeAssertionWindow = 200 * time.Millisecond
 
 // T1 — failed scan whose error wraps a snyk catalog entry produces a Failure
 // analytics event with the full error code and its product prefix.
@@ -172,13 +183,12 @@ func Test_processResults_FailedScan_EmptyProduct_NoEmission(t *testing.T) {
 		Err:               stderrors.New("boom"),
 	}
 
-	// Times(0) — gomock will fail the test if the analytics workflow gets invoked.
-	_ = testutil.MockAndCaptureWorkflowInvocation(t, engineMock, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 0)
+	// Times(0) — gomock fails the test immediately if the analytics workflow gets invoked.
+	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, engineMock, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 0)
 
 	f.ProcessResults(t.Context(), data)
 
-	// Small settle window so any (incorrect) async emission would have time to land.
-	time.Sleep(50 * time.Millisecond)
+	testsupport.RequireNeverReceive(t, capturedCh, negativeAssertionWindow, 10*time.Millisecond, "empty-product guard must suppress emission")
 }
 
 // T5 — when SendAnalytics is false, the caller opt-out must continue to
@@ -203,17 +213,18 @@ func Test_processResults_FailedScan_SendAnalyticsFalse_NoEmission(t *testing.T) 
 		Err:               stderrors.New("boom"),
 	}
 
-	_ = testutil.MockAndCaptureWorkflowInvocation(t, engineMock, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 0)
+	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, engineMock, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 0)
 
 	f.ProcessResults(t.Context(), data)
 
-	time.Sleep(50 * time.Millisecond)
+	testsupport.RequireNeverReceive(t, capturedCh, negativeAssertionWindow, 10*time.Millisecond, "SendAnalytics:false must suppress emission")
 }
 
 // T6 — sendAnalytics must tolerate partial ScanData on the failure path
-// (no Issues, no severity counts). It must emit a Failure event without
-// panicking and the test summary should at least contain the product type.
-func Test_processResults_FailedScan_PartialScanData_DoesNotPanic(t *testing.T) {
+// (no Issues, no severity counts, zero TimestampFinished). It must emit a
+// Failure event without panicking, and the zero TimestampFinished must be
+// replaced with "now" so the event doesn't carry a negative epoch.
+func Test_processResults_FailedScan_PartialScanData_DoesNotPanicAndDefaultsTimestamp(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	engineMock, engineConfig := testutil.SetUpEngineMock(t, engine)
 	engineMock.EXPECT().GetWorkflows().AnyTimes()
@@ -225,7 +236,7 @@ func Test_processResults_FailedScan_PartialScanData_DoesNotPanic(t *testing.T) {
 	const testFolderOrg = "test-org"
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, f.path, testFolderOrg, true)
 
-	// Deliberately minimal ScanData: nil Issues, zero Duration, etc.
+	// Deliberately minimal ScanData: nil Issues, zero Duration, zero TimestampFinished.
 	data := types.ScanData{
 		Product:       product.ProductOpenSource,
 		Path:          f.path,
@@ -247,4 +258,97 @@ func Test_processResults_FailedScan_PartialScanData_DoesNotPanic(t *testing.T) {
 	assert.Contains(t, payload, `"status":"failure"`)
 	assert.Contains(t, payload, `"error_category":"SNYK-OS"`)
 	assert.Contains(t, payload, `"error_code":"SNYK-OS-7001"`)
+	// Zero TimestampFinished must be defaulted to "now" — never emitted as the
+	// negative-epoch UnixMilli of time.Time{}.
+	assert.NotContains(t, payload, `"timestampMs":-`, "zero TimestampFinished must be defaulted, not emitted as a negative epoch")
+}
+
+// T7 — non-failing scan errors (auth not set, product disabled for folder/org)
+// must NOT produce a failure analytics event. These are user state, not
+// failures, and the "Is Snyk OK?" dashboard's failure rate is meant to track
+// real scan errors only.
+func Test_processResults_FailedScan_NonFailingError_NoEmission(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+	}{
+		{"not authenticated", stderrors.New(utils.MsgNotAuthenticatedNoScan)},
+		{"oss not enabled for folder", stderrors.New(utils.ErrSnykOssNotEnabledForFolder)},
+		{"code not enabled for folder", stderrors.New(utils.ErrSnykCodeNotEnabledForFolder)},
+		{"iac not enabled for folder", stderrors.New(utils.ErrSnykIacNotEnabledForFolder)},
+		{"secrets not enabled for folder", stderrors.New(utils.ErrSnykSecretsNotEnabledForFolder)},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			engineMock, engineConfig := testutil.SetUpEngineMock(t, engine)
+			engineMock.EXPECT().GetWorkflows().AnyTimes()
+
+			notifier := notification.NewNotifier()
+			f, _ := NewMockFolderWithScanNotifier(engineMock, notifier)
+			setupWorkspaceWithFolder(engineMock, f, notifier)
+
+			types.SetPreferredOrgAndOrgSetByUser(engineConfig, f.path, "test-org", true)
+
+			data := types.ScanData{
+				Product:           product.ProductOpenSource,
+				Path:              f.path,
+				UpdateGlobalCache: true,
+				SendAnalytics:     true,
+				Err:               tc.err,
+			}
+
+			capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, engineMock, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 0)
+
+			f.ProcessResults(t.Context(), data)
+
+			testsupport.RequireNeverReceive(t, capturedCh, negativeAssertionWindow, 10*time.Millisecond,
+				"non-failing scan error %q must not emit failure analytics", tc.err)
+		})
+	}
+}
+
+// T8 — routine cancellations (credential rotation, user abort) surface as
+// context.Canceled or context.DeadlineExceeded. These are not scan failures
+// and must not be counted on the failure rate. sendAnalytics must skip
+// emission entirely (neither failure nor success) for these errors.
+func Test_processResults_FailedScan_Cancellation_NoEmission(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+	}{
+		{"context.Canceled", context.Canceled},
+		{"context.DeadlineExceeded", context.DeadlineExceeded},
+		{"wrapped context.Canceled", stderrors.Join(stderrors.New("upstream"), context.Canceled)},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			engineMock, engineConfig := testutil.SetUpEngineMock(t, engine)
+			engineMock.EXPECT().GetWorkflows().AnyTimes()
+
+			notifier := notification.NewNotifier()
+			f, _ := NewMockFolderWithScanNotifier(engineMock, notifier)
+			setupWorkspaceWithFolder(engineMock, f, notifier)
+
+			types.SetPreferredOrgAndOrgSetByUser(engineConfig, f.path, "test-org", true)
+
+			data := types.ScanData{
+				Product:           product.ProductOpenSource,
+				Path:              f.path,
+				UpdateGlobalCache: true,
+				SendAnalytics:     true,
+				Err:               tc.err,
+			}
+
+			capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, engineMock, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 0)
+
+			f.ProcessResults(t.Context(), data)
+
+			testsupport.RequireNeverReceive(t, capturedCh, negativeAssertionWindow, 10*time.Millisecond,
+				"cancellation %q must not emit analytics", tc.err)
+		})
+	}
 }

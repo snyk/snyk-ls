@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/samber/lo"
@@ -359,10 +360,11 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 	if scanData.Err != nil {
 		f.sendScanError(scanData.Product, scanData.Err)
 		// IDE-1668: emit failure analytics so the "Is Snyk OK?" dashboard's
-		// IDE panel reflects scan errors. Skip for reference baselines, matching
-		// the success path's IsReferenceScan guard (baseline scans aren't a
-		// user-meaningful "scan done" interaction).
-		if !scanData.IsReferenceScan || f.configResolver.GetBool(types.SettingScanNetNew, f.FolderConfigReadOnly()) {
+		// IDE panel reflects scan errors. Mirror sendScanError's filter — auth-not-set
+		// and "product disabled" outcomes are user state, not failures, and would
+		// inflate the failure rate one event per enabled product per scan.
+		// Reference scans short-circuit inside sendAnalytics via SendAnalytics:false.
+		if !utils.IsNonFailingScanError(scanData.Err.Error()) {
 			go sendAnalytics(ctx, f.engine, f.configResolver, f.logger, &scanData)
 		}
 		return
@@ -487,17 +489,35 @@ func sendAnalytics(ctx context.Context, engine workflow.Engine, configResolver t
 		extension["scan_type"] = deltaScanType.String()
 	}
 
+	// IDE-1668: routine cancellations (credential rotation, user abort via
+	// scanner.cancelFunc) surface as context.Canceled / DeadlineExceeded. These
+	// are not scan failures — skip emission entirely so they don't show up as
+	// either status on the "Is Snyk OK?" rollup.
+	if data.Err != nil && (errors.Is(data.Err, context.Canceled) || errors.Is(data.Err, context.DeadlineExceeded)) {
+		log.Debug().Err(data.Err).Msg("skipping analytics emission for cancelled scan")
+		return
+	}
+
 	// IDE-1668: emit failure analytics events alongside success ones so the
-	// "Is Snyk OK?" dashboard's IDE panel reflects scan errors. categorizeError
-	// returns a low-cardinality catalog prefix (e.g. "SNYK-CLI") for rollups;
-	// errorCode adds the full code (e.g. "SNYK-CLI-0008") for drill-downs.
+	// "Is Snyk OK?" dashboard's IDE panel reflects scan errors. classifyError
+	// returns (category, code): the category is a low-cardinality catalog
+	// prefix (e.g. "SNYK-CLI") for rollups, the code is the full catalog code
+	// (e.g. "SNYK-CLI-0008") for drill-down.
 	status := gafanalytics.Success
 	if data.Err != nil {
 		status = gafanalytics.Failure
-		extension["error_category"] = categorizeError(data.Err)
-		if code := errorCode(data.Err); code != "" {
+		category, code := classifyError(data.Err)
+		extension["error_category"] = category
+		if code != "" {
 			extension["error_code"] = code
 		}
+	}
+
+	// Failure paths may build ScanData without TimestampFinished; the zero
+	// time.Time produces a negative epoch via UnixMilli(). Default to now.
+	timestampFinished := data.TimestampFinished
+	if timestampFinished.IsZero() {
+		timestampFinished = time.Now().UTC()
 	}
 
 	param := types.AnalyticsEventParam{
@@ -505,7 +525,7 @@ func sendAnalytics(ctx context.Context, engine workflow.Engine, configResolver t
 		Category:        categories,
 		Status:          string(status),
 		TargetId:        targetId,
-		TimestampMs:     data.TimestampFinished.UnixMilli(),
+		TimestampMs:     timestampFinished.UnixMilli(),
 		DurationMs:      int64(data.Duration),
 		Extension:       extension,
 	}

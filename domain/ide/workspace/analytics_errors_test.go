@@ -26,53 +26,60 @@ import (
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 )
 
-func Test_categorizeError_NilError(t *testing.T) {
-	assert.Equal(t, "", categorizeError(nil))
+func Test_classifyError_NilError(t *testing.T) {
+	cat, code := classifyError(nil)
+	assert.Equal(t, "", cat)
+	assert.Equal(t, "", code)
 }
 
-func Test_categorizeError_NonCatalogError(t *testing.T) {
-	assert.Equal(t, "unknown", categorizeError(stderrors.New("boom")))
+func Test_classifyError_NonCatalogError(t *testing.T) {
+	cat, code := classifyError(stderrors.New("boom"))
+	assert.Equal(t, "unknown", cat)
+	assert.Equal(t, "", code)
 }
 
-func Test_categorizeError_CatalogError_SnykCliPrefix(t *testing.T) {
-	err := snyk_errors.Error{ErrorCode: "SNYK-CLI-0008", Title: "NoSupportedFilesFound"}
-	assert.Equal(t, "SNYK-CLI", categorizeError(err))
+func Test_classifyError_CatalogError_SnykCliPrefix(t *testing.T) {
+	cat, code := classifyError(snyk_errors.Error{ErrorCode: "SNYK-CLI-0008", Title: "NoSupportedFilesFound"})
+	assert.Equal(t, "SNYK-CLI", cat)
+	assert.Equal(t, "SNYK-CLI-0008", code)
 }
 
-func Test_categorizeError_CatalogError_SnykOsPrefix(t *testing.T) {
-	err := snyk_errors.Error{ErrorCode: "SNYK-OS-7001", Title: "Request timeout"}
-	assert.Equal(t, "SNYK-OS", categorizeError(err))
+func Test_classifyError_CatalogError_SnykOsPrefix(t *testing.T) {
+	cat, code := classifyError(snyk_errors.Error{ErrorCode: "SNYK-OS-7001", Title: "Request timeout"})
+	assert.Equal(t, "SNYK-OS", cat)
+	assert.Equal(t, "SNYK-OS-7001", code)
 }
 
-func Test_categorizeError_CatalogError_MalformedCode(t *testing.T) {
-	// Codes without a "-" separator fall back to the full code string so
-	// the dashboard still gets a usable bucket name.
-	err := snyk_errors.Error{ErrorCode: "SHORT", Title: "Malformed"}
-	assert.Equal(t, "SHORT", categorizeError(err))
+func Test_classifyError_CatalogError_MalformedNoSeparator(t *testing.T) {
+	// Codes without a "-" separator fall back to the full code string so the
+	// dashboard still gets a usable bucket name and the drill-down code matches.
+	cat, code := classifyError(snyk_errors.Error{ErrorCode: "SHORT", Title: "Malformed"})
+	assert.Equal(t, "SHORT", cat)
+	assert.Equal(t, "SHORT", code)
 }
 
-func Test_categorizeError_WrappedCatalogError(t *testing.T) {
+func Test_classifyError_CatalogError_TrailingDashIsHardened(t *testing.T) {
+	// "SNYK-" used to produce category "SNYK-" because SplitN admits an empty
+	// second part. Fall back to the full code so analytics bucket names never
+	// end with a dangling separator.
+	cat, code := classifyError(snyk_errors.Error{ErrorCode: "SNYK-", Title: "Malformed"})
+	assert.Equal(t, "SNYK-", cat, "category falls back to the full code when split parts are empty")
+	assert.Equal(t, "SNYK-", code)
+}
+
+func Test_classifyError_WrappedCatalogError(t *testing.T) {
 	// errors.As must unwrap to find the catalog error.
 	inner := snyk_errors.Error{ErrorCode: "SNYK-CLI-0008"}
 	wrapped := fmt.Errorf("scan failed: %w", inner)
-	assert.Equal(t, "SNYK-CLI", categorizeError(wrapped))
+	cat, code := classifyError(wrapped)
+	assert.Equal(t, "SNYK-CLI", cat)
+	assert.Equal(t, "SNYK-CLI-0008", code)
 }
 
-func Test_errorCode_NilError(t *testing.T) {
-	assert.Equal(t, "", errorCode(nil))
-}
-
-func Test_errorCode_NonCatalogError(t *testing.T) {
-	assert.Equal(t, "", errorCode(stderrors.New("boom")))
-}
-
-func Test_errorCode_CatalogError(t *testing.T) {
-	err := snyk_errors.Error{ErrorCode: "SNYK-CLI-0008", Title: "NoSupportedFilesFound"}
-	assert.Equal(t, "SNYK-CLI-0008", errorCode(err))
-}
-
-func Test_errorCode_WrappedCatalogError(t *testing.T) {
-	inner := snyk_errors.Error{ErrorCode: "SNYK-OS-7001"}
-	wrapped := fmt.Errorf("upstream failure: %w", inner)
-	assert.Equal(t, "SNYK-OS-7001", errorCode(wrapped))
+func Test_classifyError_CatalogError_EmptyErrorCode(t *testing.T) {
+	// snyk_errors.Error wrapper with no ErrorCode should still classify as
+	// "unknown" rather than emitting an empty category.
+	cat, code := classifyError(snyk_errors.Error{Title: "no code"})
+	assert.Equal(t, "unknown", cat)
+	assert.Equal(t, "", code)
 }
