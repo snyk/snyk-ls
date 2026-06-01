@@ -17,11 +17,19 @@
 package workspace
 
 import (
+	"context"
 	stderrors "errors"
 	"strings"
 
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 )
+
+// isCancellationError reports whether err represents a routine cancellation
+// (user abort, credential rotation, timeout). Analytics callers skip emission
+// for these so cancellations don't count on the "Is Snyk OK?" rollup.
+func isCancellationError(err error) bool {
+	return err != nil && (stderrors.Is(err, context.Canceled) || stderrors.Is(err, context.DeadlineExceeded))
+}
 
 // classifyError returns the analytics (category, code) pair for err, unwrapping
 // the Snyk error catalog entry exactly once so the two values cannot drift.

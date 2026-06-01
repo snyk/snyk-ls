@@ -493,8 +493,8 @@ func sendAnalytics(ctx context.Context, engine workflow.Engine, configResolver t
 	// scanner.cancelFunc) surface as context.Canceled / DeadlineExceeded. These
 	// are not scan failures — skip emission entirely so they don't show up as
 	// either status on the "Is Snyk OK?" rollup.
-	if data.Err != nil && (errors.Is(data.Err, context.Canceled) || errors.Is(data.Err, context.DeadlineExceeded)) {
-		log.Debug().Err(data.Err).Msg("skipping analytics emission for cancelled scan")
+	if isCancellationError(data.Err) {
+		log.Debug().Err(data.Err).Msg("skipping analytics emission for canceled scan")
 		return
 	}
 
