@@ -77,12 +77,6 @@ func ApplyAuthMethodChange(conf gafConfig.Configuration, authService authenticat
 		Str("new_auth_method", string(authMethod)).
 		Msg("auth method change requested")
 	types.SetGlobalUser(conf, types.SettingAuthenticationMethod, string(authMethod))
-	if authService == nil {
-		logger.Warn().
-			Str("auth_method", string(authMethod)).
-			Msg("authService is nil; auth method persisted but ConfigureProviders skipped")
-		return authMethod != previousMethod
-	}
 	authService.ConfigureProviders(conf, logger)
 
 	return authMethod != previousMethod
