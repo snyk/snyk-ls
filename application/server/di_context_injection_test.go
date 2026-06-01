@@ -34,19 +34,25 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// sentinelHoverService is a minimal hover.Service stub used to verify that
+// diTestScanPersister is a pointer-type stub so pointer-identity assertions
+// (assert.Same) can distinguish the injected instance from any other NopScanPersister.
+type diTestScanPersister struct {
+	persistence.NopScanPersister
+}
+
+// diTestHoverService is a minimal hover.Service stub used to verify that
 // withContext injects the deps-provided service, not the di package global.
-type sentinelHoverService struct {
+type diTestHoverService struct {
 	hover.Service
 }
 
-func (s *sentinelHoverService) GetHover(_ types.FilePath, _ types.Position) hover.Result {
+func (s *diTestHoverService) GetHover(_ types.FilePath, _ types.Position) hover.Result {
 	return hover.Result{}
 }
 
-func (s *sentinelHoverService) ClearAllHovers() {}
+func (s *diTestHoverService) ClearAllHovers() {}
 
-func (s *sentinelHoverService) Channel() chan hover.DocumentHovers {
+func (s *diTestHoverService) Channel() chan hover.DocumentHovers {
 	return make(chan hover.DocumentHovers, 1)
 }
 
@@ -63,30 +69,31 @@ func Test_withContext_injectsHoverService_isolatedFromGlobal(t *testing.T) {
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 
-	globalSentinel := &sentinelHoverService{}
-	contextSentinel := &sentinelHoverService{}
+	globalSentinel := &diTestHoverService{}
+	contextSentinel := &diTestHoverService{}
 
-	// Set the di package-level global to globalSentinel.
-	di.TestInit(t, engine, tokenService, &di.Dependencies{
+	// Set the di package-level global to globalSentinel. Use the returned deps
+	// as a base so all mandatory fields (e.g. ConfigResolver) are populated.
+	baseDeps := di.TestInit(t, engine, tokenService, &di.Dependencies{
 		HoverService: globalSentinel,
 	})
 
-	// Pass a different instance in deps — withContext must inject this one.
-	deps := di.Dependencies{
-		HoverService: contextSentinel,
-	}
+	// Override only HoverService — withContext must inject contextSentinel, not
+	// the globalSentinel that was passed to TestInit above.
+	deps := baseDeps
+	deps.HoverService = contextSentinel
 
 	var gotService hover.Service
 	wrapped := withContext(handler.New(func(ctx context.Context, _ *jrpc2.Request) (any, error) {
 		gotService, _ = hoverServiceFromContext(ctx)
 		return nil, nil
-	}), logger, conf, engine, deps)
+	}), logger, conf, engine, deps, nil)
 
 	_, err := wrapped(t.Context(), nil)
 	require.NoError(t, err)
 
-	gotSentinel, ok := gotService.(*sentinelHoverService)
-	require.True(t, ok, "expected *sentinelHoverService from context")
+	gotSentinel, ok := gotService.(*diTestHoverService)
+	require.True(t, ok, "expected *diTestHoverService from context")
 	assert.True(t, gotSentinel == contextSentinel,
 		"withContext must inject the deps.HoverService into context, not read di.HoverService() global")
 	assert.True(t, gotSentinel != globalSentinel,
@@ -100,19 +107,21 @@ func Test_withContext_injectsHoverService_isolatedFromGlobal(t *testing.T) {
 // These are fields added in IDE-1898. AuthenticationService injection is
 // already covered by TestWithContext_InjectsAuthenticationService in server_test.go.
 func Test_withContext_injectsNewHandlerDependencies(t *testing.T) {
-	engine, _ := testutil.UnitTestWithEngine(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 
-	scanPersister := persistence.NopScanPersister{}
-	sentinel := &sentinelHoverService{}
+	scanPersister := &diTestScanPersister{}
+	sentinel := &diTestHoverService{}
 	errReporter := er.NewTestErrorReporter(engine)
 
-	deps := di.Dependencies{
-		HoverService:  sentinel,
-		ScanPersister: scanPersister,
-		ErrorReporter: errReporter,
-	}
+	// Prime global DI state (satisfies validateMandatoryDeps inside withContext),
+	// then override the three fields under test on the returned struct copy so the
+	// test proves context injection uses the deps struct, not the di package globals.
+	deps := di.TestInit(t, engine, tokenService, nil)
+	deps.HoverService = sentinel
+	deps.ScanPersister = scanPersister
+	deps.ErrorReporter = errReporter
 
 	var (
 		gotHoverService  hover.Service
@@ -127,15 +136,15 @@ func Test_withContext_injectsNewHandlerDependencies(t *testing.T) {
 		gotScanPersister, _ = ctxDeps[ctx2.DepScanPersister].(persistence.ScanSnapshotPersister)
 		gotErrorReporter, _ = ctxDeps[ctx2.DepErrorReporter].(er.ErrorReporter)
 		return nil, nil
-	}), logger, conf, engine, deps)
+	}), logger, conf, engine, deps, nil)
 
 	_, err := wrapped(t.Context(), nil)
 	require.NoError(t, err)
 
-	assert.Equal(t, sentinel, gotHoverService,
+	assert.Same(t, sentinel, gotHoverService,
 		"HoverService must be the exact instance injected into context")
-	assert.Equal(t, scanPersister, gotScanPersister,
+	assert.Same(t, scanPersister, gotScanPersister,
 		"ScanPersister must be the exact instance injected into context")
-	assert.Equal(t, errReporter, gotErrorReporter,
+	assert.Same(t, errReporter, gotErrorReporter,
 		"ErrorReporter must be the exact instance injected into context")
 }
