@@ -37,10 +37,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// IDE-1668: emit failure analytics when a scan returns an error.
-//
-// These tests cover the contract: sendAnalytics() must produce a
-// `interaction.status:"Failure"` event with `error_category` (catalog prefix,
+// These tests cover the failure-analytics contract: sendAnalytics() must produce
+// an `interaction.status:"Failure"` event with `error_category` (catalog prefix,
 // e.g. "SNYK-CLI") and, when available, `error_code` (full catalog code).
 // The empty-product, SendAnalytics=false, non-failing-error and
 // context-cancellation guards must continue to suppress emission even on the

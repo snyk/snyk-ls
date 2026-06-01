@@ -359,11 +359,10 @@ func (f *Folder) scan(ctx context.Context, path types.FilePath) {
 func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 	if scanData.Err != nil {
 		f.sendScanError(scanData.Product, scanData.Err)
-		// IDE-1668: emit failure analytics so the "Is Snyk OK?" dashboard's
-		// IDE panel reflects scan errors. Mirror sendScanError's filter — auth-not-set
-		// and "product disabled" outcomes are user state, not failures, and would
-		// inflate the failure rate one event per enabled product per scan.
-		// Reference scans short-circuit inside sendAnalytics via SendAnalytics:false.
+		// Mirror sendScanError's filter — auth-not-set and "product disabled" outcomes
+		// are user state, not failures, and would inflate the dashboard failure rate one
+		// event per enabled product per scan. Reference scans short-circuit inside
+		// sendAnalytics via SendAnalytics:false.
 		if !utils.IsNonFailingScanError(scanData.Err.Error()) {
 			go sendAnalytics(ctx, f.engine, f.configResolver, f.logger, &scanData)
 		}
