@@ -19,6 +19,7 @@
   --info-background: var(--vscode-inputValidation-infoBackground, #e6f3ff);
 
   --list-hover-background: var(--vscode-list-hoverBackground, #8080801a);
+  --list-hover-foreground: var(--vscode-list-hoverForeground, var(--list-active-selection-foreground));
   --list-active-selection-background: var(--vscode-list-activeSelectionBackground, #0066cc1f);
   --list-active-selection-foreground: var(--vscode-list-activeSelectionForeground, #0066cc);
 
@@ -77,6 +78,9 @@ body {
 
 .tree-node-row:hover {
   background-color: var(--list-hover-background);
+  color: var(--list-hover-foreground);
+  outline: 1px solid var(--focus-border);
+  outline-offset: -1px;
 }
 
 .tree-node-row.selected {
@@ -278,10 +282,6 @@ body {
   cursor: pointer;
 }
 
-.tree-node-issue .tree-node-row:hover {
-  background-color: var(--list-hover-background);
-}
-
 /* Issue group node (multi-location container) — expand/collapse like file node */
 .tree-node-issue-group .tree-node-row {
   cursor: pointer;
@@ -290,10 +290,6 @@ body {
 /* Location node — clickable like issue leaf */
 .tree-node-location .tree-node-row {
   cursor: pointer;
-}
-
-.tree-node-location .tree-node-row:hover {
-  background-color: var(--list-hover-background);
 }
 
 /* Filter toolbar */
