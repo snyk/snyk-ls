@@ -772,7 +772,7 @@ func applyOrganization(ctx context.Context, conf configuration.Configuration, en
 				Msg("global org changed, refreshing LDX-Sync for folders using global org fallback")
 			ldxSyncService := mustLdxSyncServiceFromContext(ctx)
 			notifier := mustNotifierFromContext(ctx)
-			ldxSyncService.RefreshConfigFromLdxSync(ctx, conf, engine, logger, foldersNeedingRefresh, notifier)
+			ldxSyncService.RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, foldersNeedingRefresh, notifier)
 		}
 	}
 

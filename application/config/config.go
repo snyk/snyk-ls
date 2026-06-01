@@ -709,8 +709,6 @@ func SetupStorage(conf configuration.Configuration, s storage.StorageWithCallbac
 	preInitOAuthToken := conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN)
 
 	conf.SetStorage(s)
-	// Ensure we aren't still using values from the CLI storage which had been got and cached.
-	conf.ClearCache()
 	conf.PersistInStorage(folderconfig.ConfigMainKey)
 	conf.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
 	conf.PersistInStorage(configuration.AUTHENTICATION_TOKEN)
