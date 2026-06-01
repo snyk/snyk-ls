@@ -452,6 +452,36 @@ func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
 	assert.False(t, ignoredExists, "Expected the ignored issue to not be in the package issue cache")
 }
 
+func TestCLIScanner_prepareScanCommand_SetsAutodetectEnv(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	resolver := defaultResolver(t, engine)
+	cliScanner := &CLIScanner{
+		engine:            engine,
+		cli:               cli.NewTestExecutorWithResponse(engine, "{}"),
+		instrumentor:      performance.NewInstrumentor(),
+		errorReporter:     error_reporting.NewTestErrorReporter(engine),
+		learnService:      mock_learn.NewMockService(gomock.NewController(t)),
+		notifier:          notification.NewMockNotifier(),
+		configResolver:    resolver,
+		mutex:             &sync.RWMutex{},
+		inlineValueMutex:  &sync.RWMutex{},
+		packageScanMutex:  &sync.Mutex{},
+		runningScans:      make(map[types.FilePath]*scans.ScanProgress),
+		supportedFiles:    make(map[string]bool),
+		packageIssueCache: make(map[string][]types.Issue),
+	}
+
+	folderPath := types.FilePath("/path/to/project")
+	fc := &types.FolderConfig{FolderPath: folderPath, ConfigResolver: resolver}
+
+	_, env := cliScanner.prepareScanCommand([]string{}, map[string]bool{}, folderPath, fc)
+
+	// The LS opts the CLI's os-flows extension into auto-detecting C/C++ projects;
+	// os-flows then runs an extra unmanaged scan when needed without the LS having
+	// to prompt or expose a per-folder toggle.
+	assert.Equal(t, "1", env["SNYK_AUTODETECT_OSS"])
+}
+
 func Test_isForceLegacyCLI(t *testing.T) {
 	t.Run("returns true when env var is set", func(t *testing.T) {
 		t.Setenv("SNYK_FORCE_LEGACY_CLI", "1")

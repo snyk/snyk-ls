@@ -203,6 +203,7 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePat
 		logger.Debug().Msg("Open Source scan skipped: path is not a supported manifest, lockfile, or directory")
 		return []types.Issue{}, nil
 	}
+
 	return cliScanner.scanInternal(ctx, cliScanner.prepareScanCommand)
 }
 
@@ -392,6 +393,14 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 	if params := cliScanner.configResolver.GetStringSlice(types.SettingCliAdditionalOssParameters, folderConfig); len(params) > 0 {
 		args = append(args, params...)
 	}
+	// Opt the CLI's os-flows extension into auto-detecting C/C++ projects:
+	// when set, it runs an extra unmanaged scan alongside the managed scan
+	// for folders that look unmanaged-eligible, so the LS doesn't need to
+	// prompt or expose a per-folder toggle.
+	if env == nil {
+		env = gotenv.Env{}
+	}
+	env["SNYK_AUTODETECT_OSS"] = "1"
 
 	processedArgs := []string{}
 	// now add all additional parameters, skipping blacklisted ones
