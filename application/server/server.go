@@ -429,8 +429,6 @@ func mustScanPersisterFromContext(ctx context.Context) persistence.ScanSnapshotP
 	return sp
 }
 
-// scanNotifierFromContext uses the (ok) pattern; addWorkspaceFolders returns an
-// error to initializeHandler when the dep is absent.
 func scanNotifierFromContext(ctx context.Context) (scanner2.ScanNotifier, bool) {
 	deps, ok := ctx2.DependenciesFromContext(ctx)
 	if !ok {
