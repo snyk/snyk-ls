@@ -382,6 +382,85 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 	})
 }
 
+func TestCLIScanner_prepareScanCommand_AutoDetectsMavenAggregateProject(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliExecutor := cli.NewTestExecutorWithResponse(engine, "{}")
+	instrumentor := performance.NewInstrumentor()
+	errorReporter := error_reporting.NewTestErrorReporter(engine)
+	learnMock := mock_learn.NewMockService(gomock.NewController(t))
+	notifier := notification.NewMockNotifier()
+	cliScanner := &CLIScanner{
+		engine:            engine,
+		cli:               cliExecutor,
+		instrumentor:      instrumentor,
+		errorReporter:     errorReporter,
+		learnService:      learnMock,
+		notifier:          notifier,
+		configResolver:    defaultResolver(t, engine),
+		mutex:             &sync.RWMutex{},
+		inlineValueMutex:  &sync.RWMutex{},
+		packageScanMutex:  &sync.Mutex{},
+		runningScans:      make(map[types.FilePath]*scans.ScanProgress),
+		supportedFiles:    make(map[string]bool),
+		packageIssueCache: make(map[string][]types.Issue),
+	}
+
+	t.Run("uses --maven-aggregate-project when pom.xml exists in scan directory", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "pom.xml"), []byte("<project/>"), 0600))
+
+		result, _ := cliScanner.prepareScanCommand([]string{}, map[string]bool{}, types.FilePath(dir), nil)
+
+		assert.Contains(t, result, "--maven-aggregate-project", "should auto-add --maven-aggregate-project for Maven directories")
+		assert.NotContains(t, result, "--all-projects", "--all-projects must be suppressed for Maven aggregate directories")
+	})
+
+	t.Run("uses --all-projects when no pom.xml in directory", func(t *testing.T) {
+		dir := t.TempDir()
+
+		result, _ := cliScanner.prepareScanCommand([]string{}, map[string]bool{}, types.FilePath(dir), nil)
+
+		assert.Contains(t, result, "--all-projects", "non-Maven directories should still use --all-projects")
+		assert.NotContains(t, result, "--maven-aggregate-project")
+	})
+
+	t.Run("does not duplicate --maven-aggregate-project when user already set it via additional params", func(t *testing.T) {
+		// The blacklist mechanism (not a slices.Contains guard) prevents duplication:
+		// when --maven-aggregate-project is in user params, allProjectsParamAllowed is set
+		// to false by the blacklist loop, so the auto-detection block is never entered.
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "pom.xml"), []byte("<project/>"), 0600))
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"--maven-aggregate-project"})
+		defer engine.GetConfiguration().Unset(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters))
+
+		result, _ := cliScanner.prepareScanCommand([]string{}, map[string]bool{}, types.FilePath(dir), nil)
+
+		count := 0
+		for _, arg := range result {
+			if arg == "--maven-aggregate-project" {
+				count++
+			}
+		}
+		assert.Equal(t, 1, count, "--maven-aggregate-project should appear exactly once")
+		assert.NotContains(t, result, "--all-projects")
+	})
+
+	t.Run("polyglot workspace: uses --maven-aggregate-project and suppresses --all-projects even with other manifests present", func(t *testing.T) {
+		// Documented trade-off: a workspace root with pom.xml alongside other ecosystem
+		// manifests (package.json, go.mod, etc.) will only scan the Maven portion.
+		// Users needing cross-ecosystem scanning should not mix root pom.xml with other
+		// manifests at the workspace root.
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "pom.xml"), []byte("<project/>"), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "package.json"), []byte("{}"), 0600))
+
+		result, _ := cliScanner.prepareScanCommand([]string{}, map[string]bool{}, types.FilePath(dir), nil)
+
+		assert.Contains(t, result, "--maven-aggregate-project")
+		assert.NotContains(t, result, "--all-projects")
+	})
+}
+
 func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
 	engine := testutil.UnitTest(t)
 

@@ -76,6 +76,8 @@ var (
 		"--all-sub-projects": true,
 		// --maven-aggregate-project is mutually exclusive with --all-projects per the Snyk CLI spec:
 		// https://docs.snyk.io/developer-tools/snyk-cli/commands/test#--maven-aggregate-project
+		// This entry also prevents the auto-detect block (below) from double-injecting the flag
+		// when the user has already set it explicitly via additional OSS parameters.
 		"--maven-aggregate-project": true,
 	}
 
@@ -418,6 +420,28 @@ func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlackli
 		}
 
 		processedArgs = append(processedArgs, parameter)
+	}
+
+	// Auto-detect Maven aggregate projects: when scanning a directory that contains a
+	// root pom.xml, use --maven-aggregate-project instead of --all-projects so that the
+	// Maven reactor resolves all modules in one pass.
+	// https://docs.snyk.io/developer-tools/snyk-cli/commands/test#--maven-aggregate-project
+	//
+	// Trade-offs (intentional design choices):
+	//   - Single-module Maven projects (no <modules> in pom.xml) also trigger this path;
+	//     the CLI handles them correctly by scanning just the root POM.
+	//   - Polyglot workspaces (pom.xml alongside package.json, go.mod, etc.) will only
+	//     scan the Maven portion. Users who need cross-ecosystem scanning should not place
+	//     a root pom.xml alongside other ecosystem manifests at the workspace root.
+	if uri.IsDirectory(path) && allProjectsParamAllowed {
+		pomPath := filepath.Join(string(path), "pom.xml")
+		if _, err := os.Stat(pomPath); err == nil {
+			processedArgs = append(processedArgs, "--maven-aggregate-project")
+			allProjectsParamAllowed = false
+		} else if !os.IsNotExist(err) {
+			cliScanner.logger.Warn().Err(err).Str("path", pomPath).
+				Msg("could not stat pom.xml; falling back to --all-projects")
+		}
 	}
 
 	// only append --all-projects, if it's not on the global blacklist
