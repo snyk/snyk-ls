@@ -1645,3 +1645,52 @@ func TestAddWorkspaceFolders_MissingDeps_ReturnsError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "missing mandatory DI dependency")
 }
+
+// TestInitializeHandler_MissingDep_PropagatesLSPError verifies that when a required
+// dependency is absent from the DI wiring, the initializeHandler returns an error that
+// propagates through the jrpc2 layer back to the LSP client as a protocol-level error
+// response — not a silent no-op or a server crash.
+func TestInitializeHandler_MissingDep_PropagatesLSPError(t *testing.T) {
+	cases := []struct {
+		name        string
+		mutate      func(deps *di.Dependencies)
+		wantMessage string
+	}{
+		{
+			name:        "missing AuthenticationService",
+			mutate:      func(d *di.Dependencies) { d.AuthenticationService = nil },
+			wantMessage: "authentication service missing",
+		},
+		{
+			name:        "missing LdxSyncService",
+			mutate:      func(d *di.Dependencies) { d.LdxSyncService = nil },
+			wantMessage: "LDX Sync service missing",
+		},
+		{
+			name:        "missing ConfigResolver",
+			mutate:      func(d *di.Dependencies) { d.ConfigResolver = nil },
+			wantMessage: "missing mandatory DI dependency",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			engine, tokenService := testutil.UnitTestWithEngine(t)
+			deps := di.TestInit(t, engine, tokenService, nil)
+
+			// Remove the dep under test so withContext does not inject it.
+			tc.mutate(&deps)
+
+			jsonRPCRecorder := &testsupport.JsonRPCRecorder{}
+			loc := startServer(engine, tokenService, nil, jsonRPCRecorder, deps)
+			t.Cleanup(func() { _ = loc.Close() })
+
+			_, err := loc.Client.Call(t.Context(), "initialize", nil)
+
+			require.Error(t, err)
+			var rpcErr *jrpc2.Error
+			require.ErrorAs(t, err, &rpcErr, "expected a jrpc2 protocol error, not a transport failure")
+			assert.Contains(t, rpcErr.Message, tc.wantMessage)
+		})
+	}
+}
