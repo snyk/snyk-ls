@@ -393,7 +393,7 @@ func processConfigSettings(ctx context.Context, conf configuration.Configuration
 	}
 	lockedMachineFields := validateLockedMachineFields(settings, configResolver, fm, &subLogger)
 
-	authService, _ := authenticationServiceFromContext(ctx)
+	authService := mustAuthenticationServiceFromContext(ctx)
 	applyApiEndpoints(conf, engine, logger, settings, triggerSource, configResolver, authService)
 	applyAuthenticationMethod(conf, engine, logger, settings, triggerSource, configResolver, authService)
 	applyToken(settings, authService)
@@ -531,9 +531,7 @@ func processFolderConfigs(ctx context.Context, conf configuration.Configuration,
 		for p := range orgChangedFolderPaths {
 			paths = append(paths, p)
 		}
-		if sa, ok := scanStateAggregatorFromContext(ctx); ok {
-			resetSummaryPanelForOrgChange(sa, paths)
-		}
+		resetSummaryPanelForOrgChange(mustScanStateAggregatorFromContext(ctx), paths)
 	}
 
 	sendFolderConfigUpdateIfNeeded(conf, engine, logger, notifier, processedConfigs, len(changedConfigs) > 0, triggerSource, configResolver)
@@ -1174,9 +1172,7 @@ func processSingleLspFolderConfig(ctx context.Context, conf configuration.Config
 	}
 
 	orgSettingsChanged := updateFolderOrgIfNeeded(ctx, conf, engine, logger, fc, fc, oldSnapshot, notifier)
-	if ffs, ok := featureFlagServiceFromContext(ctx); ok {
-		ffs.PopulateFolderConfig(fc)
-	}
+	mustFeatureFlagServiceFromContext(ctx).PopulateFolderConfig(fc)
 
 	newSnapshot := types.ReadFolderConfigSnapshot(conf, normalizedPath)
 

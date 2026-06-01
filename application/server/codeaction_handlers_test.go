@@ -16,25 +16,6 @@
 
 package server
 
-import (
-	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"github.com/snyk/snyk-ls/internal/testutil"
-	"github.com/snyk/snyk-ls/internal/types"
-)
-
-func TestGetCodeActionHandler_NilService_ReturnsNilAndNoError(t *testing.T) {
-	// When svc is nil (programming error — service not wired at startup), the handler
-	// must log a warning and return nil, nil rather than panicking.
-	engine := testutil.UnitTest(t)
-	logger := engine.GetLogger()
-	handler := GetCodeActionHandler(logger, nil)
-	require.NotNil(t, handler, "handler closure must always be returned even for nil svc")
-
-	actions, err := handler(t.Context(), types.CodeActionParams{})
-	assert.Nil(t, actions)
-	assert.NoError(t, err)
-}
+// TestGetCodeActionHandler_NilService is removed: CodeActionsService is now a
+// mandatory DI dep validated by withContext.validateMandatoryDeps before any
+// handler runs, so the nil case is unreachable in production.

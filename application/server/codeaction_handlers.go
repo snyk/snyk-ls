@@ -60,11 +60,6 @@ func GetCodeActionHandler(logger *zerolog.Logger, svc *codeaction.CodeActionsSer
 	l := logger.With().Str("method", "CodeActionHandler").Logger()
 
 	return func(paramCtx context.Context, params types.CodeActionParams) ([]types.LSPCodeAction, error) {
-		if svc == nil {
-			l.Warn().Msg("CodeActionsService is nil; code actions are unavailable — check server startup wiring")
-			return nil, nil
-		}
-
 		var ctx context.Context
 		mu.Lock()
 		cancel()

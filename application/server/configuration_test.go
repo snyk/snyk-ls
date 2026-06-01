@@ -50,9 +50,12 @@ import (
 	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
+	er "github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
@@ -100,6 +103,43 @@ func contextWithResolver(ctx context.Context, engine workflow.Engine) context.Co
 	}
 	merged[ctx2.DepConfigResolver] = testutil.DefaultConfigResolver(engine)
 	return ctx2.NewContextWithDependencies(ctx, merged)
+}
+
+// testCtx builds a test context with all mandatory DI deps that UpdateSettings /
+// InitializeSettings requires (Notifier, ConfigResolver, AuthService,
+// FeatureFlagService, LdxSyncService, ScanStateAggregator). Engine must be the
+// same instance passed to UpdateSettings / InitializeSettings so configuration
+// reads are consistent.
+func testCtx(t *testing.T, ctx context.Context, engine workflow.Engine, tokenService types.TokenService) context.Context {
+	t.Helper()
+	cr := testutil.DefaultConfigResolver(engine)
+	notifier := notification.NewMockNotifier()
+	authSvc := authentication.NewAuthenticationService(
+		engine,
+		tokenService,
+		authentication.NewFakeCliAuthenticationProvider(engine),
+		er.NewTestErrorReporter(engine),
+		notifier,
+		cr,
+	)
+	t.Cleanup(authSvc.Shutdown)
+	ffSvc := featureflag.New(engine.GetConfiguration(), engine.GetLogger(), engine, cr)
+	ldxSvc := command.NewLdxSyncService(cr)
+	deps := map[string]any{
+		ctx2.DepNotifier:            notifier,
+		ctx2.DepConfigResolver:      cr,
+		ctx2.DepAuthService:         authSvc,
+		ctx2.DepFeatureFlagService:  ffSvc,
+		ctx2.DepLdxSyncService:      ldxSvc,
+		ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
+	}
+	existing, _ := ctx2.DependenciesFromContext(ctx)
+	for k, v := range existing {
+		if _, already := deps[k]; !already {
+			deps[k] = v
+		}
+	}
+	return ctx2.NewContextWithDependencies(ctx, deps)
 }
 
 func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
@@ -210,9 +250,12 @@ func Test_InitializeSettings_PreservesRefreshedOAuthTokenWhenInitializeSendsStal
 	})
 	t.Cleanup(func() { di.Notifier().DisposeListener() })
 
+	// UpdateCredentials on the global singleton: both the global service and testCtx's
+	// service write through to the shared engine configuration, so the refreshed token
+	// is visible to whichever service instance ends up in the context.
 	di.AuthenticationService().UpdateCredentials(refreshedToken, true, false)
 
-	require.NoError(t, InitializeSettings(contextWithResolver(contextWithNotifier(t.Context()), engine), conf, engine, logger, types.InitializationOptions{
+	require.NoError(t, InitializeSettings(testCtx(t, t.Context(), engine, tokenService), conf, engine, logger, types.InitializationOptions{
 		Settings: map[string]*types.ConfigSetting{
 			types.SettingToken:                {Value: staleToken, Changed: true},
 			types.SettingAuthenticationMethod: {Value: string(types.OAuthAuthentication), Changed: true},
@@ -444,34 +487,34 @@ func Test_UpdateSettings(t *testing.T) {
 	})
 
 	t.Run("hover defaults are set", func(t *testing.T) {
-		engine, _ := testutil.UnitTestWithEngine(t)
-		UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+		engine, tokenService := testutil.UnitTestWithEngine(t)
+		UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 		assert.Equal(t, 3, types.GetGlobalInt(engine.GetConfiguration(), types.SettingHoverVerbosity))
 		assert.Equal(t, config.FormatMd, types.GetGlobalString(engine.GetConfiguration(), types.SettingFormat))
 	})
 
 	t.Run("incomplete env vars", func(t *testing.T) {
-		engine, _ := testutil.UnitTestWithEngine(t)
+		engine, tokenService := testutil.UnitTestWithEngine(t)
 
-		UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingAdditionalEnvironment: {Value: "a=", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+		UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingAdditionalEnvironment: {Value: "a=", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 		assert.Empty(t, os.Getenv("a"))
 	})
 
 	t.Run("empty env vars", func(t *testing.T) {
-		engine, _ := testutil.UnitTestWithEngine(t)
+		engine, tokenService := testutil.UnitTestWithEngine(t)
 		varCount := len(os.Environ())
 
-		UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingAdditionalEnvironment: {Value: " ", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+		UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingAdditionalEnvironment: {Value: " ", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 		assert.Equal(t, varCount, len(os.Environ()))
 	})
 
 	t.Run("broken env variables", func(t *testing.T) {
-		engine, _ := testutil.UnitTestWithEngine(t)
+		engine, tokenService := testutil.UnitTestWithEngine(t)
 
-		UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingAdditionalEnvironment: {Value: "a=; b", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+		UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingAdditionalEnvironment: {Value: "a=; b", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 		assert.Empty(t, os.Getenv("a"))
 		assert.Empty(t, os.Getenv("b"))
@@ -484,7 +527,7 @@ func Test_UpdateSettings(t *testing.T) {
 
 			path1 := filepath.Join("a", "b")
 			path2 := filepath.Join("b", "c")
-			require.NoError(t, InitializeSettings(contextWithResolver(contextWithNotifier(t.Context()), engine), engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{
+			require.NoError(t, InitializeSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{
 				Settings: map[string]*types.ConfigSetting{
 					types.SettingTrustedFolders: {Value: []interface{}{path1, path2}, Changed: true},
 				},
@@ -507,7 +550,7 @@ func Test_UpdateSettings(t *testing.T) {
 					types.SettingTrustedFolders: {Value: []interface{}{path1, path2}, Changed: true},
 				},
 			}
-			_, err := handlePushModel(contextWithResolver(contextWithNotifier(t.Context()), engine), engine.GetConfiguration(), engine, engine.GetLogger(), params)
+			_, err := handlePushModel(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), params)
 			assert.NoError(t, err)
 
 			tf := types.GetGlobalSliceFilePath(engine.GetConfiguration(), types.SettingTrustedFolders)
@@ -517,20 +560,20 @@ func Test_UpdateSettings(t *testing.T) {
 	})
 
 	t.Run("manage binaries automatically", func(t *testing.T) {
-		engine, _ := testutil.UnitTestWithEngine(t)
+		engine, tokenService := testutil.UnitTestWithEngine(t)
 		t.Run("true", func(t *testing.T) {
-			UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingAutomaticDownload: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+			UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingAutomaticDownload: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 			assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingAutomaticDownload))
 		})
 		t.Run("false", func(t *testing.T) {
-			UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingAutomaticDownload: {Value: false, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+			UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingAutomaticDownload: {Value: false, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 			assert.False(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingAutomaticDownload))
 		})
 
 		t.Run("invalid value does not update", func(t *testing.T) {
-			ctx := contextWithNotifier(t.Context())
+			ctx := testCtx(t, t.Context(), engine, tokenService)
 			UpdateSettings(ctx, engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingAutomaticDownload: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 			UpdateSettings(ctx, engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingAutomaticDownload: {Value: "dog", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
@@ -540,30 +583,30 @@ func Test_UpdateSettings(t *testing.T) {
 	})
 
 	t.Run("activateSnykCodeSecurity enables SnykCode via OR", func(t *testing.T) {
-		engine, _ := testutil.UnitTestWithEngine(t)
+		engine, tokenService := testutil.UnitTestWithEngine(t)
 
-		UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+		UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), "snyk_code_enabled should enable Snyk Code")
 	})
 	t.Run("activateSnykCode and activateSnykCodeSecurity are ORed", func(t *testing.T) {
-		engine, _ := testutil.UnitTestWithEngine(t)
+		engine, tokenService := testutil.UnitTestWithEngine(t)
 
-		UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+		UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), "Should be enabled when snyk_code_enabled is true")
 	})
 	t.Run("activateSnykCode alone enables SnykCode", func(t *testing.T) {
-		engine, _ := testutil.UnitTestWithEngine(t)
+		engine, tokenService := testutil.UnitTestWithEngine(t)
 
-		UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+		UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
 	})
 	t.Run("neither activateSnykCode nor activateSnykCodeSecurity disables SnykCode", func(t *testing.T) {
-		engine, _ := testutil.UnitTestWithEngine(t)
+		engine, tokenService := testutil.UnitTestWithEngine(t)
 
-		UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: false, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+		UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: false, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 		assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
 	})
@@ -572,7 +615,7 @@ func Test_UpdateSettings(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
 		di.TestInit(t, engine, tokenService, nil)
 
-		UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingSnykSecretsEnabled: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+		UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingSnykSecretsEnabled: {Value: true, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled)))
 	})
@@ -580,7 +623,7 @@ func Test_UpdateSettings(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
 		di.TestInit(t, engine, tokenService, nil)
 
-		UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingSnykSecretsEnabled: {Value: false, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+		UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingSnykSecretsEnabled: {Value: false, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 		assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled)))
 	})
@@ -590,16 +633,16 @@ func Test_UpdateSettings(t *testing.T) {
 
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
 
-		UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+		UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled)))
 	})
 
 	t.Run("severity filter", func(t *testing.T) {
-		engine, _ := testutil.UnitTestWithEngine(t)
+		engine, tokenService := testutil.UnitTestWithEngine(t)
 		t.Run("filtering gets passed", func(t *testing.T) {
 			mixedSeverityFilter := types.NewSeverityFilter(true, false, true, false)
-			UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+			UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 				types.SettingSeverityFilterCritical: {Value: true, Changed: true},
 				types.SettingSeverityFilterHigh:     {Value: false, Changed: true},
 				types.SettingSeverityFilterMedium:   {Value: true, Changed: true},
@@ -610,7 +653,7 @@ func Test_UpdateSettings(t *testing.T) {
 		})
 		t.Run("equivalent of the \"empty\" struct as a filter gets passed", func(t *testing.T) {
 			emptyLikeSeverityFilter := types.NewSeverityFilter(false, false, false, false)
-			UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+			UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 				types.SettingSeverityFilterCritical: {Value: false, Changed: true},
 				types.SettingSeverityFilterHigh:     {Value: false, Changed: true},
 				types.SettingSeverityFilterMedium:   {Value: false, Changed: true},
@@ -621,7 +664,7 @@ func Test_UpdateSettings(t *testing.T) {
 		})
 		t.Run("omitting filter does not cause an update", func(t *testing.T) {
 			mixedSeverityFilter := types.NewSeverityFilter(false, false, true, false)
-			ctx := contextWithNotifier(t.Context())
+			ctx := testCtx(t, t.Context(), engine, tokenService)
 			UpdateSettings(ctx, engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 				types.SettingSeverityFilterCritical: {Value: false, Changed: true},
 				types.SettingSeverityFilterHigh:     {Value: false, Changed: true},
@@ -635,7 +678,7 @@ func Test_UpdateSettings(t *testing.T) {
 		})
 		t.Run("partial update preserves unchanged severities", func(t *testing.T) {
 			// Set initial state: Critical=false, High=false, Medium=true, Low=false
-			ctx := contextWithNotifier(t.Context())
+			ctx := testCtx(t, t.Context(), engine, tokenService)
 			UpdateSettings(ctx, engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 				types.SettingSeverityFilterCritical: {Value: false, Changed: true},
 				types.SettingSeverityFilterHigh:     {Value: false, Changed: true},
@@ -655,10 +698,10 @@ func Test_UpdateSettings(t *testing.T) {
 	})
 
 	t.Run("issue view options", func(t *testing.T) {
-		engine, _ := testutil.UnitTestWithEngine(t)
+		engine, tokenService := testutil.UnitTestWithEngine(t)
 		t.Run("filtering gets passed", func(t *testing.T) {
 			mixedIssueViewOptions := types.NewIssueViewOptions(false, true)
-			UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+			UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 				types.SettingIssueViewOpenIssues:    {Value: false, Changed: true},
 				types.SettingIssueViewIgnoredIssues: {Value: true, Changed: true},
 			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
@@ -667,7 +710,7 @@ func Test_UpdateSettings(t *testing.T) {
 		})
 		t.Run("equivalent of the \"empty\" struct as a filter gets passed", func(t *testing.T) {
 			emptyLikeIssueViewOptions := types.NewIssueViewOptions(false, false)
-			UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+			UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 				types.SettingIssueViewOpenIssues:    {Value: false, Changed: true},
 				types.SettingIssueViewIgnoredIssues: {Value: false, Changed: true},
 			}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
@@ -676,7 +719,7 @@ func Test_UpdateSettings(t *testing.T) {
 		})
 		t.Run("omitting filter does not cause an update", func(t *testing.T) {
 			mixedIssueViewOptions := types.NewIssueViewOptions(false, true)
-			ctx := contextWithNotifier(t.Context())
+			ctx := testCtx(t, t.Context(), engine, tokenService)
 			UpdateSettings(ctx, engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 				types.SettingIssueViewOpenIssues:    {Value: false, Changed: true},
 				types.SettingIssueViewIgnoredIssues: {Value: true, Changed: true},
@@ -757,6 +800,7 @@ func Test_UpdateSettings_TokenChange_TriggersLdxSyncRefresh(t *testing.T) {
 			ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
 				ctx2.DepLdxSyncService:     mockLdx,
 				ctx2.DepNotifier:           notification.NewMockNotifier(),
+				ctx2.DepAuthService:        deps.AuthenticationService,
 				ctx2.DepFeatureFlagService: deps.FeatureFlagService,
 			})
 
@@ -786,6 +830,7 @@ func Test_UpdateSettings_TokenChange_TriggersLdxSyncRefresh(t *testing.T) {
 		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
 			ctx2.DepLdxSyncService:     mockLdx,
 			ctx2.DepNotifier:           notification.NewMockNotifier(),
+			ctx2.DepAuthService:        deps.AuthenticationService,
 			ctx2.DepFeatureFlagService: deps.FeatureFlagService,
 		})
 
@@ -837,7 +882,7 @@ func Test_refreshLdxSyncOnTokenChange_NilNotifier_StillCallsRefresh(t *testing.T
 }
 
 func Test_UpdateSettings_BlankOrganizationResetsToDefault_Integration(t *testing.T) {
-	engine := testutil.IntegTest(t)
+	engine, tokenService := testutil.IntegTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	if config.GetToken(conf) == "" {
 		t.Skip("SNYK_TOKEN is required to resolve the user's preferred default org via /rest/self")
@@ -849,7 +894,7 @@ func Test_UpdateSettings_BlankOrganizationResetsToDefault_Integration(t *testing
 	require.Equal(t, initialOrgId, conf.GetString(configuration.ORGANIZATION), "org should be set to the value we just set it to")
 
 	// Set to empty string to reset to the user's preferred default org they defined in the web UI.
-	UpdateSettings(contextWithNotifier(t.Context()), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingOrganization: {Value: "", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+	UpdateSettings(testCtx(t, t.Context(), engine, tokenService), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingOrganization: {Value: "", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 	// GAF's DefaultValueFunction for ORGANIZATION is synchronous: GetString blocks until the API call completes.
 	actualOrg := conf.GetString(configuration.ORGANIZATION)
@@ -860,7 +905,7 @@ func Test_UpdateSettings_BlankOrganizationResetsToDefault_Integration(t *testing
 }
 
 func Test_UpdateSettings_WhitespaceOrganizationResetsToDefault_Integration(t *testing.T) {
-	engine := testutil.IntegTest(t)
+	engine, tokenService := testutil.IntegTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	if config.GetToken(conf) == "" {
 		t.Skip("SNYK_TOKEN is required to resolve the user's preferred default org via /rest/self")
@@ -873,7 +918,7 @@ func Test_UpdateSettings_WhitespaceOrganizationResetsToDefault_Integration(t *te
 
 	// Set to whitespace to reset to the user's preferred default org they defined in the web UI.
 	// Whitespace should be trimmed to empty string.
-	UpdateSettings(contextWithNotifier(t.Context()), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingOrganization: {Value: " ", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+	UpdateSettings(testCtx(t, t.Context(), engine, tokenService), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingOrganization: {Value: " ", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 	// GAF's DefaultValueFunction for ORGANIZATION is synchronous: GetString blocks until the API call completes.
 	actualOrg := conf.GetString(configuration.ORGANIZATION)
@@ -891,6 +936,7 @@ type folderConfigTestSetup struct {
 	logger       *zerolog.Logger
 	folderPath   types.FilePath
 	deps         di.Dependencies
+	tokenService types.TokenService
 }
 
 func setupFolderConfigTest(t *testing.T) *folderConfigTestSetup {
@@ -919,6 +965,7 @@ func setupFolderConfigTest(t *testing.T) *folderConfigTestSetup {
 		logger:       logger,
 		folderPath:   folderPath,
 		deps:         deps,
+		tokenService: tokenService,
 	}
 }
 
@@ -972,7 +1019,7 @@ func Test_updateFolderConfig_UserSetOrg_PreservedOnUpdate(t *testing.T) {
 			},
 		},
 	}
-	UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), settingsMap, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+	UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), settingsMap, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 	// Verify the org was kept by reading directly from configuration
 	snap := types.ReadFolderConfigSnapshot(engineConfig, folderPath)
@@ -990,7 +1037,7 @@ func Test_updateFolderConfig_EmptyOrgSent_LeavesPreferredOrgEmpty(t *testing.T) 
 			},
 		},
 	}
-	UpdateSettings(contextWithNotifier(t.Context()), setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
+	UpdateSettings(testCtx(t, t.Context(), setup.engine, setup.tokenService), setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
 
 	updatedConfig := setup.getUpdatedConfig()
 	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false in auto mode")
@@ -1009,7 +1056,7 @@ func Test_updateFolderConfig_EmptyStoredOrg_LeavesPreferredOrgEmpty(t *testing.T
 			},
 		},
 	}
-	UpdateSettings(contextWithNotifier(t.Context()), setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
+	UpdateSettings(testCtx(t, t.Context(), setup.engine, setup.tokenService), setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
 
 	updatedConfig := setup.getUpdatedConfig()
 	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false in auto mode")
@@ -1029,7 +1076,7 @@ func Test_updateFolderConfig_LdxSyncReturnsDifferentOrg(t *testing.T) {
 			},
 		},
 	}
-	UpdateSettings(contextWithNotifier(t.Context()), setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
+	UpdateSettings(testCtx(t, t.Context(), setup.engine, setup.tokenService), setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
 
 	updatedConfig := setup.getUpdatedConfig()
 	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false when inheriting from LDX-Sync")
@@ -1051,7 +1098,7 @@ func Test_updateFolderConfig_UserSetButInheritingFromBlankGlobal(t *testing.T) {
 			},
 		},
 	}
-	UpdateSettings(contextWithNotifier(t.Context()), setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
+	UpdateSettings(testCtx(t, t.Context(), setup.engine, setup.tokenService), setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
 
 	// Verify: should attempt to resolve from LDX-Sync because inheriting from blank global
 	// This test specifically checks the case where both folder and global orgs are empty
@@ -1087,7 +1134,7 @@ func Test_updateFolderConfig_SkipsUpdateWhenConfigUnchanged(t *testing.T) {
 			},
 		},
 	}
-	UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), settingsMap, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+	UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), settingsMap, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 	// Verify config remains unchanged by reading directly from configuration
 	snap := types.ReadFolderConfigSnapshot(engineConfig, folderPath)
@@ -1117,7 +1164,7 @@ func Test_updateFolderConfig_HandlesNilStoredConfig(t *testing.T) {
 	}
 
 	// Should not panic and should handle nil gracefully
-	UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), settingsMap, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+	UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), settingsMap, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 	// If we get here without panic, the nil check worked
 }
 
@@ -1126,42 +1173,42 @@ func Test_InitializeSettings(t *testing.T) {
 	di.TestInit(t, engine, tokenService, nil)
 
 	t.Run("device ID is passed", func(t *testing.T) {
-		engine, _ := testutil.UnitTestWithEngine(t)
+		engine, tokenService := testutil.UnitTestWithEngine(t)
 		deviceId := "test-device-id"
 
-		require.NoError(t, InitializeSettings(contextWithResolver(contextWithNotifier(t.Context()), engine), engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{DeviceId: deviceId}))
+		require.NoError(t, InitializeSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{DeviceId: deviceId}))
 
 		assert.Equal(t, deviceId, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingDeviceId)))
 	})
 
 	t.Run("device ID is not passed", func(t *testing.T) {
-		engine, _ := testutil.UnitTestWithEngine(t)
+		engine, tokenService := testutil.UnitTestWithEngine(t)
 		deviceId := engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingDeviceId))
 
-		require.NoError(t, InitializeSettings(contextWithResolver(contextWithNotifier(t.Context()), engine), engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{}))
+		require.NoError(t, InitializeSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{}))
 
 		assert.Equal(t, deviceId, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingDeviceId)))
 	})
 
 	t.Run("activateSnykCodeSecurity enables SnykCode via OR on init", func(t *testing.T) {
-		engine, _ := testutil.UnitTestWithEngine(t)
+		engine, tokenService := testutil.UnitTestWithEngine(t)
 
-		require.NoError(t, InitializeSettings(contextWithResolver(contextWithNotifier(t.Context()), engine), engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{
+		require.NoError(t, InitializeSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{
 			Settings: map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: true, Changed: true}},
 		}))
 
 		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), "snyk_code_enabled should enable Snyk Code on init")
 	})
 	t.Run("activateSnykCodeSecurity not passed does not enable SnykCode on init", func(t *testing.T) {
-		engine, _ := testutil.UnitTestWithEngine(t)
+		engine, tokenService := testutil.UnitTestWithEngine(t)
 
-		require.NoError(t, InitializeSettings(contextWithResolver(contextWithNotifier(t.Context()), engine), engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{}))
+		require.NoError(t, InitializeSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{}))
 
 		assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
 	})
 
 	t.Run("custom path configuration", func(t *testing.T) {
-		engine, _ := testutil.UnitTestWithEngine(t)
+		engine, tokenService := testutil.UnitTestWithEngine(t)
 
 		first := "first"
 		second := "second"
@@ -1170,7 +1217,7 @@ func Test_InitializeSettings(t *testing.T) {
 		caseSensitivePathKey := "Path"
 		t.Setenv(caseSensitivePathKey, "something_meaningful")
 
-		ctx := contextWithResolver(contextWithNotifier(t.Context()), engine)
+		ctx := testCtx(t, t.Context(), engine, tokenService)
 		require.NoError(t, InitializeSettings(ctx, engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{Path: first}))
 		assert.True(t, strings.HasPrefix(os.Getenv(upperCasePathKey), first+string(os.PathListSeparator)))
 
@@ -1204,10 +1251,12 @@ func Test_processFolderConfigs_AutoMode_DoesNotLeakGlobalOrgToLdxSync(t *testing
 	mockApiClient := mock_command.NewMockLdxSyncApiClient(ctrl)
 	realService := command.NewLdxSyncServiceWithApiClient(mockApiClient, testutil.DefaultConfigResolver(setup.engine))
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-		ctx2.DepLdxSyncService:     realService,
-		ctx2.DepNotifier:           notification.NewMockNotifier(),
-		ctx2.DepAuthService:        setup.deps.AuthenticationService,
-		ctx2.DepFeatureFlagService: setup.deps.FeatureFlagService,
+		ctx2.DepLdxSyncService:      realService,
+		ctx2.DepNotifier:            notification.NewMockNotifier(),
+		ctx2.DepAuthService:         setup.deps.AuthenticationService,
+		ctx2.DepFeatureFlagService:  setup.deps.FeatureFlagService,
+		ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
+		ctx2.DepConfigResolver:      testutil.DefaultConfigResolver(setup.engine),
 	})
 
 	folders := config.GetWorkspace(setup.engine.GetConfiguration()).Folders()
@@ -1248,7 +1297,7 @@ func Test_updateFolderConfig_AutoMode_EmptyOrg_LeavesPreferredOrgEmpty(t *testin
 			},
 		},
 	}
-	UpdateSettings(contextWithNotifier(t.Context()), setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
+	UpdateSettings(testCtx(t, t.Context(), setup.engine, setup.tokenService), setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
 
 	updatedConfig := setup.getUpdatedConfig()
 	assert.False(t, updatedConfig.OrgSetByUser(), "OrgSetByUser should be false in auto mode")
@@ -1263,8 +1312,12 @@ func Test_updateFolderConfig_OrgChange_TriggersLdxSyncRefresh(t *testing.T) {
 
 	mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-		ctx2.DepLdxSyncService: mockLdxSyncService,
-		ctx2.DepNotifier:       notification.NewMockNotifier(),
+		ctx2.DepLdxSyncService:      mockLdxSyncService,
+		ctx2.DepNotifier:            notification.NewMockNotifier(),
+		ctx2.DepAuthService:         setup.deps.AuthenticationService,
+		ctx2.DepFeatureFlagService:  setup.deps.FeatureFlagService,
+		ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
+		ctx2.DepConfigResolver:      testutil.DefaultConfigResolver(setup.engine),
 	})
 
 	setup.createStoredConfig("initial-org", true)
@@ -1307,7 +1360,7 @@ func Test_updateFolderConfig_StoredUserOrg_PreservedOnUpdate(t *testing.T) {
 			},
 		},
 	}
-	UpdateSettings(contextWithNotifier(t.Context()), setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
+	UpdateSettings(testCtx(t, t.Context(), setup.engine, setup.tokenService), setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
 
 	updatedConfig := setup.getUpdatedConfig()
 	assert.Equal(t, "user-chosen-org", updatedConfig.PreferredOrg(), "User-set org should be preserved")
@@ -1327,8 +1380,12 @@ func Test_updateFolderConfig_MissingAutoDeterminedOrg(t *testing.T) {
 		RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Times(1)
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-		ctx2.DepLdxSyncService: mockLdx,
-		ctx2.DepNotifier:       notification.NewMockNotifier(),
+		ctx2.DepLdxSyncService:      mockLdx,
+		ctx2.DepNotifier:            notification.NewMockNotifier(),
+		ctx2.DepAuthService:         setup.deps.AuthenticationService,
+		ctx2.DepFeatureFlagService:  setup.deps.FeatureFlagService,
+		ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
+		ctx2.DepConfigResolver:      testutil.DefaultConfigResolver(setup.engine),
 	})
 
 	// Setup folderConfig WITHOUT AutoDeterminedOrg (simulating old config)
@@ -1367,8 +1424,12 @@ func Test_updateFolderConfig_SwitchFromAutoToManualOrg(t *testing.T) {
 		RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Times(1)
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-		ctx2.DepLdxSyncService: mockLdx,
-		ctx2.DepNotifier:       notification.NewMockNotifier(),
+		ctx2.DepLdxSyncService:      mockLdx,
+		ctx2.DepNotifier:            notification.NewMockNotifier(),
+		ctx2.DepAuthService:         setup.deps.AuthenticationService,
+		ctx2.DepFeatureFlagService:  setup.deps.FeatureFlagService,
+		ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
+		ctx2.DepConfigResolver:      testutil.DefaultConfigResolver(setup.engine),
 	})
 
 	userManualOrg := "user-manual-org"
@@ -1405,7 +1466,7 @@ func Test_updateFolderConfig_Unauthenticated_UserSetsPreferredOrg(t *testing.T) 
 			},
 		},
 	}
-	UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+	UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 	updatedConfig, err := folderconfig.GetOrCreateFolderConfig(engineConfig, folderPath, engine.GetLogger())
 	require.NoError(t, err)
@@ -1431,7 +1492,7 @@ func Test_updateFolderConfig_ProcessesLspFolderConfigUpdates(t *testing.T) {
 			},
 		},
 	}
-	UpdateSettings(contextWithNotifier(t.Context()), setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
+	UpdateSettings(testCtx(t, t.Context(), setup.engine, setup.tokenService), setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
 
 	// Verify: UserOverrides should be set in folderConfig
 	updatedConfig := setup.getUpdatedConfig()
@@ -1449,13 +1510,16 @@ func Test_FC105_WriteSettings_OldFormat_ProcessesSettingsStruct(t *testing.T) {
 	mockLdx.EXPECT().
 		RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Times(1)
-	di.TestInit(t, engine, tokenService, &di.Dependencies{
+	deps := di.TestInit(t, engine, tokenService, &di.Dependencies{
 		LdxSyncService: mockLdx,
 	})
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-		ctx2.DepLdxSyncService: mockLdx,
-		ctx2.DepNotifier:       notification.NewMockNotifier(),
-		ctx2.DepAuthService:    di.AuthenticationService(),
+		ctx2.DepLdxSyncService:      mockLdx,
+		ctx2.DepNotifier:            notification.NewMockNotifier(),
+		ctx2.DepAuthService:         deps.AuthenticationService,
+		ctx2.DepFeatureFlagService:  deps.FeatureFlagService,
+		ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
+		ctx2.DepConfigResolver:      testutil.DefaultConfigResolver(engine),
 	})
 
 	folderPath := types.FilePath(t.TempDir())
@@ -1497,7 +1561,7 @@ func Test_FC106_WriteSettings_NewFormat_ProcessesFolderConfigSettingsMap(t *test
 			},
 		},
 	}
-	UpdateSettings(contextWithNotifier(t.Context()), setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
+	UpdateSettings(testCtx(t, t.Context(), setup.engine, setup.tokenService), setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
 
 	updatedConfig := setup.getUpdatedConfig()
 	assert.True(t, types.HasUserOverride(updatedConfig.Conf(), updatedConfig.FolderPath, types.SettingScanAutomatic))
@@ -1525,7 +1589,7 @@ func Test_updateFolderConfig_DualWritesUserOverride(t *testing.T) {
 			},
 		},
 	}
-	UpdateSettings(contextWithNotifier(t.Context()), setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
+	UpdateSettings(testCtx(t, t.Context(), setup.engine, setup.tokenService), setup.engine.GetConfiguration(), setup.engine, setup.engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
 
 	// Verify: UserFolderKey prefix key must be written (dual-write from SetUserOverride)
 	// processSingleLspFolderConfig must set ConfigResolver before ApplyLspUpdate
@@ -1620,8 +1684,12 @@ func Test_updateFolderConfig_SwitchFromManualToAutoOrg_BlanksPreferredOrg(t *tes
 		RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Times(1)
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-		ctx2.DepLdxSyncService: mockLdx,
-		ctx2.DepNotifier:       notification.NewMockNotifier(),
+		ctx2.DepLdxSyncService:      mockLdx,
+		ctx2.DepNotifier:            notification.NewMockNotifier(),
+		ctx2.DepAuthService:         setup.deps.AuthenticationService,
+		ctx2.DepFeatureFlagService:  setup.deps.FeatureFlagService,
+		ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
+		ctx2.DepConfigResolver:      testutil.DefaultConfigResolver(setup.engine),
 	})
 
 	// Folder has a user-set org
@@ -1654,8 +1722,12 @@ func Test_updateFolderConfig_UserSetOrg_BlankedPreferredOrg_GlobalAlsoBlank_Reve
 		RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Times(1)
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-		ctx2.DepLdxSyncService: mockLdx,
-		ctx2.DepNotifier:       notification.NewMockNotifier(),
+		ctx2.DepLdxSyncService:      mockLdx,
+		ctx2.DepNotifier:            notification.NewMockNotifier(),
+		ctx2.DepAuthService:         setup.deps.AuthenticationService,
+		ctx2.DepFeatureFlagService:  setup.deps.FeatureFlagService,
+		ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
+		ctx2.DepConfigResolver:      testutil.DefaultConfigResolver(setup.engine),
 	})
 
 	// User had a specific org set; global org is blank (e.g. not configured).
@@ -1693,8 +1765,12 @@ func Test_updateFolderConfig_UserSetOrg_BlankedPreferredOrg_UsesGlobalOrg(t *tes
 		RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Times(1)
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-		ctx2.DepLdxSyncService: mockLdx,
-		ctx2.DepNotifier:       notification.NewMockNotifier(),
+		ctx2.DepLdxSyncService:      mockLdx,
+		ctx2.DepNotifier:            notification.NewMockNotifier(),
+		ctx2.DepAuthService:         setup.deps.AuthenticationService,
+		ctx2.DepFeatureFlagService:  setup.deps.FeatureFlagService,
+		ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
+		ctx2.DepConfigResolver:      testutil.DefaultConfigResolver(setup.engine),
 	})
 
 	// User previously set a specific org
@@ -1759,9 +1835,9 @@ func Test_validateLockedFields_RestoresConfigAfterValidation(t *testing.T) {
 }
 
 func Test_applySeverityFilter_AcceptsSeverityFilterStruct(t *testing.T) {
-	engine, _ := testutil.UnitTestWithEngine(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 
-	UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+	UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 		types.SettingSeverityFilterCritical: {Value: true, Changed: true},
 		types.SettingSeverityFilterHigh:     {Value: false, Changed: true},
 		types.SettingSeverityFilterMedium:   {Value: true, Changed: true},
@@ -1790,9 +1866,9 @@ func Test_SettingIsLspInitialized_UseBareKey(t *testing.T) {
 }
 
 func Test_applySeverityFilter_AcceptsSeverityFilterValueStruct(t *testing.T) {
-	engine, _ := testutil.UnitTestWithEngine(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 
-	UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+	UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 		types.SettingSeverityFilterCritical: {Value: false, Changed: true},
 		types.SettingSeverityFilterHigh:     {Value: true, Changed: true},
 		types.SettingSeverityFilterMedium:   {Value: false, Changed: true},
@@ -1807,9 +1883,9 @@ func Test_applySeverityFilter_AcceptsSeverityFilterValueStruct(t *testing.T) {
 }
 
 func Test_applySeverityFilter_AcceptsIndividualBooleans(t *testing.T) {
-	engine, _ := testutil.UnitTestWithEngine(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 
-	UpdateSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+	UpdateSettings(testCtx(t, t.Context(), engine, tokenService), engine.GetConfiguration(), engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 		types.SettingSeverityFilterCritical: {Value: true, Changed: true},
 		types.SettingSeverityFilterHigh:     {Value: false, Changed: true},
 		types.SettingSeverityFilterMedium:   {Value: true, Changed: true},
@@ -1824,7 +1900,7 @@ func Test_applySeverityFilter_AcceptsIndividualBooleans(t *testing.T) {
 }
 
 func Test_applySeverityFilter_IndividualBooleansPartialUpdate(t *testing.T) {
-	engine, _ := testutil.UnitTestWithEngine(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 
 	// Set initial state: all enabled
@@ -1833,7 +1909,7 @@ func Test_applySeverityFilter_IndividualBooleansPartialUpdate(t *testing.T) {
 	}, engine.GetLogger())
 
 	// Only change critical and low, leave high and medium unchanged
-	UpdateSettings(contextWithNotifier(t.Context()), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+	UpdateSettings(testCtx(t, t.Context(), engine, tokenService), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 		types.SettingSeverityFilterCritical: {Value: false, Changed: true},
 		types.SettingSeverityFilterLow:      {Value: false, Changed: true},
 	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
@@ -1846,7 +1922,7 @@ func Test_applySeverityFilter_IndividualBooleansPartialUpdate(t *testing.T) {
 }
 
 func Test_applySeverityFilter_IndividualBooleansIgnoreUnchanged(t *testing.T) {
-	engine, _ := testutil.UnitTestWithEngine(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 
 	// Set initial state: all disabled
@@ -1855,7 +1931,7 @@ func Test_applySeverityFilter_IndividualBooleansIgnoreUnchanged(t *testing.T) {
 	}, engine.GetLogger())
 
 	// Send all keys but only mark high as Changed
-	UpdateSettings(contextWithNotifier(t.Context()), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+	UpdateSettings(testCtx(t, t.Context(), engine, tokenService), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 		types.SettingSeverityFilterCritical: {Value: true, Changed: false},
 		types.SettingSeverityFilterHigh:     {Value: true, Changed: true},
 		types.SettingSeverityFilterMedium:   {Value: true, Changed: false},
@@ -1978,7 +2054,7 @@ func seedIssueViewOptions(t *testing.T, conf configuration.Configuration, opts t
 }
 
 func TestApplyIssueViewOptions_PreservesOpenWhenOnlyIgnoredChanged(t *testing.T) {
-	engine, _ := testutil.UnitTestWithEngine(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 
 	seedIssueViewOptions(t, conf, types.IssueViewOptions{OpenIssues: true, IgnoredIssues: false})
@@ -1986,7 +2062,7 @@ func TestApplyIssueViewOptions_PreservesOpenWhenOnlyIgnoredChanged(t *testing.T)
 	// Open's Value (false) intentionally contradicts its seeded value (true)
 	// while Changed=false. If Changed were ignored, OpenIssues would flip to
 	// false and the assertion below would fail.
-	UpdateSettings(contextWithNotifier(t.Context()), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+	UpdateSettings(testCtx(t, t.Context(), engine, tokenService), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 		types.SettingIssueViewOpenIssues:    {Value: false, Changed: false},
 		types.SettingIssueViewIgnoredIssues: {Value: true, Changed: true},
 	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
@@ -1997,7 +2073,7 @@ func TestApplyIssueViewOptions_PreservesOpenWhenOnlyIgnoredChanged(t *testing.T)
 }
 
 func TestApplyIssueViewOptions_PreservesIgnoredWhenOnlyOpenChanged(t *testing.T) {
-	engine, _ := testutil.UnitTestWithEngine(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 
 	seedIssueViewOptions(t, conf, types.IssueViewOptions{OpenIssues: true, IgnoredIssues: true})
@@ -2005,7 +2081,7 @@ func TestApplyIssueViewOptions_PreservesIgnoredWhenOnlyOpenChanged(t *testing.T)
 	// Ignored's Value (false) intentionally contradicts its seeded value (true)
 	// while Changed=false. If Changed were ignored, IgnoredIssues would flip to
 	// false and the assertion below would fail.
-	UpdateSettings(contextWithNotifier(t.Context()), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+	UpdateSettings(testCtx(t, t.Context(), engine, tokenService), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 		types.SettingIssueViewOpenIssues:    {Value: false, Changed: true},
 		types.SettingIssueViewIgnoredIssues: {Value: false, Changed: false},
 	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
@@ -2016,12 +2092,12 @@ func TestApplyIssueViewOptions_PreservesIgnoredWhenOnlyOpenChanged(t *testing.T)
 }
 
 func TestApplyIssueViewOptions_BothChangedWritesBoth(t *testing.T) {
-	engine, _ := testutil.UnitTestWithEngine(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 
 	seedIssueViewOptions(t, conf, types.IssueViewOptions{OpenIssues: true, IgnoredIssues: false})
 
-	UpdateSettings(contextWithNotifier(t.Context()), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+	UpdateSettings(testCtx(t, t.Context(), engine, tokenService), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 		types.SettingIssueViewOpenIssues:    {Value: false, Changed: true},
 		types.SettingIssueViewIgnoredIssues: {Value: true, Changed: true},
 	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
@@ -2037,25 +2113,25 @@ func TestApplyIssueViewOptions_BothChangedWritesBoth(t *testing.T) {
 // `!openPresent && !ignoredPresent` guard is covered by
 // TestApplyIssueViewOptions_NeitherChangedIsNoOp below.
 func TestApplyIssueViewOptions_EmptySettingsMapIsNoOp(t *testing.T) {
-	engine, _ := testutil.UnitTestWithEngine(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 
 	seed := types.IssueViewOptions{OpenIssues: true, IgnoredIssues: false}
 	seedIssueViewOptions(t, conf, seed)
 
-	UpdateSettings(contextWithNotifier(t.Context()), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+	UpdateSettings(testCtx(t, t.Context(), engine, tokenService), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 	assert.Equal(t, seed, config.GetIssueViewOptions(conf))
 }
 
 func TestApplyIssueViewOptions_NeitherChangedIsNoOp(t *testing.T) {
-	engine, _ := testutil.UnitTestWithEngine(t)
+	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 
 	seed := types.IssueViewOptions{OpenIssues: true, IgnoredIssues: false}
 	seedIssueViewOptions(t, conf, seed)
 
-	UpdateSettings(contextWithNotifier(t.Context()), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+	UpdateSettings(testCtx(t, t.Context(), engine, tokenService), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 		types.SettingIssueViewOpenIssues:    {Value: false, Changed: false},
 		types.SettingIssueViewIgnoredIssues: {Value: true, Changed: false},
 	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
@@ -2082,7 +2158,7 @@ func Test_UpdateSettings_LockedMachineField_RejectsPATCH(t *testing.T) {
 		Origin:   "ldx-sync-test",
 	})
 
-	UpdateSettings(contextWithNotifier(t.Context()), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+	UpdateSettings(testCtx(t, t.Context(), engine, tokenService), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 		types.SettingPublishSecurityAtInceptionRules: {Value: false, Changed: true},
 		types.SettingCodeEndpoint:                    {Value: "https://user-attempted.snyk.io", Changed: true},
 	}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
@@ -2108,7 +2184,7 @@ func Test_UpdateSettings_MachineFields_PATCHWrapsAsLocalConfigField(t *testing.T
 	di.TestInit(t, engine, tokenService, nil)
 	conf := engine.GetConfiguration()
 
-	UpdateSettings(contextWithNotifier(t.Context()), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
+	UpdateSettings(testCtx(t, t.Context(), engine, tokenService), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{
 		types.SettingAutomaticDownload: {Value: false, Changed: true},
 		types.SettingSendErrorReports:  {Value: false, Changed: true},
 		types.SettingTrustEnabled:      {Value: false, Changed: true},
@@ -2187,6 +2263,9 @@ func Test_applyOrganization_ResetsSummaryPanelOnOrgChange(t *testing.T) {
 			ctx2.DepNotifier:            mockNotifier,
 			ctx2.DepLdxSyncService:      mockLdxSync,
 			ctx2.DepScanStateAggregator: realAgg,
+			ctx2.DepAuthService:         di.AuthenticationService(),
+			ctx2.DepFeatureFlagService:  di.FeatureFlagService(),
+			ctx2.DepConfigResolver:      testutil.DefaultConfigResolver(engine),
 		})
 		return engine, folderPath, realAgg, ctx
 	}
@@ -2250,11 +2329,14 @@ func Test_updateFolderConfig_PreferredOrgChange_ResetsSummaryPanelOnOrgChange(t 
 		mockNotifier := notification.NewMockNotifier()
 		mockLdxSync := mock_command.NewMockLdxSyncService(ctrl)
 		mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-		di.TestInit(t, engine, tokenService, &di.Dependencies{ScanStateAggregator: realAgg, Notifier: mockNotifier, LdxSyncService: mockLdxSync})
+		deps := di.TestInit(t, engine, tokenService, &di.Dependencies{ScanStateAggregator: realAgg, Notifier: mockNotifier, LdxSyncService: mockLdxSync})
 		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
 			ctx2.DepNotifier:            mockNotifier,
 			ctx2.DepLdxSyncService:      mockLdxSync,
 			ctx2.DepScanStateAggregator: realAgg,
+			ctx2.DepAuthService:         deps.AuthenticationService,
+			ctx2.DepFeatureFlagService:  deps.FeatureFlagService,
+			ctx2.DepConfigResolver:      testutil.DefaultConfigResolver(engine),
 		})
 
 		engineConfig := engine.GetConfiguration()
@@ -2344,11 +2426,14 @@ func Test_updateFolderConfig_PreferredOrgChange_ResetsSummaryPanelOnOrgChange(t 
 		mockNotifier := notification.NewMockNotifier()
 		mockLdxSync := mock_command.NewMockLdxSyncService(ctrl)
 		mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-		di.TestInit(t, engine, tokenService, &di.Dependencies{ScanStateAggregator: realAgg, Notifier: mockNotifier, LdxSyncService: mockLdxSync})
+		deps := di.TestInit(t, engine, tokenService, &di.Dependencies{ScanStateAggregator: realAgg, Notifier: mockNotifier, LdxSyncService: mockLdxSync})
 		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
 			ctx2.DepNotifier:            mockNotifier,
 			ctx2.DepLdxSyncService:      mockLdxSync,
 			ctx2.DepScanStateAggregator: realAgg,
+			ctx2.DepAuthService:         deps.AuthenticationService,
+			ctx2.DepFeatureFlagService:  deps.FeatureFlagService,
+			ctx2.DepConfigResolver:      testutil.DefaultConfigResolver(engine),
 		})
 
 		conf := engine.GetConfiguration()
@@ -2688,7 +2773,10 @@ func Test_UpdateSettings_LockedFields_EmitsExactlyOneNotification(t *testing.T) 
 	}
 
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-		ctx2.DepNotifier: localNotifier,
+		ctx2.DepNotifier:           localNotifier,
+		ctx2.DepAuthService:        di.AuthenticationService(),
+		ctx2.DepConfigResolver:     resolver,
+		ctx2.DepFeatureFlagService: di.FeatureFlagService(),
 	})
 	UpdateSettings(ctx, conf, engine, logger, machineSettings, folderConfigs, analytics.TriggerSourceTest, resolver)
 

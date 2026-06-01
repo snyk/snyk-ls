@@ -133,6 +133,8 @@ func validateMandatoryDeps(deps di.Dependencies) error {
 		return errors.New("snyk-ls: mandatory DI dependency missing: ScanStateAggregator")
 	case deps.FileWatcher == nil:
 		return errors.New("snyk-ls: mandatory DI dependency missing: FileWatcher")
+	case deps.CodeActionService == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: CodeActionService")
 	default:
 		return nil
 	}
@@ -218,9 +220,7 @@ func injectCoreServicesIntoMap(m map[string]any, deps di.Dependencies) {
 	if deps.ErrorReporter != nil {
 		m[ctx2.DepErrorReporter] = deps.ErrorReporter
 	}
-	if deps.CodeActionService != nil {
-		m[ctx2.DepCodeActionService] = deps.CodeActionService
-	}
+	m[ctx2.DepCodeActionService] = deps.CodeActionService
 	if deps.FeatureFlagService != nil {
 		m[ctx2.DepFeatureFlagService] = deps.FeatureFlagService
 	}
@@ -579,19 +579,15 @@ func workspaceDidChangeWorkspaceFoldersHandler(conf configuration.Configuration,
 		defer logger.Info().Msg("SENDING")
 		changedFolders := config.GetWorkspace(conf).ChangeWorkspaceFolders(params)
 
-		// Deps below are injected by withContext if non-nil in DI wiring; each is checked
-		// before use below. HandleFolders guards nil featureFlagService internally, and a
-		// missing dep here surfaces as a no-op in HandleFolders — acceptable because
-		// workspace-folder changes are non-destructive and the handler can be retried.
-		authService, _ := authenticationServiceFromContext(ctx)
+		authService := mustAuthenticationServiceFromContext(ctx)
 		notifier := mustNotifierFromContext(ctx)
-		ldxSyncSvc, _ := ldxSyncServiceFromContext(ctx)
-		scanPersister, _ := scanPersisterFromContext(ctx)
-		scanStateAgg, _ := scanStateAggregatorFromContext(ctx)
-		featureFlags, _ := featureFlagServiceFromContext(ctx)
-		configResolver, _ := ctx2.ConfigResolverFromContext(ctx)
+		ldxSyncSvc := mustLdxSyncServiceFromContext(ctx)
+		scanPersister := mustScanPersisterFromContext(ctx)
+		scanStateAgg := mustScanStateAggregatorFromContext(ctx)
+		featureFlags := mustFeatureFlagServiceFromContext(ctx)
+		configResolver := mustConfigResolverFromContext(ctx)
 
-		if authService != nil && authService.IsAuthenticated() && ldxSyncSvc != nil {
+		if authService.IsAuthenticated() {
 			ldxSyncSvc.RefreshConfigFromLdxSync(bgCtx, conf, engine, &logger, changedFolders, notifier)
 		}
 
