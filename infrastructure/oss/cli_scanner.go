@@ -74,6 +74,9 @@ var (
 		"--yarn-workspaces":  true,
 		"--docker":           true,
 		"--all-sub-projects": true,
+		// --maven-aggregate-project is mutually exclusive with --all-projects per the Snyk CLI spec:
+		// https://docs.snyk.io/developer-tools/snyk-cli/commands/test#--maven-aggregate-project
+		"--maven-aggregate-project": true,
 	}
 
 	// Make sure CLIScanner implements the desired interfaces

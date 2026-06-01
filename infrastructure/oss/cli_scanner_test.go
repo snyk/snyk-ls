@@ -356,6 +356,12 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 				expectedInCmd:   "--all-sub-projects",
 				expectedMessage: "--all-projects should not be present when --all-sub-projects is present",
 			},
+			{
+				name:            "--maven-aggregate-project",
+				parameter:       "--maven-aggregate-project",
+				expectedInCmd:   "--maven-aggregate-project",
+				expectedMessage: "--all-projects should not be present when --maven-aggregate-project is also present",
+			},
 		}
 
 		for _, tc := range testCases {
