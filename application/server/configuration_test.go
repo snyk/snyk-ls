@@ -92,6 +92,16 @@ func contextWithNotifier(ctx context.Context) context.Context {
 	})
 }
 
+func contextWithResolver(ctx context.Context, engine workflow.Engine) context.Context {
+	existing, _ := ctx2.DependenciesFromContext(ctx)
+	merged := make(map[string]any, len(existing)+1)
+	for k, v := range existing {
+		merged[k] = v
+	}
+	merged[ctx2.DepConfigResolver] = testutil.DefaultConfigResolver(engine)
+	return ctx2.NewContextWithDependencies(ctx, merged)
+}
+
 func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	loc, _, _ := setupServer(t, engine, tokenService)
@@ -202,12 +212,12 @@ func Test_InitializeSettings_PreservesRefreshedOAuthTokenWhenInitializeSendsStal
 
 	di.AuthenticationService().UpdateCredentials(refreshedToken, true, false)
 
-	InitializeSettings(contextWithNotifier(t.Context()), conf, engine, logger, types.InitializationOptions{
+	require.NoError(t, InitializeSettings(contextWithResolver(contextWithNotifier(t.Context()), engine), conf, engine, logger, types.InitializationOptions{
 		Settings: map[string]*types.ConfigSetting{
 			types.SettingToken:                {Value: staleToken, Changed: true},
 			types.SettingAuthenticationMethod: {Value: string(types.OAuthAuthentication), Changed: true},
 		},
-	})
+	}))
 
 	assert.Equal(t, refreshedToken, config.GetToken(conf))
 	require.Eventually(t, func() bool {
@@ -364,14 +374,12 @@ func Test_UpdateSettings(t *testing.T) {
 		// Path is init-only; apply via InitializeSettings first.
 		// TrustedFolders now goes through the settings map.
 		settingsMap[types.SettingTrustedFolders] = &types.ConfigSetting{Value: []interface{}{"trustedPath1", "trustedPath2"}, Changed: true}
-		// Build the context from the deps returned by di.TestInit rather than manually
-		// instantiating services, so the context always uses the same instances that
-		// di.TestInit wired together.
 		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-			ctx2.DepNotifier:    deps.Notifier,
-			ctx2.DepAuthService: deps.AuthenticationService,
+			ctx2.DepNotifier:       deps.Notifier,
+			ctx2.DepAuthService:    deps.AuthenticationService,
+			ctx2.DepConfigResolver: deps.ConfigResolver,
 		})
-		InitializeSettings(ctx, engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{
+		require.NoError(t, InitializeSettings(ctx, engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{
 			Path:           "addPath",
 			OsPlatform:     "windows",
 			OsArch:         "amd64",
@@ -379,7 +387,7 @@ func Test_UpdateSettings(t *testing.T) {
 			RuntimeVersion: "1.8.0_275",
 			HoverVerbosity: &hoverVerbosity,
 			OutputFormat:   &outputFormat,
-		})
+		}))
 		UpdateSettings(ctx, engine.GetConfiguration(), engine, engine.GetLogger(), settingsMap, folderConfigs, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
 
 		assert.Equal(t, false, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
@@ -474,11 +482,11 @@ func Test_UpdateSettings(t *testing.T) {
 
 			path1 := filepath.Join("a", "b")
 			path2 := filepath.Join("b", "c")
-			InitializeSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{
+			require.NoError(t, InitializeSettings(contextWithResolver(contextWithNotifier(t.Context()), engine), engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{
 				Settings: map[string]*types.ConfigSetting{
 					types.SettingTrustedFolders: {Value: []interface{}{path1, path2}, Changed: true},
 				},
-			})
+			}))
 
 			tf := types.GetGlobalSliceFilePath(engine.GetConfiguration(), types.SettingTrustedFolders)
 			assert.Contains(t, tf, types.FilePath(path1))
@@ -497,7 +505,7 @@ func Test_UpdateSettings(t *testing.T) {
 					types.SettingTrustedFolders: {Value: []interface{}{path1, path2}, Changed: true},
 				},
 			}
-			_, err := handlePushModel(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), params)
+			_, err := handlePushModel(contextWithResolver(contextWithNotifier(t.Context()), engine), engine.GetConfiguration(), engine, engine.GetLogger(), params)
 			assert.NoError(t, err)
 
 			tf := types.GetGlobalSliceFilePath(engine.GetConfiguration(), types.SettingTrustedFolders)
@@ -1114,7 +1122,7 @@ func Test_InitializeSettings(t *testing.T) {
 		engine, _ := testutil.UnitTestWithEngine(t)
 		deviceId := "test-device-id"
 
-		InitializeSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{DeviceId: deviceId})
+		require.NoError(t, InitializeSettings(contextWithResolver(contextWithNotifier(t.Context()), engine), engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{DeviceId: deviceId}))
 
 		assert.Equal(t, deviceId, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingDeviceId)))
 	})
@@ -1123,7 +1131,7 @@ func Test_InitializeSettings(t *testing.T) {
 		engine, _ := testutil.UnitTestWithEngine(t)
 		deviceId := engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingDeviceId))
 
-		InitializeSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{})
+		require.NoError(t, InitializeSettings(contextWithResolver(contextWithNotifier(t.Context()), engine), engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{}))
 
 		assert.Equal(t, deviceId, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingDeviceId)))
 	})
@@ -1131,16 +1139,16 @@ func Test_InitializeSettings(t *testing.T) {
 	t.Run("activateSnykCodeSecurity enables SnykCode via OR on init", func(t *testing.T) {
 		engine, _ := testutil.UnitTestWithEngine(t)
 
-		InitializeSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{
+		require.NoError(t, InitializeSettings(contextWithResolver(contextWithNotifier(t.Context()), engine), engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{
 			Settings: map[string]*types.ConfigSetting{types.SettingSnykCodeEnabled: {Value: true, Changed: true}},
-		})
+		}))
 
 		assert.True(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), "snyk_code_enabled should enable Snyk Code on init")
 	})
 	t.Run("activateSnykCodeSecurity not passed does not enable SnykCode on init", func(t *testing.T) {
 		engine, _ := testutil.UnitTestWithEngine(t)
 
-		InitializeSettings(contextWithNotifier(t.Context()), engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{})
+		require.NoError(t, InitializeSettings(contextWithResolver(contextWithNotifier(t.Context()), engine), engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{}))
 
 		assert.False(t, engine.GetConfiguration().GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)))
 	})
@@ -1155,20 +1163,18 @@ func Test_InitializeSettings(t *testing.T) {
 		caseSensitivePathKey := "Path"
 		t.Setenv(caseSensitivePathKey, "something_meaningful")
 
-		// Path is init-only; use InitializeSettings
-		ctx := contextWithNotifier(t.Context())
-		InitializeSettings(ctx, engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{Path: first})
+		ctx := contextWithResolver(contextWithNotifier(t.Context()), engine)
+		require.NoError(t, InitializeSettings(ctx, engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{Path: first}))
 		assert.True(t, strings.HasPrefix(os.Getenv(upperCasePathKey), first+string(os.PathListSeparator)))
 
-		InitializeSettings(ctx, engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{Path: second})
+		require.NoError(t, InitializeSettings(ctx, engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{Path: second}))
 		assert.True(t, strings.HasPrefix(os.Getenv(upperCasePathKey), second+string(os.PathListSeparator)))
 		assert.False(t, strings.Contains(os.Getenv(upperCasePathKey), first))
 
-		// reset path and set auth method
-		InitializeSettings(ctx, engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{
+		require.NoError(t, InitializeSettings(ctx, engine.GetConfiguration(), engine, engine.GetLogger(), types.InitializationOptions{
 			Path:     "",
 			Settings: map[string]*types.ConfigSetting{types.SettingAuthenticationMethod: {Value: "token", Changed: true}},
-		})
+		}))
 		assert.False(t, strings.Contains(os.Getenv(upperCasePathKey), second))
 
 		assert.True(t, keyFoundInEnv(upperCasePathKey))

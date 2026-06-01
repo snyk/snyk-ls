@@ -575,7 +575,9 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 			return nil, errors.New("LDX Sync service missing from request context")
 		}
 		ldxSyncService.RefreshConfigFromLdxSync(ctx, conf, engine, &logger, config.GetWorkspace(conf).Folders(), nil)
-		InitializeSettings(ctx, conf, engine, &logger, params.InitializationOptions)
+		if err := InitializeSettings(ctx, conf, engine, &logger, params.InitializationOptions); err != nil {
+			return nil, err
+		}
 
 		startClientMonitor(params, logger)
 

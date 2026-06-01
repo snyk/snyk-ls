@@ -20,6 +20,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -98,7 +99,10 @@ func handlePushModel(ctx context.Context, conf configuration.Configuration, engi
 	if !conf.GetBool(types.SettingIsLspInitialized) {
 		triggerSource = analytics.TriggerSourceInitialize
 	}
-	configResolver, _ := ctx2.ConfigResolverFromContext(ctx)
+	configResolver, ok := ctx2.ConfigResolverFromContext(ctx)
+	if !ok {
+		return false, errors.New("config resolver missing from context")
+	}
 	UpdateSettings(ctx, conf, engine, logger, params.Settings, params.FolderConfigs, triggerSource, configResolver)
 	return true, nil
 }
@@ -143,7 +147,10 @@ func handlePullModel(ctx context.Context, conf configuration.Configuration, engi
 	if !conf.GetBool(types.SettingIsLspInitialized) {
 		triggerSource = analytics.TriggerSourceInitialize
 	}
-	configResolver, _ := ctx2.ConfigResolverFromContext(ctx)
+	configResolver, ok := ctx2.ConfigResolverFromContext(ctx)
+	if !ok {
+		return false, errors.New("config resolver missing from context")
+	}
 	UpdateSettings(ctx, conf, engine, logger, fetched.Settings.Settings, fetched.Settings.FolderConfigs, triggerSource, configResolver)
 	return true, nil
 }
@@ -189,8 +196,11 @@ func processInitMetadata(conf configuration.Configuration, engine workflow.Engin
 // InitializeSettings processes settings from the LSP initialize request.
 // Only settings explicitly marked Changed by the IDE are applied; IDE defaults
 // (Changed=false) are left alone so they don't override ldx-sync or GAF defaults.
-func InitializeSettings(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, opts types.InitializationOptions) {
-	resolver, _ := ctx2.ConfigResolverFromContext(ctx)
+func InitializeSettings(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, opts types.InitializationOptions) error {
+	resolver, ok := ctx2.ConfigResolverFromContext(ctx)
+	if !ok {
+		return errors.New("config resolver missing from context")
+	}
 
 	processInitMetadata(conf, engine, logger, opts)
 	// global
@@ -202,11 +212,12 @@ func InitializeSettings(ctx context.Context, conf configuration.Configuration, e
 	if resolver != nil {
 		fm = resolver.ConfigurationOptionsMetaData()
 	}
-	n, ok := notifierFromContext(ctx)
-	if !ok {
+	n, nOk := notifierFromContext(ctx)
+	if !nOk {
 		logger.Warn().Str("method", "InitializeSettings").Msg("notifier not in context; locked-field notifications will not be sent")
 	}
 	notifyLockedFieldsRejected(n, fm, lockedMachineFields, lockedFolderFields)
+	return nil
 }
 
 // UpdateSettings processes settings from workspace/didChangeConfiguration.
