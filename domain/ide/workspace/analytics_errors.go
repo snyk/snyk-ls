@@ -28,7 +28,7 @@ import (
 )
 
 // shouldEmitAnalytics centralizes the "do we record this scan on the
-// 'Is Snyk OK?' dashboard?" policy. Checked at the call site so cancelled and
+// 'Is Snyk OK?' dashboard?" policy. Checked at the call site so canceled and
 // non-failing scans skip the goroutine entirely instead of spawning one that
 // bails after categorization work.
 func shouldEmitAnalytics(data *types.ScanData) bool {
