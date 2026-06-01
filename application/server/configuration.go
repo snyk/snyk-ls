@@ -323,9 +323,6 @@ func validateLockedMachineFields(settings map[string]*types.ConfigSetting, confi
 // (e.g. "Snyk Code Enabled") rather than the internal snake_case identifier.
 // See [IDE-1970].
 func notifyLockedFieldsRejected(notifier notification.Notifier, fm workflow.ConfigurationOptionsMetaData, lockedFieldGroups ...[]string) {
-	if notifier == nil {
-		return
-	}
 	// Dedup on the resolved display name rather than the raw identifier so two
 	// distinct raw keys that resolve to the same display name (e.g. legacy and
 	// canonical identifiers for the same setting) collapse to a single entry
