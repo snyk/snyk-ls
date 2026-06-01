@@ -89,22 +89,6 @@ func keyFoundInEnv(key string) bool {
 	return found
 }
 
-func contextWithNotifier(ctx context.Context) context.Context {
-	return ctx2.NewContextWithDependencies(ctx, map[string]any{
-		ctx2.DepNotifier: notification.NewMockNotifier(),
-	})
-}
-
-func contextWithResolver(ctx context.Context, engine workflow.Engine) context.Context {
-	existing, _ := ctx2.DependenciesFromContext(ctx)
-	merged := make(map[string]any, len(existing)+1)
-	for k, v := range existing {
-		merged[k] = v
-	}
-	merged[ctx2.DepConfigResolver] = testutil.DefaultConfigResolver(engine)
-	return ctx2.NewContextWithDependencies(ctx, merged)
-}
-
 // testCtx builds a test context with all mandatory DI deps that UpdateSettings /
 // InitializeSettings requires (Notifier, ConfigResolver, AuthService,
 // FeatureFlagService, LdxSyncService, ScanStateAggregator). Engine must be the
@@ -881,51 +865,34 @@ func Test_refreshLdxSyncOnTokenChange_NilNotifier_StillCallsRefresh(t *testing.T
 	refreshLdxSyncOnTokenChange(ctx, conf, engine, engine.GetLogger(), config.GetWorkspace(conf), "old-token", nil)
 }
 
-func Test_UpdateSettings_BlankOrganizationResetsToDefault_Integration(t *testing.T) {
-	engine, tokenService := testutil.IntegTestWithEngine(t)
-	conf := engine.GetConfiguration()
-	if config.GetToken(conf) == "" {
-		t.Skip("SNYK_TOKEN is required to resolve the user's preferred default org via /rest/self")
+func Test_UpdateSettings_BlankOrWhitespaceOrganizationResetsToDefault_Integration(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		value string
+	}{
+		{"blank", ""},
+		{"whitespace", " "},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			engine, tokenService := testutil.IntegTestWithEngine(t)
+			conf := engine.GetConfiguration()
+			if config.GetToken(conf) == "" {
+				t.Skip("SNYK_TOKEN is required to resolve the user's preferred default org via /rest/self")
+			}
+			initialOrgId := "00000000-0000-0000-0000-000000000001"
+			config.SetOrganization(conf, initialOrgId)
+			require.Equal(t, initialOrgId, conf.GetString(configuration.ORGANIZATION))
+
+			UpdateSettings(testCtx(t, t.Context(), engine, tokenService), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingOrganization: {Value: tc.value, Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
+
+			// GAF's DefaultValueFunction for ORGANIZATION is synchronous.
+			actualOrg := conf.GetString(configuration.ORGANIZATION)
+			assert.NotEqual(t, initialOrgId, actualOrg)
+			assert.NotEmpty(t, actualOrg)
+			_, err := uuid.Parse(actualOrg)
+			assert.NoError(t, err, "resolved org should be a valid UUID")
+		})
 	}
-
-	// Set to a specific org first
-	initialOrgId := "00000000-0000-0000-0000-000000000001"
-	config.SetOrganization(conf, initialOrgId)
-	require.Equal(t, initialOrgId, conf.GetString(configuration.ORGANIZATION), "org should be set to the value we just set it to")
-
-	// Set to empty string to reset to the user's preferred default org they defined in the web UI.
-	UpdateSettings(testCtx(t, t.Context(), engine, tokenService), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingOrganization: {Value: "", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
-
-	// GAF's DefaultValueFunction for ORGANIZATION is synchronous: GetString blocks until the API call completes.
-	actualOrg := conf.GetString(configuration.ORGANIZATION)
-	assert.NotEqual(t, initialOrgId, actualOrg, "org should have changed from initial value")
-	assert.NotEmpty(t, actualOrg, "org should have resolved to the user's preferred default org they defined in the web UI")
-	_, err := uuid.Parse(actualOrg)
-	assert.NoError(t, err, "resolved org should be a valid UUID")
-}
-
-func Test_UpdateSettings_WhitespaceOrganizationResetsToDefault_Integration(t *testing.T) {
-	engine, tokenService := testutil.IntegTestWithEngine(t)
-	conf := engine.GetConfiguration()
-	if config.GetToken(conf) == "" {
-		t.Skip("SNYK_TOKEN is required to resolve the user's preferred default org via /rest/self")
-	}
-
-	// Set to a specific org first
-	initialOrgId := "00000000-0000-0000-0000-000000000001"
-	config.SetOrganization(conf, initialOrgId)
-	require.Equal(t, initialOrgId, conf.GetString(configuration.ORGANIZATION), "org should be set to the value we just set it to")
-
-	// Set to whitespace to reset to the user's preferred default org they defined in the web UI.
-	// Whitespace should be trimmed to empty string.
-	UpdateSettings(testCtx(t, t.Context(), engine, tokenService), conf, engine, engine.GetLogger(), map[string]*types.ConfigSetting{types.SettingOrganization: {Value: " ", Changed: true}}, nil, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(engine))
-
-	// GAF's DefaultValueFunction for ORGANIZATION is synchronous: GetString blocks until the API call completes.
-	actualOrg := conf.GetString(configuration.ORGANIZATION)
-	assert.NotEqual(t, initialOrgId, actualOrg, "org should have changed from initial value")
-	assert.NotEmpty(t, actualOrg, "org should have resolved to the user's preferred default org they defined in the web UI")
-	_, err := uuid.Parse(actualOrg)
-	assert.NoError(t, err, "resolved org should be a valid UUID")
 }
 
 // Common test setup for updateFolderConfig tests
