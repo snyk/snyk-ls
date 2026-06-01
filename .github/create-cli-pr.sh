@@ -15,7 +15,10 @@
 # limitations under the License.
 #
 
-set -ex
+set -euxo pipefail
+
+export GOPRIVATE='github.com/snyk'
+git config --global 'url.git@github.com:snyk/.insteadOf' 'https://github.com/snyk/'
 
 CLI_DIR=$(mktemp -d)
 git clone --depth 1 --single-branch --branch main git@github.com:snyk/cli.git "$CLI_DIR"
@@ -27,12 +30,16 @@ WHAT_CHANGED=$(git log --name-status "$LS_COMMIT_HASH"...HEAD)
 BODY=$(printf "## Changes since last integration of Language Server\n\n\`\`\`\n%s\n\`\`\`" "$WHAT_CHANGED")
 BRANCH=chore/automatic-upgrade-of-ls
 
-pushd $CLI_DIR
+pushd "$CLI_DIR"
   git checkout -B $BRANCH
   git rebase --ignore-whitespace main
 
   UPGRADE=$(go run scripts/upgrade-snyk-go-dependencies.go --name=snyk-ls)
   LS_VERSION=$(echo $UPGRADE | sed 's/.*Sha: \(.*\) URL.*/\1/')
+  if [[ -z "$LS_VERSION" ]]; then
+    echo "Failed to extract language server commit SHA from upgrade output" >&2
+    exit 1
+  fi
 
   git config --global user.email "team-ide@snyk.io"
   git config --global user.name "Snyk Team IDE"
