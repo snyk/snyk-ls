@@ -358,7 +358,13 @@ func (f *Folder) scan(ctx context.Context, path types.FilePath) {
 
 func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 	if scanData.Err != nil {
-		f.sendScanError(scanData.Product, scanData.Err, scanData.UserNotified)
+		// UserNotified means the caller has already surfaced the error (toast +
+		// any diagnostic) and only routed through here for analytics emission.
+		// Skip sendScanError entirely so we don't fire a duplicate SendError or
+		// an unwanted SendErrorDiagnostic.
+		if !scanData.UserNotified {
+			f.sendScanError(scanData.Product, scanData.Err)
+		}
 		if shouldEmitAnalytics(&scanData) {
 			go sendAnalytics(ctx, f.engine, f.configResolver, f.logger, &scanData)
 		}
@@ -387,10 +393,8 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 	f.FilterAndPublishDiagnostics(scanData.Product)
 }
 
-func (f *Folder) sendScanError(product product.Product, err error, userAlreadyNotified bool) {
-	if !userAlreadyNotified {
-		f.scanNotifier.SendError(product, f.path, err.Error())
-	}
+func (f *Folder) sendScanError(product product.Product, err error) {
+	f.scanNotifier.SendError(product, f.path, err.Error())
 
 	if utils.IsNonFailingScanError(err.Error()) {
 		f.logger.Debug().
@@ -847,7 +851,7 @@ func (f *Folder) publishDiagnostics(p product.Product, issuesToSendByProduct sny
 	f.sendDiagnostics(issuesToSendByProduct.AggregateFromAllProducts(p))
 	scanErr := f.scanStateAggregator.GetScanErr(f.path, p, f.IsDeltaFindingsEnabled())
 	if scanErr != nil {
-		f.sendScanError(p, scanErr, false)
+		f.sendScanError(p, scanErr)
 	} else {
 		f.sendSuccess(p)
 	}

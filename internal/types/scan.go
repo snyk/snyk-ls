@@ -42,10 +42,11 @@ type ScanData struct {
 	IsReferenceScan   bool
 	SendAnalytics     bool
 	UpdateGlobalCache bool
-	// UserNotified signals that the caller already invoked scanNotifier.SendError
-	// for this scan; downstream processors must not send a duplicate user-facing
-	// notification. Set by callers that emit the error themselves and then route
-	// the ScanData through a processor purely for analytics/state updates.
+	// UserNotified signals that the caller has already surfaced this scan error
+	// to the user (toast notification and any error diagnostic). Downstream
+	// processors must skip all user-facing error surfacing for this ScanData so
+	// it can be routed through purely for analytics/state updates without
+	// firing a duplicate notification or an unexpected publishDiagnostics.
 	UserNotified bool
 }
 

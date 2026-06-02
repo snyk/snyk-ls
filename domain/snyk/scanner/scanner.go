@@ -279,6 +279,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 
 			scanSpan := sc.instrumentor.StartSpan(span.Context(), "scan")
 
+			preScanStart := time.Now()
 			err := sc.executePreScanCommand(span.Context(), sc.engine, s.Product(), workspaceFolderConfig, folderPath, true)
 			if err != nil {
 				scanLogger.Err(err).Send()
@@ -289,6 +290,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 				processResults(span.Context(), types.ScanData{
 					Product:           s.Product(),
 					Err:               err,
+					Duration:          time.Since(preScanStart),
 					TimestampFinished: time.Now().UTC(),
 					Path:              folderPath,
 					SendAnalytics:     true,

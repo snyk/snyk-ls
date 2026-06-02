@@ -18,6 +18,7 @@ package workspace
 
 import (
 	"context"
+	"encoding/json"
 	stderrors "errors"
 	"testing"
 	"time"
@@ -257,8 +258,21 @@ func Test_processResults_FailedScan_PartialScanData_DoesNotPanicAndDefaultsTimes
 	assert.Contains(t, payload, `"error_category":"SNYK-OS"`)
 	assert.Contains(t, payload, `"error_code":"SNYK-OS-7001"`)
 	// Zero TimestampFinished must be defaulted to "now" — never emitted as the
-	// negative-epoch UnixMilli of time.Time{}.
-	assert.NotContains(t, payload, `"timestampMs":-`, "zero TimestampFinished must be defaulted, not emitted as a negative epoch")
+	// negative-epoch UnixMilli of time.Time{}. Assert on the actual emitted
+	// value, not on string presence (the GAF schema serialises the key as
+	// `timestamp_ms`, so a substring check for `timestampMs` is vacuous).
+	var envelope struct {
+		Data struct {
+			Attributes struct {
+				Interaction struct {
+					TimestampMs int64 `json:"timestamp_ms"`
+				} `json:"interaction"`
+			} `json:"attributes"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(payload), &envelope))
+	assert.Positive(t, envelope.Data.Attributes.Interaction.TimestampMs,
+		"zero TimestampFinished must be defaulted to a positive epoch, not emitted as a negative or zero value")
 }
 
 // T7 — non-failing scan errors (auth not set, product disabled for folder/org)
@@ -305,6 +319,40 @@ func Test_processResults_FailedScan_NonFailingError_NoEmission(t *testing.T) {
 				"non-failing scan error %q must not emit failure analytics", tc.err)
 		})
 	}
+}
+
+// T7b — when UserNotified is true the caller has already surfaced the error
+// (toast notification and any diagnostic). ProcessResults must skip
+// sendScanError entirely so no duplicate SendError and no unexpected
+// SendErrorDiagnostic fire, while still emitting failure analytics.
+func Test_processResults_FailedScan_UserNotified_SkipsSendScanError(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	engineMock, engineConfig := testutil.SetUpEngineMock(t, engine)
+	engineMock.EXPECT().GetWorkflows().AnyTimes()
+
+	notifier := notification.NewMockNotifier()
+	f, scanNotifier := NewMockFolderWithScanNotifier(engineMock, notifier)
+	setupWorkspaceWithFolder(engineMock, f, notifier)
+
+	types.SetPreferredOrgAndOrgSetByUser(engineConfig, f.path, "test-org", true)
+
+	data := types.ScanData{
+		Product:       product.ProductOpenSource,
+		Path:          f.path,
+		SendAnalytics: true,
+		Err:           stderrors.New("pre-scan command boom"),
+		UserNotified:  true,
+	}
+
+	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, engineMock, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
+
+	f.ProcessResults(t.Context(), data)
+
+	assert.Empty(t, scanNotifier.ErrorCalls(),
+		"UserNotified=true must skip SendError — caller already notified the user")
+	assert.Equal(t, 0, notifier.SendErrorDiagnosticCount(),
+		"UserNotified=true must skip SendErrorDiagnostic — no unexpected publishDiagnostics for caller-handled errors")
+	testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics emission should still happen")
 }
 
 // T8 — routine cancellations (credential rotation, user abort) surface as
