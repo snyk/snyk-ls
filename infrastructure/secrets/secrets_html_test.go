@@ -173,6 +173,47 @@ func Test_Secrets_Html_CCIEnabled(t *testing.T) {
 	assert.Contains(t, result, `id="ignore-create"`)
 }
 
+func Test_Secrets_Html_hiddenClassIsImportant(t *testing.T) {
+	// ignore_styles.css is concatenated AFTER the panel stylesheet,
+	// so an equal-specificity component rule (.sn-ignore-issue-container { display: flex })
+	// wins over .hidden { display: none } on source order. Pinning !important keeps
+	// the form invisible on load until JS removes the hidden class.
+	engine := testutil.UnitTest(t)
+
+	issue := createBasicSecretIssue()
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
+
+	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
+	assert.NoError(t, err)
+
+	secretsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	assert.Regexp(t, `\.hidden\s*\{\s*display:\s*none\s*!important\s*;?\s*\}`, secretsPanelHtml)
+}
+
+func Test_Secrets_Html_formInputsDoNotUseBorderAsBackground(t *testing.T) {
+	// .sn-select / .sn-input / .sn-textarea must not use --input-border
+	// as their background-color (the border variable produces a flat appearance
+	// where background and border collapse to the same color, particularly in
+	// Eclipse). They should use --input-background instead.
+	engine := testutil.UnitTest(t)
+
+	issue := createBasicSecretIssue()
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
+
+	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
+	assert.NoError(t, err)
+
+	secretsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
+
+	assert.Regexp(t, `\.sn-select[^}]*background-color:\s*var\(--input-background\)`, secretsPanelHtml)
+	assert.Regexp(t, `\.sn-input[^}]*background-color:\s*var\(--input-background\)`, secretsPanelHtml)
+	assert.Regexp(t, `\.sn-textarea[^}]*background-color:\s*var\(--input-background\)`, secretsPanelHtml)
+}
+
 func Test_Secrets_Html_InvalidAdditionalData(t *testing.T) {
 	engine := testutil.UnitTest(t)
 

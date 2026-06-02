@@ -24,9 +24,11 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 
@@ -36,6 +38,19 @@ import (
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
+
+type TreeEmitter interface {
+	Emit(state scanstates.StateSnapshot)
+}
+
+func treeEmitterFromContext(ctx context.Context) (TreeEmitter, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	te, ok := deps[ctx2.DepTreeEmitter].(TreeEmitter)
+	return te, ok
+}
 
 const (
 	workflowTypeIndex = iota
@@ -53,6 +68,8 @@ type submitIgnoreRequest struct {
 	srv            types.Server
 	engine         workflow.Engine
 	configResolver types.ConfigResolverInterface
+	treeEmitter    TreeEmitter
+	scanStateFunc  func() scanstates.StateSnapshot
 }
 
 func (cmd *submitIgnoreRequest) Command() types.CommandData {
@@ -103,6 +120,10 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 
 	default:
 		return nil, fmt.Errorf(`unknown workflow`)
+	}
+
+	if cmd.treeEmitter != nil && cmd.scanStateFunc != nil {
+		cmd.treeEmitter.Emit(cmd.scanStateFunc())
 	}
 
 	SendShowDocumentRequest(ctx, logger, issue, cmd.srv)
