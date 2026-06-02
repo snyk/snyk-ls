@@ -137,6 +137,9 @@ func (fc *FolderConfig) GetFeatureFlag(flag string) bool {
 }
 
 // SetFeatureFlag writes a feature flag value to configuration under the folder metadata prefix.
+// Feature flags are re-fetched from the API on every initialized call; they must not be persisted
+// to disk because PersistInStorage triggers a full JSON re-serialization on every Set, which is
+// O(N²) across N folders × M flags per folder.
 func (fc *FolderConfig) SetFeatureFlag(flag string, value bool) {
 	if fc == nil {
 		return
@@ -146,7 +149,6 @@ func (fc *FolderConfig) SetFeatureFlag(flag string, value bool) {
 		return
 	}
 	key := configresolver.FolderMetadataKey(string(PathKey(fc.FolderPath)), FeatureFlagPrefix+flag)
-	conf.PersistInStorage(key)
 	conf.Set(key, value)
 }
 

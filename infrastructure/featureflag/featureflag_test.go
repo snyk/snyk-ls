@@ -20,15 +20,19 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/erni27/imcache"
+	"github.com/rs/zerolog"
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -39,8 +43,12 @@ type mockExternalCallsProvider struct {
 	ignoreErr           error
 	featureFlagsByOrg   map[string]map[string]bool
 	flagErr             error
+	flagDelay           time.Duration // artificial latency injected into getFeatureFlag
+	flagReadyCh         chan struct{} // signals when first getFeatureFlag call is mid-sleep
 	sastSettingsByOrg   map[string]*sast_contract.SastResponse
 	sastErr             error
+	sastDelay           time.Duration // artificial latency injected into getSastSettings
+	sastReadyCh         chan struct{} // closed when getSastSettings is mid-sleep
 	folderOrg           string
 	folderOrgByPath     map[string]string // Maps folder path to org for testing different folders
 
@@ -68,7 +76,18 @@ func (m *mockExternalCallsProvider) getIgnoreApprovalEnabled(org string) (bool, 
 func (m *mockExternalCallsProvider) getFeatureFlag(flag string, org string) (bool, error) {
 	m.mu.Lock()
 	m.featureFlagCalls++
+	delay := m.flagDelay
+	readyCh := m.flagReadyCh
 	m.mu.Unlock()
+	if readyCh != nil {
+		select {
+		case readyCh <- struct{}{}:
+		default:
+		}
+	}
+	if delay > 0 {
+		time.Sleep(delay)
+	}
 	if m.flagErr != nil {
 		return false, m.flagErr
 	}
@@ -86,7 +105,18 @@ func (m *mockExternalCallsProvider) getFeatureFlag(flag string, org string) (boo
 func (m *mockExternalCallsProvider) getSastSettings(org string) (*sast_contract.SastResponse, error) {
 	m.mu.Lock()
 	m.sastSettingsCalls++
+	delay := m.sastDelay
+	readyCh := m.sastReadyCh
 	m.mu.Unlock()
+	if readyCh != nil {
+		select {
+		case readyCh <- struct{}{}:
+		default:
+		}
+	}
+	if delay > 0 {
+		time.Sleep(delay)
+	}
 	if m.sastErr != nil {
 		return nil, m.sastErr
 	}
@@ -242,6 +272,33 @@ func TestFetch(t *testing.T) {
 		// Should not panic with empty org
 		flags := service.fetch("")
 		assert.NotNil(t, flags)
+	})
+
+	t.Run("concurrent FlushCache does not re-populate flag cache", func(t *testing.T) {
+		// TOCTOU guard: if FlushCache() runs while flag goroutines are in-flight,
+		// the stale results must not be written into the freshly-cleared cache.
+		engine, mockProvider := setupMockProvider(t)
+		mockProvider.flagDelay = 50 * time.Millisecond
+		mockProvider.flagReadyCh = make(chan struct{}, 1)
+
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		org := "toctou-flags-org"
+
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			_ = service.fetch(org)
+		}()
+
+		// Wait for the first flag goroutine to signal it's mid-fetch, then flush.
+		testsupport.RequireEventuallyReceive(t, mockProvider.flagReadyCh, 5*time.Second, time.Millisecond, "flag fetch did not start in time")
+		service.FlushCache()
+
+		testsupport.RequireEventuallyClosed(t, done, 5*time.Second, time.Millisecond, "in-flight fetch goroutine did not finish in time")
+
+		// The gen guard must have prevented stale flags from being written back.
+		_, found := service.orgToFlag.Get(org)
+		assert.False(t, found, "flag cache must not be re-populated after concurrent FlushCache (TOCTOU guard)")
 	})
 }
 
@@ -604,12 +661,14 @@ func Test_PopulateFolderConfig_UsesFolderOrganization(t *testing.T) {
 	}
 
 	service := &serviceImpl{
-		conf:              engine.GetConfiguration(),
-		logger:            engine.GetLogger(),
-		provider:          mockProvider,
-		orgToFlag:         imcache.New[string, map[string]bool](),
-		orgToSastSettings: imcache.New[string, *sast_contract.SastResponse](),
-		mutex:             &sync.Mutex{},
+		conf:                 engine.GetConfiguration(),
+		logger:               engine.GetLogger(),
+		provider:             mockProvider,
+		orgToFlag:            imcache.New[string, map[string]bool](),
+		orgToSastSettings:    imcache.New[string, *sast_contract.SastResponse](),
+		orgToSastSettingsErr: imcache.New[string, struct{}](),
+		mutex:                &sync.Mutex{},
+		overrides:            make(map[string]bool),
 	}
 
 	// Populate folder config for folder 1 - needs ConfigResolver for SetFeatureFlag
@@ -676,4 +735,138 @@ func TestServiceImpl_Override_PinsFlag(t *testing.T) {
 
 	assert.False(t, folderConfig.GetFeatureFlag(UseExperimentalRiskScoreInCLI),
 		"Override(false) must win over the API-returned true value")
+}
+
+func TestFetchSastSettings_NegativeCache(t *testing.T) {
+	t.Run("caches SAST error so same-org failure only calls provider once", func(t *testing.T) {
+		engine, mockProvider := setupMockProvider(t)
+		mockProvider.sastErr = fmt.Errorf("401 unauthorized")
+
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		org := "fedramp-org"
+
+		const N = 100
+		for range N {
+			_, err := service.fetchSastSettings(org)
+			require.Error(t, err)
+		}
+
+		mockProvider.mu.Lock()
+		calls := mockProvider.sastSettingsCalls
+		mockProvider.mu.Unlock()
+
+		assert.Equal(t, 1, calls, "provider should only be called once; subsequent calls should use the negative cache")
+	})
+
+	t.Run("GoldenPath_WorksWithNegativeCachePresent", func(t *testing.T) {
+		engine, mockProvider := setupMockProvider(t)
+		mockProvider.sastSettingsByOrg = map[string]*sast_contract.SastResponse{
+			"good-org": {SastEnabled: true},
+		}
+
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+
+		resp, err := service.fetchSastSettings("good-org")
+		require.NoError(t, err)
+		assert.True(t, resp.SastEnabled)
+	})
+
+	t.Run("FlushCache clears the negative cache", func(t *testing.T) {
+		engine, mockProvider := setupMockProvider(t)
+		mockProvider.sastErr = fmt.Errorf("401 unauthorized")
+
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		org := "flush-org"
+
+		_, _ = service.fetchSastSettings(org)
+
+		service.FlushCache()
+
+		// After flush, provider should be called again
+		mockProvider.mu.Lock()
+		before := mockProvider.sastSettingsCalls
+		mockProvider.mu.Unlock()
+
+		_, _ = service.fetchSastSettings(org)
+
+		mockProvider.mu.Lock()
+		after := mockProvider.sastSettingsCalls
+		mockProvider.mu.Unlock()
+
+		assert.Equal(t, before+1, after, "provider should be called again after FlushCache")
+	})
+
+	t.Run("concurrent FlushCache does not re-poison error cache", func(t *testing.T) {
+		// TOCTOU guard: if FlushCache() runs while an HTTP error response is in-flight,
+		// the error must not be written back into the freshly-cleared cache.
+		engine, mockProvider := setupMockProvider(t)
+		mockProvider.sastErr = fmt.Errorf("401 unauthorized")
+		mockProvider.sastDelay = 50 * time.Millisecond
+		sastReady := make(chan struct{}, 1)
+		mockProvider.sastReadyCh = sastReady
+
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		org := "toctou-org"
+
+		// Start a fetch that will sleep 50ms inside getSastSettings.
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			_, _ = service.fetchSastSettings(org)
+		}()
+
+		// Wait for getSastSettings to signal it is mid-sleep, then flush.
+		testsupport.RequireEventuallyReceive(t, sastReady, 5*time.Second, time.Millisecond, "getSastSettings did not signal in time")
+		service.FlushCache()
+
+		testsupport.RequireEventuallyClosed(t, done, 5*time.Second, time.Millisecond, "in-flight getSastSettings goroutine did not finish in time")
+
+		// The gen guard must have prevented the stale error from being written back.
+		_, found := service.orgToSastSettingsErr.Get(org)
+		assert.False(t, found, "error must not be cached after concurrent FlushCache (TOCTOU guard)")
+	})
+}
+
+// BenchmarkFetchSastSettings_NegativeCache proves the O(N)→O(1) speedup.
+// Before the fix: N=100 folders each make a fresh HTTP call → 100× slower than N=1.
+// After the fix:  all 100 calls hit the negative cache → ~same wall time as N=1.
+func BenchmarkFetchSastSettings_NegativeCache(b *testing.B) {
+	const N = 100
+
+	slowProvider := &mockExternalCallsProvider{
+		sastErr: fmt.Errorf("401 unauthorized"),
+	}
+
+	// Use a plain in-memory configuration — no engine needed for this benchmark.
+	conf := configuration.NewWithOpts()
+	logger := zerolog.Nop()
+	service := &serviceImpl{
+		conf:                 conf,
+		logger:               &logger,
+		provider:             slowProvider,
+		orgToFlag:            imcache.New[string, map[string]bool](),
+		orgToSastSettings:    imcache.New[string, *sast_contract.SastResponse](),
+		orgToSastSettingsErr: imcache.New[string, struct{}](),
+		mutex:                &sync.Mutex{},
+		overrides:            make(map[string]bool),
+	}
+	org := "bench-org"
+
+	b.ResetTimer()
+	for range b.N {
+		service.FlushCache() // reset per iteration to measure steady-state with cache warm
+		for range N {
+			_, _ = service.fetchSastSettings(org)
+		}
+	}
+
+	slowProvider.mu.Lock()
+	totalCalls := slowProvider.sastSettingsCalls
+	slowProvider.mu.Unlock()
+
+	// With negative caching: provider called once per b.N iteration (once per FlushCache),
+	// not N times. Allow up to 2× b.N to tolerate any edge-case double-call.
+	if totalCalls > 2*b.N {
+		b.Errorf("provider called %d times total for %d iterations (want ≤%d); negative cache is not working", totalCalls, b.N, 2*b.N)
+	}
 }

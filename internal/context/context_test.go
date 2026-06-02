@@ -32,6 +32,65 @@ import (
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
+// TestNewDepConstants verifies that all Dep* string constants added in Step 2
+// are distinct non-empty strings, preventing accidental key collisions.
+func TestNewDepConstants(t *testing.T) {
+	constants := map[string]string{
+		"DepHoverService":       DepHoverService,
+		"DepInstaller":          DepInstaller,
+		"DepCodeActionService":  DepCodeActionService,
+		"DepFeatureFlagService": DepFeatureFlagService,
+		"DepFileWatcher":        DepFileWatcher,
+		"DepScanner":            DepScanners,
+		"DepScanNotifier":       DepScanNotifier,
+		"DepScanPersister":      DepScanPersister,
+		"DepErrorReporter":      DepErrorReporter,
+		"DepInitializer":        DepInitializer,
+	}
+	seen := map[string]string{}
+	for name, val := range constants {
+		require.NotEmpty(t, val, "constant %s must not be empty", name)
+		if other, exists := seen[val]; exists {
+			t.Errorf("constant %s has same value %q as %s", name, val, other)
+		}
+		seen[val] = name
+	}
+}
+
+// TestGenericDepRoundTrip verifies the generic NewContextWith*/FromContext helpers
+// added in Step 2 correctly store and retrieve values from the dependency map.
+func TestGenericDepRoundTrip(t *testing.T) {
+	type sentinel struct{ id int }
+
+	cases := []struct {
+		name  string
+		key   string
+		value any
+	}{
+		{name: "HoverService", key: DepHoverService, value: &sentinel{1}},
+		{name: "Installer", key: DepInstaller, value: &sentinel{2}},
+		{name: "CodeActionService", key: DepCodeActionService, value: &sentinel{3}},
+		{name: "FeatureFlagService", key: DepFeatureFlagService, value: &sentinel{4}},
+		{name: "FileWatcher", key: DepFileWatcher, value: &sentinel{5}},
+		{name: "ErrorReporter", key: DepErrorReporter, value: &sentinel{6}},
+		{name: "Initializer", key: DepInitializer, value: &sentinel{7}},
+		{name: "ScanNotifier", key: DepScanNotifier, value: &sentinel{8}},
+		{name: "ScanPersister", key: DepScanPersister, value: &sentinel{9}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name+" round-trip via dep map", func(t *testing.T) {
+			ctx := NewContextWithDependencies(stdctx.Background(), map[string]any{
+				tc.key: tc.value,
+			})
+			deps, ok := DependenciesFromContext(ctx)
+			require.True(t, ok)
+			got := deps[tc.key]
+			require.Same(t, tc.value, got)
+		})
+	}
+}
+
 func TestScanSource_String(t *testing.T) {
 	t.Run("LLM returns correct string", func(t *testing.T) {
 		require.Equal(t, "LLM", LLM.String())

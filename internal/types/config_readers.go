@@ -248,3 +248,41 @@ func WaitForDefaultEnv(ctx context.Context, conf configuration.Configuration) er
 		return ctx.Err()
 	}
 }
+
+// NewLspInitializedChannel creates a channel for signaling LSP initialization
+// and stores it in conf under SettingLspInitializedChannel. Call
+// SignalLspInitialized(conf) when the initialized handler completes.
+func NewLspInitializedChannel(conf configuration.Configuration) {
+	ch := make(chan struct{})
+	conf.Set(SettingLspInitializedChannel, ch)
+}
+
+// SignalLspInitialized closes the channel stored by NewLspInitializedChannel,
+// unblocking all goroutines waiting in WaitForLspInitialized.
+// Must not be called concurrently; the LSP protocol guarantees a single
+// initialized handler fires per session.
+func SignalLspInitialized(conf configuration.Configuration) {
+	ch, ok := conf.Get(SettingLspInitializedChannel).(chan struct{})
+	if !ok {
+		return
+	}
+	select {
+	case <-ch: // already closed — no-op
+	default:
+		close(ch)
+	}
+}
+
+// WaitForLspInitialized blocks until LSP initialization is complete.
+// Returns immediately if the bool flag is already set (backward-compat with
+// tests that set SettingIsLspInitialized directly) or if no channel exists.
+func WaitForLspInitialized(conf configuration.Configuration) {
+	if conf.GetBool(SettingIsLspInitialized) {
+		return
+	}
+	ch, ok := conf.Get(SettingLspInitializedChannel).(chan struct{})
+	if !ok {
+		return
+	}
+	<-ch
+}

@@ -111,16 +111,22 @@ func (p *externalCallsProvider) getSastSettings(org string) (*sast_contract.Sast
 }
 
 type serviceImpl struct {
-	conf              configuration.Configuration
-	logger            *zerolog.Logger
-	engine            workflow.Engine
-	configResolver    types.ConfigResolverInterface
-	provider          ExternalCallsProvider
-	orgToFlag         *imcache.Cache[string, map[string]bool]
-	orgToSastSettings *imcache.Cache[string, *sast_contract.SastResponse]
-	mutex             *sync.Mutex
-	overrides         map[string]bool
-	overrideMu        sync.RWMutex
+	conf                 configuration.Configuration
+	logger               *zerolog.Logger
+	engine               workflow.Engine
+	configResolver       types.ConfigResolverInterface
+	provider             ExternalCallsProvider
+	orgToFlag            *imcache.Cache[string, map[string]bool]
+	orgToSastSettings    *imcache.Cache[string, *sast_contract.SastResponse]
+	orgToSastSettingsErr *imcache.Cache[string, struct{}]
+	mutex                *sync.Mutex
+	// flushGen is incremented on every FlushCache() call while holding mutex.
+	// fetchSastSettings records the generation before releasing the lock for the
+	// HTTP call; on return it only writes to the cache if the generation is
+	// unchanged, preventing a post-flush re-poisoning.
+	flushGen   int
+	overrides  map[string]bool
+	overrideMu sync.RWMutex
 }
 
 type Option func(*serviceImpl)
@@ -134,18 +140,20 @@ func WithProvider(provider ExternalCallsProvider) Option {
 func New(conf configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, configResolver types.ConfigResolverInterface, opts ...Option) *serviceImpl {
 	ffCache := imcache.New[string, map[string]bool]()
 	sastResponseCache := imcache.New[string, *sast_contract.SastResponse]()
+	sastErrCache := imcache.New[string, struct{}]()
 
 	// default values
 	service := &serviceImpl{
-		conf:              conf,
-		logger:            logger,
-		engine:            engine,
-		configResolver:    configResolver,
-		provider:          &externalCallsProvider{conf: conf, logger: logger, engine: engine},
-		orgToFlag:         ffCache,
-		orgToSastSettings: sastResponseCache,
-		mutex:             &sync.Mutex{},
-		overrides:         make(map[string]bool),
+		conf:                 conf,
+		logger:               logger,
+		engine:               engine,
+		configResolver:       configResolver,
+		provider:             &externalCallsProvider{conf: conf, logger: logger, engine: engine},
+		orgToFlag:            ffCache,
+		orgToSastSettings:    sastResponseCache,
+		orgToSastSettingsErr: sastErrCache,
+		mutex:                &sync.Mutex{},
+		overrides:            make(map[string]bool),
 	}
 
 	for _, opt := range opts {
@@ -164,6 +172,10 @@ func (s *serviceImpl) fetch(org string) map[string]bool {
 		s.logger.Debug().Str("org", org).Interface("cachedFlags", clone).Msg("feature flags cache hit")
 		return clone
 	}
+	// Record the flush generation before releasing the lock. If FlushCache() runs
+	// while flag goroutines are in-flight, s.flushGen will differ and we skip the
+	// cache write to avoid re-populating the freshly-cleared cache.
+	gen := s.flushGen
 	s.mutex.Unlock()
 	s.logger.Debug().Str("org", org).Msg("feature flags cache miss, fetching from API")
 	orgFlags = make(map[string]bool)
@@ -192,10 +204,7 @@ func (s *serviceImpl) fetch(org string) map[string]bool {
 			}
 
 			s.mutex.Lock()
-			// Check if cache was flushed while we were fetching
-			if orgFlags != nil {
-				orgFlags[flag] = enabled
-			}
+			orgFlags[flag] = enabled
 			s.mutex.Unlock()
 		}()
 	}
@@ -203,7 +212,11 @@ func (s *serviceImpl) fetch(org string) map[string]bool {
 	wg.Wait()
 
 	s.mutex.Lock()
-	s.orgToFlag.Set(org, orgFlags, imcache.WithExpiration(time.Minute))
+	if s.flushGen == gen {
+		// 30s TTL: flags may be deactivated quickly (e.g. org plan changes), so keep
+		// the cache short — well below the 1-minute SAST settings TTL.
+		s.orgToFlag.Set(org, orgFlags, imcache.WithExpiration(30*time.Second))
+	}
 	result := orgFlags
 	s.mutex.Unlock()
 
@@ -212,20 +225,35 @@ func (s *serviceImpl) fetch(org string) map[string]bool {
 
 func (s *serviceImpl) fetchSastSettings(org string) (*sast_contract.SastResponse, error) {
 	s.mutex.Lock()
+	if _, hasErr := s.orgToSastSettingsErr.Get(org); hasErr {
+		s.mutex.Unlock()
+		return nil, fmt.Errorf("sast settings unavailable for org %s (cached failure)", org)
+	}
 	cached, found := s.orgToSastSettings.Get(org)
 	if found {
 		s.mutex.Unlock()
 		return cached, nil
 	}
+	// Record the flush generation before releasing the lock. If FlushCache() runs
+	// while the HTTP call is in-flight, s.flushGen will differ and we skip the
+	// cache write to avoid re-poisoning the freshly-cleared cache.
+	gen := s.flushGen
 	s.mutex.Unlock()
 
 	sastResponse, err := s.provider.getSastSettings(org)
 	if err != nil {
+		s.mutex.Lock()
+		if s.flushGen == gen {
+			s.orgToSastSettingsErr.Set(org, struct{}{}, imcache.WithExpiration(time.Minute))
+		}
+		s.mutex.Unlock()
 		return nil, err
 	}
 
 	s.mutex.Lock()
-	s.orgToSastSettings.Set(org, sastResponse, imcache.WithExpiration(time.Minute))
+	if s.flushGen == gen {
+		s.orgToSastSettings.Set(org, sastResponse, imcache.WithExpiration(time.Minute))
+	}
 	s.mutex.Unlock()
 
 	return sastResponse, nil
@@ -236,6 +264,8 @@ func (s *serviceImpl) FlushCache() {
 	defer s.mutex.Unlock()
 	s.orgToFlag.RemoveAll()
 	s.orgToSastSettings.RemoveAll()
+	s.orgToSastSettingsErr.RemoveAll()
+	s.flushGen++
 }
 
 func (s *serviceImpl) Override(flag string, value bool) {

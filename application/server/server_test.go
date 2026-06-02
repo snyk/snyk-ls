@@ -196,6 +196,46 @@ func TestPeriodicallyCheckForExpiredCache_StopsOnContextCancel(t *testing.T) {
 	}
 }
 
+// sentinelHoverService is a minimal hover.Service that records whether GetHover was called.
+type sentinelHoverService struct {
+	called bool
+}
+
+func (s *sentinelHoverService) DeleteHover(_ product.Product, _ types.FilePath) {}
+func (s *sentinelHoverService) Channel() chan hover.DocumentHovers              { return nil }
+func (s *sentinelHoverService) ClearAllHovers()                                 {}
+func (s *sentinelHoverService) GetHover(_ types.FilePath, _ types.Position) hover.Result {
+	s.called = true
+	return hover.Result{}
+}
+
+// TestTextDocumentHover_UsesHoverServiceFromContext verifies that textDocumentHover
+// reads HoverService from the request context (injected via withContext) rather than
+// calling the di.HoverService() global.
+func TestTextDocumentHover_UsesHoverServiceFromContext(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	logger := zerolog.Nop()
+	conf := engine.GetConfiguration()
+
+	sentinel := &sentinelHoverService{}
+
+	deps := di.Dependencies{
+		HoverService: sentinel,
+	}
+
+	h := withContext(textDocumentHover(), &logger, conf, engine, deps)
+
+	hoverParams := hover.Params{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: "file:///foo.go"},
+	}
+	var req jrpc2.Request
+	require.NoError(t, req.UnmarshalParams(&hoverParams))
+	_, err := h(t.Context(), &req)
+
+	require.NoError(t, err)
+	require.True(t, sentinel.called, "textDocumentHover should use HoverService from context, not di global")
+}
+
 func TestWithContext_InjectsAuthenticationService(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	logger := zerolog.Nop()
@@ -210,14 +250,20 @@ func TestWithContext_InjectsAuthenticationService(t *testing.T) {
 		configResolver,
 	)
 
+	deps := di.Dependencies{
+		ConfigResolver:        configResolver,
+		AuthenticationService: authService,
+		Notifier:              notifier,
+	}
+
 	var gotAuthService authentication.AuthenticationService
 	wrapped := withContext(func(ctx context.Context, _ *jrpc2.Request) (any, error) {
-		deps, ok := ctx2.DependenciesFromContext(ctx)
+		ctxDeps, ok := ctx2.DependenciesFromContext(ctx)
 		require.True(t, ok)
-		gotAuthService, ok = deps[ctx2.DepAuthService].(authentication.AuthenticationService)
+		gotAuthService, ok = ctxDeps[ctx2.DepAuthService].(authentication.AuthenticationService)
 		require.True(t, ok)
 		return nil, nil
-	}, &logger, engine.GetConfiguration(), engine, configResolver, authService, nil, notifier, nil)
+	}, &logger, engine.GetConfiguration(), engine, deps)
 
 	_, err := wrapped(t.Context(), nil)
 
