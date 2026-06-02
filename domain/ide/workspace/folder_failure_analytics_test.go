@@ -259,7 +259,7 @@ func Test_processResults_FailedScan_PartialScanData_DoesNotPanicAndDefaultsTimes
 	assert.Contains(t, payload, `"error_code":"SNYK-OS-7001"`)
 	// Zero TimestampFinished must be defaulted to "now" — never emitted as the
 	// negative-epoch UnixMilli of time.Time{}. Assert on the actual emitted
-	// value, not on string presence (the GAF schema serialises the key as
+	// value, not on string presence (the GAF schema serializes the key as
 	// `timestamp_ms`, so a substring check for `timestampMs` is vacuous).
 	var envelope struct {
 		Data struct {
