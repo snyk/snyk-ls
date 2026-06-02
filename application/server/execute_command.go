@@ -39,8 +39,7 @@ func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 		commandData := types.CommandData{CommandId: params.Command, Arguments: params.Arguments, Title: params.Command}
 
 		result, err := command.Service().ExecuteCommandData(ctx, commandData, srv)
-		reporter, _ := errorReporterFromContext(ctx)
-		logError(logger, reporter, err, fmt.Sprintf("Error executing command %v", commandData))
+		logError(logger, mustErrorReporterFromContext(ctx), err, fmt.Sprintf("Error executing command %v", commandData))
 		return result, err
 	})
 }

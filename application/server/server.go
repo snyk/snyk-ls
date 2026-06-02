@@ -24,7 +24,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/creachadair/jrpc2"
@@ -100,31 +102,98 @@ func Start(engine workflow.Engine, tokenService *config.TokenServiceImpl) {
 	}
 }
 
+// validateMandatoryDeps returns an error if any mandatory DI dependency is nil.
+// All deps in this list are always created by di.Init and di.TestInit; a nil value
+// means the server was started with broken wiring and cannot function correctly.
+func validateMandatoryDeps(deps di.Dependencies) error {
+	switch {
+	case deps.ConfigResolver == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: ConfigResolver")
+	case deps.AuthenticationService == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: AuthenticationService")
+	case deps.LdxSyncService == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: LdxSyncService")
+	case deps.Notifier == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: Notifier")
+	case deps.FeatureFlagService == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: FeatureFlagService")
+	case deps.ErrorReporter == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: ErrorReporter")
+	case deps.LearnService == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: LearnService")
+	case deps.Scanner == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: Scanner")
+	case deps.HoverService == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: HoverService")
+	case deps.ScanNotifier == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: ScanNotifier")
+	case deps.ScanPersister == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: ScanPersister")
+	case deps.ScanStateAggregator == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: ScanStateAggregator")
+	case deps.FileWatcher == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: FileWatcher")
+	case deps.CodeActionService == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: CodeActionService")
+	default:
+		return nil
+	}
+}
+
 // withContext wraps a jrpc2.Handler to inject logger, configuration, engine,
 // and all handler dependencies into the context so that handlers can read them
 // from ctx rather than reaching for package-level di.* globals.
+// If any mandatory dependency is nil, it returns a jrpc2 error to the client
+// and stops the server — a server with broken DI wiring cannot function correctly.
 func withContext(
 	h jrpc2.Handler,
 	logger *zerolog.Logger,
 	conf configuration.Configuration,
 	engine workflow.Engine,
 	deps di.Dependencies,
+	srv *jrpc2.Server,
 ) jrpc2.Handler {
-	return func(ctx context.Context, req *jrpc2.Request) (any, error) {
+	var stopOnce sync.Once
+	// stop closes over logger, stopOnce, and srv — no parameters needed.
+	stop := func(reason string) {
+		logger.Error().Str("reason", reason).Msg("stopping server")
+		if srv != nil {
+			// stopOnce ensures only one Stop() goroutine per handler registration.
+			// The 100ms delay gives jrpc2 time to transmit the error response before
+			// the channel closes; best-effort on a fast local transport.
+			stopOnce.Do(func() {
+				go func() {
+					time.Sleep(100 * time.Millisecond)
+					srv.Stop()
+				}()
+			})
+		}
+	}
+	return func(ctx context.Context, req *jrpc2.Request) (res any, rerr error) {
+		// Single enforcement point for all failure modes: both explicit dep
+		// validation and synchronous panics in h's call stack are caught here,
+		// converted to a jrpc2 error (returned to the LSP client) and trigger
+		// server stop. Panics in goroutines launched by h are not covered.
+		defer func() {
+			if r := recover(); r != nil {
+				rerr = fmt.Errorf("snyk-ls: internal server error: %v", r)
+				logger.Error().Str("stack", string(debug.Stack())).Msg(rerr.Error())
+				stop(rerr.Error())
+			}
+		}()
+		if err := validateMandatoryDeps(deps); err != nil {
+			stop(err.Error())
+			return nil, err
+		}
 		ctx = ctx2.NewContextWithLogger(ctx, logger)
-		ctx = ctx2.NewContextWithConfiguration(ctx, conf)
-		ctx = ctx2.NewContextWithEngine(ctx, engine)
-		if deps.ConfigResolver != nil {
-			ctx = ctx2.NewContextWithConfigResolver(ctx, deps.ConfigResolver)
-		}
-		ctxDeps, found := ctx2.DependenciesFromContext(ctx)
-		if !found {
-			ctxDeps = map[string]any{}
-		}
+		ctxDeps := make(map[string]any)
+		ctxDeps[ctx2.DepConfiguration] = conf
+		ctxDeps[ctx2.DepEngine] = engine
 		injectCoreServicesIntoMap(ctxDeps, deps)
 		injectScanServicesIntoMap(ctxDeps, deps)
 		ctx = ctx2.NewContextWithDependencies(ctx, ctxDeps)
-		return h(ctx, req)
+		res, rerr = h(ctx, req)
+		return
 	}
 }
 
@@ -133,6 +202,9 @@ func withContext(
 // each function's cyclomatic complexity below the gocyclo limit (15); it does
 // not reflect a semantic boundary between the services.
 func injectCoreServicesIntoMap(m map[string]any, deps di.Dependencies) {
+	if deps.ConfigResolver != nil {
+		m[ctx2.DepConfigResolver] = deps.ConfigResolver
+	}
 	if deps.AuthenticationService != nil {
 		m[ctx2.DepAuthService] = deps.AuthenticationService
 	}
@@ -148,15 +220,7 @@ func injectCoreServicesIntoMap(m map[string]any, deps di.Dependencies) {
 	if deps.ErrorReporter != nil {
 		m[ctx2.DepErrorReporter] = deps.ErrorReporter
 	}
-	if deps.Installer != nil {
-		m[ctx2.DepInstaller] = deps.Installer
-	}
-	if deps.CodeActionService != nil {
-		m[ctx2.DepCodeActionService] = deps.CodeActionService
-	}
-	if deps.Initializer != nil {
-		m[ctx2.DepInitializer] = deps.Initializer
-	}
+	m[ctx2.DepCodeActionService] = deps.CodeActionService
 	if deps.FeatureFlagService != nil {
 		m[ctx2.DepFeatureFlagService] = deps.FeatureFlagService
 	}
@@ -195,7 +259,7 @@ const textDocumentDidSaveOperation = "textDocument/didSave"
 
 func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, deps di.Dependencies) {
 	enrich := func(h jrpc2.Handler) jrpc2.Handler {
-		return withContext(h, logger, conf, engine, deps)
+		return withContext(h, logger, conf, engine, deps, srv)
 	}
 	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv))
 	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv))
@@ -227,6 +291,14 @@ func authenticationServiceFromContext(ctx context.Context) (authentication.Authe
 	}
 	authService, ok := deps[ctx2.DepAuthService].(authentication.AuthenticationService)
 	return authService, ok
+}
+
+func mustAuthenticationServiceFromContext(ctx context.Context) authentication.AuthenticationService {
+	svc, ok := authenticationServiceFromContext(ctx)
+	if !ok {
+		panic("AuthenticationService missing from context")
+	}
+	return svc
 }
 
 func ldxSyncServiceFromContext(ctx context.Context) (command.LdxSyncService, bool) {
@@ -364,14 +436,6 @@ func scanNotifierFromContext(ctx context.Context) (scanner2.ScanNotifier, bool) 
 	}
 	sn, ok := deps[ctx2.DepScanNotifier].(scanner2.ScanNotifier)
 	return sn, ok
-}
-
-func mustScanNotifierFromContext(ctx context.Context) scanner2.ScanNotifier {
-	sn, ok := scanNotifierFromContext(ctx)
-	if !ok {
-		panic("ScanNotifier missing from context")
-	}
-	return sn
 }
 
 func featureFlagServiceFromContext(ctx context.Context) (featureflag.Service, bool) {
@@ -513,21 +577,19 @@ func workspaceDidChangeWorkspaceFoldersHandler(conf configuration.Configuration,
 		defer logger.Info().Msg("SENDING")
 		changedFolders := config.GetWorkspace(conf).ChangeWorkspaceFolders(params)
 
-		authSvc, _ := authenticationServiceFromContext(ctx)
-		if authSvc != nil && authSvc.IsAuthenticated() {
-			ldxSvc, _ := ldxSyncServiceFromContext(ctx)
-			notifier, _ := notifierFromContext(ctx)
-			if ldxSvc != nil {
-				ldxSvc.RefreshConfigFromLdxSync(bgCtx, conf, engine, &logger, changedFolders, notifier)
-			}
+		authService := mustAuthenticationServiceFromContext(ctx)
+		notifier := mustNotifierFromContext(ctx)
+		ldxSyncSvc := mustLdxSyncServiceFromContext(ctx)
+		scanPersister := mustScanPersisterFromContext(ctx)
+		scanStateAgg := mustScanStateAggregatorFromContext(ctx)
+		featureFlags := mustFeatureFlagServiceFromContext(ctx)
+		configResolver := mustConfigResolverFromContext(ctx)
+
+		if authService.IsAuthenticated() {
+			ldxSyncSvc.RefreshConfigFromLdxSync(bgCtx, conf, engine, &logger, changedFolders, notifier)
 		}
 
-		notifier, _ := notifierFromContext(ctx)
-		scanPersister, _ := scanPersisterFromContext(ctx)
-		scanStateAgg, _ := scanStateAggregatorFromContext(ctx)
-		ffService, _ := featureFlagServiceFromContext(ctx)
-		configRes, _ := configResolverFromContext(ctx)
-		command.HandleFolders(conf, engine, &logger, bgCtx, srv, notifier, scanPersister, scanStateAgg, ffService, configRes)
+		command.HandleFolders(conf, engine, &logger, bgCtx, srv, notifier, scanPersister, scanStateAgg, featureFlags, configResolver)
 		for _, f := range changedFolders {
 			if f.IsAutoScanEnabled() {
 				go f.ScanFolder(bgCtx)
@@ -570,26 +632,24 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		// Register the OAuth storage bridge before any pre-initialization API
 		// call so a rotated refresh token is reliably propagated to the IDE
 		// (queued until SettingIsLspInitialized turns true).
-		authenticationService, ok := authenticationServiceFromContext(ctx)
-		if !ok {
-			return nil, errors.New("authentication service missing from request context")
-		}
-		authentication.RegisterOAuthStorageBridge(storage, authenticationService)
+		// withContext guarantees AuthenticationService is non-nil before any handler runs.
+		authentication.RegisterOAuthStorageBridge(storage, mustAuthenticationServiceFromContext(ctx))
 
-		addWorkspaceFolders(ctx, conf, &logger, engine, params)
+		if err := addWorkspaceFolders(ctx, conf, &logger, engine, params); err != nil {
+			return nil, err
+		}
 
 		// Prime ORGANIZATION for hot-path GlobalOrg(); see GetGlobalOrganization.
 		// Must run before RefreshConfigFromLdxSync and HandleFolders, which rely
 		// on the resolver's global-org fallback for folders without a preferred org.
 		_ = types.GetGlobalOrganization(conf)
 
-		InitializeSettings(ctx, conf, engine, &logger, params.InitializationOptions)
-
-		ldxSyncService, ok := ldxSyncServiceFromContext(ctx)
-		if !ok {
-			return nil, errors.New("LDX Sync service missing from request context")
+		if err := InitializeSettings(ctx, conf, engine, &logger, params.InitializationOptions); err != nil {
+			return nil, err
 		}
-		ldxSyncService.RefreshConfigFromLdxSync(ctx, conf, engine, &logger, config.GetWorkspace(conf).Folders(), nil)
+
+		// withContext guarantees LdxSyncService is non-nil before any handler runs.
+		mustLdxSyncServiceFromContext(ctx).RefreshConfigFromLdxSync(ctx, conf, engine, &logger, config.GetWorkspace(conf).Folders(), nil)
 
 		startClientMonitor(params, logger)
 
@@ -903,21 +963,34 @@ func periodicallyCheckForExpiredCache(ctx context.Context, conf configuration.Co
 	}
 }
 
-func addWorkspaceFolders(ctx context.Context, conf configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, params types.InitializeParams) {
+func addWorkspaceFolders(ctx context.Context, conf configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine, params types.InitializeParams) error {
 	const method = "addWorkspaceFolders"
 	w := config.GetWorkspace(conf)
 
-	sc := mustScannerFromContext(ctx)
-	hoverSvc := mustHoverServiceFromContext(ctx)
-	scanNotifier := mustScanNotifierFromContext(ctx)
-	notifier := mustNotifierFromContext(ctx)
-	scanPersister := mustScanPersisterFromContext(ctx)
-	scanStateAgg := mustScanStateAggregatorFromContext(ctx)
-	ffService := mustFeatureFlagServiceFromContext(ctx)
-	configRes := mustConfigResolverFromContext(ctx)
+	scn, scnOk := scannerFromContext(ctx)
+	hs, hsOk := hoverServiceFromContext(ctx)
+	scanNotifier, snOk := scanNotifierFromContext(ctx)
+	notifier, nOk := notifierFromContext(ctx)
+	scanPersister, spOk := scanPersisterFromContext(ctx)
+	scanStateAgg, ssaOk := scanStateAggregatorFromContext(ctx)
+	featureFlags, ffOk := featureFlagServiceFromContext(ctx)
+	configResolver, crOk := ctx2.ConfigResolverFromContext(ctx)
+	if !scnOk || !hsOk || !snOk || !nOk || !spOk || !ssaOk || !ffOk || !crOk {
+		logger.Error().Str("method", method).
+			Bool("scanner", scnOk).
+			Bool("hoverService", hsOk).
+			Bool("scanNotifier", snOk).
+			Bool("notifier", nOk).
+			Bool("scanPersister", spOk).
+			Bool("scanStateAggregator", ssaOk).
+			Bool("featureFlagService", ffOk).
+			Bool("configResolver", crOk).
+			Msg("missing mandatory dependency in context; LSP initialize will fail")
+		return errors.New("snyk-ls: missing mandatory DI dependency at initialize")
+	}
 
 	newFolder := func(path types.FilePath, name string) *workspace.Folder {
-		return workspace.NewFolder(conf, logger, path, name, sc, hoverSvc, scanNotifier, notifier, scanPersister, scanStateAgg, ffService, configRes, engine)
+		return workspace.NewFolder(conf, logger, path, name, scn, hs, scanNotifier, notifier, scanPersister, scanStateAgg, featureFlags, configResolver, engine)
 	}
 
 	if len(params.WorkspaceFolders) > 0 {
@@ -932,6 +1005,7 @@ func addWorkspaceFolders(ctx context.Context, conf configuration.Configuration, 
 			w.AddFolder(newFolder(types.FilePath(params.RootPath), params.ClientInfo.Name))
 		}
 	}
+	return nil
 }
 
 // setClientInformation sets the integration name and version from the client information.
