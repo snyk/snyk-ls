@@ -290,6 +290,74 @@ func Test_RegisterOAuthStorageBridge_SerializesRapidTokenRotations(t *testing.T)
 	require.Equal(t, tokenJSONs[len(tokenJSONs)-1], finalToken, "final token should be the last one set")
 }
 
+// Test_RegisterOAuthStorageBridge_SuppressesEchoWhenKeyIsPersisted verifies that
+// the echo-suppression guard in newOAuthStorageBridgeCallback is effective when
+// CONFIG_KEY_OAUTH_TOKEN is persisted in the GAF configuration. In that mode,
+// WriteTokenToConfig's conf.Set(CONFIG_KEY_OAUTH_TOKEN, ...) propagates back to
+// storage, which would re-fire the callback with the same token — the guard must
+// drop that echo so exactly one notification is delivered.
+func Test_RegisterOAuthStorageBridge_SuppressesEchoWhenKeyIsPersisted(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	storageWithCallbacks, err := storage2.NewStorageWithCallbacks(storage2.WithStorageFile(filepath.Join(t.TempDir(), "testStorage")))
+	require.NoError(t, err)
+	conf.SetStorage(storageWithCallbacks)
+	// PersistInStorage causes conf.Set(CONFIG_KEY_OAUTH_TOKEN, ...) inside
+	// WriteTokenToConfig to propagate back to storageWithCallbacks, which fires
+	// the bridge callback again — the guard must suppress that echo.
+	conf.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+
+	notifier := notification.NewNotifier()
+	authParamsChan := make(chan types.AuthenticationParams, 10)
+	notifier.CreateListener(func(params any) {
+		if authParams, ok := params.(types.AuthenticationParams); ok {
+			authParamsChan <- authParams
+		}
+	})
+	t.Cleanup(func() { notifier.DisposeListener() })
+
+	service := NewAuthenticationService(
+		engine,
+		tokenService,
+		nil,
+		error_reporting.NewTestErrorReporter(engine),
+		notifier,
+		testutil.DefaultConfigResolver(engine),
+	)
+	t.Cleanup(func() { service.Shutdown() })
+
+	RegisterOAuthStorageBridge(storageWithCallbacks, service)
+
+	tokenBytes, _ := json.Marshal(oauth2.Token{
+		AccessToken:  "access-token",
+		RefreshToken: "refresh-token",
+		TokenType:    "Bearer",
+		Expiry:       time.Now().Add(time.Hour),
+	})
+	tokenJSON := string(tokenBytes)
+
+	require.NoError(t, storageWithCallbacks.Set(auth.CONFIG_KEY_OAUTH_TOKEN, tokenJSON))
+
+	// Exactly one notification must arrive — no echo from the conf.Set write-back.
+	select {
+	case authParams := <-authParamsChan:
+		require.Equal(t, tokenJSON, authParams.Token, "notification should carry the written token")
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for notification")
+	}
+
+	// No second (echo) notification must arrive.
+	select {
+	case extra := <-authParamsChan:
+		t.Fatalf("unexpected second notification (echo not suppressed): %+v", extra)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	require.Equal(t, tokenJSON, config.GetToken(conf), "config token should equal the written token")
+}
+
 func Test_RegisterOAuthStorageBridge_PreInitRefreshIsBufferedForIde(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
