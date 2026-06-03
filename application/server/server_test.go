@@ -173,7 +173,7 @@ func setupServer(
 // thing that needs explicit cleanup here.
 //
 // Note: progress.CleanupChannels() is intentionally NOT called. Under t.Parallel(),
-// cancelling all active trackers in the global map would silently abort concurrent
+// canceling all active trackers in the global map would silently abort concurrent
 // tests' in-flight scans. progress.ToServerProgressChannel is a shared bounded
 // buffer (1000); stale messages from completed tests are display-only noise and do
 // not affect test correctness. Full isolation requires threading a per-server
