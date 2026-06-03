@@ -53,7 +53,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// init sets DefaultOpenBrowserFunc once at process startup so every TestInit call
 // TestInit builds an isolated set of dependencies for a single test run.
 // The returned Dependencies struct is self-contained; all service fields are
 // independent per-call instances.
@@ -65,8 +64,6 @@ import (
 //     a mock rather than nil. Concurrent parallel TestInit calls race on this
 //     write; do not add t.Parallel() to tests that exercise workspace/executeCommand
 //     unless command.Service is migrated to context injection.
-//
-//nolint:gocyclo // high branching is inherent: one nil-check per overrideable dependency
 func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenService, overrideDeps *Dependencies) Dependencies {
 	t.Helper()
 	gafConfiguration := engine.GetConfiguration()

@@ -736,8 +736,8 @@ func Test_SmokeScanPrecedence_CodeEnabled_OSSDisabled(t *testing.T) {
 // are disabled globally, no scans are executed.
 func Test_SmokeScanPrecedence_AllDisabled_NoScansRun(t *testing.T) {
 	t.Parallel()
-	engine, _, _, jsonRpcRecorder, folder, _ := setupScanPrecedenceTest(t, false, false, false)
-	_ = engine
+	engine, _, loc, jsonRpcRecorder, folder, _ := setupScanPrecedenceTest(t, false, false, false)
+	_, _ = engine, loc
 
 	require.Never(t, func() bool {
 		return hasScanInProgressForProduct(jsonRpcRecorder, product.ProductCode, folder) ||

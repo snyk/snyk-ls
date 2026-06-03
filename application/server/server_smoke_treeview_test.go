@@ -35,6 +35,8 @@ import (
 // 1. $/snyk.treeView notification is sent after scan with valid HTML and issue data
 // 2. snyk.getTreeView command returns HTML on demand
 // 3. snyk.toggleTreeFilter command updates filter and returns re-rendered HTML
+//
+//nolint:tparallel // subtests share the parent server instance and cannot be parallelized
 func Test_SmokeTreeView(t *testing.T) {
 	t.Parallel()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
