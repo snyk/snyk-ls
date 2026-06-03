@@ -72,7 +72,12 @@ func Test_SmokeInstanceTest(t *testing.T) {
 	runSmokeTest(t, engine, tokenService, testsupport.NodejsGoof, "0336589", ossFile, codeFile, true, endpoint, product.ProductOpenSource, product.ProductCode)
 }
 
+//nolint:tparallel // os.Setenv must come before t.Parallel(); t.Setenv panics after t.Parallel()
 func Test_SmokeWorkspaceScan(t *testing.T) {
+	if os.Getenv("SNYK_API") == "" {
+		_ = os.Setenv("SNYK_API", "https://api.snyk.io") //nolint:usetesting // t.Setenv cannot be used: it panics when called before t.Parallel()
+	}
+	t.Parallel()
 	ossFile := "package.json"
 	iacFile := "main.tf"
 	codeFile := "app.js"
@@ -87,13 +92,6 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 		useConsistentIgnores bool
 		hasVulns             bool
 		products             []product.Product
-	}
-
-	t.Parallel()
-
-	endpoint := os.Getenv("SNYK_API")
-	if endpoint == "" {
-		endpoint = "https://api.snyk.io"
 	}
 
 	tests := []test{
@@ -598,7 +596,8 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.TokenServiceImpl, repo string, commit string, file1 string, file2 string, hasVulns bool, endpoint string, products ...product.Product) {
 	t.Helper()
 	if endpoint != "" && endpoint != "/v1" {
-		t.Setenv("SNYK_API", endpoint)
+		// os.Setenv: runSmokeTest is called from parallel tests; t.Setenv panics there.
+		_ = os.Setenv("SNYK_API", endpoint) //nolint:usetesting // t.Setenv panics in parallel tests
 	}
 	// Allocate temp dir BEFORE setupServer so t.Cleanup LIFO order ensures
 	// the server shuts down before the temp dir is removed (fixes Windows file locking).
