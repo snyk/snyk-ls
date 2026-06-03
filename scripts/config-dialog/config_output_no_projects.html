@@ -3187,55 +3187,76 @@ if (window.cssVars) {
 	var dom = window.ConfigApp.dom;
 	var ideBridge = window.ConfigApp.ideBridge;
 
+	// Guard against re-entrance when triggerChangeHandlers() calls getAndSaveIdeConfig recursively
+	var _isSaving = false;
+
 	// Get current form data, validate, and call __saveIdeConfig__
 	autoSave.getAndSaveIdeConfig = function() {
-		// Check validation state
-		var validationInfo = window.ConfigApp.validation.getFormValidationInfo();
-		if (!validationInfo.isValid) {
-			if (ideBridge) {
-				ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.VALIDATION_ERROR);
-			}
-			return;
-		}
+		if (_isSaving) return;
+		_isSaving = true;
 
-		// Collect form data
-		if (!window.ConfigApp.formHandler || !window.ConfigApp.formHandler.collectChangedData || !window.ConfigApp.formHandler.collectData) {
-			if (ideBridge) {
-				ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.ERROR);
-			}
-			return;
-		}
-
-		var data = window.ConfigApp.formHandler.collectChangedData();
-
-		// Apply folder resets (sets all org-scope fields to null for reset-marked folders)
-		if (window.ConfigApp.formHandler.applyFolderResets) {
-			window.ConfigApp.formHandler.applyFolderResets(data);
-		}
-
-		var jsonString = JSON.stringify(data);
-
-		// Save using IDE bridge
-		var saveSuccess = ideBridge.saveConfig(jsonString);
-
-		// If save was successful
-		if (saveSuccess) {
-			// Discard any saved token state before resetting the dirty tracker baseline.
-			// If the user changed auth-sensitive fields (e.g. auth method), the monitor
-			// holds the pre-change token in savedToken so it can be restored if the user
-			// reverts. But once the save goes through, that token must not be restored —
-			// the save is the commit point.
-			if (window.ConfigApp.authFieldMonitor && window.ConfigApp.authFieldMonitor.resetSavedState) {
-				window.ConfigApp.authFieldMonitor.resetSavedState();
-			}
-			// Reset dirty state after successful save (baseline must be the full form state)
-			if (window.dirtyTracker) {
-				window.dirtyTracker.reset();
+		try {
+			// Run dirty-tracker change listeners (authFieldMonitor etc.) before collecting,
+			// so token/endpoint/authMethod changes are reflected before collectChangedData() reads them.
+			// Closing the panel without blurring would otherwise silently discard the pending change.
+			// triggerChangeHandlers() runs the listeners synchronously; the auto-save re-entrance it can
+			// trigger is blocked by the _isSaving guard. No DOM focus change needed.
+			// SELECT values are always read live from the DOM by collectChangedData(), so no blur
+			// is required to capture a pending SELECT change either.
+			if (window.ConfigApp.formState && typeof window.ConfigApp.formState.triggerChangeHandlers === 'function') {
+				window.ConfigApp.formState.triggerChangeHandlers();
 			}
 
-			if (ideBridge) {
-				ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.SUCCESS);
+			// Check validation state
+			var validationInfo = window.ConfigApp.validation.getFormValidationInfo();
+			if (!validationInfo.isValid) {
+				if (ideBridge) {
+					ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.VALIDATION_ERROR);
+				}
+				return;
 			}
+
+			// Collect form data
+			if (!window.ConfigApp.formHandler || !window.ConfigApp.formHandler.collectChangedData || !window.ConfigApp.formHandler.collectData) {
+				if (ideBridge) {
+					ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.ERROR);
+				}
+				return;
+			}
+
+			var data = window.ConfigApp.formHandler.collectChangedData();
+
+			// Apply folder resets (sets all org-scope fields to null for reset-marked folders)
+			if (window.ConfigApp.formHandler.applyFolderResets) {
+				window.ConfigApp.formHandler.applyFolderResets(data);
+			}
+
+			var jsonString = JSON.stringify(data);
+
+			// Save using IDE bridge
+			var saveSuccess = ideBridge.saveConfig(jsonString);
+
+			// If save was successful
+			if (saveSuccess) {
+				// Discard any saved token state before resetting the dirty tracker baseline.
+				// If the user changed auth-sensitive fields (e.g. auth method), the monitor
+				// holds the pre-change token in savedToken so it can be restored if the user
+				// reverts. But once the save goes through, that token must not be restored —
+				// the save is the commit point.
+				if (window.ConfigApp.authFieldMonitor && window.ConfigApp.authFieldMonitor.resetSavedState) {
+					window.ConfigApp.authFieldMonitor.resetSavedState();
+				}
+				// Reset dirty state after successful save (baseline must be the full form state)
+				if (window.dirtyTracker) {
+					window.dirtyTracker.reset();
+				}
+
+				if (ideBridge) {
+					ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.SUCCESS);
+				}
+			}
+		} finally {
+			_isSaving = false;
 		}
 	};
 
@@ -3449,6 +3470,16 @@ if (window.cssVars) {
 
 		// Initialize reset handlers
 		window.ConfigApp.resetHandler.init();
+
+		// Save when the panel becomes hidden (e.g. closed in VS Code) without a prior blur.
+		// Closing a webview does not fire blur on the focused element, so text field changes
+		// typed but not yet blurred would otherwise be silently discarded.
+		// Only fires for auto-save IDEs; non-auto-save IDEs use an explicit OK/Cancel flow.
+		dom.addEvent(document, 'visibilitychange', function() {
+			if (document.visibilityState === 'hidden' && window.ConfigApp.ideBridge.isAutoSaveEnabled()) {
+				window.ConfigApp.autoSave.getAndSaveIdeConfig();
+			}
+		});
 	});
 })();
 
