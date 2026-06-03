@@ -48,10 +48,9 @@ func TestDependencies_AllFieldsPopulated(t *testing.T) {
 	assert.NotNil(t, deps.ScanPersister, "ScanPersister must be set")
 	assert.NotNil(t, deps.ScanNotifier, "ScanNotifier must be set")
 	assert.NotNil(t, deps.CodeActionService, "CodeActionService must be set")
-	// Installer and Initializer are process-lifecycle deps not in di.Dependencies;
-	// verify their global accessors are still populated after Init.
-	assert.NotNil(t, di.Installer(), "di.Installer() must be non-nil after Init")
-	assert.NotNil(t, di.Initializer(), "di.Initializer() must be non-nil after Init")
+	assert.NotNil(t, deps.Installer, "Installer must be set")
+	// Initializer is a process-lifecycle dep intentionally absent from di.Dependencies;
+	// it is only set by di.Init() (production path), not di.TestInit().
 }
 
 // TestTestInit_ReturnedDepsAreIndependent verifies that two consecutive TestInit

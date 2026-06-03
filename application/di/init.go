@@ -103,10 +103,8 @@ type Dependencies struct {
 	InlineValueProvider   snyk.InlineValueProvider
 	TreeEmitter           command.TreeEmitter
 	// Handler-accessed dependencies (previously read via di.*() globals).
-	// Note: Installer and Initializer are intentionally absent — they are
-	// process-lifecycle dependencies used during startup, not per-request.
-	// Access them via di.Installer() / di.Initializer() until those global
-	// accessors are retired.
+	// Note: Initializer is intentionally absent — it is a process-lifecycle
+	// dependency used during startup only.
 	Scanner           scanner2.Scanner
 	HoverService      hover.Service
 	ScanNotifier      scanner2.ScanNotifier
@@ -114,6 +112,7 @@ type Dependencies struct {
 	FileWatcher       *watcher.FileWatcher
 	ErrorReporter     er.ErrorReporter
 	CodeActionService *codeaction.CodeActionsService
+	Installer         install.Installer
 }
 
 func currentDependencies() Dependencies {
@@ -139,6 +138,7 @@ func currentDependencies() Dependencies {
 		FileWatcher:       fileWatcher,
 		ErrorReporter:     errorReporter,
 		CodeActionService: codeActionService,
+		Installer:         installer,
 	}
 }
 

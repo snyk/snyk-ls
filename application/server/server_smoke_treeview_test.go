@@ -25,7 +25,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -37,11 +36,12 @@ import (
 // 2. snyk.getTreeView command returns HTML on demand
 // 3. snyk.toggleTreeFilter command updates filter and returns re-rendered HTML
 func Test_SmokeTreeView(t *testing.T) {
+	t.Parallel()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductCode)
 
-	cloneTargetDir := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
+	cloneTargetDir := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService, deps)
 	cloneTargetDirString := string(cloneTargetDir)
 
 	waitForScan(t, cloneTargetDirString, engine)
@@ -49,7 +49,7 @@ func Test_SmokeTreeView(t *testing.T) {
 	// Register before any t.Skipf site: t.Cleanup runs even when t.Skipf fires
 	// (runtime.Goexit honors registered cleanup functions), so reference-branch
 	// goroutines are always given time to finish before the temp dir is removed.
-	t.Cleanup(func() { waitForDeltaScan(t, di.ScanStateAggregator()) })
+	t.Cleanup(func() { waitForDeltaScan(t, deps.ScanStateAggregator) })
 
 	// Poll for TotalIssues>0: early SetScanInProgress notifications arrive before
 	// the workspace cache is populated; the async render goroutine may lag behind waitForScan.
@@ -68,7 +68,7 @@ func Test_SmokeTreeView(t *testing.T) {
 		if tv.TotalIssues > 0 {
 			return true
 		}
-		ss := di.ScanStateAggregator().StateSnapshot()
+		ss := deps.ScanStateAggregator.StateSnapshot()
 		return ss.AllScansFinishedWorkingDirectory && ss.AllScansFinishedReference
 	}, maxIntegTestDuration, 100*time.Millisecond, "expected $/snyk.treeView notification with TotalIssues > 0 or all scans finished")
 

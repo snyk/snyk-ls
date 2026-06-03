@@ -109,8 +109,8 @@ func setupOAuthEndpointTest(t *testing.T, customUrl string, tokenToReturn string
 	testutil.DisableOutboundAnalyticsForTest(t, engine)
 
 	notes := &oauthEndpointNotifications{}
-	di.Notifier().CreateListener(notes.record)
-	t.Cleanup(func() { di.Notifier().DisposeListener() })
+	deps.Notifier.CreateListener(notes.record)
+	t.Cleanup(func() { deps.Notifier.DisposeListener() })
 
 	provider := &authentication.FakeAuthenticationProvider{
 		Engine:        engine,

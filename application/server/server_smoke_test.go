@@ -60,6 +60,7 @@ import (
 )
 
 func Test_SmokeInstanceTest(t *testing.T) {
+	t.Parallel()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	ossFile := "package.json"
 	codeFile := "app.js"
@@ -72,6 +73,7 @@ func Test_SmokeInstanceTest(t *testing.T) {
 }
 
 func Test_SmokeWorkspaceScan(t *testing.T) {
+	t.Parallel()
 	ossFile := "package.json"
 	iacFile := "main.tf"
 	codeFile := "app.js"
@@ -169,6 +171,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 }
 
 func Test_SmokePreScanCommand(t *testing.T) {
+	t.Parallel()
 	t.Run("executes pre scan command if configured", func(t *testing.T) {
 		testsupport.NotOnWindows(t, "we can enable windows if we have the correct error message")
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
@@ -224,13 +227,14 @@ func Test_SmokePreScanCommand(t *testing.T) {
 }
 
 func Test_SmokeIssueCaching(t *testing.T) {
+	t.Parallel()
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
 	t.Run("adds issues to cache correctly", func(t *testing.T) {
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_1")
-		loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+		loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 		enableOnlyProducts(t, engine, product.ProductOpenSource, product.ProductCode)
 
-		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
+		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService, deps)
 		cloneTargetDirGoofString := (string)(cloneTargetDirGoof)
 		folderGoof := config.GetWorkspace(engine.GetConfiguration()).GetFolderContaining(cloneTargetDirGoof)
 		folderGoofIssueProvider, ok := folderGoof.(snyk.IssueProvider)
@@ -304,15 +308,15 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		//     just-published issues in the IDE — this is the cross-folder leak we explicitly fixed).
 		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 1, 1, engine)
 		checkScanResultsPublishingForCachingSmokeTest(t, jsonRPCRecorder, folderTwo, folderGoof, engine)
-		waitForDeltaScan(t, di.ScanStateAggregator())
+		waitForDeltaScan(t, deps.ScanStateAggregator)
 	})
 
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_1")
-		loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+		loc, jsonRPCRecorder, deps2 := setupServer(t, engine, tokenService, WithRealDI())
 		enableOnlyProducts(t, engine, product.ProductOpenSource, product.ProductCode)
 
-		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
+		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService, deps2)
 		folderGoof := config.GetWorkspace(engine.GetConfiguration()).GetFolderContaining(cloneTargetDirGoof)
 		folderGoofIssueProvider, ok := folderGoof.(snyk.IssueProvider)
 		require.Truef(t, ok, "Expected to find snyk issue provider")
@@ -349,17 +353,18 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		var emptyHover hover.Result
 		require.NoError(t, response.UnmarshalResult(&emptyHover))
 		require.Empty(t, emptyHover.Contents.Value)
-		waitForDeltaScan(t, di.ScanStateAggregator())
+		waitForDeltaScan(t, deps2.ScanStateAggregator)
 	})
 }
 
 func Test_SmokeExecuteCLICommand(t *testing.T) {
+	t.Parallel()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
-	loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, _, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
 
-	cloneTargetDirGoof := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, engine, tokenService)
+	cloneTargetDirGoof := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, engine, tokenService, deps)
 	folderGoof := config.GetWorkspace(engine.GetConfiguration()).GetFolderContaining(cloneTargetDirGoof)
 
 	// wait till the whole workspace is scanned
@@ -384,6 +389,7 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 }
 
 func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
+	t.Parallel()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretNameForRiskScore, "SMOKE_SHARD_1")
 	loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
@@ -593,7 +599,7 @@ func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.Tok
 	// the server shuts down before the temp dir is removed (fixes Windows file locking).
 	// TempDirWithRetry adds retry logic for os.RemoveAll to handle lingering file locks.
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRPCRecorder, smokeDeps := setupServer(t, engine, tokenService, WithRealDI())
 	if len(products) == 0 {
 		// Default mirrors the original all-enabled state. Secrets intentionally excluded:
 		// its registered default is false and no callers in this suite require it.
@@ -601,7 +607,7 @@ func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.Tok
 	}
 	enableOnlyProducts(t, engine, products...)
 
-	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, repo, commit, loc, engine, tokenService)
+	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, repo, commit, loc, engine, tokenService, smokeDeps)
 	cloneTargetDirString := (string)(cloneTargetDir)
 
 	waitForScan(t, cloneTargetDirString, engine)
@@ -651,7 +657,7 @@ func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.Tok
 		checkOnlyOneQuickFixCodeAction(t, jsonRPCRecorder, cloneTargetDirString, loc)
 		checkOnlyOneCodeLens(t, jsonRPCRecorder, cloneTargetDirString, loc)
 	}
-	waitForDeltaScan(t, di.ScanStateAggregator())
+	waitForDeltaScan(t, smokeDeps.ScanStateAggregator)
 }
 
 func receivedFolderConfigNotification(t *testing.T, notifications []jrpc2.Request, cloneTargetDir types.FilePath) bool {
@@ -1050,9 +1056,9 @@ func enableOnlyProducts(t *testing.T, engine workflow.Engine, products ...produc
 	}
 }
 
-func setupRepoAndInitialize(t *testing.T, repo string, commit string, manifestFile string, loc server.Local, engine workflow.Engine, tokenService *config.TokenServiceImpl) types.FilePath {
+func setupRepoAndInitialize(t *testing.T, repo string, commit string, manifestFile string, loc server.Local, engine workflow.Engine, tokenService *config.TokenServiceImpl, extraDeps ...di.Dependencies) types.FilePath {
 	t.Helper()
-	return setupRepoAndInitializeInDir(t, types.FilePath(testutil.TempDirWithRetry(t)), repo, commit, loc, engine, tokenService)
+	return setupRepoAndInitializeInDir(t, types.FilePath(testutil.TempDirWithRetry(t)), repo, commit, loc, engine, tokenService, extraDeps...)
 }
 
 // setupRepoAndInitializeInDir clones a repo into the given rootDir and initializes the server with it.
@@ -1061,13 +1067,19 @@ func setupRepoAndInitialize(t *testing.T, repo string, commit string, manifestFi
 //
 // When repo is NodejsGoof and sharedGoofDir is populated by TestMain, this uses copyGoofDir
 // (a fast local clone) instead of a network clone.
-func setupRepoAndInitializeInDir(t *testing.T, rootDir types.FilePath, repo string, commit string, loc server.Local, engine workflow.Engine, tokenService *config.TokenServiceImpl) types.FilePath {
+func setupRepoAndInitializeInDir(t *testing.T, rootDir types.FilePath, repo string, commit string, loc server.Local, engine workflow.Engine, tokenService *config.TokenServiceImpl, extraDeps ...di.Dependencies) types.FilePath {
 	t.Helper()
 
 	// Wait for scans to complete before temp dir removal (LIFO order).
 	// This prevents Windows file locking issues where HTTP requests are still in flight during cleanup.
+	var agg scanstates.Aggregator
+	if len(extraDeps) > 0 {
+		agg = extraDeps[0].ScanStateAggregator
+	}
 	t.Cleanup(func() {
-		waitForAllScansToComplete(t, di.ScanStateAggregator())
+		if agg != nil {
+			waitForAllScansToComplete(t, agg)
+		}
 	})
 
 	var cloneTargetDir types.FilePath
@@ -1221,12 +1233,13 @@ func checkFeatureFlagStatus(t *testing.T, engine workflow.Engine, loc *server.Lo
 }
 
 func Test_SmokeSnykCodeFileScan(t *testing.T) {
+	t.Parallel()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductCode)
 
-	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, engine, tokenService)
+	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, engine, tokenService, deps)
 	cloneTargetDirString := string(cloneTargetDir)
 
 	testPath := types.FilePath(filepath.Join(cloneTargetDirString, "app.js"))
@@ -1234,13 +1247,14 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	_ = textDocumentDidSave(t, &loc, testPath)
 
 	assert.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), 2*time.Minute, time.Millisecond)
-	waitForDeltaScan(t, di.ScanStateAggregator())
+	waitForDeltaScan(t, deps.ScanStateAggregator)
 }
 
 func Test_SmokeUncFilePath(t *testing.T) {
+	t.Parallel()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	testsupport.OnlyOnWindows(t, "testing windows UNC file paths")
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductCode)
 	testutil.EnableSastAndAutoFix(engine)
 	// This test verifies UNC path handling end-to-end including a real Snyk Code scan.
@@ -1260,16 +1274,17 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	testPath := types.FilePath(filepath.Join(uncPath, "app.js"))
 
 	assert.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, time.Millisecond)
-	waitForDeltaScan(t, di.ScanStateAggregator())
+	waitForDeltaScan(t, deps.ScanStateAggregator)
 }
 
 func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
+	t.Parallel()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductCode)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
 	testutil.EnableSastAndAutoFix(engine)
-	scanAggregator := di.ScanStateAggregator()
+	scanAggregator := deps.ScanStateAggregator
 	fileWithNewVulns := "vulns.js"
 	cloneTargetDir := copyGoofDir(t)
 	cloneTargetDirString := string(cloneTargetDir)
@@ -1292,11 +1307,12 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
+	t.Parallel()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductCode)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
-	scanAggregator := di.ScanStateAggregator()
+	scanAggregator := deps.ScanStateAggregator
 
 	fileWithNewVulns := "vulns.js"
 	cloneTargetDir := copyGoofDir(t)
@@ -1318,11 +1334,12 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
+	t.Parallel()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductCode)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
-	scanAggregator := di.ScanStateAggregator()
+	scanAggregator := deps.ScanStateAggregator
 
 	cloneTargetDir := initLocalFixtureRepoFromTestdata(t, []string{
 		"smokefix/java/VulnApp.java",
@@ -1349,12 +1366,13 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 // This reproduces the bug where git.PlainOpen fails for subfolders because it doesn't
 // walk up parent directories to find .git. The fix uses PlainOpenWithOptions with DetectDotGit.
 func Test_SmokeSnykCodeDelta_SubfolderWorkspace(t *testing.T) {
+	t.Parallel()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	testutil.OnlyEnableCode(t, engine)
 	testutil.EnableSastAndAutoFix(engine)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
-	scanAggregator := di.ScanStateAggregator()
+	scanAggregator := deps.ScanStateAggregator
 
 	// Use a local copy of the shared goof clone as the git root (fast local clone, no network).
 	gitRoot := copyGoofDir(t)
@@ -1394,6 +1412,7 @@ app.get('/unique_subfolder_test', function(req, res) {
 }
 
 func Test_SmokeScanUnmanaged(t *testing.T) {
+	t.Parallel()
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_1")
 	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
@@ -1606,6 +1625,7 @@ func requireLspFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsuppo
 }
 
 func Test_SmokeOrgSelection(t *testing.T) {
+	t.Parallel()
 	setupOrgSelectionTest := func(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder, types.FilePath, types.InitializeParams) {
 		t.Helper()
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
@@ -2281,13 +2301,14 @@ const monorepoRealScanPhaseMaxWait = 90 * time.Minute
 
 // monorepoRealScanHarness holds state for Test_SmokeRealScanMonorepoFixture.
 type monorepoRealScanHarness struct {
-	cloneTarget     types.FilePath
-	codeLeafFolders int
-	ossLeafFolders  int
-	engine          workflow.Engine
-	tokenService    *config.TokenServiceImpl
-	loc             server.Local
-	jsonRPCRecorder *testsupport.JsonRPCRecorder
+	cloneTarget         types.FilePath
+	codeLeafFolders     int
+	ossLeafFolders      int
+	engine              workflow.Engine
+	tokenService        *config.TokenServiceImpl
+	loc                 server.Local
+	jsonRPCRecorder     *testsupport.JsonRPCRecorder
+	scanStateAggregator scanstates.Aggregator
 }
 
 func setupMonorepoRealScanHarness(t *testing.T) *monorepoRealScanHarness {
@@ -2303,14 +2324,14 @@ func setupMonorepoRealScanHarness(t *testing.T) *monorepoRealScanHarness {
 	benchmark.AssertMonorepoFixtureLayout(t, repoDir, nCode, nOSS)
 	cloneTarget := types.FilePath(repoDir)
 
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 
 	// Register after setupServer so this cleanup runs before shutdown (LIFO); capture aggregator
-	// because di.ScanStateAggregator() is not reliable after shutdown has run.
-	scanAgg := di.ScanStateAggregator()
+	// from deps so it remains valid after shutdown.
+	scanAgg := deps.ScanStateAggregator
 	require.NotNil(t, scanAgg)
 	t.Cleanup(func() {
 		waitForAllScansToComplete(t, scanAgg)
@@ -2320,13 +2341,14 @@ func setupMonorepoRealScanHarness(t *testing.T) *monorepoRealScanHarness {
 	ensureInitialized(t, engine, tokenService, loc, initParams, nil)
 
 	return &monorepoRealScanHarness{
-		cloneTarget:     cloneTarget,
-		codeLeafFolders: nCode,
-		ossLeafFolders:  nOSS,
-		engine:          engine,
-		tokenService:    tokenService,
-		loc:             loc,
-		jsonRPCRecorder: jsonRPCRecorder,
+		cloneTarget:         cloneTarget,
+		codeLeafFolders:     nCode,
+		ossLeafFolders:      nOSS,
+		engine:              engine,
+		tokenService:        tokenService,
+		loc:                 loc,
+		jsonRPCRecorder:     jsonRPCRecorder,
+		scanStateAggregator: scanAgg,
 	}
 }
 
@@ -2352,10 +2374,10 @@ func runMonorepoRealScanScanPhase(t *testing.T, h *monorepoRealScanHarness) {
 			h.codeLeafFolders+h.ossLeafFolders, monorepoPerLeafDiagnosticCoverageMaxLeaves)
 	}
 
-	waitUntilDeltaScanComplete(t, di.ScanStateAggregator(), monorepoRealScanPhaseMaxWait, true)
+	waitUntilDeltaScanComplete(t, h.scanStateAggregator, monorepoRealScanPhaseMaxWait, true)
 
 	if os.Getenv(testsupport.BenchmarkRealScanMonorepoProfileDirEnvVar) != "" {
-		waitForAllScansToComplete(t, di.ScanStateAggregator())
+		waitForAllScansToComplete(t, h.scanStateAggregator)
 		h.jsonRPCRecorder.DrainRecordedTrafficForProfiling()
 		runtime.GC()
 	}
