@@ -393,11 +393,11 @@ func startE2ELocalServer(
 	))
 	recorder := &testsupport.JsonRPCRecorder{}
 	loc := startServer(engine, tokenService, nil, recorder, deps)
-	cleanupChannels()
+	cleanupChannels(deps)
 
 	t.Cleanup(func() {
 		_ = shutdownLSPClient(t, loc)
-		cleanupChannels()
+		cleanupChannels(deps)
 		recorder.ClearCallbacks()
 		recorder.ClearNotifications()
 	})

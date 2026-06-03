@@ -120,16 +120,14 @@ func Test_LSPInitCompletesWithManyFolders(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	params := buildInitParams(t, lspInitPerfFolderCount)
 
-	loc, _, _ := setupServer(t, engine, tokenService)
+	// Inject a no-op fake so PopulateFolderConfig makes no HTTP calls.
+	// This keeps the test CI-reliable regardless of network access.
+	loc, _, _ := setupServer(t, engine, tokenService, WithDeps(di.Dependencies{
+		FeatureFlagService: featureflag.NewFakeService(),
+	}))
 
 	_, err := loc.Client.Call(t.Context(), "initialize", params)
 	require.NoError(t, err)
-
-	// Replace the global featureFlagService with a no-op fake so PopulateFolderConfig
-	// makes no HTTP calls.  This keeps the test CI-reliable regardless of network access.
-	origFF := di.FeatureFlagService()
-	di.SetFeatureFlagService(featureflag.NewFakeService())
-	t.Cleanup(func() { di.SetFeatureFlagService(origFF) })
 
 	// Disable auto-scan (before initialized): the requirement is about initialization
 	// latency, not scan throughput.

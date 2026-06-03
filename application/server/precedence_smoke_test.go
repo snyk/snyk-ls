@@ -46,7 +46,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-func setupPrecedenceTest(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder) {
+func setupPrecedenceTest(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder, di.Dependencies) {
 	t.Helper()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
 
@@ -54,13 +54,13 @@ func setupPrecedenceTest(t *testing.T) (workflow.Engine, *config.TokenServiceImp
 	xdg.ConfigHome = t.TempDir()
 	t.Cleanup(func() { xdg.ConfigHome = origConfigHome })
 
-	loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRpcRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
 
-	return engine, tokenService, loc, jsonRpcRecorder
+	return engine, tokenService, loc, jsonRpcRecorder, deps
 }
 
 // Test_SmokePrecedence_MachineScope_GlobalSettingsInNotification verifies that machine-scope
@@ -68,7 +68,8 @@ func setupPrecedenceTest(t *testing.T) (workflow.Engine, *config.TokenServiceImp
 // and that the source is correctly attributed. This is the end-to-end test for machine-scope
 // precedence: user global > remote > default.
 func Test_SmokePrecedence_MachineScope_GlobalSettingsInNotification(t *testing.T) {
-	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	t.Parallel()
+	engine, tokenService, loc, jsonRpcRecorder, _ := setupPrecedenceTest(t)
 
 	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 	_ = folder
@@ -92,7 +93,8 @@ func Test_SmokePrecedence_MachineScope_GlobalSettingsInNotification(t *testing.T
 // changing machine-scope settings via didChangeConfiguration updates the $/snyk.configuration
 // notification with the new values.
 func Test_SmokePrecedence_MachineScope_DidChangeUpdatesGlobalSettings(t *testing.T) {
-	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	t.Parallel()
+	engine, tokenService, loc, jsonRpcRecorder, _ := setupPrecedenceTest(t)
 
 	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
@@ -117,7 +119,8 @@ func Test_SmokePrecedence_MachineScope_DidChangeUpdatesGlobalSettings(t *testing
 // Test_SmokePrecedence_OrgScope_UserFolderOverrideReflectedInNotification verifies the
 // precedence: locked remote > user folder override > user global > remote > default.
 func Test_SmokePrecedence_OrgScope_UserFolderOverrideReflectedInNotification(t *testing.T) {
-	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	t.Parallel()
+	engine, tokenService, loc, jsonRpcRecorder, _ := setupPrecedenceTest(t)
 
 	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
@@ -182,7 +185,8 @@ func Test_SmokePrecedence_OrgScope_UserFolderOverrideReflectedInNotification(t *
 // notification. This tests the full pipeline: LDX-Sync populates remote config → resolver
 // detects locked → notification includes IsLocked.
 func Test_SmokePrecedence_OrgScope_LockedFieldsHaveIsLockedTrue(t *testing.T) {
-	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	t.Parallel()
+	engine, tokenService, loc, jsonRpcRecorder, _ := setupPrecedenceTest(t)
 
 	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
@@ -212,7 +216,8 @@ func Test_SmokePrecedence_OrgScope_LockedFieldsHaveIsLockedTrue(t *testing.T) {
 // Test_SmokePrecedence_OrgScope_LDXSyncSourceInNotification verifies that org-scope
 // settings from LDX-Sync have the correct Source and OriginScope in the notification.
 func Test_SmokePrecedence_OrgScope_LDXSyncSourceInNotification(t *testing.T) {
-	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	t.Parallel()
+	engine, tokenService, loc, jsonRpcRecorder, _ := setupPrecedenceTest(t)
 
 	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
@@ -241,7 +246,8 @@ func Test_SmokePrecedence_OrgScope_LDXSyncSourceInNotification(t *testing.T) {
 // (base_branch, additional_parameters, reference_folder) set via didChangeConfiguration
 // are correctly stored and reflected back in the $/snyk.configuration folder config.
 func Test_SmokePrecedence_FolderScope_SettingsRoundtrip(t *testing.T) {
-	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	t.Parallel()
+	engine, tokenService, loc, jsonRpcRecorder, _ := setupPrecedenceTest(t)
 
 	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
@@ -283,7 +289,8 @@ func Test_SmokePrecedence_FolderScope_SettingsRoundtrip(t *testing.T) {
 // (used by legacy IDEs) is correctly processed through the full LSP pipeline and
 // reflected in $/snyk.configuration notifications.
 func Test_SmokePrecedence_OldFormatSettings_Roundtrip(t *testing.T) {
-	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	t.Parallel()
+	engine, tokenService, loc, jsonRpcRecorder, _ := setupPrecedenceTest(t)
 
 	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
@@ -324,7 +331,8 @@ func Test_SmokePrecedence_OldFormatSettings_Roundtrip(t *testing.T) {
 //   - scan_net_new is NOT locked, so the folder override is accepted and preserved
 //     after a global change.
 func Test_SmokePrecedence_GlobalChangePreserves_FolderOverrides(t *testing.T) {
-	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	t.Parallel()
+	engine, tokenService, loc, jsonRpcRecorder, _ := setupPrecedenceTest(t)
 
 	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
@@ -410,7 +418,8 @@ func Test_SmokePrecedence_GlobalChangePreserves_FolderOverrides(t *testing.T) {
 // belong to different organizations, the $/snyk.configuration notification contains
 // per-folder settings resolved with the correct org's remote config.
 func Test_SmokePrecedence_MultiFolder_DifferentOrgs(t *testing.T) {
-	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	t.Parallel()
+	engine, tokenService, loc, jsonRpcRecorder, _ := setupPrecedenceTest(t)
 
 	folder1 := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
@@ -455,7 +464,8 @@ func Test_SmokePrecedence_MultiFolder_DifferentOrgs(t *testing.T) {
 // after login (trigger 3), LDX-Sync refreshes and sends $/snyk.configuration, while
 // folder user overrides that were set before login are preserved (unless locked).
 func Test_SmokePrecedence_LoginRefreshesConfig_WithFolderOverridesPreserved(t *testing.T) {
-	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	t.Parallel()
+	engine, tokenService, loc, jsonRpcRecorder, deps := setupPrecedenceTest(t)
 
 	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
@@ -486,7 +496,7 @@ func Test_SmokePrecedence_LoginRefreshesConfig_WithFolderOverridesPreserved(t *t
 	// Switch to FakeAuthentication AFTER initialization (which hardcodes TokenAuthentication)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
-	authService := di.AuthenticationService()
+	authService := deps.AuthenticationService
 	authService.ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
 	fakeProvider := authService.Provider().(*authentication.FakeAuthenticationProvider)
 	fakeProvider.IsAuthenticated = false
@@ -517,6 +527,7 @@ func Test_SmokePrecedence_LoginRefreshesConfig_WithFolderOverridesPreserved(t *t
 // ActivateSnykCodeSecurity field is ORed with ActivateSnykCode when processing old-format
 // settings through the full LSP pipeline. This tests the reconciliation logic end-to-end.
 func Test_SmokePrecedence_ActivateSnykCodeSecurity_OR_Reconciliation(t *testing.T) {
+	t.Parallel()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
 	testutil.CreateDummyProgressListener(t)
 
@@ -565,6 +576,7 @@ func Test_SmokePrecedence_ActivateSnykCodeSecurity_OR_Reconciliation(t *testing.
 // no user settings are provided and no LDX-Sync remote config is available,
 // default values are used for all settings.
 func Test_SmokePrecedence_DefaultValues_WhenNoUserOrRemoteConfig(t *testing.T) {
+	t.Parallel()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
 	testutil.CreateDummyProgressListener(t)
 
@@ -622,7 +634,7 @@ func Test_SmokePrecedence_DefaultValues_WhenNoUserOrRemoteConfig(t *testing.T) {
 // It initializes the LSP server with the specified product states, waits for initialization
 // and LDX-Sync to complete, then returns the folder path ready for scanning.
 func setupScanPrecedenceTest(t *testing.T, codeEnabled, ossEnabled, iacEnabled bool) (
-	workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder, types.FilePath,
+	workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder, types.FilePath, di.Dependencies,
 ) {
 	t.Helper()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
@@ -632,7 +644,7 @@ func setupScanPrecedenceTest(t *testing.T, codeEnabled, ossEnabled, iacEnabled b
 	t.Cleanup(func() { xdg.ConfigHome = origConfigHome })
 
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
-	loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRpcRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), codeEnabled)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), ossEnabled)
@@ -640,15 +652,15 @@ func setupScanPrecedenceTest(t *testing.T, codeEnabled, ossEnabled, iacEnabled b
 	// Pin risk-score flags to false: the ostest scanner path fails on CI because the
 	// dep-graph generation is unreliable for the test org. These flags are only needed
 	// in the unified-test-api smoke test which sets them explicitly.
-	di.FeatureFlagService().Override(featureflag.UseExperimentalRiskScoreInCLI, false)
-	di.FeatureFlagService().Override(featureflag.UseExperimentalRiskScore, false)
+	deps.FeatureFlagService.Override(featureflag.UseExperimentalRiskScoreInCLI, false)
+	deps.FeatureFlagService.Override(featureflag.UseExperimentalRiskScore, false)
 
-	folder := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, engine, tokenService)
+	folder := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, engine, tokenService, deps)
 
 	requireLspConfigurationNotification(t, jsonRpcRecorder, nil, false)
 	jsonRpcRecorder.ClearNotifications()
 
-	return engine, tokenService, loc, jsonRpcRecorder, folder
+	return engine, tokenService, loc, jsonRpcRecorder, folder, deps
 }
 
 // hasScanSuccessForProduct checks if $/snyk.scan notifications contain a success for the given product and folder.
@@ -693,10 +705,11 @@ func waitForScanCompletion(t *testing.T, agg scanstates.Aggregator) {
 // and Code is disabled globally, the LSP server runs an OSS scan ($/snyk.scan success for oss)
 // but does NOT run a Code scan.
 func Test_SmokeScanPrecedence_OSSEnabled_CodeDisabled(t *testing.T) {
-	engine, _, _, jsonRpcRecorder, folder := setupScanPrecedenceTest(t, false, true, false)
+	t.Parallel()
+	engine, _, _, jsonRpcRecorder, folder, deps := setupScanPrecedenceTest(t, false, true, false)
 
 	waitForScan(t, string(folder), engine)
-	waitForScanCompletion(t, di.ScanStateAggregator())
+	waitForScanCompletion(t, deps.ScanStateAggregator)
 
 	assert.True(t, hasScanSuccessForProduct(jsonRpcRecorder, product.ProductOpenSource, folder),
 		"OSS scan should have completed successfully")
@@ -707,10 +720,11 @@ func Test_SmokeScanPrecedence_OSSEnabled_CodeDisabled(t *testing.T) {
 // Test_SmokeScanPrecedence_CodeEnabled_OSSDisabled verifies that when Code is enabled
 // and OSS is disabled globally, the LSP server runs a Code scan but NOT an OSS scan.
 func Test_SmokeScanPrecedence_CodeEnabled_OSSDisabled(t *testing.T) {
-	engine, _, _, jsonRpcRecorder, folder := setupScanPrecedenceTest(t, true, false, false)
+	t.Parallel()
+	engine, _, _, jsonRpcRecorder, folder, deps := setupScanPrecedenceTest(t, true, false, false)
 
 	waitForScan(t, string(folder), engine)
-	waitForScanCompletion(t, di.ScanStateAggregator())
+	waitForScanCompletion(t, deps.ScanStateAggregator)
 
 	assert.True(t, hasScanSuccessForProduct(jsonRpcRecorder, product.ProductCode, folder),
 		"Code scan should have completed successfully")
@@ -721,7 +735,8 @@ func Test_SmokeScanPrecedence_CodeEnabled_OSSDisabled(t *testing.T) {
 // Test_SmokeScanPrecedence_AllDisabled_NoScansRun verifies that when all products
 // are disabled globally, no scans are executed.
 func Test_SmokeScanPrecedence_AllDisabled_NoScansRun(t *testing.T) {
-	engine, _, _, jsonRpcRecorder, folder := setupScanPrecedenceTest(t, false, false, false)
+	t.Parallel()
+	engine, _, _, jsonRpcRecorder, folder, _ := setupScanPrecedenceTest(t, false, false, false)
 	_ = engine
 
 	require.Never(t, func() bool {
@@ -738,10 +753,11 @@ func Test_SmokeScanPrecedence_AllDisabled_NoScansRun(t *testing.T) {
 // 4. Trigger workspace scan via executeCommand
 // 5. Verify OSS scan runs
 func Test_SmokeScanPrecedence_UserOverrideEnablesProduct(t *testing.T) {
-	engine, _, loc, jsonRpcRecorder, folder := setupScanPrecedenceTest(t, true, false, false)
+	t.Parallel()
+	engine, _, loc, jsonRpcRecorder, folder, deps := setupScanPrecedenceTest(t, true, false, false)
 
 	waitForScan(t, string(folder), engine)
-	waitForScanCompletion(t, di.ScanStateAggregator())
+	waitForScanCompletion(t, deps.ScanStateAggregator)
 
 	assert.True(t, hasScanSuccessForProduct(jsonRpcRecorder, product.ProductCode, folder),
 		"initial Code scan should succeed")
@@ -769,7 +785,7 @@ func Test_SmokeScanPrecedence_UserOverrideEnablesProduct(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	waitForScanCompletion(t, di.ScanStateAggregator())
+	waitForScanCompletion(t, deps.ScanStateAggregator)
 
 	assert.Eventually(t, func() bool {
 		return hasScanSuccessForProduct(jsonRpcRecorder, product.ProductOpenSource, folder)
@@ -780,11 +796,12 @@ func Test_SmokeScanPrecedence_UserOverrideEnablesProduct(t *testing.T) {
 // Test_SmokeScanPrecedence_UserOverrideDisablesProduct verifies that when a product
 // is enabled globally but a folder override disables it, no scan runs for that product.
 func Test_SmokeScanPrecedence_UserOverrideDisablesProduct(t *testing.T) {
-	engine, _, loc, jsonRpcRecorder, folder := setupScanPrecedenceTest(t, true, false, false)
+	t.Parallel()
+	engine, _, loc, jsonRpcRecorder, folder, deps := setupScanPrecedenceTest(t, true, false, false)
 
 	// Wait for initial Code scan to complete
 	waitForScan(t, string(folder), engine)
-	waitForScanCompletion(t, di.ScanStateAggregator())
+	waitForScanCompletion(t, deps.ScanStateAggregator)
 	jsonRpcRecorder.ClearNotifications()
 
 	// Send didChangeConfiguration with folder override disabling Code
@@ -813,6 +830,7 @@ func Test_SmokeScanPrecedence_UserOverrideDisablesProduct(t *testing.T) {
 // a severity filter (Critical+High only) is configured at initialization, published
 // diagnostics only contain issues matching the allowed severities.
 func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing.T) {
+	t.Parallel()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
 
 	origConfigHome := xdg.ConfigHome
@@ -820,7 +838,7 @@ func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing
 	t.Cleanup(func() { xdg.ConfigHome = origConfigHome })
 
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
-	loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRpcRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 
 	restrictedFilter := types.SeverityFilter{Critical: true, High: true, Medium: false, Low: false}
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
@@ -829,7 +847,7 @@ func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing
 	config.SetSeverityFilterOnConfig(engine.GetConfiguration(), &restrictedFilter, engine.GetLogger())
 
 	t.Cleanup(func() {
-		waitForAllScansToComplete(t, di.ScanStateAggregator())
+		waitForAllScansToComplete(t, deps.ScanStateAggregator)
 	})
 
 	cloneTargetDir, err := folderconfig.SetupCustomTestRepo(t, repoTempDir, testsupport.NodejsGoof, "0336589", engine.GetLogger(), false)
@@ -845,7 +863,7 @@ func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing
 	})
 
 	waitForScan(t, string(cloneTargetDir), engine)
-	waitForScanCompletion(t, di.ScanStateAggregator())
+	waitForScanCompletion(t, deps.ScanStateAggregator)
 
 	// Verify diagnostics were published
 	require.Eventually(t, func() bool {
@@ -883,10 +901,11 @@ func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing
 // when Code and OSS are enabled, both scan types execute successfully.
 // IaC is excluded because the test org lacks the infrastructureAsCode entitlement.
 func Test_SmokeScanPrecedence_EnableAllProducts_AllScansRun(t *testing.T) {
-	engine, _, _, jsonRpcRecorder, folder := setupScanPrecedenceTest(t, true, true, false)
+	t.Parallel()
+	engine, _, _, jsonRpcRecorder, folder, deps := setupScanPrecedenceTest(t, true, true, false)
 
 	waitForScan(t, string(folder), engine)
-	waitForScanCompletion(t, di.ScanStateAggregator())
+	waitForScanCompletion(t, deps.ScanStateAggregator)
 
 	assert.True(t, hasScanSuccessForProduct(jsonRpcRecorder, product.ProductOpenSource, folder),
 		"OSS scan should run when enabled")
@@ -899,7 +918,8 @@ func Test_SmokeScanPrecedence_EnableAllProducts_AllScansRun(t *testing.T) {
 // config (RemoteOrgKey) in the config notification. This tests the full pipeline:
 // write folder-level remote → resolver picks it up → notification reflects it.
 func Test_SmokePrecedence_FolderLevelRemote_OverridesOrgLevel(t *testing.T) {
-	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	t.Parallel()
+	engine, tokenService, loc, jsonRpcRecorder, _ := setupPrecedenceTest(t)
 
 	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
@@ -963,7 +983,8 @@ func Test_SmokePrecedence_FolderLevelRemote_OverridesOrgLevel(t *testing.T) {
 // Test_SmokePrecedence_FolderLevelRemoteLocked_OverridesUserOverride verifies that
 // a locked folder-level remote setting overrides user overrides and is marked IsLocked=true.
 func Test_SmokePrecedence_FolderLevelRemoteLocked_OverridesUserOverride(t *testing.T) {
-	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	t.Parallel()
+	engine, tokenService, loc, jsonRpcRecorder, _ := setupPrecedenceTest(t)
 
 	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
@@ -1026,7 +1047,8 @@ func Test_SmokePrecedence_FolderLevelRemoteLocked_OverridesUserOverride(t *testi
 // Steps 1-3 would have FAILED under the old folder-scope precedence
 // (Folder Value > Default), which ignored user global and remote layers entirely.
 func Test_SmokePrecedence_FolderScopePrecedenceChain(t *testing.T) {
-	engine, tokenService, loc, jsonRpcRecorder := setupPrecedenceTest(t)
+	t.Parallel()
+	engine, tokenService, loc, jsonRpcRecorder, _ := setupPrecedenceTest(t)
 
 	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
