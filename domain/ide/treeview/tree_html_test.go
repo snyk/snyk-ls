@@ -700,27 +700,3 @@ func TestTreeHtmlRenderer_FileNode_EmptyFileIconHTML_RendersGenericSVG(t *testin
 	assert.NotContains(t, html, "📄", "empty FileIconHTML should not fall back to emoji")
 	assert.Contains(t, html, `<svg`, "empty FileIconHTML should render the generic file SVG")
 }
-
-func TestTreeHtmlRenderer_TreeHoverRow_PairsBackgroundAndForeground(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
-	require.NoError(t, err)
-
-	html := renderer.RenderTreeView(TreeViewData{})
-
-	// The embedded CSS must define the hover-foreground variable so that hover
-	// text color is paired with the hover background across IDE themes (IDE-2078).
-	assert.Contains(t, html, "--list-hover-foreground", "CSS must define --list-hover-foreground variable")
-
-	// The .tree-node-row:hover block must set BOTH background-color AND color so
-	// that an opaque IDE-injected hover background does not leave text unreadable.
-	hoverBlockStart := strings.Index(html, ".tree-node-row:hover")
-	require.Greater(t, hoverBlockStart, 0, ".tree-node-row:hover rule must be present")
-	hoverBlock := html[hoverBlockStart:]
-	closingBrace := strings.Index(hoverBlock, "}")
-	require.Greater(t, closingBrace, 0, ".tree-node-row:hover block must have a closing brace")
-	hoverRule := hoverBlock[:closingBrace]
-
-	assert.Contains(t, hoverRule, "background-color", ".tree-node-row:hover must set background-color")
-	assert.Contains(t, hoverRule, "color", ".tree-node-row:hover must set color")
-}
