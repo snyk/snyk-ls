@@ -18,7 +18,6 @@ package di
 
 import (
 	"path/filepath"
-	"sync"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -54,17 +53,20 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// initBrowserFuncOnce guards the write to types.DefaultOpenBrowserFunc so concurrent
-// TestInit calls (e.g. from future parallel unit tests) do not race on this global.
-var initBrowserFuncOnce sync.Once
+// init sets DefaultOpenBrowserFunc once at process startup so every TestInit call
+// (including concurrent ones) sees a no-op rather than the real browser-open
+// implementation. A package-level init is clearer than sync.Once here: the value
+// is set exactly once and never needs to be overridden by any test in this package.
+func init() {
+	types.DefaultOpenBrowserFunc = func(url string) {}
+}
 
 // TestInit builds an isolated set of dependencies for a single test run.
 // The returned Dependencies struct is self-contained; all service fields are
 // independent per-call instances.
 //
-// Remaining global side effects (safe to call concurrently):
+// Remaining global side effects (not safe for parallel tests without further work):
 //   - types.SetGlobalSystemDefault — stores into the per-engine configuration.
-//   - types.DefaultOpenBrowserFunc — written once via a sync.Once (no race).
 //   - command.SetService — writes the process-global command singleton so that
 //     execute_command.go's handler (which calls command.Service() directly) uses
 //     a mock rather than nil. Concurrent parallel TestInit calls race on this
@@ -76,9 +78,6 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 	t.Helper()
 	gafConfiguration := engine.GetConfiguration()
 	types.SetGlobalSystemDefault(gafConfiguration, types.SettingCliPath, filepath.Join(t.TempDir(), "fake-cli"))
-	initBrowserFuncOnce.Do(func() {
-		types.DefaultOpenBrowserFunc = func(url string) {}
-	})
 
 	return buildTestDependencies(t, engine, tokenService, overrideDeps)
 }
