@@ -61,19 +61,18 @@ import (
 
 func Test_SmokeInstanceTest(t *testing.T) {
 	t.Parallel()
+	endpoint := os.Getenv("SNYK_API")
+	if endpoint == "" {
+		endpoint = "https://api.snyk.io"
+	}
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	ossFile := "package.json"
 	codeFile := "app.js"
 	testutil.CreateDummyProgressListener(t)
-	endpoint := os.Getenv("SNYK_API")
-	if endpoint == "" {
-		t.Setenv("SNYK_API", "https://api.snyk.io")
-	}
 	runSmokeTest(t, engine, tokenService, testsupport.NodejsGoof, "0336589", ossFile, codeFile, true, endpoint, product.ProductOpenSource, product.ProductCode)
 }
 
 func Test_SmokeWorkspaceScan(t *testing.T) {
-	t.Parallel()
 	ossFile := "package.json"
 	iacFile := "main.tf"
 	codeFile := "app.js"
@@ -90,9 +89,11 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 		products             []product.Product
 	}
 
+	t.Parallel()
+
 	endpoint := os.Getenv("SNYK_API")
 	if endpoint == "" {
-		t.Setenv("SNYK_API", "https://api.snyk.io")
+		endpoint = "https://api.snyk.io"
 	}
 
 	tests := []test{
