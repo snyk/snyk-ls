@@ -1072,6 +1072,8 @@ func setupRepoAndInitializeInDir(t *testing.T, rootDir types.FilePath, repo stri
 
 	// Wait for scans to complete before temp dir removal (LIFO order).
 	// This prevents Windows file locking issues where HTTP requests are still in flight during cleanup.
+	// When extraDeps is omitted the wait is skipped — callers that omit deps must disable all
+	// scanning products so no in-flight requests can hold file locks.
 	var agg scanstates.Aggregator
 	if len(extraDeps) > 0 {
 		agg = extraDeps[0].ScanStateAggregator

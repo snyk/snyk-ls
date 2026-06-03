@@ -2669,7 +2669,6 @@ func Test_validateLockedMachineFields_EarlyReturns(t *testing.T) {
 func Test_UpdateSettings_LockedFields_EmitsExactlyOneNotification(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	testDeps2746 := di.TestInit(t, engine, tokenService, nil)
-	_ = testDeps2746 // deps available below via testDeps2746
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 

@@ -169,8 +169,15 @@ func setupServer(
 }
 
 // cleanupChannels clears per-test state. The progress listener is stopped by
-// the shutdown handler (per-server stop channel), so only hover state needs
-// explicit cleanup here.
+// the shutdown handler (per-server stop channel), so hover state is the only
+// thing that needs explicit cleanup here.
+//
+// Note: progress.CleanupChannels() is intentionally NOT called. Under t.Parallel(),
+// cancelling all active trackers in the global map would silently abort concurrent
+// tests' in-flight scans. progress.ToServerProgressChannel is a shared bounded
+// buffer (1000); stale messages from completed tests are display-only noise and do
+// not affect test correctness. Full isolation requires threading a per-server
+// progress channel through NewTracker — deferred to a follow-up.
 func cleanupChannels(deps di.Dependencies) {
 	if deps.HoverService != nil {
 		deps.HoverService.ClearAllHovers()
@@ -1129,32 +1136,26 @@ func Test_textDocumentDidSave_manualScanningMode_doesNotScan(t *testing.T) {
 	)
 }
 
-func sendFileSavedMessage(t *testing.T, engine workflow.Engine, filePath types.FilePath, fileDir types.FilePath, loc server.Local, deps ...di.Dependencies) sglsp.DocumentURI {
+func sendFileSavedMessage(t *testing.T, engine workflow.Engine, filePath types.FilePath, fileDir types.FilePath, loc server.Local, deps di.Dependencies) sglsp.DocumentURI {
 	t.Helper()
-	var d di.Dependencies
-	if len(deps) > 0 {
-		d = deps[0]
-	}
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(filePath)},
 	}
 	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), fileDir,
 		"Test",
-		d.Scanner,
-		d.HoverService,
-		d.ScanNotifier,
-		d.Notifier,
-		d.ScanPersister,
-		d.ScanStateAggregator,
+		deps.Scanner,
+		deps.HoverService,
+		deps.ScanNotifier,
+		deps.Notifier,
+		deps.ScanPersister,
+		deps.ScanStateAggregator,
 		featureflag.NewFakeService(),
-		d.ConfigResolver,
+		deps.ConfigResolver,
 		engine))
 
 	// Populate folder config with SAST settings after adding the folder
 	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), fileDir, engine.GetLogger())
-	if d.FeatureFlagService != nil {
-		d.FeatureFlagService.PopulateFolderConfig(folderConfig)
-	}
+	deps.FeatureFlagService.PopulateFolderConfig(folderConfig)
 
 	_, err := loc.Client.Call(t.Context(), textDocumentDidSaveOperation, didSaveParams)
 	if err != nil {
