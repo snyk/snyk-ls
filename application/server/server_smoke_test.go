@@ -159,6 +159,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			tokenSecretName := ""
 			if tc.useConsistentIgnores {
 				tokenSecretName = "SNYK_TOKEN_CONSISTENT_IGNORES"
@@ -173,6 +174,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 func Test_SmokePreScanCommand(t *testing.T) {
 	t.Parallel()
 	t.Run("executes pre scan command if configured", func(t *testing.T) {
+		t.Parallel()
 		testsupport.NotOnWindows(t, "we can enable windows if we have the correct error message")
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 		loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
@@ -230,6 +232,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	t.Parallel()
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
 	t.Run("adds issues to cache correctly", func(t *testing.T) {
+		t.Parallel()
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_1")
 		loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 		enableOnlyProducts(t, engine, product.ProductOpenSource, product.ProductCode)
@@ -312,6 +315,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	})
 
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
+		t.Parallel()
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_1")
 		loc, jsonRPCRecorder, deps2 := setupServer(t, engine, tokenService, WithRealDI())
 		enableOnlyProducts(t, engine, product.ProductOpenSource, product.ProductCode)
@@ -1652,6 +1656,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	}
 
 	t.Run("authenticated - takes given non-default org, sends folder config after init", func(t *testing.T) {
+		t.Parallel()
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		preferredOrg := "non-default"
 
@@ -1678,6 +1683,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	})
 
 	t.Run("authenticated - determines org when nothing is given", func(t *testing.T) {
+		t.Parallel()
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 
 		// No folder config needed - LS will auto-determine org
@@ -1696,6 +1702,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	})
 
 	t.Run("authenticated - global default org results in auto mode", func(t *testing.T) {
+		t.Parallel()
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 
 		initParams.InitializationOptions.FolderConfigs = []types.LspFolderConfig{
@@ -1717,6 +1724,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	})
 
 	t.Run("authenticated - global non-default org is preserved", func(t *testing.T) {
+		t.Parallel()
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 
 		expectedOrg := "00000000-0000-0000-0000-000000000001"
@@ -1739,6 +1747,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	})
 
 	t.Run("authenticated - adding folder with existing folderConfig. Making sure PreferredOrg is preserved", func(t *testing.T) {
+		t.Parallel()
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 
 		ensureInitialized(t, engine, tokenService, loc, initParams, nil)
@@ -1789,6 +1798,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	})
 
 	t.Run("authenticated - user blanks folder-level org, so LS uses global org", func(t *testing.T) {
+		t.Parallel()
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {
 			s, _ := folderconfig.ConfigFileFromConfig(engine.GetConfiguration())
@@ -1852,6 +1862,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	})
 
 	t.Run("unauthenticated - re-adding folder with changing the config through workspace/didChangeConfiguration", func(t *testing.T) {
+		t.Parallel()
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {
 			s, _ := folderconfig.ConfigFileFromConfig(engine.GetConfiguration())
@@ -1916,6 +1927,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	})
 
 	t.Run("authenticated - user opts in to automatic org selection", func(t *testing.T) {
+		t.Parallel()
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {
 			s, _ := folderconfig.ConfigFileFromConfig(engine.GetConfiguration())
@@ -1973,6 +1985,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	})
 
 	t.Run("authenticated - user opts out of automatic org selection", func(t *testing.T) {
+		t.Parallel()
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {
 			s, _ := folderconfig.ConfigFileFromConfig(engine.GetConfiguration())
