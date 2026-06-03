@@ -1068,7 +1068,13 @@ func shutdownHandler(progressStopChan chan<- bool) jrpc2.Handler {
 			cacheCheckCancel()
 		}
 		di.DisposeTreeEmitter()
-		progressStopChan <- true
+		// Non-blocking: if initialize was never called the listener goroutine was
+		// never started, so no one reads the channel. A second shutdown call (e.g.
+		// from t.Cleanup after an explicit shutdown in the test body) must not block.
+		select {
+		case progressStopChan <- true:
+		default:
+		}
 		mustNotifierFromContext(ctx).DisposeListener()
 		command.StopPendingRescanTimers()
 		return nil, nil
