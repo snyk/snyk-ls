@@ -35,18 +35,7 @@ func notifyClient(logger *zerolog.Logger, srv types.Server, method string, param
 	logError(logger, nil, err, "notifier")
 }
 
-var progressStopChan = make(chan bool, 1000)
-
-func createProgressListener(progressChannel chan types.ProgressParams, server types.Server, logger *zerolog.Logger) {
-	// cleanup stopchannel before starting
-	for {
-		select {
-		case <-progressStopChan:
-			continue
-		default:
-		}
-		break
-	}
+func createProgressListener(progressChannel chan types.ProgressParams, stopChan <-chan bool, server types.Server, logger *zerolog.Logger) {
 	logger.Debug().Msg("started progress listener")
 	defer logger.Debug().Msg("stopped progress listener")
 	for {
@@ -64,7 +53,7 @@ func createProgressListener(progressChannel chan types.ProgressParams, server ty
 				}
 			}
 			notifyProgress(server, p)
-		case <-progressStopChan:
+		case <-stopChan:
 			logger.Debug().Msg("received stop message for progress listener")
 			return
 		}
@@ -76,10 +65,6 @@ func notifyProgress(server types.Server, p types.ProgressParams) {
 		return
 	}
 	_ = server.Notify(context.Background(), "$/progress", p)
-}
-
-func disposeProgressListener() {
-	progressStopChan <- true
 }
 
 //nolint:gocyclo // this is ok, as it's so high because of forwarding the calls

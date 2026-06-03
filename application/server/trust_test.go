@@ -28,7 +28,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
@@ -43,10 +42,10 @@ import (
 
 func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScan(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService)
 	sc := &scanner.TestScanner{}
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
-	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), testutil.DefaultConfigResolver(engine), engine))
+	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", sc, deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, featureflag.NewFakeService(), testutil.DefaultConfigResolver(engine), engine))
 	command.HandleUntrustedFolders(t.Context(), engine.GetConfiguration(), engine.GetLogger(), loc.Server)
 	assert.Eventually(t, func() bool {
 		return checkTrustMessageRequest(jsonRPCRecorder, engine) == true
@@ -56,11 +55,11 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScan(t *testing.
 
 func Test_handleUntrustedFolders_shouldNotTriggerTrustRequestWhenAlreadyRequesting(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService)
 	w := config.GetWorkspace(engine.GetConfiguration())
 	sc := &scanner.TestScanner{}
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
-	w.AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), testutil.DefaultConfigResolver(engine), engine))
+	w.AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", sc, deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, featureflag.NewFakeService(), testutil.DefaultConfigResolver(engine), engine))
 	w.StartRequestTrustCommunication()
 
 	command.HandleUntrustedFolders(t.Context(), engine.GetConfiguration(), engine.GetLogger(), loc.Server)
@@ -83,7 +82,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmati
 	sc := &scanner.TestScanner{}
 	conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
 	conf.Set(types.SettingIsLspInitialized, true)
-	w.AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("/trusted/dummy"), "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), testutil.DefaultConfigResolver(engine), engine))
+	w.AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("/trusted/dummy"), "dummy", sc, deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, featureflag.NewFakeService(), testutil.DefaultConfigResolver(engine), engine))
 
 	command.HandleUntrustedFolders(t.Context(), engine.GetConfiguration(), engine.GetLogger(), loc.Server)
 
@@ -103,7 +102,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativ
 	registerNotifier(engine.GetConfiguration(), engine.GetLogger(), loc.Server, deps.Notifier)
 	w := config.GetWorkspace(engine.GetConfiguration())
 	sc := &scanner.TestScanner{}
-	w.AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("/trusted/dummy"), "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), testutil.DefaultConfigResolver(engine), engine))
+	w.AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("/trusted/dummy"), "dummy", sc, deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, featureflag.NewFakeService(), testutil.DefaultConfigResolver(engine), engine))
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
 
 	command.HandleUntrustedFolders(t.Context(), engine.GetConfiguration(), engine.GetLogger(), loc.Server)
@@ -113,9 +112,9 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativ
 
 func Test_initializeHandler_shouldCallHandleUntrustedFolders(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := deps.AuthenticationService.Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	_, err := loc.Client.Call(t.Context(), "initialize", types.InitializeParams{
@@ -154,11 +153,11 @@ func Test_DidWorkspaceFolderChange_shouldCallHandleUntrustedFolders(t *testing.T
 
 func Test_MultipleFoldersInRootDirWithOnlyOneTrusted(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService)
 
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
 
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
+	fakeAuthenticationProvider := deps.AuthenticationService.Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	rootDir := types.FilePath(t.TempDir())
