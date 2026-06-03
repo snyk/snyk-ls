@@ -27,6 +27,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -168,6 +169,15 @@ func newOAuthStorageBridgeCallback(authenticationService AuthenticationService) 
 		// Queue the update for sequential processing instead of spawning a goroutine
 		// directly. This prevents race conditions where older tokens overwrite newer ones.
 		if serviceImpl, ok := authenticationService.(*AuthenticationServiceImpl); ok {
+			// WriteTokenToConfig calls conf.Set(CONFIG_KEY_OAUTH_TOKEN, ...) after applying
+			// a token. Because that key is persisted, the GAF conf propagates the write back
+			// to storage, which fires this callback again with the same token — an echo we
+			// must ignore. If the incoming token already equals the applied config token the
+			// write came from updateCredentials itself, not from an external rotation.
+			conf := serviceImpl.engine.GetConfiguration()
+			if config.GetToken(conf) == newToken {
+				return
+			}
 			serviceImpl.QueueCredentialUpdate(newToken, true, false)
 		} else {
 			// Fallback to direct goroutine for non-impl types (should not happen in practice)
