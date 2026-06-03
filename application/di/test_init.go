@@ -54,13 +54,6 @@ import (
 )
 
 // init sets DefaultOpenBrowserFunc once at process startup so every TestInit call
-// (including concurrent ones) sees a no-op rather than the real browser-open
-// implementation. A package-level init is clearer than sync.Once here: the value
-// is set exactly once and never needs to be overridden by any test in this package.
-func init() {
-	types.DefaultOpenBrowserFunc = func(url string) {}
-}
-
 // TestInit builds an isolated set of dependencies for a single test run.
 // The returned Dependencies struct is self-contained; all service fields are
 // independent per-call instances.
