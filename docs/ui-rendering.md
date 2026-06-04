@@ -287,7 +287,7 @@ Product nodes default to expanded, file nodes default to collapsed. Trees with <
 
 ### Snyk Learn JIT — Secrets issue details ([EDU-4754](https://snyksec.atlassian.net/browse/EDU-4754))
 
-Secrets findings receive a CWE-keyed Snyk Learn lesson URL during scan (`Issue.LessonUrl`). The secrets details panel renders a “Learn about this issue type” link when the URL is set (same markup as SAST). Learn **code actions** (editor lightbulb) are not implemented for secrets; only the issue-card HTML link is in scope.
+Secrets findings receive a CWE-keyed Snyk Learn lesson URL during scan (`Issue.LessonUrl`). The secrets details panel renders a “Learn how to remediate Secrets securely” link when the URL is set (product-aligned CTA; markup matches other products). The header uses a **Location:** label (line link) for parity with web inventory. When more than one engine location exists in the same file for a finding, a banner shows `N LOCATIONS IN THIS FILE` using a per-file `LocationsCount` from conversion. Learn **code actions** (editor lightbulb) are not implemented for secrets; only the issue-card HTML link is in scope.
 
 #### Unit Tests (`infrastructure/learn`)
 - `lessonsLookupParams` for `types.SecretsIssue` (empty rule/ecosystem, CWE fall-through)
@@ -298,6 +298,7 @@ Secrets findings receive a CWE-keyed Snyk Learn lesson URL during scan (`Issue.L
 - `Scanner.Scan` populates `LessonUrl` via scanner `enrichContext` (thin context, no handler deps)
 - Learn lookup errors and nil lessons leave `LessonUrl` empty; scan still succeeds
 - HTML renderer includes or omits Learn block based on `LessonUrl`
+- `LocationsCount` is per file within a finding; multi-location banner and cross-file cases covered in `convert_test.go`
 
 #### Unit Tests (`domain/ide/command`)
 - `snyk.getLearnLesson` / `snyk.openLearnLesson` accept `issueType=5` (`SecretsIssue`)

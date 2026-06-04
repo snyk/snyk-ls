@@ -134,7 +134,7 @@ func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, scanPa
 			Categories:     categories,
 			Cols:           snyk.CodePoint{issueRange.Start.Character, issueRange.End.Character},
 			Rows:           snyk.CodePoint{issueRange.Start.Line, issueRange.End.Line},
-			LocationsCount: len(attrs.Locations),
+			LocationsCount: countSourceLocationsInFile(attrs.Locations, sourceLocation.FilePath),
 			RiskScore:      riskScore,
 		}
 
@@ -256,6 +256,22 @@ func (c *FindingsConverter) formattedMessageMarkdown(severity types.Severity, ti
 	builder.WriteString(description)
 
 	return builder.String()
+}
+
+// countSourceLocationsInFile returns how many finding locations share the same
+// relative file path, for accurate "locations in this file" UI on per-location issues.
+func countSourceLocationsInFile(locations []testapi.FindingLocation, filePath string) int {
+	count := 0
+	for _, loc := range locations {
+		sl, err := loc.AsSourceLocation()
+		if err != nil {
+			continue
+		}
+		if sl.FilePath == filePath {
+			count++
+		}
+	}
+	return count
 }
 
 // toRange converts a 1-based SourceLocation into a 0-based types.Range.

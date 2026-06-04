@@ -187,6 +187,33 @@ func TestToIssues_MultipleLocations_DuplicatesFinding(t *testing.T) {
 	// But different ranges
 	assert.Equal(t, 9, issues[0].GetRange().Start.Line)
 	assert.Equal(t, 19, issues[1].GetRange().Start.Line)
+
+	// Per-file count: one location per file — no multi-loc banner on either issue
+	for _, issue := range issues {
+		ad, ok := issue.GetAdditionalData().(snyk.SecretsIssueData)
+		require.True(t, ok)
+		assert.Equal(t, 1, ad.LocationsCount)
+	}
+}
+
+func TestToIssues_MultipleLocations_SameFile_PopulatesPerFileLocationsCount(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
+	converter := NewFindingsConverter(logger)
+
+	loc1 := newSourceLocation("src/config.yml", 10, intPtr(1), intPtr(10), intPtr(30))
+	loc2 := newSourceLocation("src/config.yml", 20, intPtr(5), intPtr(20), intPtr(40))
+	finding := newFinding("same-file-key", "Secret Found", "desc", testapi.SeverityMedium,
+		[]testapi.FindingLocation{loc1, loc2}, nil, nil)
+
+	issues := converter.ToIssues(t.Context(), []testapi.FindingData{finding}, "", "/folder")
+
+	require.Len(t, issues, 2)
+	for _, issue := range issues {
+		ad, ok := issue.GetAdditionalData().(snyk.SecretsIssueData)
+		require.True(t, ok)
+		assert.Equal(t, 2, ad.LocationsCount)
+	}
 }
 
 func TestToIssues_MultipleFindings(t *testing.T) {

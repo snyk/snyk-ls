@@ -258,7 +258,7 @@ func Test_Secrets_Html_RendersLessonLink_WhenSet(t *testing.T) {
 
 	assert.Contains(t, result, `class="lesson-link styled-link is-external"`)
 	assert.Contains(t, result, `href="`+lessonURL+`"`)
-	assert.Contains(t, result, "Learn about this issue type")
+	assert.Contains(t, result, "Learn how to remediate Secrets securely")
 }
 
 // Test_Secrets_Html_OmitsLessonBlock_WhenEmpty verifies the lesson block is absent
@@ -278,7 +278,34 @@ func Test_Secrets_Html_OmitsLessonBlock_WhenEmpty(t *testing.T) {
 	result := htmlRenderer.GetDetailsHtml(issue)
 
 	assert.NotContains(t, result, `class="lesson-link styled-link is-external"`)
-	assert.NotContains(t, result, "Learn about this issue type")
+	assert.NotContains(t, result, "Learn how to remediate Secrets securely")
+}
+
+// Test_Secrets_Html_RendersLocationsBanner_WhenMultipleInFile verifies the per-file
+// locations banner when LocationsCount is greater than one.
+func Test_Secrets_Html_RendersLocationsBanner_WhenMultipleInFile(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	issue := createBasicSecretIssue()
+	issue.AdditionalData = snyk.SecretsIssueData{
+		Key:            "secret-key-1",
+		Title:          "AWS Access Token",
+		Message:        "Detected a hardcoded AWS access token",
+		RuleId:         "aws-access-token",
+		RuleName:       "AWS Access Token Rule",
+		CWE:            []string{"CWE-798"},
+		Categories:     []string{"Security"},
+		LocationsCount: 2,
+	}
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
+	assert.NoError(t, err)
+
+	result := htmlRenderer.GetDetailsHtml(issue)
+
+	assert.Contains(t, result, "2 LOCATIONS IN THIS FILE")
+	assert.Contains(t, result, "Location:")
 }
 
 func createBasicSecretIssue() *snyk.Issue {
