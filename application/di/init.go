@@ -99,7 +99,21 @@ type Dependencies struct {
 	Notifier              domainNotify.Notifier
 	LearnService          learn.Service
 	LdxSyncService        command.LdxSyncService
+	ScanStateAggregator   scanstates.Aggregator
 	InlineValueProvider   snyk.InlineValueProvider
+	TreeEmitter           command.TreeEmitter
+	// Handler-accessed dependencies (previously read via di.*() globals).
+	// Note: Installer and Initializer are intentionally absent — they are
+	// process-lifecycle dependencies used during startup, not per-request.
+	// Access them via di.Installer() / di.Initializer() until those global
+	// accessors are retired.
+	Scanner           scanner2.Scanner
+	HoverService      hover.Service
+	ScanNotifier      scanner2.ScanNotifier
+	ScanPersister     persistence.ScanSnapshotPersister
+	FileWatcher       *watcher.FileWatcher
+	ErrorReporter     er.ErrorReporter
+	CodeActionService *codeaction.CodeActionsService
 }
 
 func currentDependencies() Dependencies {
@@ -114,7 +128,17 @@ func currentDependencies() Dependencies {
 		Notifier:              notifier,
 		LearnService:          learnService,
 		LdxSyncService:        ldxSyncService,
+		ScanStateAggregator:   scanStateAggregator,
 		InlineValueProvider:   inlineValueProvider,
+		TreeEmitter:           treeEmitterInstance,
+		// Handler-accessed dependencies:
+		Scanner:           scanner,
+		HoverService:      hoverService,
+		ScanNotifier:      scanNotifier,
+		ScanPersister:     scanPersister,
+		FileWatcher:       fileWatcher,
+		ErrorReporter:     errorReporter,
+		CodeActionService: codeActionService,
 	}
 }
 
@@ -293,6 +317,15 @@ func FeatureFlagService() featureflag.Service {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return featureFlagService
+}
+
+// SetFeatureFlagService replaces the global featureFlagService for future calls
+// to FeatureFlagService(). Objects already constructed before this call retain
+// their previous reference. Intended for test use only.
+func SetFeatureFlagService(service featureflag.Service) {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	featureFlagService = service
 }
 
 func LdxSyncService() command.LdxSyncService {

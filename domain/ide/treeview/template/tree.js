@@ -51,6 +51,21 @@
     }
   }
 
+  function scrollRowIntoViewVerticalOnly(row) {
+    if (!row) return;
+    if (!row.scrollIntoView) return;
+    // Preserve horizontal scroll — scrollIntoView may shift it even with inline:'nearest'
+    // if the row is horizontally out of view. Capture and restore unconditionally.
+    var savedScrollLeft = container.scrollLeft;
+    // block:'nearest' is a no-op when the row is already fully visible, so manual clicks
+    // that trigger a programmatic __selectTreeNode__ round-trip don't cause any scroll jump.
+    // inline:'nearest' minimises horizontal movement, but we restore scrollLeft anyway.
+    row.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    // scroll-behavior: smooth on #treeContainer would run after this line and overwrite
+    // the restored value. tree.css must not set scroll-behavior: smooth on this element.
+    container.scrollLeft = savedScrollLeft;
+  }
+
   window.__selectTreeNode__ = function(issueId) {
     if (!issueId) return;
     var row = container.querySelector('[data-issue-id="' + issueId + '"]');
@@ -68,13 +83,16 @@
       parent = parent.parentElement;
     }
     selectNodeRow(row);
-    if (row.scrollIntoView) row.scrollIntoView(false);
+    scrollRowIntoViewVerticalOnly(row);
   };
 
   // Scan error overlay for product error nodes.
   var activeErrorOverlay = null;
   var activeErrorKeyDown = null;
   var activeErrorOutsideClick = null;
+  var activeErrorResize = null;
+  var activeErrorScroll = null;
+  var activeErrorRow = null;
 
   function dismissErrorOverlay() {
     if (activeErrorOverlay && activeErrorOverlay.parentNode) {
@@ -88,7 +106,66 @@
       document.removeEventListener('click', activeErrorOutsideClick);
       activeErrorOutsideClick = null;
     }
+    if (activeErrorResize) {
+      window.removeEventListener('resize', activeErrorResize);
+      activeErrorResize = null;
+    }
+    if (activeErrorScroll) {
+      // Match the `capture: true` used when adding the listener.
+      document.removeEventListener('scroll', activeErrorScroll, true);
+      activeErrorScroll = null;
+    }
     activeErrorOverlay = null;
+    activeErrorRow = null;
+  }
+
+  // Computes and applies the final overlay position using its measured height,
+  // so a tall overlay against a row at the bottom of the viewport flips above
+  // the row instead of being clipped (IDE-1808). Prefers above whenever there
+  // is room above: tree views in IDEs typically have more chrome below them
+  // (status bars, help panels) than above, so above is the safer default and
+  // matches the behavior of the previous VS Code-side shim.
+  // Clears `bottom` and `transform` defensively so future style sources can't
+  // stretch the overlay between opposing anchors.
+  function positionErrorOverlay(overlay, row) {
+    if (!overlay || !row) return;
+    var rect = row.getBoundingClientRect();
+    // 600 = sensible fallback viewport width when neither window.innerWidth
+    // nor documentElement.clientWidth is reported (very old WebViews / tests).
+    var vw = window.innerWidth || document.documentElement.clientWidth || 600;
+
+    // 520 = preferred max overlay width (keeps error text at a comfortable
+    // reading width); 16 = total horizontal viewport padding (8px each side)
+    // so a narrow viewport still leaves a small margin.
+    var overlayW = Math.min(520, vw - 16);
+
+    // Apply width and clear stale top/bottom before measuring height: the
+    // <pre> message wraps, so width determines height. Measuring height first
+    // would use the pre-wrap layout and place the overlay incorrectly once
+    // the width is applied.
+    overlay.style.position = 'fixed';
+    overlay.style.bottom = '';
+    overlay.style.transform = '';
+    overlay.style.width = overlayW + 'px';
+
+    var overlayH = overlay.getBoundingClientRect().height;
+    if (overlayH <= 0) return;
+
+    // 4 = gap in px between the row and the overlay (and a minimum margin
+    // from the viewport edge).
+    var gap = 4;
+    var topPos = rect.bottom + gap;
+    if (rect.top - overlayH - gap >= gap) {
+      topPos = rect.top - overlayH - gap;
+    }
+    topPos = Math.max(gap, topPos);
+
+    // 8 = right-edge margin: when the row is far right, pin the overlay so
+    // there is still ~8px between its right edge and the viewport.
+    var leftPos = Math.max(gap, Math.min(rect.left, vw - overlayW - 8));
+
+    overlay.style.top = topPos + 'px';
+    overlay.style.left = leftPos + 'px';
   }
 
   function showErrorOverlay(row, productLabel, errorMessage) {
@@ -118,23 +195,18 @@
     });
     overlay.appendChild(closeBtn);
 
-    // Position below the clicked row using fixed positioning so the overlay is
-    // viewport-relative and not clipped by the scrollable tree container.
-    var rect = row.getBoundingClientRect();
-    var vw = window.innerWidth || document.documentElement.clientWidth || 600;
-    var vh = window.innerHeight || document.documentElement.clientHeight || 400;
-    var overlayW = Math.min(520, vw - 16);
-    var topPos = rect.bottom + 4;
-    // Flip above the row if not enough space below
-    if (topPos + 200 > vh) { topPos = Math.max(4, rect.top - 4); }
-    var leftPos = Math.max(4, Math.min(rect.left, vw - overlayW - 8));
+    // Insert offscreen so we can measure the real height without a visible
+    // flash, then reposition correctly using `positionErrorOverlay`.
     overlay.style.position = 'fixed';
-    overlay.style.top = topPos + 'px';
-    overlay.style.left = leftPos + 'px';
-    overlay.style.width = overlayW + 'px';
-
+    overlay.style.top = '0px';
+    overlay.style.left = '0px';
+    overlay.style.visibility = 'hidden';
     document.body.appendChild(overlay);
+    positionErrorOverlay(overlay, row);
+    overlay.style.visibility = '';
+
     activeErrorOverlay = overlay;
+    activeErrorRow = row;
 
     activeErrorKeyDown = function(ev) {
       if (ev.key === 'Escape' || ev.key === 'Esc' || ev.keyCode === 27) {
@@ -142,6 +214,24 @@
       }
     };
     document.addEventListener('keydown', activeErrorKeyDown);
+
+    activeErrorResize = function() {
+      if (activeErrorOverlay && activeErrorRow) {
+        positionErrorOverlay(activeErrorOverlay, activeErrorRow);
+      }
+    };
+    window.addEventListener('resize', activeErrorResize);
+
+    // Reposition on scroll so the overlay tracks its row when any scrollable
+    // ancestor (e.g. the tree container) scrolls. `capture: true` is required
+    // because scroll events do not bubble; capturing on the document catches
+    // them from any element.
+    activeErrorScroll = function() {
+      if (activeErrorOverlay && activeErrorRow) {
+        positionErrorOverlay(activeErrorOverlay, activeErrorRow);
+      }
+    };
+    document.addEventListener('scroll', activeErrorScroll, true);
 
     setTimeout(function() {
       if (!activeErrorOverlay) return;

@@ -49,3 +49,34 @@ func RequireEventuallyReceive[T any](t *testing.T, ch <-chan T, waitFor, tick ti
 
 	return capturedValue
 }
+
+// RequireEventuallyClosed asserts that ch is closed within waitFor, polling every tick.
+// It is the closed-channel analog of RequireEventuallyReceive: use it when the test
+// coordinate expects a close signal rather than a value send.
+func RequireEventuallyClosed[T any](t *testing.T, ch <-chan T, waitFor, tick time.Duration, msgAndArgs ...any) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		select {
+		case _, ok := <-ch:
+			return !ok
+		default:
+			return false
+		}
+	}, waitFor, tick, msgAndArgs...)
+}
+
+// RequireNeverReceive asserts that ch does not receive a value within waitFor,
+// polling every tick. Negative analog of RequireEventuallyReceive. Use for
+// negative async assertions where a fixed time.Sleep would either flake on slow
+// CI or accept incorrect emissions that arrive after the sleep window.
+func RequireNeverReceive[T any](t *testing.T, ch <-chan T, waitFor, tick time.Duration, msgAndArgs ...any) {
+	t.Helper()
+	require.Never(t, func() bool {
+		select {
+		case _, ok := <-ch:
+			return ok
+		default:
+			return false
+		}
+	}, waitFor, tick, msgAndArgs...)
+}

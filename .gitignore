@@ -102,3 +102,4 @@ brain/
 .verify-range
 .verify-agent-progress
 .pr-review-*.md
+.verify-metrics-pending

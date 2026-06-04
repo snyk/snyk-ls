@@ -121,6 +121,16 @@
                                 <input type="text" id="cli_path" name="cli_path" value="{{index .Settings "cli_path"}}" placeholder="/path/to/snyk-cli">
                             </div>
 
+                            {{if .IsEclipse}}
+                            <div class="form-group">
+                                <label for="user_settings_path">
+                                    <span data-toggle="tooltip" title="Additional directories prepended to PATH before launching CLI subprocesses. Restart required for changes to take effect.">Path</span>
+                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="user_settings_path"></span>
+                                </label>
+                                <input type="text" id="user_settings_path" name="user_settings_path" value="{{index .Settings "user_settings_path"}}" placeholder="/usr/local/bin:/opt/snyk/bin">
+                            </div>
+                            {{end}}
+
                             <div class="form-group">
                                 <label class="checkbox-label">
                                     <input type="checkbox" name="automatic_download" {{if index .Settings "automatic_download"}}checked{{end}}>

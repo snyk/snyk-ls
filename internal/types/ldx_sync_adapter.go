@@ -20,7 +20,7 @@ import (
 	"sort"
 
 	"github.com/rs/zerolog/log"
-	v20241015 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2024-10-15"
+	v20260507 "github.com/snyk/go-application-framework/pkg/apiclients/ldx_sync_config/ldx_sync/2026-05-07"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	gafgit "github.com/snyk/go-application-framework/pkg/utils/git"
@@ -71,7 +71,7 @@ var ldxSyncSettingKeyMap = map[string]string{
 // ConvertLDXSyncResponseToOrgConfig converts a UserConfigResponse to our LDXSyncOrgConfig format.
 // Only extracts folder-scoped settings (not machine-scoped).
 // fm is used to determine setting scope from GAF annotations.
-func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserConfigResponse, fm workflow.ConfigurationOptionsMetaData) *LDXSyncOrgConfig {
+func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20260507.UserConfigResponse, fm workflow.ConfigurationOptionsMetaData) *LDXSyncOrgConfig {
 	if response == nil {
 		return nil
 	}
@@ -97,7 +97,7 @@ func ConvertLDXSyncResponseToOrgConfig(orgId string, response *v20241015.UserCon
 
 // ExtractMachineSettings extracts machine-scoped settings from a UserConfigResponse.
 // fm is used to determine setting scope from GAF annotations.
-func ExtractMachineSettings(response *v20241015.UserConfigResponse, fm workflow.ConfigurationOptionsMetaData) map[string]*LDXSyncField {
+func ExtractMachineSettings(response *v20260507.UserConfigResponse, fm workflow.ConfigurationOptionsMetaData) map[string]*LDXSyncField {
 	if response == nil || response.Data.Attributes.Settings == nil {
 		return nil
 	}
@@ -123,7 +123,7 @@ func ExtractMachineSettings(response *v20241015.UserConfigResponse, fm workflow.
 // ExtractFolderSettings extracts folder-specific settings from a UserConfigResponse for the given remote URL
 // These settings should be stored per-folder, NOT merged into the org config cache
 // Returns nil if no folder-specific settings are found
-func ExtractFolderSettings(response *v20241015.UserConfigResponse, remoteUrl string) map[string]*LDXSyncField {
+func ExtractFolderSettings(response *v20260507.UserConfigResponse, remoteUrl string) map[string]*LDXSyncField {
 	if response == nil || response.Data.Attributes.FolderSettings == nil || remoteUrl == "" {
 		return nil
 	}
@@ -135,7 +135,7 @@ func ExtractFolderSettings(response *v20241015.UserConfigResponse, remoteUrl str
 	}
 	sort.Strings(keys)
 
-	index := make(map[string]map[string]v20241015.SettingMetadata)
+	index := make(map[string]map[string]v20260507.SettingMetadata)
 	collisionLogged := false
 	for _, apiKey := range keys {
 		settings := fs[apiKey]
@@ -255,7 +255,7 @@ func WriteFolderConfigToConfiguration(conf configuration.Configuration, orgId st
 }
 
 // ExtractOrgIdFromResponse extracts the preferred organization ID from a UserConfigResponse
-func ExtractOrgIdFromResponse(response *v20241015.UserConfigResponse) string {
+func ExtractOrgIdFromResponse(response *v20260507.UserConfigResponse) string {
 	if response == nil || response.Data.Attributes.Organizations == nil {
 		return ""
 	}

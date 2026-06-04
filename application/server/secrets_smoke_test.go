@@ -51,11 +51,9 @@ func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingOrganization), secretsSmokeOrg)
 
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlySecrets(engine)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanAutomatic), false)
-	cleanupChannels()
-	di.Init(engine, tokenService)
 
 	// Workspace contains only a binary file — the secrets file filter rejects it
 	// (returns SNYK-CLI-0008 / NoSupportedFilesFound), which should map to success, not error.
@@ -131,10 +129,8 @@ func Test_SmokeSecretsScan(t *testing.T) {
 	engineConfig.Set(configresolver.UserGlobalKey(types.SettingOrganization), secretsSmokeOrg)
 	t.Setenv("SNYK_LOG_LEVEL", "debug")
 
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlySecrets(engine)
-	cleanupChannels()
-	di.Init(engine, tokenService)
 
 	// Clone the fake-leaks repo which contains intentional hardcoded secrets for testing
 	cloneTargetDir := copyFakeLeaksDirInto(t, t.TempDir())

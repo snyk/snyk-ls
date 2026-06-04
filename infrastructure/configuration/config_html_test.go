@@ -519,6 +519,33 @@ func TestConfigHtmlRenderer_EclipseShowsProjectSettings(t *testing.T) {
 	assert.Contains(t, html, "- Project")
 }
 
+func TestConfigHtmlRenderer_EclipsePathField(t *testing.T) {
+	renderForIntegration := func(t *testing.T, integrationName string) string {
+		t.Helper()
+		engine := testutil.UnitTest(t)
+		engine.GetConfiguration().Set(gafconfiguration.INTEGRATION_NAME, integrationName)
+		renderer, err := NewConfigHtmlRenderer(engine)
+		require.NoError(t, err)
+		settings := map[string]any{
+			types.SettingUserSettingsPath: "/usr/local/bin",
+		}
+		return renderer.GetConfigHtml(settings, nil)
+	}
+
+	t.Run("ECLIPSE shows path field", func(t *testing.T) {
+		html := renderForIntegration(t, "ECLIPSE")
+		assert.Contains(t, html, `id="user_settings_path"`)
+		assert.Contains(t, html, `/usr/local/bin`)
+	})
+
+	for _, name := range []string{"VS_CODE", "VISUAL_STUDIO", "JETBRAINS_IDE"} {
+		t.Run(name+" hides path field", func(t *testing.T) {
+			html := renderForIntegration(t, name)
+			assert.NotContains(t, html, `id="user_settings_path"`)
+		})
+	}
+}
+
 func TestTmplSourceIndicator(t *testing.T) {
 	tests := []struct {
 		name            string
