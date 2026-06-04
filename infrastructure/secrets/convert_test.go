@@ -22,12 +22,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -129,6 +133,35 @@ func TestToIssues_SingleFinding_SingleLocation(t *testing.T) {
 	assert.Equal(t, []string{"Security"}, additionalData.Categories)
 	assert.Equal(t, snyk.CodePoint{4, 19}, additionalData.Cols)
 	assert.Equal(t, snyk.CodePoint{9, 9}, additionalData.Rows)
+}
+
+func TestToIssues_PopulatesLessonUrl_WhenLearnServiceInContext(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
+	converter := NewFindingsConverter(logger)
+
+	loc := newSourceLocation("src/config.yml", 10, intPtr(5), intPtr(10), intPtr(20))
+	cwe := newCweProblem("CWE-798")
+	finding := newFinding(
+		"learn-ctx-key", "Hardcoded Secret Found", "A hardcoded secret was detected",
+		testapi.SeverityHigh, []testapi.FindingLocation{loc}, []testapi.Problem{cwe}, nil,
+	)
+
+	expectedLessonURL := "https://learn.snyk.io/lesson/hardcoded-secrets/?loc=ide"
+	ctrl := gomock.NewController(t)
+	learnMock := mock_learn.NewMockService(ctrl)
+	learnMock.EXPECT().
+		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), types.SecretsIssue).
+		Return(&learn.Lesson{Url: expectedLessonURL}, nil).
+		Times(1)
+
+	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
+		ctx2.DepLearnService: learnMock,
+	})
+	issues := converter.ToIssues(ctx, []testapi.FindingData{finding}, "", "/folder/path")
+
+	require.Len(t, issues, 1)
+	assert.Equal(t, expectedLessonURL, issues[0].GetLessonUrl())
 }
 
 func TestToIssues_MultipleLocations_DuplicatesFinding(t *testing.T) {
