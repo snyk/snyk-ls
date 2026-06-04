@@ -351,7 +351,8 @@ func (s *startupAuthRequestLdxSyncService) RefreshConfigFromLdxSync(ctx context.
 	require.True(s.t, ok)
 
 	req := httptest.NewRequest(http.MethodGet, "https://api.snyk.io/rest/self", nil).WithContext(ctx)
-	require.NoError(s.t, provider.Authenticator().AddAuthenticationHeader(req))
+	_, err := provider.Authenticator().AddAuthenticationHeader(req)
+	require.NoError(s.t, err)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()

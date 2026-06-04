@@ -24,12 +24,14 @@ repos:
         stages: [pre-push]
         verbose: true
         pass_filenames: false
-  - repo: https://github.com/gitguardian/ggshield
-    rev: v1.43.0
+  - repo: local
     hooks:
       - id: ggshield
-        language_version: python3
+        name: ggshield (pre-commit)
+        entry: ggshield secret scan pre-commit
+        language: system
         stages: [pre-commit]
+        pass_filenames: false
   - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
     rev: v9.22.0
     hooks:

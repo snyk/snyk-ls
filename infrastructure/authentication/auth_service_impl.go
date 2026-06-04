@@ -155,6 +155,8 @@ func (a *AuthenticationServiceImpl) Shutdown() {
 	}
 }
 
+var _ AuthenticationService = (*AuthenticationServiceImpl)(nil)
+
 func (a *AuthenticationServiceImpl) Provider() AuthenticationProvider {
 	a.m.RLock()
 	defer a.m.RUnlock()
@@ -675,28 +677,7 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 	user, err := ar.user, ar.err
 	if user == "" {
 		if a.configResolver.GetBool(types.SettingOffline, nil) || (err != nil && !shouldCauseLogout(err, a.engine.GetLogger())) {
-			// Deduplicate balloon notifications from concurrent callers. Identical messages
-			// are suppressed for 30s; different error messages are shown immediately so the
-			// user sees feedback when the error cause changes (e.g., connectivity → invalid token).
-			userMsg := "Could not retrieve authentication status. Most likely this is a temporary error " +
-				"caused by connectivity problems. If this message does not go away, please log out and re-authenticate"
-			if err != nil {
-				userMsg += fmt.Sprintf(" (%s)", err.Error())
-			}
-			a.notifDedup.Lock()
-			sameMsg := a.notifDedup.lastMsg == userMsg
-			recentlySent := time.Since(time.Unix(0, a.notifDedup.lastTime)) <= 30*time.Second
-			shouldSend := !sameMsg || !recentlySent
-			if shouldSend {
-				a.notifDedup.lastMsg = userMsg
-				a.notifDedup.lastTime = time.Now().UnixNano()
-			}
-			a.notifDedup.Unlock()
-			if shouldSend {
-				a.notifier.SendShowMessage(sglsp.MTError, userMsg)
-			}
-
-			logger.Info().Msg("not logging out, as we had an error, but returning not authenticated to caller")
+			a.handleTransientAuthError(err, logger)
 			return false
 		}
 
@@ -722,6 +703,33 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 	}
 	logger.Debug().Str("userId", user).Msg("Authenticated, adding to cache.")
 	return true
+}
+
+// handleTransientAuthError sends a deduplicated balloon notification for
+// transient (non-logout) auth failures.
+func (a *AuthenticationServiceImpl) handleTransientAuthError(err error, logger zerolog.Logger) {
+	// Deduplicate balloon notifications from concurrent callers. Identical messages
+	// are suppressed for 30s; different error messages are shown immediately so the
+	// user sees feedback when the error cause changes (e.g., connectivity → invalid token).
+	userMsg := "Could not retrieve authentication status. Most likely this is a temporary error " +
+		"caused by connectivity problems. If this message does not go away, please log out and re-authenticate"
+	if err != nil {
+		userMsg += fmt.Sprintf(" (%s)", err.Error())
+	}
+	a.notifDedup.Lock()
+	sameMsg := a.notifDedup.lastMsg == userMsg
+	recentlySent := time.Since(time.Unix(0, a.notifDedup.lastTime)) <= 30*time.Second
+	shouldSend := !sameMsg || !recentlySent
+	if shouldSend {
+		a.notifDedup.lastMsg = userMsg
+		a.notifDedup.lastTime = time.Now().UnixNano()
+	}
+	a.notifDedup.Unlock()
+	if shouldSend {
+		a.notifier.SendShowMessage(sglsp.MTError, userMsg)
+	}
+
+	logger.Info().Msg("not logging out, as we had an error, but returning not authenticated to caller")
 }
 
 // configure providers, if needed, as specified in the config

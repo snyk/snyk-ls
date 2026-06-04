@@ -392,7 +392,7 @@ func Test_NewOauthProvider_oauthProvider_created_with_injected_refreshMethod(t *
 	provider := NewOAuthProvider(engine, testFunc, nil, nil)
 
 	// AddAuthenticationHeader will trigger the refresh method
-	_ = provider.Authenticator().AddAuthenticationHeader(httptest.NewRequest(http.MethodGet, "/", nil))
+	_, _ = provider.Authenticator().AddAuthenticationHeader(httptest.NewRequest(http.MethodGet, "/", nil))
 
 	assert.Eventuallyf(t, func() bool {
 		return <-triggeredChan

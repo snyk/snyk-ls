@@ -166,9 +166,9 @@ func (f *fakeOauthAuthenticator) CancelableAuthenticate(_ context.Context) error
 	return f.fakeAuthenticate()
 }
 
-func (f *fakeOauthAuthenticator) AddAuthenticationHeader(_ *http.Request) error {
+func (f *fakeOauthAuthenticator) AddAuthenticationHeader(_ *http.Request) (bool, error) {
 	f.addCall(nil, "AddAuthenticationHeader")
-	return nil
+	return false, nil
 }
 func (f *fakeOauthAuthenticator) IsSupported() bool {
 	f.addCall(nil, "IsSupported")
