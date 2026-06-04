@@ -284,3 +284,24 @@ Product nodes default to expanded, file nodes default to collapsed. Trees with <
 
 #### Smoke Tests (`application/server/server_smoke_treeview_test.go`)
 - Tree view notification after scan, getTreeView command, toggleTreeFilter
+
+### Snyk Learn JIT — Secrets issue details ([EDU-4754](https://snyksec.atlassian.net/browse/EDU-4754))
+
+Secrets findings receive a CWE-keyed Snyk Learn lesson URL during scan (`Issue.LessonUrl`). The secrets details panel renders a “Learn about this issue type” link when the URL is set (same markup as SAST). Learn **code actions** (editor lightbulb) are not implemented for secrets; only the issue-card HTML link is in scope.
+
+#### Unit Tests (`infrastructure/learn`)
+- `lessonsLookupParams` for `types.SecretsIssue` (empty rule/ecosystem, CWE fall-through)
+- Optional live API: `SMOKE_TESTS=1` subtest resolves CWE-798 → hardcoded-secrets lesson with `?loc=ide`
+
+#### Unit Tests (`infrastructure/secrets`)
+- `FindingsConverter.ToIssues` populates `LessonUrl` when `DepLearnService` is in context
+- `Scanner.Scan` populates `LessonUrl` via scanner `enrichContext` (thin context, no handler deps)
+- Learn lookup errors and nil lessons leave `LessonUrl` empty; scan still succeeds
+- HTML renderer includes or omits Learn block based on `LessonUrl`
+
+#### Unit Tests (`domain/ide/command`)
+- `snyk.getLearnLesson` / `snyk.openLearnLesson` accept `issueType=5` (`SecretsIssue`)
+
+#### Integration / server smoke
+- No new integration test file for secrets Learn
+- `application/server/secrets_smoke_test.go` does not assert `LessonUrl` (CI-skipped today)
