@@ -32,6 +32,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/issuecache"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
@@ -76,15 +77,17 @@ type Scanner struct {
 	engine             workflow.Engine
 	logger             *zerolog.Logger
 	configResolver     types.ConfigResolverInterface
+	learnService       learn.Service
 }
 
-func New(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, featureFlagService featureflag.Service, notifier notification.Notifier, configResolver types.ConfigResolverInterface) *Scanner {
+func New(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, featureFlagService featureflag.Service, learnService learn.Service, notifier notification.Notifier, configResolver types.ConfigResolverInterface) *Scanner {
 	return &Scanner{
 		IssueCache:         issuecache.NewIssueCache(product.ProductSecrets),
 		SnykApiClient:      apiClient,
 		runningScans:       map[types.FilePath]*ScanStatus{},
 		changedPaths:       map[types.FilePath]map[types.FilePath]bool{},
 		featureFlagService: featureFlagService,
+		learnService:       learnService,
 		notifier:           notifier,
 		Instrumentor:       instrumentor,
 		conf:               conf,
@@ -92,6 +95,20 @@ func New(conf configuration.Configuration, engine workflow.Engine, logger *zerol
 		logger:             logger,
 		configResolver:     configResolver,
 	}
+}
+
+// enrichContext injects the scanner-held learn service into the request context so
+// FindingsConverter can resolve LessonUrl on every scan path (including autosave and
+// background scans that use context.Background()). Mirrors infrastructure/oss/cli_scanner.go.
+func (sc *Scanner) enrichContext(ctx context.Context) context.Context {
+	dependenciesFromContext, found := ctx2.DependenciesFromContext(ctx)
+	if !found {
+		dependenciesFromContext = map[string]any{}
+	}
+	if sc.learnService != nil {
+		dependenciesFromContext[ctx2.DepLearnService] = sc.learnService
+	}
+	return ctx2.NewContextWithDependencies(ctx, dependenciesFromContext)
 }
 
 func (sc *Scanner) getConfigResolver(ctx context.Context) types.ConfigResolverInterface {
@@ -114,6 +131,7 @@ func (sc *Scanner) SupportedCommands() []types.CommandName {
 }
 
 func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues []types.Issue, err error) {
+	ctx = sc.enrichContext(ctx)
 	workspaceFolderConfig, ctxLogger, doScan, err := sc.checkPreconditions(ctx, pathToScan)
 	if err != nil || !doScan {
 		return issues, err

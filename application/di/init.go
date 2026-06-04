@@ -212,7 +212,7 @@ func initInfrastructure(tokenService types.TokenService, conf configuration.Conf
 	openSourceScanner = oss.NewCLIScanner(engine, instrumentor, errorReporter, snykCli, learnService, notifier, configResolver)
 	scanNotifier, _ = appNotification.NewScanNotifier(notifier, configResolver)
 	snykCodeScanner = code.New(engine, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.CreateCodeScanner, configResolver)
-	snykSecretsScanner = secrets.New(conf, engine, logger, instrumentor, snykApiClient, featureFlagService, notifier, configResolver)
+	snykSecretsScanner = secrets.New(conf, engine, logger, instrumentor, snykApiClient, featureFlagService, learnService, notifier, configResolver)
 
 	cliInitializer = cli.NewInitializer(conf, logger, errorReporter, installer, notifier, snykCli, configResolver)
 	authInitializer := authentication.NewInitializer(conf, logger, authenticationService, errorReporter, notifier, configResolver)
