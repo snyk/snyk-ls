@@ -483,13 +483,15 @@ button.sn-apply-fix:disabled{
 button.generate-ai-fix,
 button.sn-apply-fix {
   border-radius: 4px;
-  background-color: var(--button-background-color);
-  color: var(--button-text-color);
+  background-color: transparent;
+  color: var(--button-background-color);
+  border: 1px solid var(--button-background-color);
   cursor: pointer;
+  transition: background-color .15s ease-in, color .15s ease-in;
 }
 button.sn-apply-fix{
   padding: 4px 12px;
-  background-color: var(--button-background-color)
+  background-color: transparent;
 }
 button.sn-apply-fix:disabled{
   background-color: var(--disabled-background-color);
@@ -538,9 +540,10 @@ button.sn-apply-fix:disabled{
   color: var(--text-color);
 }
 
-button.generate-ai-fix:hover,
-button.sn-apply-fix:hover {
-  opacity: 0.9;
+button.generate-ai-fix:hover:not(:disabled),
+button.sn-apply-fix:hover:not(:disabled) {
+  background-color: var(--button-background-color);
+  color: var(--button-text-color);
 }
 
 /*AI fix tab */
