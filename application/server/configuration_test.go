@@ -2813,7 +2813,7 @@ func TestApplyUserSettingsPath_IgnoresUnchanged(t *testing.T) {
 
 // IDE-1035: when the user presses the stop-scan button the IDE sends a
 // window/workDoneProgress/cancel notification. The summary panel must be reset
-// to its initial state so it no longer shows the counts from the cancelled scan.
+// to its initial state so it no longer shows the counts from the canceled scan.
 func TestResetSummaryPanelOnStopScan_CallsInit(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
