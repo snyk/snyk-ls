@@ -227,7 +227,7 @@ func initApplication(conf configuration.Configuration, engine workflow.Engine, l
 	w := workspace.New(conf, logger, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, configResolver, engine) // don't use getters or it'll deadlock
 	config.SetWorkspace(conf, w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(engine, w, fileWatcher, notifier, featureFlagService, configResolver)
+	codeActionService = codeaction.NewService(engine, w, fileWatcher, notifier, featureFlagService, configResolver, nil)
 	command.SetService(command.NewService(engine, logger, authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, ldxSyncService, configResolver, scanStateAggregator.StateSnapshot))
 }
 
