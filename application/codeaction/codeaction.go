@@ -32,6 +32,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/remediation"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -142,6 +143,10 @@ func (c *CodeActionsService) remediationCodeActions(issues []types.Issue, path t
 		issue := issues[i]
 		findingId := issue.GetFindingId()
 		if findingId == "" {
+			continue
+		}
+		// Remy operates on Snyk Code findings only; other products are not supported.
+		if issue.GetProduct() != product.ProductCode {
 			continue
 		}
 		additionalData := issue.GetAdditionalData()
