@@ -624,3 +624,36 @@ func TestScanner_Scan_LessonUrlEmptyOnNilLesson(t *testing.T) {
 	require.Len(t, issues, 1)
 	assert.Empty(t, issues[0].GetLessonUrl(), "scan must succeed and LessonUrl stays empty when learn returns nil lesson")
 }
+
+func TestScanner_enrichContext_DoesNotMutateSharedDepsMap(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	learnMock := mock_learn.NewMockService(ctrl)
+
+	scanner := New(
+		engine.GetConfiguration(),
+		engine,
+		engine.GetLogger(),
+		performance.NewInstrumentor(),
+		&snyk_api.FakeApiClient{},
+		featureflag.NewFakeService(),
+		learnMock,
+		notification.NewMockNotifier(),
+		defaultResolver(engine),
+	)
+
+	sharedDeps := map[string]any{"sentinel": "unchanged"}
+	parentCtx := ctx2.NewContextWithDependencies(t.Context(), sharedDeps)
+
+	enrichedCtx := scanner.enrichContext(parentCtx)
+
+	_, learnInParent := sharedDeps[ctx2.DepLearnService]
+	assert.False(t, learnInParent, "enrichContext must not write into the parent deps map")
+	assert.Equal(t, "unchanged", sharedDeps["sentinel"])
+
+	enrichedDeps, ok := ctx2.DependenciesFromContext(enrichedCtx)
+	require.True(t, ok)
+	learnInEnriched, ok := enrichedDeps[ctx2.DepLearnService].(learn.Service)
+	require.True(t, ok, "enriched context must carry DepLearnService")
+	assert.Same(t, learnMock, learnInEnriched)
+}

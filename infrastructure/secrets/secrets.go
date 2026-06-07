@@ -101,14 +101,17 @@ func New(conf configuration.Configuration, engine workflow.Engine, logger *zerol
 // FindingsConverter can resolve LessonUrl on every scan path (including autosave and
 // background scans that use context.Background()). Mirrors infrastructure/oss/cli_scanner.go.
 func (sc *Scanner) enrichContext(ctx context.Context) context.Context {
-	dependenciesFromContext, found := ctx2.DependenciesFromContext(ctx)
-	if !found {
-		dependenciesFromContext = map[string]any{}
+	// Copy existing deps so concurrent scans never mutate a map shared via parent ctx.
+	deps := map[string]any{}
+	if existing, found := ctx2.DependenciesFromContext(ctx); found {
+		for k, v := range existing {
+			deps[k] = v
+		}
 	}
 	if sc.learnService != nil {
-		dependenciesFromContext[ctx2.DepLearnService] = sc.learnService
+		deps[ctx2.DepLearnService] = sc.learnService
 	}
-	return ctx2.NewContextWithDependencies(ctx, dependenciesFromContext)
+	return ctx2.NewContextWithDependencies(ctx, deps)
 }
 
 func (sc *Scanner) getConfigResolver(ctx context.Context) types.ConfigResolverInterface {
