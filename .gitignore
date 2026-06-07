@@ -103,3 +103,13 @@ brain/
 .verify-agent-progress
 .pr-review-*.md
 .verify-metrics-pending
+.verify*
+.verify-complete
+.verify-precommit-hash
+.verify-staged-hash
+.snyk-sca-output.json
+.snyk-sca-output.err
+.snyk-code-output.json
+.snyk-code-output.err
+.verify-agents
+.verify-counts
