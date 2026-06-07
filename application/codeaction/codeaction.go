@@ -18,6 +18,7 @@
 package codeaction
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -30,6 +31,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -47,12 +49,13 @@ type CodeActionsService struct {
 
 	// actionsCache holds all the issues that were returns by the GetCodeActions method.
 	// This is used to resolve the code actions later on in ResolveCodeAction.
-	actionsCache   map[uuid.UUID]cachedAction
-	engine         workflow.Engine
-	logger         zerolog.Logger
-	fileWatcher    dirtyFilesWatcher
-	notifier       noti.Notifier
-	configResolver types.ConfigResolverInterface
+	actionsCache        map[uuid.UUID]cachedAction
+	engine              workflow.Engine
+	logger              zerolog.Logger
+	fileWatcher         dirtyFilesWatcher
+	notifier            noti.Notifier
+	configResolver      types.ConfigResolverInterface
+	remediationProvider remediation.RemediationProvider
 }
 
 type cachedAction struct {
@@ -60,16 +63,17 @@ type cachedAction struct {
 	action types.CodeAction
 }
 
-func NewService(engine workflow.Engine, provider snyk.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) *CodeActionsService {
+func NewService(engine workflow.Engine, provider snyk.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface, remediationProvider remediation.RemediationProvider) *CodeActionsService {
 	return &CodeActionsService{
-		IssuesProvider:     provider,
-		featureFlagService: featureFlagService,
-		actionsCache:       make(map[uuid.UUID]cachedAction),
-		engine:             engine,
-		logger:             engine.GetLogger().With().Str("service", "CodeActionsService").Logger(),
-		fileWatcher:        fileWatcher,
-		notifier:           notifier,
-		configResolver:     configResolver,
+		IssuesProvider:      provider,
+		featureFlagService:  featureFlagService,
+		actionsCache:        make(map[uuid.UUID]cachedAction),
+		engine:              engine,
+		logger:              engine.GetLogger().With().Str("service", "CodeActionsService").Logger(),
+		fileWatcher:         fileWatcher,
+		notifier:            notifier,
+		configResolver:      configResolver,
+		remediationProvider: remediationProvider,
 	}
 }
 
@@ -122,8 +126,60 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 		updatedIssues = filteredIssues
 	}
 
+	remediationActions := c.remediationCodeActions(updatedIssues, path, folder.Path(), r)
 	actions := converter.ToCodeActions(updatedIssues)
+	actions = append(actions, remediationActions...)
 	c.logger.Debug().Msg(fmt.Sprint("Returning ", len(actions), " code actions"))
+	return actions
+}
+
+func (c *CodeActionsService) remediationCodeActions(issues []types.Issue, path types.FilePath, folderPath types.FilePath, r types.Range) []types.LSPCodeAction {
+	if c.remediationProvider == nil {
+		return nil
+	}
+	var actions []types.LSPCodeAction
+	for i := range issues {
+		issue := issues[i]
+		findingId := issue.GetFindingId()
+		if findingId == "" {
+			continue
+		}
+		additionalData := issue.GetAdditionalData()
+		if additionalData == nil || !additionalData.IsFixable() {
+			continue
+		}
+		// Capture loop variables for the closure.
+		issueFindingId := findingId
+		issueRange := r
+		issueProduct := issue.GetProduct()
+		provider := c.remediationProvider
+		deferredEdit := func() *types.WorkspaceEdit {
+			edit, err := provider.Remediate(context.Background(), remediation.RemediationRequest{
+				FindingId:   issueFindingId,
+				FilePath:    path,
+				ContentRoot: folderPath,
+				Range:       issueRange,
+				Product:     issueProduct,
+			})
+			if err != nil {
+				c.logger.Error().Err(err).Str("findingId", issueFindingId).Msg("remediation provider returned error")
+			}
+			return edit
+		}
+		action, err := snyk.NewDeferredCodeAction(
+			"Fix with Snyk Remediation Agent",
+			&deferredEdit,
+			nil,
+			"",
+			nil,
+		)
+		if err == nil {
+			action.Kind = types.RemediationAgentQuickFix
+			lspAction := converter.ToCodeAction(issue, &action)
+			c.cacheCodeAction(&action, issue)
+			actions = append(actions, lspAction)
+		}
+	}
 	return actions
 }
 
