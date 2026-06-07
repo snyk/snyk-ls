@@ -73,6 +73,9 @@ type CodeAction struct {
 
 	// The type of grouping to determine the grouping function to be used
 	GroupingType types.GroupingType
+
+	// Kind is the LSP code action kind. When empty the converter falls back to QuickFix.
+	Kind types.CodeActionKind
 }
 
 func (c *CodeAction) SetEdit(edit *types.WorkspaceEdit) {
@@ -125,6 +128,12 @@ func (c *CodeAction) GetGroupingValue() any {
 
 func (c *CodeAction) GetGroupingType() types.GroupingType {
 	return c.GroupingType
+}
+
+// GetKind returns the LSP CodeActionKind. Kind is set at construction time via the Kind field;
+// there is no SetKind because kind is an immutable property of the action type.
+func (c *CodeAction) GetKind() types.CodeActionKind {
+	return c.Kind
 }
 
 func NewCodeAction(title string, edit *types.WorkspaceEdit, command *types.CommandData) (*CodeAction, error) {
