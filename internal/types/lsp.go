@@ -865,6 +865,10 @@ const SourceOrganizeImports CodeActionKind = "source.organizeImports"
  */
 const SourceFixAll CodeActionKind = "source.fixAll"
 
+// RemediationAgentQuickFix is the stable, machine-readable kind clients match on to identify
+// the Snyk Remediation Agent fix action. Clients must match on this kind, never on the title.
+const RemediationAgentQuickFix CodeActionKind = "quickfix.snyk.remediationAgent"
+
 type CodeActionParams struct {
 	/**
 	 * The document in which the command was invoked.
