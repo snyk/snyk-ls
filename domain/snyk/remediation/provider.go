@@ -35,6 +35,10 @@ type RemediationRequest struct {
 
 // RemediationProvider computes an autonomous fix for a single finding.
 // Returns nil when no fix can be computed; callers treat nil as "no fix available".
+//
+// Isolation contract: implementations may mutate ContentRoot in place.
+// Callers must supply an isolated copy of the workspace (e.g. a git worktree)
+// as ContentRoot and are responsible for post-fix verification and rollback.
 type RemediationProvider interface {
 	Remediate(ctx context.Context, req RemediationRequest) (*types.WorkspaceEdit, error)
 }
