@@ -530,6 +530,7 @@ func Test_submitIgnoreRequest_TriggersTreeRefreshOnSuccess(t *testing.T) {
 			mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
 
 			folderPath := types.FilePath(t.TempDir())
+			initGitRepoWithRemote(t, folderPath)
 			issue := testutil.NewMockIssue("issueId", types.FilePath(filepath.Join(string(folderPath), "test.js")))
 			issue.ContentRoot = folderPath
 			_, _ = workspaceutil.SetupWorkspace(t, mockEngine, folderPath)
@@ -577,6 +578,7 @@ func Test_submitIgnoreRequest_NoTreeRefreshOnFailure(t *testing.T) {
 	mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
 
 	folderPath := types.FilePath(t.TempDir())
+	initGitRepoWithRemote(t, folderPath)
 	issue := testutil.NewMockIssue("issueId", types.FilePath(filepath.Join(string(folderPath), "test.js")))
 	issue.ContentRoot = folderPath
 	_, _ = workspaceutil.SetupWorkspace(t, mockEngine, folderPath)
@@ -615,6 +617,7 @@ func Test_submitIgnoreRequest_NilTreeRefresher_DoesNotPanic(t *testing.T) {
 	mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
 
 	folderPath := types.FilePath(t.TempDir())
+	initGitRepoWithRemote(t, folderPath)
 	issue := testutil.NewMockIssue("issueId", types.FilePath(filepath.Join(string(folderPath), "test.js")))
 	issue.ContentRoot = folderPath
 	_, _ = workspaceutil.SetupWorkspace(t, mockEngine, folderPath)
