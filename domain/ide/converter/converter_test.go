@@ -288,3 +288,175 @@ func TestGetCvssCalculatorUrl(t *testing.T) {
 		assert.Equal(t, expected, url)
 	})
 }
+
+// TestToDiagnostics_FindingId verifies that ScanIssue.FindingId is populated from issue.GetFindingId()
+// for each product. A stable FindingId allows clients to correlate the same underlying finding across
+// separate scan invocations without relying on the per-result-set Id field.
+func TestToDiagnostics_FindingId_Code(t *testing.T) {
+	testutil.UnitTest(t)
+
+	const expectedFindingId = "snyk-asset-finding-v1-abc123"
+	testIssue := &snyk.Issue{
+		ID:        "code-rule-id",
+		Severity:  types.High,
+		Product:   product.ProductCode,
+		FindingId: expectedFindingId,
+		AdditionalData: snyk.CodeIssueData{
+			Key: "code-key-1",
+		},
+	}
+
+	diagnostics := ToDiagnostics([]types.Issue{testIssue})
+
+	require.Len(t, diagnostics, 1)
+	assert.Equal(t, expectedFindingId, diagnostics[0].Data.FindingId,
+		"ScanIssue.FindingId must equal issue.GetFindingId() for Code issues")
+}
+
+func TestToDiagnostics_FindingId_OSS(t *testing.T) {
+	testutil.UnitTest(t)
+
+	const expectedFindingId = "oss-introducing-finding-id-xyz"
+	testIssue := &snyk.Issue{
+		ID:        "oss-vuln-id",
+		Severity:  types.Medium,
+		Product:   product.ProductOpenSource,
+		FindingId: expectedFindingId,
+		AdditionalData: snyk.OssIssueData{
+			Key: "oss-key-1",
+		},
+	}
+
+	diagnostics := ToDiagnostics([]types.Issue{testIssue})
+
+	require.Len(t, diagnostics, 1)
+	assert.Equal(t, expectedFindingId, diagnostics[0].Data.FindingId,
+		"ScanIssue.FindingId must equal issue.GetFindingId() for OSS issues")
+}
+
+func TestToDiagnostics_FindingId_Secrets(t *testing.T) {
+	testutil.UnitTest(t)
+
+	const expectedFindingId = "secret-attrs-key-99"
+	testIssue := &snyk.Issue{
+		ID:        "secret-rule-id",
+		Severity:  types.High,
+		Product:   product.ProductSecrets,
+		FindingId: expectedFindingId,
+		AdditionalData: snyk.SecretsIssueData{
+			Key:   "secret-key-99",
+			Title: "Hardcoded Secret",
+		},
+	}
+
+	diagnostics := ToDiagnostics([]types.Issue{testIssue})
+
+	require.Len(t, diagnostics, 1)
+	assert.Equal(t, expectedFindingId, diagnostics[0].Data.FindingId,
+		"ScanIssue.FindingId must equal issue.GetFindingId() for Secrets issues")
+}
+
+// TestToDiagnostics_FindingId_IaC documents that IaC findings currently emit an empty FindingId.
+// The IaC scanner does not yet set FindingId on snyk.Issue, so ScanIssue.FindingId is always "".
+// When the IaC scanner is updated to set FindingId, this test should be updated to assert the
+// expected non-empty value.
+func TestToDiagnostics_FindingId_IaC(t *testing.T) {
+	testutil.UnitTest(t)
+
+	testIssue := &snyk.Issue{
+		ID:       "iac-rule-id",
+		Severity: types.High,
+		Product:  product.ProductInfrastructureAsCode,
+		// FindingId is intentionally not set: the IaC scanner does not yet populate it.
+		AdditionalData: snyk.IaCIssueData{
+			Key:   "iac-key-1",
+			Title: "IaC misconfiguration",
+		},
+	}
+
+	diagnostics := ToDiagnostics([]types.Issue{testIssue})
+
+	require.Len(t, diagnostics, 1)
+	assert.Empty(t, diagnostics[0].Data.FindingId,
+		"IaC issues emit empty FindingId until the IaC scanner populates it")
+}
+
+// TestToDiagnostics_FindingId_DeterministicConversion verifies that ToDiagnostics is a pure
+// function: two calls on the same issue struct produce identical FindingId values.
+func TestToDiagnostics_FindingId_DeterministicConversion(t *testing.T) {
+	testutil.UnitTest(t)
+
+	const stableFindingId = "stable-code-fingerprint-v1"
+	testIssue := &snyk.Issue{
+		ID:        "code-rule-id",
+		Severity:  types.High,
+		Product:   product.ProductCode,
+		FindingId: stableFindingId,
+		AdditionalData: snyk.CodeIssueData{
+			Key: "code-key-stable",
+		},
+	}
+
+	diagnostics1 := ToDiagnostics([]types.Issue{testIssue})
+	diagnostics2 := ToDiagnostics([]types.Issue{testIssue})
+
+	require.Len(t, diagnostics1, 1)
+	require.Len(t, diagnostics2, 1)
+	assert.Equal(t, diagnostics1[0].Data.FindingId, diagnostics2[0].Data.FindingId,
+		"FindingId must be identical across two separate conversions of the same finding")
+	assert.Equal(t, stableFindingId, diagnostics1[0].Data.FindingId,
+		"FindingId must match the value from issue.GetFindingId()")
+}
+
+func TestToCodeAction_KindDerived_RemediationAgent(t *testing.T) {
+	testutil.UnitTest(t)
+
+	issue := &snyk.Issue{}
+	action := &snyk.CodeAction{
+		Title:         "Fix with Snyk Remediation Agent",
+		OriginalTitle: "Fix with Snyk Remediation Agent",
+		Kind:          types.RemediationAgentQuickFix,
+		Command:       nil,
+		Edit:          &types.WorkspaceEdit{Changes: map[string][]types.TextEdit{}},
+	}
+	issue.CodeActions = []types.CodeAction{action}
+
+	result := ToCodeAction(issue, action)
+
+	assert.Equal(t, types.RemediationAgentQuickFix, result.Kind)
+}
+
+func TestToCodeAction_KindDerived_Empty_FallsBackToQuickFix(t *testing.T) {
+	testutil.UnitTest(t)
+
+	issue := &snyk.Issue{}
+	action := &snyk.CodeAction{
+		Title:         "Some action",
+		OriginalTitle: "Some action",
+		Kind:          types.Empty,
+		Command:       nil,
+		Edit:          &types.WorkspaceEdit{Changes: map[string][]types.TextEdit{}},
+	}
+	issue.CodeActions = []types.CodeAction{action}
+
+	result := ToCodeAction(issue, action)
+
+	assert.Equal(t, types.QuickFix, result.Kind)
+}
+
+func TestToCodeAction_KindDerived_ExistingQuickfix_NoRegression(t *testing.T) {
+	testutil.UnitTest(t)
+
+	issue := &snyk.Issue{}
+	action := &snyk.CodeAction{
+		Title:         "Fix this",
+		OriginalTitle: "Fix this",
+		// Kind is zero-value (empty string) — existing path
+		Edit: &types.WorkspaceEdit{Changes: map[string][]types.TextEdit{}},
+	}
+	issue.CodeActions = []types.CodeAction{action}
+
+	result := ToCodeAction(issue, action)
+
+	assert.Equal(t, types.QuickFix, result.Kind, "existing actions without explicit Kind must fall back to QuickFix")
+}
