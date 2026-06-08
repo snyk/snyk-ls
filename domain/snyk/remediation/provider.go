@@ -42,3 +42,10 @@ type RemediationRequest struct {
 type RemediationProvider interface {
 	Remediate(ctx context.Context, req RemediationRequest) (*types.WorkspaceEdit, error)
 }
+
+// FileChangeNotifier is implemented by providers that cache per-file results.
+// Call InvalidateFile whenever a file is modified so that stale cached diffs
+// are evicted before the user resolves another code action against that file.
+type FileChangeNotifier interface {
+	InvalidateFile(path types.FilePath)
+}
