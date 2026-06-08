@@ -736,4 +736,96 @@
   }
 
   scheduleRetruncate();
+
+  // Tooltips.
+  // Native `title` tooltips render inconsistently inside IDE webviews, so we
+  // draw our own from the same `title` attributes (IDE-1864 disabled/errored
+  // scanner hints, full file paths from the truncation pass above, untrusted
+  // folder paths). While our tooltip is shown the title is moved to
+  // data-tooltip so the native one can't also fire, and restored on mouse-out
+  // so it stays available for accessibility and any non-webview host.
+  var tooltipEl = null;
+  var tooltipTarget = null;
+
+  function findTitledAncestor(el) {
+    while (el && el !== document.body) {
+      if (el.getAttribute && el.getAttribute('title')) return el;
+      el = el.parentElement;
+    }
+    return null;
+  }
+
+  function positionTooltip(tip, target) {
+    var rect = target.getBoundingClientRect();
+    var vw = window.innerWidth || document.documentElement.clientWidth || 600;
+    var vh = window.innerHeight || document.documentElement.clientHeight || 600;
+    var gap = 4;
+    var tw = tip.offsetWidth;
+    var th = tip.offsetHeight;
+    // Prefer below the row; flip above if there isn't room.
+    var top = rect.bottom + gap;
+    if (top + th > vh - gap) {
+      top = rect.top - th - gap;
+    }
+    top = Math.max(gap, top);
+    var left = Math.max(gap, Math.min(rect.left, vw - tw - gap));
+    tip.style.top = top + 'px';
+    tip.style.left = left + 'px';
+  }
+
+  function showTooltip(target) {
+    var text = target.getAttribute('title');
+    if (!text) return;
+    // Stash + remove title so the native tooltip can't also appear.
+    target.setAttribute('data-tooltip', text);
+    target.removeAttribute('title');
+    tooltipTarget = target;
+
+    if (!tooltipEl) {
+      tooltipEl = document.createElement('div');
+      tooltipEl.className = 'tree-tooltip';
+      tooltipEl.setAttribute('role', 'tooltip');
+      document.body.appendChild(tooltipEl);
+    }
+    tooltipEl.textContent = text;
+    // Measure with content + max-width applied, then position, then reveal.
+    tooltipEl.style.visibility = 'hidden';
+    tooltipEl.style.display = 'block';
+    positionTooltip(tooltipEl, target);
+    tooltipEl.style.visibility = '';
+  }
+
+  function hideTooltip() {
+    if (tooltipTarget) {
+      var stored = tooltipTarget.getAttribute('data-tooltip');
+      if (stored !== null) {
+        tooltipTarget.setAttribute('title', stored);
+        tooltipTarget.removeAttribute('data-tooltip');
+      }
+      tooltipTarget = null;
+    }
+    if (tooltipEl) tooltipEl.style.display = 'none';
+  }
+
+  // Bound to document so it also covers titled elements outside the tree
+  // container (e.g. the severity filter-toolbar buttons).
+  document.addEventListener('mouseover', function(e) {
+    // Still hovering within the current target (e.g. moved onto a child) — keep it.
+    if (tooltipTarget && tooltipTarget.contains(e.target)) return;
+    var t = findTitledAncestor(e.target);
+    if (!t) {
+      hideTooltip();
+      return;
+    }
+    if (t !== tooltipTarget) {
+      hideTooltip();
+      showTooltip(t);
+    }
+  });
+  document.addEventListener('mouseout', function(e) {
+    // Ignore moves between descendants of the same titled element.
+    if (tooltipTarget && !tooltipTarget.contains(e.relatedTarget)) {
+      hideTooltip();
+    }
+  });
 })();

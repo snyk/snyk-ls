@@ -372,11 +372,11 @@ func (b *TreeBuilder) buildInfoNodes(ctx infoNodeContext) []TreeNode {
 
 func (b *TreeBuilder) zeroIssuesText(ctx infoNodeContext) string {
 	if !ctx.consistentIgnoresEnabled {
-		return "✅ Congrats! No issues found!"
+		return "✅ No issues found"
 	}
 	ivo := ctx.issueViewOptions
 	if ivo.OpenIssues && !ivo.IgnoredIssues {
-		return "✅ Congrats! No open issues found!"
+		return "✅ No open issues found"
 	}
 	if !ivo.OpenIssues && ivo.IgnoredIssues {
 		return "✋ No ignored issues, open issues are disabled"
@@ -442,7 +442,7 @@ func productDescription(p product.Product, totalIssues int, counts *SeverityCoun
 		return "No issues found"
 	}
 
-	countWord := productCountWord(p, totalIssues)
+	word := countWord(totalIssues)
 	var parts []string
 	if counts.Critical > 0 {
 		parts = append(parts, fmt.Sprintf("%d critical", counts.Critical))
@@ -458,19 +458,15 @@ func productDescription(p product.Product, totalIssues int, counts *SeverityCoun
 	}
 
 	if len(parts) == 0 {
-		return fmt.Sprintf("%d %s", totalIssues, countWord)
+		return fmt.Sprintf("%d %s", totalIssues, word)
 	}
-	return fmt.Sprintf("%d %s: %s", totalIssues, countWord, strings.Join(parts, ", "))
+	return fmt.Sprintf("%d %s: %s", totalIssues, word, strings.Join(parts, ", "))
 }
 
-// productCountWord returns "vulnerabilities"/"vulnerability" for OSS, "issues"/"issue" for Code/IaC.
-func productCountWord(p product.Product, count int) string {
-	if p == product.ProductOpenSource {
-		if count == 1 {
-			return "unique vulnerability"
-		}
-		return "unique vulnerabilities"
-	}
+// countWord returns the singular/plural noun for an issue count. All products
+// use "issue"/"issues" for consistency across scanner rows (OSS previously said
+// "unique vulnerabilities").
+func countWord(count int) string {
 	if count == 1 {
 		return "issue"
 	}
@@ -543,7 +539,7 @@ func (b *TreeBuilder) buildFileNodes(issuesByFile snyk.IssuesByFile, folderPath 
 		uniqueCount := len(types.DeduplicateByFingerprint(issues))
 
 		relPath := computeRelativePath(path, folderPath)
-		desc := fileDescription(p, uniqueCount)
+		desc := fileDescription(uniqueCount)
 
 		// Only Open Source file nodes get a file icon (package manager SVG).
 		// Non-OSS products (Code, IaC, Secrets) intentionally omit the icon.
@@ -571,10 +567,9 @@ func (b *TreeBuilder) buildFileNodes(issuesByFile snyk.IssuesByFile, folderPath 
 	return fileNodes
 }
 
-// fileDescription returns product-aware text: "N vulnerabilities" for OSS, "N issues" for Code/IaC.
-func fileDescription(p product.Product, count int) string {
-	word := productCountWord(p, count)
-	return fmt.Sprintf("%d %s", count, word)
+// fileDescription returns the issue-count text for a file node, e.g. "3 issues".
+func fileDescription(count int) string {
+	return fmt.Sprintf("%d %s", count, countWord(count))
 }
 
 // buildIssueNodes creates issue-level nodes, sorted by priority (severity + product score).

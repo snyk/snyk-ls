@@ -312,15 +312,17 @@ func TestTreeHtmlRenderer_FilterToolbar_NoIssueViewButtons(t *testing.T) {
 	assert.NotContains(t, html, `data-filter-value="ignoredIssues"`)
 }
 
-func TestTreeHtmlRenderer_FilterToolbar_ExpandCollapseButtons_Rendered(t *testing.T) {
+func TestTreeHtmlRenderer_FilterToolbar_ExpandCollapseButtons_NotRendered(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	html := renderer.RenderTreeView(TreeViewData{})
 
-	assert.Contains(t, html, `id="expandAllBtn"`)
-	assert.Contains(t, html, `id="collapseAllBtn"`)
+	// IDE-1863: Expand/Collapse All buttons were removed from the toolbar in
+	// favour of per-scanner chevrons.
+	assert.NotContains(t, html, `id="expandAllBtn"`)
+	assert.NotContains(t, html, `id="collapseAllBtn"`)
 }
 
 func TestTreeHtmlRenderer_MultiRoot_FolderNodes_Rendered(t *testing.T) {
@@ -360,6 +362,32 @@ func TestTreeHtmlRenderer_ProductNode_ScanError_HasDataAttribute(t *testing.T) {
 
 	assert.Contains(t, html, `data-error-message="dependency graph failed"`, "product node with error should have data-error-message attribute")
 	assert.Contains(t, html, "tree-node-error", "product node with error should have error CSS class")
+}
+
+func TestTreeHtmlRenderer_ProductNode_HasChildrenClass_OnlyWhenExpandable(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	// IDE-1863: the chevron glyph is gated on tree-node-has-children, so a product
+	// with children (completed scan with results/info rows) carries the class and
+	// one without (scanning / awaiting first scan / errored) does not.
+	withChildren := NewTreeNode(NodeTypeProduct, "Open Source",
+		WithProduct(product.ProductOpenSource),
+		WithChildren([]TreeNode{NewTreeNode(NodeTypeInfo, "✅ No issues found")}),
+	)
+	withoutChildren := NewTreeNode(NodeTypeProduct, "Snyk Code",
+		WithProduct(product.ProductCode),
+		WithDescription("- Scanning..."),
+	)
+
+	withHTML := renderer.RenderTreeView(TreeViewData{Nodes: []TreeNode{withChildren}})
+	withoutHTML := renderer.RenderTreeView(TreeViewData{Nodes: []TreeNode{withoutChildren}})
+
+	// Match the class on the node (space-separated, quote-terminated) rather than
+	// the bare string, which also appears in the embedded styles.css selectors.
+	assert.Contains(t, withHTML, ` tree-node-has-children"`, "product with children should be marked expandable")
+	assert.NotContains(t, withoutHTML, ` tree-node-has-children"`, "product without children should not be marked expandable")
 }
 
 func TestTreeHtmlRenderer_FolderNode_DeltaEnabled_HasBranchDataAttributes(t *testing.T) {

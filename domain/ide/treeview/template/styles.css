@@ -181,10 +181,44 @@ body {
   left: 58px;
 }
 
-/* Chevron: hidden — the tree guide lines indicate structure.
-   Kept in the DOM for click handling and screen-reader state. */
+/* Chevron: hidden by default — file/issue/location rows use the tree guide
+   lines to indicate structure, so their chevron stays in the DOM (for click
+   handling and screen-reader state) but is not painted. */
 .tree-chevron {
   display: none;
+}
+
+/* IDE-1863: scanner (product) rows reserve space for an expand/collapse chevron
+   to the left of the product icon. The span is always present so the product
+   icons stay aligned in a column, but the chevron glyph is only painted when the
+   scanner has something to expand (tree-node-has-children — i.e. completed scans
+   with results or info rows). Scanners that are scanning, awaiting a first scan,
+   errored, or disabled have no children and so render no glyph. */
+[data-product-id] > .tree-node-row > .tree-chevron {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  vertical-align: middle;
+  margin-right: 2px;
+  position: relative;
+  opacity: 0.7;
+  color: var(--text-color);
+}
+/* The glyph itself: rotated border corners that follow currentColor. Points
+   down when expanded, right when collapsed. Only drawn for expandable rows. */
+[data-product-id].tree-node-has-children > .tree-node-row > .tree-chevron::before {
+  content: "";
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -75%) rotate(45deg);
+}
+[data-product-id].tree-node-has-children:not(.expanded) > .tree-node-row > .tree-chevron::before {
+  transform: translate(-75%, -50%) rotate(-45deg);
 }
 
 /* Node label */
@@ -461,7 +495,7 @@ body {
 
 /* IDE-1882: untrusted-folder info node. Sits on the existing .tree-node-info
    foundation (no banner chrome) so it visually belongs in the same family as
-   the other inline info rows ("✅ Congrats!", "⚡ N fixable…"). The action row
+   the other inline info rows ("✅ No issues found", "⚡ N fixable…"). The action row
    is stacked under the message so the Trust button is always visible at the
    sidebar's natural width. Button styling reuses --vscode-button-* tokens,
    matching the IDE's primary-button look. */
@@ -676,6 +710,26 @@ body {
 
 /* Scan error overlay — viewport-fixed popup shown when a product error node is clicked.
    Width and position are set by JS; max-height limits the scrollable message area. */
+/* Custom tooltip drawn by tree.js from `title` attributes (native title
+   tooltips are unreliable inside IDE webviews). pointer-events: none so it
+   never intercepts hover/click on the row beneath it. */
+.tree-tooltip {
+  position: fixed;
+  z-index: 300;
+  display: none;
+  max-width: 320px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: var(--font-size);
+  line-height: 1.4;
+  white-space: normal;
+  pointer-events: none;
+  background-color: var(--vscode-editorHoverWidget-background, #252526);
+  color: var(--vscode-editorHoverWidget-foreground, var(--text-color));
+  border: 1px solid var(--vscode-editorHoverWidget-border, var(--panel-border));
+  box-shadow: 0 2px 8px var(--widget-shadow);
+}
+
 .error-overlay {
   /* JS sets style.width to fit the viewport (Math.min(520, vw - 16)); border-box
      makes that the total rendered width incl. padding + border, otherwise the

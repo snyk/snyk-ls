@@ -35,11 +35,10 @@
       <button data-filter-type="severity" data-filter-value="medium" class="filter-btn filter-btn-icon{{if .FilterState.SeverityFilter.Medium}} filter-active{{end}}" title="Medium">{{severitySVGByName "medium"}}</button>
       <button data-filter-type="severity" data-filter-value="low" class="filter-btn filter-btn-icon{{if .FilterState.SeverityFilter.Low}} filter-active{{end}}" title="Low">{{severitySVGByName "low"}}</button>
     </span>
-    <span class="filter-separator"></span>
-    <span class="filter-group">
-      <button id="expandAllBtn" class="action-btn" title="Expand All"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M3 3l5 4.5L13 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 8.5l5 4.5L13 8.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-      <button id="collapseAllBtn" class="action-btn" title="Collapse All"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M3 13l5-4.5L13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 7.5L8 3l5 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-    </span>
+    {{/* IDE-1863: Expand/Collapse All removed from the toolbar — they aren't
+        filters, and per-scanner chevrons (see .tree-chevron in styles.css) now
+        handle expand/collapse. tree.js keeps the expandAll/collapseAll handlers,
+        which simply no-op when the buttons are absent. */}}
   </div>
 
   <div class="tree-container" id="treeContainer" data-total-issues="{{.TotalIssues}}">
@@ -58,7 +57,7 @@
     <div class="tree-node{{if .Expanded}} expanded{{end}}" data-node-id="{{.ID}}"{{if .DeltaEnabled}} data-delta-enabled="true" data-file-path="{{.FilePath}}"{{if .BaseBranch}} data-base-branch="{{.BaseBranch}}"{{end}}{{if .LocalBranches}} data-local-branches="{{joinStrings .LocalBranches ","}}"{{end}}{{if .ReferenceFolderPath}} data-reference-folder-path="{{.ReferenceFolderPath}}"{{end}}{{end}}>
       <div class="tree-node-row">
         <span class="tree-chevron"></span>
-        <span class="folder-icon">📁</span>
+        <span class="folder-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" opacity="0.6"><path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h3.88l1.62 2H12.5A1.5 1.5 0 0 1 14 5.5v7A1.5 1.5 0 0 1 12.5 14h-9A1.5 1.5 0 0 1 2 12.5z"/></svg></span>
         <span class="tree-label">{{.Label}}</span>
         {{if .Description}}<span class="tree-description">{{.Description}}</span>{{end}}
       </div>
@@ -67,11 +66,11 @@
       </div>
     </div>
   {{else if eq .Type "product"}}
-    <div class="tree-node{{if .Expanded}} expanded{{end}}{{if not (isEnabled .Enabled)}} tree-node-disabled{{end}}{{if .ErrorMessage}} tree-node-error{{end}}" data-node-id="{{.ID}}" data-product-id="{{.Product.ToProductCodename}}"{{if .ErrorMessage}} data-error-message="{{.ErrorMessage}}"{{end}}>
+    <div class="tree-node{{if .Expanded}} expanded{{end}}{{if .Children}} tree-node-has-children{{end}}{{if not (isEnabled .Enabled)}} tree-node-disabled{{end}}{{if .ErrorMessage}} tree-node-error{{end}}" data-node-id="{{.ID}}" data-product-id="{{.Product.ToProductCodename}}"{{if .ErrorMessage}} data-error-message="{{.ErrorMessage}}"{{end}}>
       <div class="tree-node-row"{{if .Tooltip}} title="{{.Tooltip}}"{{end}}>
         <span class="tree-chevron"></span>
         <span class="product-icon product-icon--abbreviated">{{productSVG .Product}}</span>
-        <span class="tree-label tree-label-product-name"><strong>{{.Label}}</strong></span>{{if .Description}} <span class="tree-description tree-description-product">{{.Description}}</span>{{end}}
+        <span class="tree-label tree-label-product-name"><strong>{{.Label}}</strong></span>{{if .Description}}<span class="tree-description tree-description-product">{{.Description}}</span>{{end}}
       </div>
       <div class="tree-node-children">
         {{range .Children}}{{template "treeNode" .}}{{end}}

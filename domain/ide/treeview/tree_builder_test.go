@@ -725,7 +725,7 @@ func TestBuildTree_CodeIssueLabel_TitleWithLineCol(t *testing.T) {
 	assert.Equal(t, "SQL Injection [42, 10]", issueNodes[0].Label)
 }
 
-func TestBuildTree_OssFileDescription_SaysVulnerabilities(t *testing.T) {
+func TestBuildTree_OssFileDescription_SaysIssues(t *testing.T) {
 	builder := newBuilderWithCompletedScans()
 	filePath := types.FilePath("/project/package.json")
 
@@ -745,7 +745,8 @@ func TestBuildTree_OssFileDescription_SaysVulnerabilities(t *testing.T) {
 	require.NotNil(t, ossNode)
 	fileNodes := filterChildrenByType(ossNode.Children, NodeTypeFile)
 	require.GreaterOrEqual(t, len(fileNodes), 1)
-	assert.Contains(t, fileNodes[0].Description, "vulnerabilit")
+	assert.Contains(t, fileNodes[0].Description, "issue")
+	assert.NotContains(t, fileNodes[0].Description, "vulnerabilit")
 }
 
 func TestBuildTree_CodeFileDescription_SaysIssues(t *testing.T) {
