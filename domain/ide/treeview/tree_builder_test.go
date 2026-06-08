@@ -660,9 +660,39 @@ func TestBuildTree_EmptyProduct_ShowsCongratsInfoChild(t *testing.T) {
 	ossNode := findChildByProduct(data.Nodes, product.ProductOpenSource)
 	require.NotNil(t, ossNode, "empty product should still appear")
 
+	// Scanner row shows just the ✅ tick with a "No issues found" tooltip.
+	assert.Equal(t, "✅", ossNode.Description, "zero-issue scanner row should show only the tick")
+	assert.Equal(t, "No issues found", ossNode.Tooltip)
+
 	infoNodes := filterChildrenByType(ossNode.Children, NodeTypeInfo)
 	congratsNode := findInfoNodeContaining(infoNodes, "No issues found")
 	require.NotNil(t, congratsNode, "empty product should show congrats info child")
+	// Child carries the plain text, without the tick (which is on the parent row).
+	assert.NotContains(t, congratsNode.Label, "✅", "child info node should not repeat the tick emoji")
+}
+
+func TestBuildTree_AllIssuesFilteredOut_ShowsFilterAwareEmptyState(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+	filePath := types.FilePath("/project/main.go")
+
+	issue := testutil.NewMockIssueWithSeverity("code-1", filePath, types.High)
+	issue.Product = product.ProductCode
+	issue.AdditionalData = &snyk.CodeIssueData{Key: "k1", Title: "Hardcoded Secret"}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           snyk.IssuesByFile{filePath: {issue}},
+		FilteredIssues:      snyk.IssuesByFile{}, // active filters hide every issue
+	}})
+
+	codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+	require.NotNil(t, codeNode)
+	assert.Equal(t, "✅", codeNode.Description, "scanner with all issues filtered still shows the tick")
+
+	infoNodes := filterChildrenByType(codeNode.Children, NodeTypeInfo)
+	require.NotNil(t, findInfoNodeContaining(infoNodes, "No issues found with these filters"),
+		"child should explain the empty state is filter-driven")
 }
 
 func TestBuildTree_OssIssueLabel_PackageAtVersionTitle(t *testing.T) {
@@ -1313,7 +1343,7 @@ func TestBuildTree_SingleFolder_DeltaEnabled_BothSet_ReferenceFolderTakesPrecede
 
 // --- Info node: issue view options awareness ---
 
-func TestBuildTree_ConsistentIgnoresEnabled_IgnoredDisabled_ZeroFiltered_ShowsAdjustHint(t *testing.T) {
+func TestBuildTree_ConsistentIgnoresEnabled_IgnoredDisabled_ZeroFiltered_ShowsFilterAwareEmpty(t *testing.T) {
 	builder := newBuilderWithCompletedScans()
 	filePath := types.FilePath("/project/main.go")
 
@@ -1334,11 +1364,13 @@ func TestBuildTree_ConsistentIgnoresEnabled_IgnoredDisabled_ZeroFiltered_ShowsAd
 	require.NotNil(t, codeNode)
 
 	infoNodes := filterChildrenByType(codeNode.Children, NodeTypeInfo)
-	hintNode := findInfoNodeContaining(infoNodes, "Adjust your settings to view Ignored issues")
-	require.NotNil(t, hintNode, "should show hint about ignored issues being filtered")
+	require.NotNil(t, findInfoNodeContaining(infoNodes, "No issues found with these filters"),
+		"filter-hidden empty state should explain filters are active")
+	assert.Nil(t, findInfoNodeContaining(infoNodes, "Adjust your settings"),
+		"redundant 'Adjust your settings' hint should no longer be shown")
 }
 
-func TestBuildTree_ConsistentIgnoresEnabled_OpenDisabled_ZeroFiltered_ShowsAdjustHint(t *testing.T) {
+func TestBuildTree_ConsistentIgnoresEnabled_OpenDisabled_ZeroFiltered_ShowsFilterAwareEmpty(t *testing.T) {
 	builder := newBuilderWithCompletedScans()
 	filePath := types.FilePath("/project/main.go")
 
@@ -1358,8 +1390,10 @@ func TestBuildTree_ConsistentIgnoresEnabled_OpenDisabled_ZeroFiltered_ShowsAdjus
 	require.NotNil(t, ossNode)
 
 	infoNodes := filterChildrenByType(ossNode.Children, NodeTypeInfo)
-	hintNode := findInfoNodeContaining(infoNodes, "Adjust your settings to view Open issues")
-	require.NotNil(t, hintNode, "should show hint about open issues being filtered")
+	require.NotNil(t, findInfoNodeContaining(infoNodes, "No issues found with these filters"),
+		"filter-hidden empty state should explain filters are active")
+	assert.Nil(t, findInfoNodeContaining(infoNodes, "Adjust your settings"),
+		"redundant 'Adjust your settings' hint should no longer be shown")
 }
 
 func TestBuildTree_ConsistentIgnoresDisabled_NoHint(t *testing.T) {

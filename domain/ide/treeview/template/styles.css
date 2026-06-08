@@ -479,9 +479,13 @@ body {
    labels below it. Italic alone (no color/weight shift) sits the row a half-step
    above filepaths without competing with the bold scanner name above. Scoped to
    .tree-label so action elements inside variants (e.g. the untrusted-folder
-   Trust button) keep their upright type. */
+   Trust button) keep their upright type.
+   font-synthesis: none stops the browser from faking an oblique on the leading
+   status emoji (✅ ⚡ ✋) — the emoji font has no italic face, so without this it
+   gets a synthetic skew and looks tilted. Real text fonts keep their true italic. */
 .tree-node-row-info .tree-label {
   font-style: italic;
+  font-synthesis: none;
 }
 
 /* IDE-1864: disabled scanner rows use targeted dimming on the product icon and
