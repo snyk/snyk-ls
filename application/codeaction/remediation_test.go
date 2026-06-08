@@ -189,6 +189,48 @@ func TestResolveCodeAction_RemediationAgent_InvokesProvider(t *testing.T) {
 	assert.Len(t, resolved.Edit.Changes, 1, "resolved edit must carry the provider's changes")
 }
 
+func TestGetCodeActions_RemediationAgent_NonCodeProduct_NoAction(t *testing.T) {
+	fake := &fakeRemediationProvider{edit: &types.WorkspaceEdit{}}
+
+	// OSS issue with a FindingId and HasAIFix — should not get a remediation action.
+	ossIssue := &snyk.Issue{
+		FindingId: "finding-oss",
+		Product:   product.ProductOpenSource,
+		AdditionalData: snyk.OssIssueData{
+			IsUpgradable: true,
+		},
+	}
+
+	service, params := setupWithIssueAndProvider(t, ossIssue, fake)
+	actions := service.GetCodeActions(params)
+
+	for _, a := range actions {
+		assert.NotEqual(t, types.RemediationAgentQuickFix, a.Kind,
+			"non-Code product must not produce RemediationAgentQuickFix actions")
+	}
+}
+
+func TestGetCodeActions_RemediationAgent_NotAIFixable_NoAction(t *testing.T) {
+	fake := &fakeRemediationProvider{edit: &types.WorkspaceEdit{}}
+
+	// Code issue with HasAIFix=false — provider present but issue is not AI-fixable.
+	issue := &snyk.Issue{
+		FindingId: "finding-not-fixable",
+		Product:   product.ProductCode,
+		AdditionalData: snyk.CodeIssueData{
+			HasAIFix: false,
+		},
+	}
+
+	service, params := setupWithIssueAndProvider(t, issue, fake)
+	actions := service.GetCodeActions(params)
+
+	for _, a := range actions {
+		assert.NotEqual(t, types.RemediationAgentQuickFix, a.Kind,
+			"non-AI-fixable Code issue must not produce RemediationAgentQuickFix actions")
+	}
+}
+
 func TestGetCodeActions_RemediationAgent_DoesNotMutateIssueCodeActions(t *testing.T) {
 	fake := &fakeRemediationProvider{edit: &types.WorkspaceEdit{}}
 	issue := buildFixableIssue("finding-mutate")
