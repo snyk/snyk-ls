@@ -33,6 +33,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/code-client-go/sarif"
+	"github.com/snyk/code-client-go/scan"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
@@ -97,6 +99,11 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		logger.Warn().Str("issueId", issueId).Msg("missing finding id for issue. Please rerun the Code scan to refresh finding IDs.")
 	}
 	contentRoot := issue.GetContentRoot()
+
+	if err := cmd.validateIgnoreRequest(logger, contentRoot); err != nil {
+		return nil, err
+	}
+
 	engine := cmd.engine
 
 	switch workflowType {
@@ -338,6 +345,22 @@ func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, wo
 	err = updateIssueWithIgnoreDetails(cmd.engine.GetLogger(), output, issue)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+const userMsgCannotDetermineRepoURL = "Cannot submit ignore: could not determine the repository URL for this folder. Please ensure the folder is part of a Git repository with a configured remote."
+
+// validateIgnoreRequest checks that a repository URL can be resolved for contentRoot.
+// If not, it sends a user-facing warning notification and returns an error.
+// The raw error from go-git is kept in the structured log only, to avoid leaking filesystem paths.
+func (cmd *submitIgnoreRequest) validateIgnoreRequest(logger zerolog.Logger, contentRoot types.FilePath) error {
+	if _, err := scan.NewRepositoryTarget(string(contentRoot)); err != nil {
+		logger.Warn().Err(err).Str("contentRoot", string(contentRoot)).Msg("could not determine repository URL for ignore request")
+		if cmd.notifier != nil {
+			cmd.notifier.SendShowMessage(sglsp.MTWarning, userMsgCannotDetermineRepoURL)
+		}
+		return fmt.Errorf("could not determine repository URL: %w", err)
 	}
 	return nil
 }

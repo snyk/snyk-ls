@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -644,4 +645,36 @@ func Test_submitIgnoreRequest_NilTreeRefresher_DoesNotPanic(t *testing.T) {
 	assert.NotPanics(t, func() {
 		_, _ = cmd.Execute(t.Context())
 	})
+}
+
+func Test_validateIgnoreRequest__notifies_user_when_repo_URL_cannot_be_determined(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	// Use a non-git temp dir so NewRepositoryTarget cannot determine the repo URL.
+	nonGitDir := types.FilePath(t.TempDir())
+
+	mockNotifier := notification.NewMockNotifier()
+	cmd := &submitIgnoreRequest{
+		engine:   engine,
+		notifier: mockNotifier,
+	}
+
+	logger := engine.GetLogger().With().Str("method", "test").Logger()
+	err := cmd.validateIgnoreRequest(logger, nonGitDir)
+
+	require.Error(t, err, "validateIgnoreRequest should return an error when repo URL cannot be determined")
+
+	messages := mockNotifier.SentMessages()
+	require.NotEmpty(t, messages, "expected a user-facing warning to be sent via notifier")
+
+	found := false
+	for _, msg := range messages {
+		if params, ok := msg.(sglsp.ShowMessageParams); ok {
+			if params.Type == sglsp.MTWarning && params.Message == userMsgCannotDetermineRepoURL {
+				found = true
+				break
+			}
+		}
+	}
+	assert.True(t, found, "expected a MTWarning ShowMessage with the stable repo-URL message, got: %v", messages)
 }

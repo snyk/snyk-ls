@@ -25,8 +25,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog"
-	sglsp "github.com/sourcegraph/go-lsp"
-
 	codeClient "github.com/snyk/code-client-go"
 	codeClientConfig "github.com/snyk/code-client-go/config"
 	codeClientHTTP "github.com/snyk/code-client-go/http"
@@ -414,7 +412,6 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fo
 	target, err := scan.NewRepositoryTarget(string(path))
 	if err != nil {
 		logger.Warn().Err(err).Msg("could not determine repository URL (target)")
-		sc.notifier.SendShowMessage(sglsp.MTWarning, fmt.Sprintf("Could not determine repository URL: %s", err.Error()))
 	}
 
 	// convert changedFiles to map[string]bool

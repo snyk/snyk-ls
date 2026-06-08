@@ -21,7 +21,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 
@@ -136,7 +135,7 @@ func TestUploadAndAnalyze(t *testing.T) {
 	cancelChannel := make(chan bool, 1)
 	testTracker := progress.NewTestTracker(channel, cancelChannel, engine.GetLogger())
 
-	t.Run("should notify user with underlying error when repository URL cannot be determined", func(t *testing.T) {
+	t.Run("should not send a user-facing popup when repository URL cannot be determined during scan", func(t *testing.T) {
 		mockNotifier := notification.NewMockNotifier()
 		scanner := New(engine,
 			performance.NewInstrumentor(),
@@ -159,18 +158,12 @@ func TestUploadAndAnalyze(t *testing.T) {
 
 		_, _ = scanner.UploadAndAnalyze(t.Context(), nonGitPath, folderConfig, sliceToChannel([]string{}), map[types.FilePath]bool{}, false, testTracker)
 
-		messages := mockNotifier.SentMessages()
-		require.NotEmpty(t, messages, "expected a user-facing warning to be sent via notifier")
-		found := false
-		for _, msg := range messages {
+		for _, msg := range mockNotifier.SentMessages() {
 			if params, ok := msg.(sglsp.ShowMessageParams); ok {
-				if params.Type == sglsp.MTWarning && strings.Contains(params.Message, "Could not determine repository URL") {
-					found = true
-					break
-				}
+				assert.NotEqual(t, sglsp.MTWarning, params.Type,
+					"scan path must not send a warning popup when repo URL cannot be determined; got: %v", params.Message)
 			}
 		}
-		assert.True(t, found, "expected a MTWarning ShowMessage containing 'Could not determine repository URL', got: %v", messages)
 	})
 
 	t.Run(
