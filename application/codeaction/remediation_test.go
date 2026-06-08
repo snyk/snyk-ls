@@ -33,6 +33,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -53,6 +54,7 @@ func (f *fakeRemediationProvider) Remediate(_ context.Context, _ remediation.Rem
 func buildFixableIssue(findingId string) *snyk.Issue {
 	return &snyk.Issue{
 		FindingId: findingId,
+		Product:   product.ProductCode,
 		AdditionalData: snyk.CodeIssueData{
 			HasAIFix: true,
 		},
