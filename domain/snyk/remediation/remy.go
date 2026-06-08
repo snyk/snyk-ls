@@ -165,70 +165,69 @@ func (p *remyProvider) tryServeFromCache(root, filePath string) ([]types.TextEdi
 // Remediate returns a WorkspaceEdit limited to req.FilePath. On the first call
 // for a given ContentRoot, it clones ContentRoot into an isolated git worktree,
 // runs remy there, and builds a full WorkspaceEdit. Changes for req.FilePath
-// are returned immediately; changes for all other files are stored in an
-// in-process cache so that subsequent code action resolutions for those files
-// can be served without re-running remy.
+// are returned immediately; changes for all other files are cached for
+// subsequent code action resolutions without re-running remy.
 //
-// Concurrent calls for the same ContentRoot are serialized via a per-root mutex
-// so only one remy/LLM invocation runs at a time per workspace root. Callers
-// that arrive while remy is running will block and then re-check the cache.
-//
-// Cache eviction: if any cached file has been modified on disk since the cache
-// was populated, the whole entry is discarded and remy runs again. The
-// textDocument/didChange and textDocument/didSave handlers also call
-// InvalidateFile to evict stale diffs on in-memory edits.
-//
-// Returns (nil, nil) when:
-//   - FindingId, ContentRoot, or FilePath is empty
-//   - remy makes no changes to req.FilePath
-//   - the diff produces no actionable hunks for req.FilePath
+// Returns (nil, nil) when FindingId/ContentRoot/FilePath is empty, remy makes
+// no changes to req.FilePath, or the diff produces no actionable hunks.
 func (p *remyProvider) Remediate(ctx context.Context, req RemediationRequest) (*types.WorkspaceEdit, error) {
 	if req.FindingId == "" || req.ContentRoot == "" || req.FilePath == "" {
 		return nil, nil
 	}
-
 	root := string(req.ContentRoot)
 	if !filepath.IsAbs(root) {
 		return nil, fmt.Errorf("remy: ContentRoot must be an absolute path, got %q", root)
 	}
 	filePath := string(req.FilePath)
 
-	// Fast path: serve from cache without holding the root lock.
 	if edits, ok := p.tryServeFromCache(root, filePath); ok {
-		if len(edits) == 0 {
-			return nil, nil
-		}
-		return &types.WorkspaceEdit{Changes: map[string][]types.TextEdit{filePath: edits}}, nil
+		return editsToEdit(filePath, edits), nil
 	}
 
-	// Acquire the per-root lock so concurrent callers wait rather than
-	// launching duplicate remy invocations for the same workspace root.
 	rootMu := p.getOrCreateRootMu(root)
 	rootMu.Lock()
 	defer rootMu.Unlock()
 
-	// Double-check: another goroutine may have populated the cache while we waited.
 	if edits, ok := p.tryServeFromCache(root, filePath); ok {
-		if len(edits) == 0 {
-			return nil, nil
-		}
-		return &types.WorkspaceEdit{Changes: map[string][]types.TextEdit{filePath: edits}}, nil
+		return editsToEdit(filePath, edits), nil
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, p.opts.Timeout)
 	defer cancel()
 
-	// Resolve the git repository root so that worktree paths are relative to
-	// the repo root, not the workspace subfolder. This matters when the
-	// workspace folder is a subdirectory of a git repo (e.g. a monorepo package).
+	allChanges, err := p.runRemyInWorktree(ctx, root, req)
+	if err != nil {
+		return nil, err
+	}
+	if len(allChanges) == 0 {
+		return nil, nil
+	}
+	p.populateCache(root, filePath, allChanges)
+
+	fileEdits := allChanges[filePath]
+	if len(fileEdits) == 0 {
+		return nil, nil
+	}
+	return &types.WorkspaceEdit{Changes: map[string][]types.TextEdit{filePath: fileEdits}}, nil
+}
+
+// editsToEdit converts a slice of TextEdits into a WorkspaceEdit, returning nil
+// when the slice is empty so callers get a uniform (nil, nil) no-fix signal.
+func editsToEdit(filePath string, edits []types.TextEdit) *types.WorkspaceEdit {
+	if len(edits) == 0 {
+		return nil
+	}
+	return &types.WorkspaceEdit{Changes: map[string][]types.TextEdit{filePath: edits}}
+}
+
+// runRemyInWorktree creates an isolated git worktree, runs the remy runner, and
+// builds a WorkspaceEdit for all changed files. It owns the full worktree
+// lifecycle (creation and cleanup via defer).
+func (p *remyProvider) runRemyInWorktree(ctx context.Context, root string, req RemediationRequest) (map[string][]types.TextEdit, error) {
 	gitRoot, err := resolveGitRoot(ctx, root)
 	if err != nil {
 		return nil, fmt.Errorf("remy: resolve git root: %w", err)
 	}
-
-	// Create an isolated git worktree so remy can mutate freely without
-	// touching the real workspace. git worktree add requires the target path
-	// to not exist, so we use a temp parent and point at a subdir.
 	tmpParent, err := os.MkdirTemp("", "snyk-remy-*")
 	if err != nil {
 		return nil, fmt.Errorf("remy: create temp dir: %w", err)
@@ -241,23 +240,26 @@ func (p *remyProvider) Remediate(ctx context.Context, req RemediationRequest) (*
 	}
 	defer func() {
 		// Use a fresh context with a short deadline so cleanup is bounded even
-		// if the parent ctx has been cancelled.
+		// if the parent ctx has been canceled.
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cleanupCancel()
 		_ = exec.CommandContext(cleanupCtx, "git", "-C", gitRoot, "worktree", "remove", "--force", worktreeDir).Run()
 		_ = os.RemoveAll(tmpParent)
 	}()
-
 	snapshot, err := snapshotGitFiles(ctx, worktreeDir)
 	if err != nil {
 		p.log.Debug().Err(err).Str("root", worktreeDir).Msg("remy: failed to snapshot tracked files")
 		return nil, fmt.Errorf("remy: snapshot: %w", err)
 	}
-
 	if err = p.runner(ctx, p.engine, worktreeDir, req.FindingId); err != nil {
 		return nil, err
 	}
+	return buildWorkspaceEdits(ctx, p.log, worktreeDir, gitRoot, snapshot)
+}
 
+// buildWorkspaceEdits enumerates files changed in the worktree relative to HEAD
+// and translates each unified diff into TextEdits keyed by the real workspace path.
+func buildWorkspaceEdits(ctx context.Context, log zerolog.Logger, worktreeDir, gitRoot string, snapshot map[string][]byte) (map[string][]types.TextEdit, error) {
 	changedPaths, err := gitChangedFiles(ctx, worktreeDir)
 	if err != nil {
 		return nil, fmt.Errorf("remy: enumerate changed files: %w", err)
@@ -265,11 +267,6 @@ func (p *remyProvider) Remediate(ctx context.Context, req RemediationRequest) (*
 	if len(changedPaths) == 0 {
 		return nil, nil
 	}
-
-	// Build a full WorkspaceEdit. Paths are keyed by the real workspace absolute
-	// path: git diff returns paths relative to the repo root (gitRoot), so
-	// filepath.Join(gitRoot, relPath) gives the correct on-disk workspace path
-	// regardless of whether root is the repo root or a subdirectory of it.
 	allChanges := make(map[string][]types.TextEdit)
 	for _, relPath := range changedPaths {
 		originalBytes, ok := snapshot[relPath]
@@ -278,16 +275,15 @@ func (p *remyProvider) Remediate(ctx context.Context, req RemediationRequest) (*
 		}
 		diff, err := gitFileDiff(ctx, worktreeDir, relPath)
 		if err != nil {
-			p.log.Debug().Err(err).Str("path", relPath).Msg("remy: failed to get diff for file")
+			log.Debug().Err(err).Str("path", relPath).Msg("remy: failed to get diff for file")
 			continue
 		}
 		if diff == "" {
 			continue
 		}
-		realAbsPath := filepath.Join(gitRoot, relPath)
-		edit, err := workspaceEditFromContent(realAbsPath, originalBytes, diff)
+		edit, err := workspaceEditFromContent(filepath.Join(gitRoot, relPath), originalBytes, diff)
 		if err != nil {
-			p.log.Debug().Err(err).Str("path", relPath).Msg("remy: failed to build WorkspaceEdit for file")
+			log.Debug().Err(err).Str("path", relPath).Msg("remy: failed to build WorkspaceEdit for file")
 			continue
 		}
 		if edit == nil {
@@ -297,14 +293,14 @@ func (p *remyProvider) Remediate(ctx context.Context, req RemediationRequest) (*
 			allChanges[k] = append(allChanges[k], v...)
 		}
 	}
+	return allChanges, nil
+}
 
-	if len(allChanges) == 0 {
-		return nil, nil
-	}
-
-	// Populate cache with changes for all files except req.FilePath so that
-	// other code action resolutions can be served without re-running remy.
+// populateCache stores changes for all files except filePath in the cache so
+// that subsequent code action resolutions can be served without re-running remy.
+func (p *remyProvider) populateCache(root, filePath string, allChanges map[string][]types.TextEdit) {
 	p.cacheMu.Lock()
+	defer p.cacheMu.Unlock()
 	entry := &remyCacheEntry{
 		changes:   make(map[string][]types.TextEdit, len(allChanges)-1),
 		createdAt: time.Now(),
@@ -315,13 +311,6 @@ func (p *remyProvider) Remediate(ctx context.Context, req RemediationRequest) (*
 		}
 	}
 	p.cache[root] = entry
-	p.cacheMu.Unlock()
-
-	fileEdits := allChanges[filePath]
-	if len(fileEdits) == 0 {
-		return nil, nil
-	}
-	return &types.WorkspaceEdit{Changes: map[string][]types.TextEdit{filePath: fileEdits}}, nil
 }
 
 // cacheValid returns false if any file in the entry has been modified on disk
