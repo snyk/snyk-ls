@@ -79,6 +79,7 @@ var (
 	scanNotifier                scanner2.ScanNotifier
 	codeActionService           *codeaction.CodeActionsService
 	fileWatcher                 *watcher.FileWatcher
+	remediationNotifier         remediation.FileChangeNotifier
 	initMutex                   = &sync.Mutex{}
 	notifier                    domainNotify.Notifier
 	codeInstrumentor            codeClientObservability.Instrumentor
@@ -107,13 +108,14 @@ type Dependencies struct {
 	// process-lifecycle dependencies used during startup, not per-request.
 	// Access them via di.Installer() / di.Initializer() until those global
 	// accessors are retired.
-	Scanner           scanner2.Scanner
-	HoverService      hover.Service
-	ScanNotifier      scanner2.ScanNotifier
-	ScanPersister     persistence.ScanSnapshotPersister
-	FileWatcher       *watcher.FileWatcher
-	ErrorReporter     er.ErrorReporter
-	CodeActionService *codeaction.CodeActionsService
+	Scanner             scanner2.Scanner
+	HoverService        hover.Service
+	ScanNotifier        scanner2.ScanNotifier
+	ScanPersister       persistence.ScanSnapshotPersister
+	FileWatcher         *watcher.FileWatcher
+	ErrorReporter       er.ErrorReporter
+	CodeActionService   *codeaction.CodeActionsService
+	RemediationNotifier remediation.FileChangeNotifier
 }
 
 func currentDependencies() Dependencies {
@@ -132,13 +134,14 @@ func currentDependencies() Dependencies {
 		InlineValueProvider:   inlineValueProvider,
 		TreeEmitter:           treeEmitterInstance,
 		// Handler-accessed dependencies:
-		Scanner:           scanner,
-		HoverService:      hoverService,
-		ScanNotifier:      scanNotifier,
-		ScanPersister:     scanPersister,
-		FileWatcher:       fileWatcher,
-		ErrorReporter:     errorReporter,
-		CodeActionService: codeActionService,
+		Scanner:             scanner,
+		HoverService:        hoverService,
+		ScanNotifier:        scanNotifier,
+		ScanPersister:       scanPersister,
+		FileWatcher:         fileWatcher,
+		ErrorReporter:       errorReporter,
+		CodeActionService:   codeActionService,
+		RemediationNotifier: remediationNotifier,
 	}
 }
 

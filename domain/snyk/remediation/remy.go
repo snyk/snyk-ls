@@ -25,12 +25,76 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+// remyRunner is the seam that lets tests inject a fake runner without shelling
+// out to a real CLI. The real implementation invokes the legacycli workflow
+// via the Go Application Framework engine.
+//
+// eng is the workflow engine used for GAF invocation (nil in tests).
+// contentRoot is the absolute path of the git worktree to operate on.
+// findingID is the stable identifier of the finding to fix.
+type remyRunner func(ctx context.Context, eng workflow.Engine, contentRoot string, findingID string) error
+
+// RemyOptions controls the behavior of the concrete remy-backed provider.
+type RemyOptions struct {
+	// Timeout caps how long a single remediation attempt may run. When zero,
+	// a 5-minute default applies.
+	Timeout time.Duration
+}
+
 // remyProvider is the concrete implementation that drives the remy workflow.
-type remyProvider struct{}
+type remyProvider struct {
+	opts   RemyOptions
+	runner remyRunner
+	engine workflow.Engine
+	log    zerolog.Logger
+}
+
+// gafRunner is the default remyRunner that invokes the legacycli workflow via
+// the Go Application Framework engine. The remy fix workflow is a Go extension
+// registered under the "fix" workflow ID — invoke it directly, not via legacycli.
+// auto-approve suppresses interactive prompts required for non-interactive LS use.
+func gafRunner(ctx context.Context, eng workflow.Engine, contentRoot string, _ string) error {
+	remyWorkflowID := workflow.NewWorkflowIdentifier("fix")
+	conf := eng.GetConfiguration().Clone()
+	conf.Set("agentic", true)
+	conf.Set("auto-approve", true)
+	conf.Set(configuration.INPUT_DIRECTORY, []string{contentRoot})
+	_, err := eng.Invoke(remyWorkflowID, workflow.WithContext(ctx), workflow.WithConfig(conf))
+	return err
+}
+
+// NewRemyProvider constructs a remyProvider.
+//
+// engine is the workflow engine used for GAF invocation.
+// runner is the test seam; pass nil to use the default gafRunner which
+// invokes the legacycli workflow via the engine. Callers that want to plug
+// in a fake runner for unit tests pass a non-nil function here.
+func NewRemyProvider(engine workflow.Engine, runner remyRunner) *remyProvider {
+	var log zerolog.Logger
+	opts := RemyOptions{}
+	if engine != nil {
+		l := engine.GetLogger().With().Str("provider", "remy").Logger()
+		log = l
+	} else {
+		log = zerolog.Nop()
+	}
+	if opts.Timeout <= 0 {
+		opts.Timeout = 5 * time.Minute
+	}
+	if runner == nil {
+		runner = gafRunner
+	}
+	return &remyProvider{opts: opts, runner: runner, engine: engine, log: log}
+}
 
 // gitChangedFiles returns the relative paths of files that differ from HEAD in
 // the working tree at root.

@@ -14,5 +14,12 @@
  * limitations under the License.
  */
 
-// Package remediation defines the interface for autonomous finding remediation.
 package remediation
+
+import "github.com/snyk/snyk-ls/internal/types"
+
+// ExportedWorkspaceEditFromContent exposes workspaceEditFromContent for
+// black-box tests in the remediation_test package.
+func ExportedWorkspaceEditFromContent(absPath string, originalContent []byte, diff string) (*types.WorkspaceEdit, error) {
+	return workspaceEditFromContent(absPath, originalContent, diff)
+}
