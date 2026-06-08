@@ -38,6 +38,12 @@ import (
 	"github.com/snyk/snyk-ls/internal/vcs"
 )
 
+// cancelCallbacks maps folderPath → reset function registered by the LSP
+// cancel handler (IDE-1035). Callbacks are consumed (and removed) by Scan()
+// after all per-product goroutines have finished, ensuring the reset happens
+// only once and only after all SetScanDone writes are complete.
+type cancelCallbackMap = sync.Map
+
 var (
 	_ Scanner                  = (*DelegatingConcurrentScanner)(nil)
 	_ snyk.InlineValueProvider = (*DelegatingConcurrentScanner)(nil)
@@ -63,6 +69,18 @@ type DelegatingConcurrentScanner struct {
 	scanStateAggregator scanstates.Aggregator
 	snykApiClient       snyk_api.SnykApiClient
 	configResolver      types.ConfigResolverInterface
+	// cancelCallbacks stores per-folder reset functions registered by the LSP
+	// cancel handler. Consumed by Scan() after all goroutines exit (IDE-1035).
+	cancelCallbacks cancelCallbackMap
+}
+
+// RegisterCancelCallback stores fn to be called by Scan() for folderPath once
+// all per-product goroutines have exited after a user-initiated cancellation.
+// Only one callback per folder is kept; a second call for the same folder
+// overwrites the previous one. This is intentional: the handler is only ever
+// called once per active cancel notification.
+func (sc *DelegatingConcurrentScanner) RegisterCancelCallback(folderPath types.FilePath, fn func()) {
+	sc.cancelCallbacks.Store(folderPath, fn)
 }
 
 func (sc *DelegatingConcurrentScanner) Issue(key string) types.Issue {
@@ -357,6 +375,15 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 	logger.Debug().Msgf("All product scanners started for %s", pathToScan)
 	waitGroup.Wait()
 	referenceBranchScanWaitGroup.Wait()
+
+	// After all per-product goroutines have exited (including their SetScanDone
+	// writes), invoke any cancel callback registered by the LSP cancel handler
+	// for this folder (IDE-1035). Consuming the callback here — after the
+	// WaitGroups — guarantees the aggregator reset cannot race with in-flight
+	// SetScanDone calls.
+	if fn, loaded := sc.cancelCallbacks.LoadAndDelete(folderPath); loaded {
+		fn.(func())()
+	}
 
 	defer func() {
 		if postActionFunc != nil {

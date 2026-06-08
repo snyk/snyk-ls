@@ -27,12 +27,14 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
@@ -159,6 +161,38 @@ func TestCancelProgress(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		return progress.IsCanceled(expectedWorkdoneProgressCancelParams.Token)
 	}, time.Second*5, time.Millisecond)
+}
+
+// IDE-1035 (D): window/workDoneProgress/cancel for a non-scan token (e.g. a
+// download tracker) must NOT reset the summary panel. The positive case (scan
+// token → panel is eventually reset) is exercised by
+// TestScan_CancelCallback_CalledAfterGoroutinesFinish in the scanner package,
+// which verifies the reset happens only after scan goroutines finish writing.
+func TestCancelProgress_NonScanToken_DoesNotResetAggregator(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+
+	agg := &initRecordingAggregator{}
+	loc, _, _ := setupServer(t, engine, tokenService, WithDeps(di.Dependencies{ScanStateAggregator: agg}))
+
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
+	require.NoError(t, err)
+
+	// Seed a workspace folder.
+	tmpDir := types.FilePath(t.TempDir())
+	_, _ = workspaceutil.SetupWorkspace(t, engine, tmpDir)
+
+	// Create a plain (non-scan) tracker, e.g. for a download, and cancel it.
+	plainTracker := progress.NewTracker(true, engine.GetLogger())
+	cancelParams := types.WorkdoneProgressCancelParams{Token: plainTracker.GetToken()}
+	_, err = loc.Client.Call(t.Context(), "window/workDoneProgress/cancel", cancelParams)
+	require.NoError(t, err)
+
+	// Give the handler time to execute; Init must NOT be called.
+	assert.Never(t, func() bool {
+		agg.mu.Lock()
+		defer agg.mu.Unlock()
+		return len(agg.initCalls) > 0
+	}, 300*time.Millisecond, time.Millisecond, "Init must NOT be called when a non-scan token is cancelled")
 }
 
 func Test_NotifierShouldSendNotificationToClient(t *testing.T) {

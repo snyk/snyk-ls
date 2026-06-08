@@ -33,6 +33,15 @@ import (
 var trackersMutex sync.RWMutex
 var trackers = make(map[types.ProgressToken]*Tracker)
 var ToServerProgressChannel = make(chan types.ProgressParams, 1000)
+
+// scanTokensMutex guards scanTokens.
+var scanTokensMutex sync.RWMutex
+
+// scanTokens is the set of progress tokens that belong to scan operations.
+// Tokens created via NewScanTracker are recorded here so that the
+// window/workDoneProgress/cancel handler can distinguish scan cancellations
+// from download/install cancellations (IDE-1035).
+var scanTokens = make(map[types.ProgressToken]struct{})
 var _ ui.ProgressBar = (*Tracker)(nil)
 
 type Tracker struct {
@@ -77,6 +86,27 @@ func NewTracker(cancellable bool, logger *zerolog.Logger) *Tracker {
 	trackers[t.token] = t
 	trackersMutex.Unlock()
 	return t
+}
+
+// NewScanTracker creates a progress tracker and registers its token as a scan
+// token so that IsScanToken returns true for it. Use this for scan operations
+// (OSS, Code, IaC) instead of NewTracker. Download/install operations must
+// continue to use NewTracker so their cancel events do not reset the summary
+// panel (IDE-1035).
+func NewScanTracker(cancellable bool, logger *zerolog.Logger) *Tracker {
+	t := NewTracker(cancellable, logger)
+	scanTokensMutex.Lock()
+	scanTokens[t.token] = struct{}{}
+	scanTokensMutex.Unlock()
+	return t
+}
+
+// IsScanToken reports whether token was created via NewScanTracker.
+func IsScanToken(token types.ProgressToken) bool {
+	scanTokensMutex.RLock()
+	_, ok := scanTokens[token]
+	scanTokensMutex.RUnlock()
+	return ok
 }
 
 func (t *Tracker) GetChannel() chan types.ProgressParams {
@@ -236,6 +266,9 @@ func (t *Tracker) deleteTracker() {
 	trackersMutex.Lock()
 	delete(trackers, t.token)
 	trackersMutex.Unlock()
+	scanTokensMutex.Lock()
+	delete(scanTokens, t.token)
+	scanTokensMutex.Unlock()
 }
 
 func (t *Tracker) GetToken() types.ProgressToken {
@@ -300,6 +333,12 @@ func CleanupChannels() {
 	for token := range tempTrackers {
 		Cancel(token)
 	}
+
+	// Clear any remaining scan tokens that may have been deregistered from the
+	// tracker registry already (e.g. via deleteTracker) but not yet cleaned up.
+	scanTokensMutex.Lock()
+	scanTokens = make(map[types.ProgressToken]struct{})
+	scanTokensMutex.Unlock()
 }
 
 func (t *Tracker) IsCanceled() bool {
@@ -315,6 +354,11 @@ func Cancel(token types.ProgressToken) {
 		delete(trackers, token)
 		close(t.cancelChannel)
 	}
+	// Remove from scan-token set regardless of whether a tracker was found,
+	// so IsScanToken is consistent after cancellation.
+	scanTokensMutex.Lock()
+	delete(scanTokens, token)
+	scanTokensMutex.Unlock()
 }
 
 func IsCanceled(token types.ProgressToken) bool {
