@@ -28,35 +28,38 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // remyRunner is the seam that lets tests inject a fake runner without shelling
-// out to a real CLI. The real implementation executes the host snyk binary with
-// the remy subcommand.
+// out to a real CLI. The real implementation invokes the legacycli workflow
+// via the Go Application Framework engine.
 //
-// root is the absolute path of the git worktree to operate on.
+// eng is the workflow engine used for GAF invocation (nil in tests).
+// contentRoot is the absolute path of the git worktree to operate on.
 // findingID is the stable identifier of the finding to fix.
-type remyRunner func(ctx context.Context, root string, findingID string) error
+type remyRunner func(ctx context.Context, eng workflow.Engine, contentRoot string, findingID string) error
 
 // RemyOptions controls the behavior of the concrete remy-backed provider.
 type RemyOptions struct {
-	// CliPath is the absolute path of the host snyk binary. Required when
-	// using the default subprocess runner.
-	CliPath string
-
 	// Timeout caps how long a single remediation attempt may run. When zero,
 	// a 5-minute default applies.
 	Timeout time.Duration
+}
 
-	// Logger receives structured operational logs. When nil, a discarding
-	// logger is used so the dependency stays optional for callers that do
-	// not need logging.
-	Logger *zerolog.Logger
+// remyCacheEntry holds the changes produced by a single remy run that have not
+// yet been delivered to a code action. Entries are keyed by absolute workspace
+// path. createdAt is used for mtime-based eviction.
+type remyCacheEntry struct {
+	changes   map[string][]types.TextEdit
+	createdAt time.Time
 }
 
 // remyProvider is the concrete RemediationProvider that drives the host snyk
@@ -65,45 +68,117 @@ type RemyOptions struct {
 type remyProvider struct {
 	opts   RemyOptions
 	runner remyRunner
+	engine workflow.Engine
 	log    zerolog.Logger
+
+	cacheMu sync.Mutex
+	cache   map[string]*remyCacheEntry // ContentRoot → leftover changes from last run
+
+	// rootMusMu protects rootMus. rootMus holds one mutex per ContentRoot so
+	// that concurrent Remediate calls for different roots run in parallel while
+	// calls for the same root are serialized, preventing double remy invocations.
+	rootMusMu sync.Mutex
+	rootMus   map[string]*sync.Mutex
 }
 
-// Ensure remyProvider satisfies the interface at compile time.
+// Ensure remyProvider satisfies both interfaces at compile time.
 var _ RemediationProvider = (*remyProvider)(nil)
+var _ FileChangeNotifier = (*remyProvider)(nil)
+
+// gafRunner is the default remyRunner that invokes the legacycli workflow via
+// the Go Application Framework engine. The remy fix workflow is a Go extension
+// registered under the "fix" workflow ID — invoke it directly, not via legacycli.
+// auto-approve suppresses interactive prompts required for non-interactive LS use.
+func gafRunner(ctx context.Context, eng workflow.Engine, contentRoot string, _ string) error {
+	remyWorkflowID := workflow.NewWorkflowIdentifier("fix")
+	conf := eng.GetConfiguration().Clone()
+	conf.Set("agentic", true)
+	conf.Set("auto-approve", true)
+	conf.Set(configuration.INPUT_DIRECTORY, []string{contentRoot})
+	_, err := eng.Invoke(remyWorkflowID, workflow.WithContext(ctx), workflow.WithConfig(conf))
+	return err
+}
 
 // NewRemyProvider constructs a remyProvider.
 //
-// runner is the test seam; pass nil to use the default subprocess runner which
-// shells out to opts.CliPath. Callers that want to plug in a fake runner for
-// unit tests pass a non-nil function here.
-func NewRemyProvider(opts RemyOptions, runner remyRunner) RemediationProvider {
-	log := zerolog.Nop()
-	if opts.Logger != nil {
-		log = *opts.Logger
+// engine is the workflow engine used for GAF invocation.
+// runner is the test seam; pass nil to use the default gafRunner which
+// invokes the legacycli workflow via the engine. Callers that want to plug
+// in a fake runner for unit tests pass a non-nil function here.
+func NewRemyProvider(engine workflow.Engine, runner remyRunner) RemediationProvider {
+	var log zerolog.Logger
+	opts := RemyOptions{}
+	if engine != nil {
+		l := engine.GetLogger().With().Str("provider", "remy").Logger()
+		log = l
+	} else {
+		log = zerolog.Nop()
 	}
 	if opts.Timeout <= 0 {
 		opts.Timeout = 5 * time.Minute
 	}
 	if runner == nil {
-		runner = makeSubprocessRunner(opts, log)
+		runner = gafRunner
 	}
-	return &remyProvider{opts: opts, runner: runner, log: log}
+	return &remyProvider{opts: opts, runner: runner, engine: engine, log: log, cache: make(map[string]*remyCacheEntry), rootMus: make(map[string]*sync.Mutex)}
 }
 
-// Remediate runs remy against req.ContentRoot (a git worktree supplied by the
-// caller), lets remy mutate it in place, then builds a WorkspaceEdit from the
-// before/after diff of every changed file.
+// getOrCreateRootMu returns the per-ContentRoot mutex, creating it if needed.
+// Serializing remy invocations per root prevents concurrent callers from
+// both missing the cache and launching duplicate LLM calls.
+func (p *remyProvider) getOrCreateRootMu(root string) *sync.Mutex {
+	p.rootMusMu.Lock()
+	defer p.rootMusMu.Unlock()
+	if mu, ok := p.rootMus[root]; ok {
+		return mu
+	}
+	mu := &sync.Mutex{}
+	p.rootMus[root] = mu
+	return mu
+}
+
+// tryServeFromCache looks up the cache for root/filePath. Holds cacheMu for
+// the full read-validate-consume cycle so that cacheValid (which iterates
+// entry.changes) and InvalidateFile (which deletes from entry.changes) are
+// never concurrent — preventing a data race on the shared map.
+// Returns (edits, true) on a valid cache hit, (nil, false) otherwise.
+func (p *remyProvider) tryServeFromCache(root, filePath string) ([]types.TextEdit, bool) {
+	p.cacheMu.Lock()
+	defer p.cacheMu.Unlock()
+	entry, exists := p.cache[root]
+	if !exists || !p.cacheValid(entry) {
+		return nil, false
+	}
+	edits, ok := entry.changes[filePath]
+	if !ok {
+		return nil, false
+	}
+	delete(entry.changes, filePath)
+	return edits, true
+}
+
+// Remediate returns a WorkspaceEdit limited to req.FilePath. On the first call
+// for a given ContentRoot, it clones ContentRoot into an isolated git worktree,
+// runs remy there, and builds a full WorkspaceEdit. Changes for req.FilePath
+// are returned immediately; changes for all other files are stored in an
+// in-process cache so that subsequent code action resolutions for those files
+// can be served without re-running remy.
 //
-// The provider never copies, restores, or verifies the worktree. Isolation and
-// post-fix verification are the caller's responsibility.
+// Concurrent calls for the same ContentRoot are serialized via a per-root mutex
+// so only one remy/LLM invocation runs at a time per workspace root. Callers
+// that arrive while remy is running will block and then re-check the cache.
+//
+// Cache eviction: if any cached file has been modified on disk since the cache
+// was populated, the whole entry is discarded and remy runs again. The
+// textDocument/didChange and textDocument/didSave handlers also call
+// InvalidateFile to evict stale diffs on in-memory edits.
 //
 // Returns (nil, nil) when:
-//   - FindingId or ContentRoot is empty
-//   - remy makes no changes
-//   - the diff produces no actionable hunks
+//   - FindingId, ContentRoot, or FilePath is empty
+//   - remy makes no changes to req.FilePath
+//   - the diff produces no actionable hunks for req.FilePath
 func (p *remyProvider) Remediate(ctx context.Context, req RemediationRequest) (*types.WorkspaceEdit, error) {
-	// Guard: both fields must be present before doing any real work.
-	if req.FindingId == "" || req.ContentRoot == "" {
+	if req.FindingId == "" || req.ContentRoot == "" || req.FilePath == "" {
 		return nil, nil
 	}
 
@@ -111,29 +186,74 @@ func (p *remyProvider) Remediate(ctx context.Context, req RemediationRequest) (*
 	if !filepath.IsAbs(root) {
 		return nil, fmt.Errorf("remy: ContentRoot must be an absolute path, got %q", root)
 	}
+	filePath := string(req.FilePath)
 
-	// Apply a timeout to the subprocess so a hung LLM call does not block
-	// the language-server indefinitely.
+	// Fast path: serve from cache without holding the root lock.
+	if edits, ok := p.tryServeFromCache(root, filePath); ok {
+		if len(edits) == 0 {
+			return nil, nil
+		}
+		return &types.WorkspaceEdit{Changes: map[string][]types.TextEdit{filePath: edits}}, nil
+	}
+
+	// Acquire the per-root lock so concurrent callers wait rather than
+	// launching duplicate remy invocations for the same workspace root.
+	rootMu := p.getOrCreateRootMu(root)
+	rootMu.Lock()
+	defer rootMu.Unlock()
+
+	// Double-check: another goroutine may have populated the cache while we waited.
+	if edits, ok := p.tryServeFromCache(root, filePath); ok {
+		if len(edits) == 0 {
+			return nil, nil
+		}
+		return &types.WorkspaceEdit{Changes: map[string][]types.TextEdit{filePath: edits}}, nil
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, p.opts.Timeout)
 	defer cancel()
 
-	// Snapshot the pre-mutation state of every tracked file so we can
-	// recover the original content after remy writes its changes.
-	snapshot, err := snapshotGitFiles(ctx, root)
+	// Resolve the git repository root so that worktree paths are relative to
+	// the repo root, not the workspace subfolder. This matters when the
+	// workspace folder is a subdirectory of a git repo (e.g. a monorepo package).
+	gitRoot, err := resolveGitRoot(ctx, root)
 	if err != nil {
-		p.log.Debug().Err(err).Str("root", root).Msg("remy: failed to snapshot tracked files")
+		return nil, fmt.Errorf("remy: resolve git root: %w", err)
+	}
+
+	// Create an isolated git worktree so remy can mutate freely without
+	// touching the real workspace. git worktree add requires the target path
+	// to not exist, so we use a temp parent and point at a subdir.
+	tmpParent, err := os.MkdirTemp("", "snyk-remy-*")
+	if err != nil {
+		return nil, fmt.Errorf("remy: create temp dir: %w", err)
+	}
+	worktreeDir := filepath.Join(tmpParent, "wt")
+	addOut, err := exec.CommandContext(ctx, "git", "-C", gitRoot, "worktree", "add", "--detach", worktreeDir, "HEAD").CombinedOutput()
+	if err != nil {
+		_ = os.RemoveAll(tmpParent)
+		return nil, fmt.Errorf("remy: git worktree add: %w (%s)", err, addOut)
+	}
+	defer func() {
+		// Use a fresh context with a short deadline so cleanup is bounded even
+		// if the parent ctx has been cancelled.
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cleanupCancel()
+		_ = exec.CommandContext(cleanupCtx, "git", "-C", gitRoot, "worktree", "remove", "--force", worktreeDir).Run()
+		_ = os.RemoveAll(tmpParent)
+	}()
+
+	snapshot, err := snapshotGitFiles(ctx, worktreeDir)
+	if err != nil {
+		p.log.Debug().Err(err).Str("root", worktreeDir).Msg("remy: failed to snapshot tracked files")
 		return nil, fmt.Errorf("remy: snapshot: %w", err)
 	}
 
-	// Run remy via the injected runner. The runner mutates ContentRoot in
-	// place — that is the intended outcome.
-	err = p.runner(ctx, root, req.FindingId)
-	if err != nil {
+	if err = p.runner(ctx, p.engine, worktreeDir, req.FindingId); err != nil {
 		return nil, err
 	}
 
-	// Enumerate files that changed after the runner finished.
-	changedPaths, err := gitChangedFiles(ctx, root)
+	changedPaths, err := gitChangedFiles(ctx, worktreeDir)
 	if err != nil {
 		return nil, fmt.Errorf("remy: enumerate changed files: %w", err)
 	}
@@ -141,18 +261,17 @@ func (p *remyProvider) Remediate(ctx context.Context, req RemediationRequest) (*
 		return nil, nil
 	}
 
-	// Build a merged WorkspaceEdit from all changed files.
-	merged := &types.WorkspaceEdit{Changes: make(map[string][]types.TextEdit)}
+	// Build a full WorkspaceEdit. Paths are keyed by the real workspace absolute
+	// path: git diff returns paths relative to the repo root (gitRoot), so
+	// filepath.Join(gitRoot, relPath) gives the correct on-disk workspace path
+	// regardless of whether root is the repo root or a subdirectory of it.
+	allChanges := make(map[string][]types.TextEdit)
 	for _, relPath := range changedPaths {
-		absPath := filepath.Join(root, relPath)
-
 		originalBytes, ok := snapshot[relPath]
 		if !ok {
-			// File was untracked before remy — skip: we only diff tracked files.
 			continue
 		}
-
-		diff, err := gitFileDiff(ctx, root, relPath)
+		diff, err := gitFileDiff(ctx, worktreeDir, relPath)
 		if err != nil {
 			p.log.Debug().Err(err).Str("path", relPath).Msg("remy: failed to get diff for file")
 			continue
@@ -160,21 +279,84 @@ func (p *remyProvider) Remediate(ctx context.Context, req RemediationRequest) (*
 		if diff == "" {
 			continue
 		}
-
-		edit, err := workspaceEditFromContent(absPath, originalBytes, diff)
+		realAbsPath := filepath.Join(gitRoot, relPath)
+		edit, err := workspaceEditFromContent(realAbsPath, originalBytes, diff)
 		if err != nil {
 			p.log.Debug().Err(err).Str("path", relPath).Msg("remy: failed to build WorkspaceEdit for file")
 			continue
 		}
+		if edit == nil {
+			continue
+		}
 		for k, v := range edit.Changes {
-			merged.Changes[k] = append(merged.Changes[k], v...)
+			allChanges[k] = append(allChanges[k], v...)
 		}
 	}
 
-	if len(merged.Changes) == 0 {
+	if len(allChanges) == 0 {
 		return nil, nil
 	}
-	return merged, nil
+
+	// Populate cache with changes for all files except req.FilePath so that
+	// other code action resolutions can be served without re-running remy.
+	p.cacheMu.Lock()
+	entry := &remyCacheEntry{
+		changes:   make(map[string][]types.TextEdit, len(allChanges)-1),
+		createdAt: time.Now(),
+	}
+	for k, v := range allChanges {
+		if k != filePath {
+			entry.changes[k] = v
+		}
+	}
+	p.cache[root] = entry
+	p.cacheMu.Unlock()
+
+	fileEdits := allChanges[filePath]
+	if len(fileEdits) == 0 {
+		return nil, nil
+	}
+	return &types.WorkspaceEdit{Changes: map[string][]types.TextEdit{filePath: fileEdits}}, nil
+}
+
+// InvalidateFile removes cached diffs for path from every cache entry so that
+// the next Remediate call for that file re-runs remy rather than serving stale
+// results. It is called by the LSP textDocument/didChange handler.
+func (p *remyProvider) InvalidateFile(path types.FilePath) {
+	p.cacheMu.Lock()
+	defer p.cacheMu.Unlock()
+	for root, entry := range p.cache {
+		delete(entry.changes, string(path))
+		// Remove the cache entry entirely once it has no remaining changes so
+		// it does not occupy memory or cause vacuously-valid hits.
+		if len(entry.changes) == 0 {
+			delete(p.cache, root)
+		}
+	}
+}
+
+// cacheValid returns false if any file in the entry has been modified on disk
+// since the entry was created, indicating the cached diffs are stale.
+func (p *remyProvider) cacheValid(entry *remyCacheEntry) bool {
+	for path := range entry.changes {
+		info, err := os.Stat(path)
+		if err != nil || info.ModTime().After(entry.createdAt) {
+			return false
+		}
+	}
+	return true
+}
+
+// resolveGitRoot returns the root of the git repository containing path by
+// running git rev-parse --show-toplevel. This is necessary when path is a
+// subdirectory of a git repo (e.g. a monorepo package folder) so that worktree
+// paths and diff paths are all relative to the same root.
+func resolveGitRoot(ctx context.Context, path string) (string, error) {
+	out, err := exec.CommandContext(ctx, "git", "-C", path, "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return "", fmt.Errorf("git rev-parse --show-toplevel: %w", err)
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 // snapshotGitFiles returns a map of relative path → original bytes for every
@@ -193,16 +375,9 @@ func snapshotGitFiles(ctx context.Context, root string) (map[string][]byte, erro
 		if relPath == "" {
 			continue
 		}
-		// Read from HEAD so we always capture the committed content
-		// regardless of any in-progress changes.
 		content, err := gitShowHEAD(ctx, root, relPath)
 		if err != nil {
-			// File may be staged but not committed yet; read from disk as
-			// a best-effort fallback.
-			content, err = os.ReadFile(filepath.Join(root, relPath))
-			if err != nil {
-				continue
-			}
+			continue
 		}
 		snapshot[relPath] = content
 	}
@@ -335,13 +510,16 @@ func applyInsertion(s *diffState, line string, lastLine int) error {
 // server applies fixes.
 func parseDiffHunks(diffLines []string, lastLine int) ([]types.TextEdit, error) {
 	s := &diffState{}
+	// inHunk tracks whether we have seen at least one @@ header. Before the
+	// first hunk, all lines are file/extended headers and must be skipped.
+	// After the first @@, lines starting with "-" or "+" are content, not
+	// headers — checking "---"/"+++" before "-"/"+" would silently drop
+	// deletions of lines beginning with "--" and insertions of "++" lines.
+	inHunk := false
 
 	for _, line := range diffLines {
-		if strings.HasPrefix(line, "---") || strings.HasPrefix(line, "+++") {
-			// Ignore unified diff file header lines.
-			continue
-		}
 		if strings.HasPrefix(line, "@@") {
+			inHunk = true
 			m := hunkHeader.FindStringSubmatch(line)
 			if m == nil {
 				return nil, fmt.Errorf("malformed hunk header: %s", line)
@@ -349,6 +527,10 @@ func parseDiffHunks(diffLines []string, lastLine int) ([]types.TextEdit, error) 
 			n, _ := strconv.Atoi(m[1])
 			s.currentLine = n - 1 // convert to 0-indexed
 			s.lastWasInsertion = false
+			continue
+		}
+		if !inHunk {
+			// Pre-hunk lines: "--- a/file", "+++ b/file", "diff --git", "index", etc.
 			continue
 		}
 		if strings.HasPrefix(line, "-") {
@@ -384,8 +566,7 @@ func parseDiffHunks(diffLines []string, lastLine int) ([]types.TextEdit, error) 
 			s.lastWasInsertion = false
 			continue
 		}
-		// All remaining lines (git extended headers like "diff --git …",
-		// "index …", and any other unrecognized lines) are silently skipped.
+		// Any other in-hunk line is silently skipped.
 	}
 	return s.textEdits, nil
 }
@@ -412,59 +593,4 @@ func makeLineEdit(startLine, endLine int, newText string, lastLine int) (*types.
 		},
 		NewText: newText,
 	}, nil
-}
-
-// makeSubprocessRunner returns the default remyRunner that shells out to the
-// host snyk binary's remy subcommand.
-//
-// findingID is passed as a parameter for correlation (matching remy's output
-// back to the triggering finding) but is not forwarded to the CLI args because
-// the remy subcommand operates on the entire ContentRoot — it scans the project
-// and attempts to fix all findings it discovers rather than targeting a specific
-// one. The findingID is therefore used only for logging and response mapping by
-// the caller.
-//
-// TODO: thread a configResolver through RemyOptions so that
-// AppendCliEnvironmentVariables can be used here instead of os.Environ().
-// Until then we inherit the parent process environment as-is.
-func makeSubprocessRunner(opts RemyOptions, log zerolog.Logger) remyRunner {
-	return func(ctx context.Context, root string, findingID string) error {
-		if opts.CliPath == "" {
-			log.Debug().Msg("remy: no CLI path configured; skipping subprocess")
-			return nil
-		}
-
-		// Pass --experimental and --beast-mode so remy runs non-interactively:
-		// --experimental is required by the remy workflow guard, and
-		// --beast-mode auto-approves all proposed fixes without prompting.
-		args := []string{"remy", root, "--experimental", "--beast-mode"}
-
-		cmd := exec.CommandContext(ctx, opts.CliPath, args...)
-		cmd.Stdin = nil // closed stdin so remy never blocks on a prompt
-		cmd.Env = os.Environ()
-
-		var outBuf, errBuf bytes.Buffer
-		cmd.Stdout = &outBuf
-		cmd.Stderr = &errBuf
-
-		log.Debug().
-			Str("cli", opts.CliPath).
-			Str("root", root).
-			Str("finding_id", findingID).
-			Msg("remy: starting subprocess")
-
-		if err := cmd.Run(); err != nil {
-			log.Debug().
-				Err(err).
-				Str("stdout", outBuf.String()).
-				Str("stderr", errBuf.String()).
-				Msg("remy: subprocess exited with error")
-			return fmt.Errorf("remy subprocess: %w", err)
-		}
-
-		log.Debug().
-			Str("stdout", outBuf.String()).
-			Msg("remy: subprocess completed successfully")
-		return nil
-	}
 }
