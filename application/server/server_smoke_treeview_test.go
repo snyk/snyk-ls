@@ -38,9 +38,8 @@ import (
 // 3. snyk.toggleTreeFilter command updates filter and returns re-rendered HTML
 func Test_SmokeTreeView(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductCode)
-	di.Init(engine, tokenService)
 
 	cloneTargetDir := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 	cloneTargetDirString := string(cloneTargetDir)

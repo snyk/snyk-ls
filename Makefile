@@ -184,9 +184,9 @@ benchmark:
 benchmark-real:
 	SMOKE_TESTS=1 SMOKE_SHARD_2=1 BENCHMARK_REAL_SCAN_MONOREPO=1 BENCHMARK_REALSCAN_FULL_FIXTURE=1 go test $(TIMEOUT) -count=1 ./application/server/... -run Test_SmokeRealScanMonorepoFixture
 
-## test-js: Run all JavaScript tests (tree view + config dialog) and check ES5 compatibility.
+## test-js: Run all JavaScript tests (tree view + config dialog + settings fallback) and check ES5 compatibility.
 .PHONY: test-js
-test-js: tree-view-fixture config-dialog-fixture
+test-js: tree-view-fixture config-dialog-fixture settings-fallback-fixture
 	@echo "==> Running JS tests..."
 	@cd js-tests && npm install --ignore-scripts && npm test
 	@echo "==> Linting JS for ES5 compatibility..."
@@ -224,6 +224,16 @@ config-dialog-fixture:
 	@mkdir -p js-tests/fixtures
 	@go run scripts/config-dialog/main.go --dummy-data -no-panel > js-tests/fixtures/config-page.html
 	@echo "    Written to js-tests/fixtures/config-page.html"
+
+## settings-fallback-fixture: Regenerate settings fallback HTML fixtures used by JS tests.
+.PHONY: settings-fallback-fixture
+settings-fallback-fixture:
+	@echo "==> Generating settings fallback HTML fixtures..."
+	@mkdir -p js-tests/fixtures
+	@go run scripts/settings-fallback-fixture/main.go > js-tests/fixtures/settings-fallback.html
+	@go run scripts/settings-fallback-fixture/main.go --release-channel v1.1292.0 > js-tests/fixtures/settings-fallback-custom-valid.html
+	@go run scripts/settings-fallback-fixture/main.go --release-channel not-a-version > js-tests/fixtures/settings-fallback-custom-invalid.html
+	@echo "    Written to js-tests/fixtures/settings-fallback*.html"
 
 ## generate: Regenerate generated files (e.g. mocks).
 .PHONY: generate

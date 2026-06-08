@@ -162,15 +162,17 @@ Disabled products (not in `SupportedIssueTypes`) are rendered with `opacity: 0.5
 
 ### Node Selection
 
-Clicking an issue node highlights it with the `.selected` CSS class. Only one node can be selected at a time.
+Clicking an issue node highlights it with the `.selected` CSS class. Only one node can be selected at a time. Manual clicks (mouse) do not change the scroll position.
 
 The IDE can programmatically select a node by calling:
 
 ```javascript
-window.__selectTreeNode__(nodeId)
+window.__selectTreeNode__(issueId)
 ```
 
-This finds the node by `data-node-id`, applies the `.selected` class, and removes it from any previously selected node.
+This finds the node by `data-issue-id`, expands any collapsed ancestors so the node is visible, applies the `.selected` class, and removes it from any previously selected node.
+
+**Scroll behavior on programmatic selection:** the container scrolls the minimum amount needed to make the row visible (`block: 'nearest'`); if the row is already fully visible, no scroll occurs. The horizontal scroll position (`scrollLeft`) is never changed.
 
 ### Issue Badges
 
@@ -261,9 +263,9 @@ The `Makefile` includes dedicated targets:
 - **Auto-expand**: trees with <= 50 total issues auto-expand progressively
 - **State persistence**: expand/collapse state survives re-renders via `ExpandState` in the LS
 
-### IE11 Compatibility
+### Browser Compatibility
 
-All JS is ES5 (no arrow functions, no `const`/`let`, no template literals). CSS uses no variables, no grid, no `:focus-visible`. The `<meta http-equiv='X-UA-Compatible' content='IE=edge' />` tag is included. `scrollIntoView` uses the boolean argument form (`scrollIntoView(false)`) instead of the options object, since IE11 (used by Visual Studio's webview) does not support `ScrollIntoViewOptions`.
+All JS is ES5 (no arrow functions, no `const`/`let`, no template literals). CSS uses no variables, no grid, no `:focus-visible`. Visual Studio's webview has migrated to Chromium; IE11 is no longer a supported target. `scrollIntoView` uses the options-object form (`{ block: 'nearest', inline: 'nearest' }`).
 
 ### Test Scenarios
 
