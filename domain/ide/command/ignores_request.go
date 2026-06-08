@@ -34,11 +34,11 @@ import (
 
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
-	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+	sglsp "github.com/sourcegraph/go-lsp"
 )
 
 type TreeEmitter interface {
