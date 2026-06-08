@@ -242,7 +242,7 @@ func TestScan_CancelCallback_CalledAfterGoroutinesFinish(t *testing.T) {
 	mockProductScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, _ types.FilePath) ([]types.Issue, error) {
 			close(scanStarted)
-			// Block until context is cancelled (simulates in-flight cancellation).
+			// Block until context is canceled (simulates in-flight cancellation).
 			<-ctx.Done()
 			return []types.Issue{}, nil
 		}).Times(1)
@@ -310,7 +310,7 @@ func TestScan_CancelCallback_CalledAfterGoroutinesFinish(t *testing.T) {
 	defer callsMu.Unlock()
 	require.GreaterOrEqual(t, len(calls), 2, "expected at least SetScanDone then Init")
 	// Find Init call position
-	var initIdx, setDoneIdx int = -1, -1
+	initIdx, setDoneIdx := -1, -1
 	for i, c := range calls {
 		if c.kind == "SetScanDone" && setDoneIdx == -1 {
 			setDoneIdx = i

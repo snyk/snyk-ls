@@ -91,17 +91,17 @@ func TestEndProgress(t *testing.T) {
 func TestIsScanToken_ScanTracker_ReturnsTrue(t *testing.T) {
 	logger := zerolog.Nop()
 	tr := NewScanTracker(true, &logger)
-	assert.True(t, IsScanToken(tr.GetToken()), "NewScanTracker token must be recognised as a scan token")
+	assert.True(t, IsScanToken(tr.GetToken()), "NewScanTracker token must be recognized as a scan token")
 }
 
 func TestIsScanToken_PlainTracker_ReturnsFalse(t *testing.T) {
 	logger := zerolog.Nop()
 	tr := NewTracker(true, &logger)
-	assert.False(t, IsScanToken(tr.GetToken()), "NewTracker token must NOT be recognised as a scan token")
+	assert.False(t, IsScanToken(tr.GetToken()), "NewTracker token must NOT be recognized as a scan token")
 }
 
 func TestIsScanToken_UnknownToken_ReturnsFalse(t *testing.T) {
-	assert.False(t, IsScanToken("unknown-token"), "unknown token must NOT be recognised as a scan token")
+	assert.False(t, IsScanToken("unknown-token"), "unknown token must NOT be recognized as a scan token")
 }
 
 func TestIsScanToken_AfterCancel_ReturnsFalse(t *testing.T) {
@@ -109,7 +109,7 @@ func TestIsScanToken_AfterCancel_ReturnsFalse(t *testing.T) {
 	tr := NewScanTracker(true, &logger)
 	token := tr.GetToken()
 	Cancel(token)
-	assert.False(t, IsScanToken(token), "canceled scan token must no longer be recognised as a scan token")
+	assert.False(t, IsScanToken(token), "canceled scan token must no longer be recognized as a scan token")
 }
 
 func TestEndProgressTwice(t *testing.T) {

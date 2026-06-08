@@ -192,7 +192,7 @@ func TestCancelProgress_NonScanToken_DoesNotResetAggregator(t *testing.T) {
 		agg.mu.Lock()
 		defer agg.mu.Unlock()
 		return len(agg.initCalls) > 0
-	}, 300*time.Millisecond, time.Millisecond, "Init must NOT be called when a non-scan token is cancelled")
+	}, 300*time.Millisecond, time.Millisecond, "Init must NOT be called when a non-scan token is canceled")
 }
 
 func Test_NotifierShouldSendNotificationToClient(t *testing.T) {

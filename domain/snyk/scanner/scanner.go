@@ -83,6 +83,21 @@ func (sc *DelegatingConcurrentScanner) RegisterCancelCallback(folderPath types.F
 	sc.cancelCallbacks.Store(folderPath, fn)
 }
 
+// consumeCancelCallback fires and removes any cancel callback registered for
+// folderPath. Called by Scan() after both WaitGroups return so the callback
+// runs only after all SetScanDone writes have completed (IDE-1035).
+func (sc *DelegatingConcurrentScanner) consumeCancelCallback(folderPath types.FilePath) {
+	v, loaded := sc.cancelCallbacks.LoadAndDelete(folderPath)
+	if !loaded {
+		return
+	}
+	fn, ok := v.(func())
+	if !ok {
+		return
+	}
+	fn()
+}
+
 func (sc *DelegatingConcurrentScanner) Issue(key string) types.Issue {
 	for _, scanner := range sc.scanners {
 		if s, ok := scanner.(snyk.IssueProvider); ok {
@@ -381,9 +396,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 	// for this folder (IDE-1035). Consuming the callback here — after the
 	// WaitGroups — guarantees the aggregator reset cannot race with in-flight
 	// SetScanDone calls.
-	if fn, loaded := sc.cancelCallbacks.LoadAndDelete(folderPath); loaded {
-		fn.(func())()
-	}
+	sc.consumeCancelCallback(folderPath)
 
 	defer func() {
 		if postActionFunc != nil {

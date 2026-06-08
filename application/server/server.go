@@ -1202,7 +1202,6 @@ func windowWorkDoneProgressCancelHandler(conf configuration.Configuration) jrpc2
 				if dcs, ok := sc.(*scanner2.DelegatingConcurrentScanner); ok {
 					folderPaths := workspaceFolderPaths(conf)
 					for _, fp := range folderPaths {
-						fp := fp
 						dcs.RegisterCancelCallback(fp, func() {
 							resetSummaryPanel(scanAgg, []types.FilePath{fp})
 						})
