@@ -33,6 +33,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -53,6 +54,7 @@ func (f *fakeRemediationProvider) Remediate(_ context.Context, _ remediation.Rem
 func buildFixableIssue(findingId string) *snyk.Issue {
 	return &snyk.Issue{
 		FindingId: findingId,
+		Product:   product.ProductCode,
 		AdditionalData: snyk.CodeIssueData{
 			HasAIFix: true,
 		},
@@ -210,4 +212,61 @@ func TestGetCodeActions_RemediationAgent_DoesNotMutateIssueCodeActions(t *testin
 		}
 	}
 	assert.True(t, found, "expected RemediationAgentQuickFix in returned actions")
+}
+
+func TestGetCodeActions_RemediationAgent_SecretsIssue_NoAction(t *testing.T) {
+	fake := &fakeRemediationProvider{edit: &types.WorkspaceEdit{}}
+	issue := &snyk.Issue{
+		FindingId:      "finding-secret",
+		Product:        product.ProductSecrets,
+		AdditionalData: snyk.SecretsIssueData{},
+	}
+
+	service, params := setupWithIssueAndProvider(t, issue, fake)
+
+	actions := service.GetCodeActions(params)
+
+	for _, a := range actions {
+		assert.NotEqual(t, types.RemediationAgentQuickFix, a.Kind,
+			"Secrets product must not produce RemediationAgentQuickFix actions")
+	}
+}
+
+func TestGetCodeActions_RemediationAgent_UnknownProduct_NoAction(t *testing.T) {
+	fake := &fakeRemediationProvider{edit: &types.WorkspaceEdit{}}
+	issue := &snyk.Issue{
+		FindingId:      "finding-unknown",
+		Product:        product.ProductUnknown,
+		AdditionalData: snyk.CodeIssueData{HasAIFix: true},
+	}
+
+	service, params := setupWithIssueAndProvider(t, issue, fake)
+
+	actions := service.GetCodeActions(params)
+
+	for _, a := range actions {
+		assert.NotEqual(t, types.RemediationAgentQuickFix, a.Kind,
+			"unknown product must not produce RemediationAgentQuickFix actions")
+	}
+}
+
+func TestGetCodeActions_RemediationAgent_IaCIssue_WithFindingId_OfferedAction(t *testing.T) {
+	fake := &fakeRemediationProvider{edit: &types.WorkspaceEdit{}}
+	issue := &snyk.Issue{
+		FindingId:      "finding-iac",
+		Product:        product.ProductInfrastructureAsCode,
+		AdditionalData: snyk.IaCIssueData{},
+	}
+
+	service, params := setupWithIssueAndProvider(t, issue, fake)
+
+	actions := service.GetCodeActions(params)
+
+	found := false
+	for _, a := range actions {
+		if a.Kind == types.RemediationAgentQuickFix {
+			found = true
+		}
+	}
+	assert.True(t, found, "IaC issue with FindingId must produce RemediationAgentQuickFix action")
 }

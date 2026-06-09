@@ -34,6 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	noti "github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -144,14 +145,17 @@ func (c *CodeActionsService) remediationCodeActions(issues []types.Issue, path t
 		if findingId == "" {
 			continue
 		}
+		issueProduct := issue.GetProduct()
+		if issueProduct == product.ProductSecrets || issueProduct == product.ProductUnknown {
+			continue
+		}
 		additionalData := issue.GetAdditionalData()
-		if additionalData == nil || !additionalData.IsFixable() {
+		if issueProduct != product.ProductInfrastructureAsCode && (additionalData == nil || !additionalData.IsFixable()) {
 			continue
 		}
 		// Capture loop variables for the closure.
 		issueFindingId := findingId
 		issueRange := r
-		issueProduct := issue.GetProduct()
 		provider := c.remediationProvider
 		deferredEdit := func() *types.WorkspaceEdit {
 			edit, err := provider.Remediate(context.Background(), remediation.RemediationRequest{
