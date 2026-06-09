@@ -290,8 +290,9 @@ var hunkHeader = regexp.MustCompile(`@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@`)
 
 // diffState holds the mutable state threaded through parseDiffHunks.
 type diffState struct {
-	currentLine int
-	textEdits   []types.TextEdit
+	currentLine      int
+	textEdits        []types.TextEdit
+	lastWasInsertion bool // true iff the immediately preceding diff content line was '+'
 }
 
 // applyDeletion records a deletion TextEdit and advances the original-file cursor.
@@ -302,6 +303,7 @@ func applyDeletion(s *diffState, lastLine int) error {
 	}
 	s.textEdits = append(s.textEdits, *te)
 	s.currentLine++ // the deleted line still existed in the original
+	s.lastWasInsertion = false
 	return nil
 }
 
@@ -313,6 +315,7 @@ func applyInsertion(s *diffState, line string, lastLine int) error {
 		s.textEdits[len(s.textEdits)-1].NewText != "" &&
 		s.textEdits[len(s.textEdits)-1].Range.Start.Line == s.currentLine {
 		s.textEdits[len(s.textEdits)-1].NewText += newText
+		s.lastWasInsertion = true
 		return nil
 	}
 	te, err := makeLineEdit(s.currentLine, s.currentLine, newText, lastLine)
@@ -321,6 +324,7 @@ func applyInsertion(s *diffState, line string, lastLine int) error {
 	}
 	s.textEdits = append(s.textEdits, *te)
 	// Insertions do not advance the original-file cursor.
+	s.lastWasInsertion = true
 	return nil
 }
 
@@ -344,6 +348,7 @@ func parseDiffHunks(diffLines []string, lastLine int) ([]types.TextEdit, error) 
 			}
 			n, _ := strconv.Atoi(m[1])
 			s.currentLine = n - 1 // convert to 0-indexed
+			s.lastWasInsertion = false
 			continue
 		}
 		if strings.HasPrefix(line, "-") {
@@ -359,13 +364,24 @@ func parseDiffHunks(diffLines []string, lastLine int) ([]types.TextEdit, error) 
 			continue
 		}
 		if line == `\ No newline at end of file` {
-			// Compensate for the line counter being one ahead of reality.
-			s.currentLine--
+			if s.lastWasInsertion {
+				// The immediately preceding diff line was a '+' insertion.
+				// applyInsertion always appends "\n"; strip it since the
+				// inserted content does not end with a newline.
+				last := len(s.textEdits) - 1
+				s.textEdits[last].NewText = strings.TrimSuffix(s.textEdits[last].NewText, "\n")
+			} else {
+				// The immediately preceding diff line was a '-' deletion;
+				// applyDeletion advanced the cursor, so compensate.
+				s.currentLine--
+			}
+			s.lastWasInsertion = false
 			continue
 		}
 		if strings.HasPrefix(line, " ") {
 			// Context line: advance the original-file cursor.
 			s.currentLine++
+			s.lastWasInsertion = false
 			continue
 		}
 		// All remaining lines (git extended headers like "diff --git …",
