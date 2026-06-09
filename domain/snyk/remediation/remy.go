@@ -154,6 +154,11 @@ func (p *remyProvider) tryServeFromCache(root, filePath string) ([]types.TextEdi
 		return nil, false
 	}
 	delete(entry.changes, filePath)
+	// Remove the cache entry entirely once it has no remaining changes so
+	// it does not occupy memory or cause vacuously-valid hits.
+	if len(entry.changes) == 0 {
+		delete(p.cache, root)
+	}
 	return edits, true
 }
 
@@ -319,6 +324,18 @@ func (p *remyProvider) Remediate(ctx context.Context, req RemediationRequest) (*
 	return &types.WorkspaceEdit{Changes: map[string][]types.TextEdit{filePath: fileEdits}}, nil
 }
 
+// cacheValid returns false if any file in the entry has been modified on disk
+// since the entry was created, indicating the cached diffs are stale.
+func (p *remyProvider) cacheValid(entry *remyCacheEntry) bool {
+	for path := range entry.changes {
+		info, err := os.Stat(path)
+		if err != nil || info.ModTime().After(entry.createdAt) {
+			return false
+		}
+	}
+	return true
+}
+
 // InvalidateFile removes cached diffs for path from every cache entry so that
 // the next Remediate call for that file re-runs remy rather than serving stale
 // results. It is called by the LSP textDocument/didChange handler.
@@ -333,18 +350,6 @@ func (p *remyProvider) InvalidateFile(path types.FilePath) {
 			delete(p.cache, root)
 		}
 	}
-}
-
-// cacheValid returns false if any file in the entry has been modified on disk
-// since the entry was created, indicating the cached diffs are stale.
-func (p *remyProvider) cacheValid(entry *remyCacheEntry) bool {
-	for path := range entry.changes {
-		info, err := os.Stat(path)
-		if err != nil || info.ModTime().After(entry.createdAt) {
-			return false
-		}
-	}
-	return true
 }
 
 // resolveGitRoot returns the root of the git repository containing path by
