@@ -2,7 +2,7 @@
 // ABOUTME: production HTML fixture (scripts embedded in the same order as config.html).
 
 import { readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
 
