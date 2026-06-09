@@ -124,6 +124,9 @@ func (e *TreeScanStateEmitter) renderPending() {
 	if ws != nil {
 		data = e.builder.BuildTree(ws)
 	}
+	// FilterState uses global IVO (filter panel scope); individual folder nodes use
+	// folder-level IVO (see BuildTree). These are separate concerns by design: the
+	// IDE filter panel is workspace-wide, while info-node messages reflect per-folder overrides.
 	data.FilterState = TreeViewFilterState{
 		SeverityFilter:   config.GetFilterSeverity(e.conf),
 		IssueViewOptions: config.GetIssueViewOptions(e.conf),
