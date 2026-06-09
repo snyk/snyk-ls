@@ -560,8 +560,8 @@ func TestWorkspaceEditFromContent_EmptyOriginal(t *testing.T) {
 	assert.Nil(t, edit)
 }
 
-// TestWorkspaceEditFromContent_EmptyDiff returns an error when the diff is empty.
-func TestWorkspaceEditFromContent_EmptyDiff(t *testing.T) {
+// TestWorkspaceEditFromContent_EmptyDiffString returns an error when the diff is an empty string.
+func TestWorkspaceEditFromContent_EmptyDiffString(t *testing.T) {
 	edit, err := remediation.ExportedWorkspaceEditFromContent("/tmp/file.go", []byte("content\n"), "")
 	require.Error(t, err)
 	assert.Nil(t, edit)
