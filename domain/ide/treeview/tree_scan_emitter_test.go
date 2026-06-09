@@ -27,6 +27,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -223,8 +224,13 @@ func TestTreeScanStateEmitter_FolderLevelIssueViewOptions(t *testing.T) {
 	conf.Set(configresolver.UserGlobalKey(types.SettingIssueViewOpenIssues), false)
 	conf.Set(configresolver.UserGlobalKey(types.SettingIssueViewIgnoredIssues), false)
 
+	// SnykCodeConsistentIgnores must be true for the IVO branch in zeroIssuesText to execute.
+	// Without it, zeroIssuesText early-returns "✅ Congrats! No issues found!" regardless of IVO.
+	ffSvc := featureflag.NewFakeService()
+	ffSvc.Override(featureflag.SnykCodeConsistentIgnores, true)
+
 	folderPath := types.FilePath("/project-folder-ivo")
-	workspaceutil.SetupWorkspace(t, engine, folderPath)
+	workspaceutil.SetupWorkspaceWithFeatureFlags(t, engine, ffSvc, folderPath)
 
 	// Folder-level override: both enabled (takes precedence over global).
 	folderKey := string(types.PathKey(folderPath))
