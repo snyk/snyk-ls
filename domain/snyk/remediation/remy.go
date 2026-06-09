@@ -326,6 +326,7 @@ func (p *remyProvider) InvalidateFile(path types.FilePath) {
 
 // cacheValid returns false if any file in the entry has been modified on disk
 // since the entry was created, indicating the cached diffs are stale.
+// Caller must hold p.cacheMu.
 func (p *remyProvider) cacheValid(entry *remyCacheEntry) bool {
 	for path := range entry.changes {
 		info, err := os.Stat(path)
