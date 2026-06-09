@@ -32,9 +32,9 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/remediation"
-	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	noti "github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
