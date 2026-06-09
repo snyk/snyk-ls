@@ -43,7 +43,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/treeview"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	scanner2 "github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
@@ -229,24 +228,9 @@ func initApplication(conf configuration.Configuration, engine workflow.Engine, l
 	config.SetWorkspace(conf, w)
 	fileWatcher = watcher.NewFileWatcher()
 
-	var remediationProvider remediation.RemediationProvider
-	if conf.GetBool(remediationAgentEnabledKey) {
-		lp := engine.GetLogger().With().Str("provider", "remy").Logger()
-		remediationProvider = remediation.NewRemyProvider(remediation.RemyOptions{
-			CliPath: config.GetCliPath(conf),
-			Logger:  &lp,
-		}, nil)
-	}
-
-	codeActionService = codeaction.NewService(engine, w, fileWatcher, notifier, featureFlagService, configResolver, remediationProvider)
+	codeActionService = codeaction.NewService(engine, w, fileWatcher, notifier, featureFlagService, configResolver)
 	command.SetService(command.NewService(engine, logger, authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, ldxSyncService, configResolver, scanStateAggregator.StateSnapshot))
 }
-
-// remediationAgentEnabledKey is the configuration key that gates the remy-backed
-// remediation provider. The feature ships off by default; set this key to true
-// only when the host CLI bundles the remy subcommand and an LLM API key is
-// available.
-const remediationAgentEnabledKey = "remediation_agent_enabled"
 
 /*
 TODO Accessors: This should go away, since all dependencies should be satisfied at startup-time, if needed for testing

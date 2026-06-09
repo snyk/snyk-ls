@@ -108,7 +108,7 @@ func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
 	var issues []types.Issue
 	providerMock := mock_snyk.NewMockIssueProvider(ctrl)
 	providerMock.EXPECT().IssuesForRange(gomock.Any(), gomock.Any()).Return(issues)
-	service := codeaction.NewService(engine, providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), featureflag.NewFakeService(), types.NewConfigResolver(engine.GetLogger()), nil)
+	service := codeaction.NewService(engine, providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), featureflag.NewFakeService(), types.NewConfigResolver(engine.GetLogger()))
 	codeActionsParam := types.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
 			URI: documentUriExample,
@@ -281,7 +281,7 @@ func setupService(t *testing.T, engine workflow.Engine) *codeaction.CodeActionsS
 
 	providerMock := mock_snyk.NewMockIssueProvider(gomock.NewController(t))
 	providerMock.EXPECT().IssuesForRange(gomock.Any(), gomock.Any()).Return([]types.Issue{}).AnyTimes()
-	service := codeaction.NewService(engine, providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), featureflag.NewFakeService(), types.NewConfigResolver(engine.GetLogger()), nil)
+	service := codeaction.NewService(engine, providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), featureflag.NewFakeService(), types.NewConfigResolver(engine.GetLogger()))
 	return service
 }
 
@@ -299,7 +299,7 @@ func setupWithSingleIssue(t *testing.T, engine workflow.Engine, issue types.Issu
 	issues := []types.Issue{issue}
 	providerMock.EXPECT().IssuesForRange(path, converter.FromRange(r)).Return(issues).AnyTimes()
 	fileWatcher := watcher.NewFileWatcher()
-	service := codeaction.NewService(engine, providerMock, fileWatcher, notification.NewMockNotifier(), featureflag.NewFakeService(), types.NewConfigResolver(engine.GetLogger()), nil)
+	service := codeaction.NewService(engine, providerMock, fileWatcher, notification.NewMockNotifier(), featureflag.NewFakeService(), types.NewConfigResolver(engine.GetLogger()))
 
 	codeActionsParam := types.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
