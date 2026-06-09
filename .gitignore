@@ -113,3 +113,4 @@ brain/
 .snyk-code-output.err
 .verify-agents
 .verify-counts
+.verification-result.*

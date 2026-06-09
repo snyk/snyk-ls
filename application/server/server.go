@@ -263,10 +263,14 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	}
 	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv))
 	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv))
-	handlers["textDocument/didChange"] = enrich(textDocumentDidChangeHandler(conf))
+	var onFileChange func(types.FilePath)
+	if deps.RemediationNotifier != nil {
+		onFileChange = deps.RemediationNotifier.InvalidateFile
+	}
+	handlers["textDocument/didChange"] = enrich(textDocumentDidChangeHandler(conf, onFileChange))
 	handlers["textDocument/didClose"] = enrich(noOpHandler())
 	handlers[textDocumentDidOpenOperation] = enrich(textDocumentDidOpenHandler(conf))
-	handlers[textDocumentDidSaveOperation] = enrich(textDocumentDidSaveHandler(conf))
+	handlers[textDocumentDidSaveOperation] = enrich(textDocumentDidSaveHandler(conf, onFileChange))
 	handlers["textDocument/hover"] = enrich(textDocumentHover())
 	handlers["textDocument/codeAction"] = enrich(textDocumentCodeActionHandler(logger, deps.CodeActionService))
 	handlers["textDocument/codeLens"] = enrich(codeLensHandler())
@@ -501,7 +505,7 @@ func mustConfigResolverFromContext(ctx context.Context) types.ConfigResolverInte
 	return cr
 }
 
-func textDocumentDidChangeHandler(conf configuration.Configuration) jrpc2.Handler {
+func textDocumentDidChangeHandler(conf configuration.Configuration, onFileChange func(types.FilePath)) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidChangeTextDocumentParams) (any, error) {
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "TextDocumentDidChangeHandler").Logger()
 		pathFromUri := uri.PathFromUri(params.TextDocument.URI)
@@ -519,6 +523,9 @@ func textDocumentDidChangeHandler(conf configuration.Configuration) jrpc2.Handle
 		}
 
 		mustFileWatcherFromContext(ctx).SetFileAsChanged(params.TextDocument.URI)
+		if onFileChange != nil {
+			onFileChange(pathFromUri)
+		}
 
 		return nil, nil
 	})
@@ -1132,7 +1139,7 @@ func textDocumentDidOpenHandler(conf configuration.Configuration) jrpc2.Handler 
 	})
 }
 
-func textDocumentDidSaveHandler(conf configuration.Configuration) jrpc2.Handler {
+func textDocumentDidSaveHandler(conf configuration.Configuration, onFileChange func(types.FilePath)) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidSaveTextDocumentParams) (any, error) {
 		bgCtx := context.Background()
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "TextDocumentDidSaveHandler").Logger()
@@ -1150,6 +1157,10 @@ func textDocumentDidSaveHandler(conf configuration.Configuration) jrpc2.Handler 
 		if !folder.IsTrusted() {
 			logger.Warn().Msg(string("folder not trusted for file " + filePath))
 			return nil, nil
+		}
+
+		if onFileChange != nil {
+			onFileChange(filePath)
 		}
 
 		if folder.IsAutoScanEnabled() && uri.IsDotSnykFile(params.TextDocument.URI) {
