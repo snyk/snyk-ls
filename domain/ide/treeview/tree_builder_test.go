@@ -1195,6 +1195,72 @@ func TestBuildTree_ProductNode_ScanError_ShowsErrorSuffix(t *testing.T) {
 	assert.Equal(t, "dependency graph failed", ossNode.ErrorMessage, "product node should carry the full error message")
 }
 
+func TestBuildTree_DisabledScanner_TooltipVariesByReason(t *testing.T) {
+	t.Run("disabled in plugin settings", func(t *testing.T) {
+		builder := newBuilderWithCompletedScans()
+		// Code is absent from SupportedIssueTypes → disabled via the settings toggle.
+		data := builder.BuildTreeFromFolderData([]FolderData{{
+			FolderPath: "/project", FolderName: "project",
+			SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
+		}})
+
+		codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+		require.NotNil(t, codeNode)
+		assert.Contains(t, codeNode.Tooltip, "disabled in Snyk plugin settings")
+		assert.Contains(t, codeNode.Tooltip, "gear icon")
+	})
+
+	t.Run("disabled at the organization", func(t *testing.T) {
+		builder := newBuilderWithCompletedScans()
+		builder.SetProductScanErrors(map[types.FilePath]map[product.Product]string{
+			"/project": {product.ProductCode: utils.ErrSnykCodeNotEnabled},
+		})
+		data := builder.BuildTreeFromFolderData([]FolderData{{
+			FolderPath: "/project", FolderName: "project",
+			SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		}})
+
+		codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+		require.NotNil(t, codeNode)
+		assert.Contains(t, codeNode.Tooltip, "disabled for your Snyk organization")
+		assert.Contains(t, codeNode.Tooltip, "org admin")
+	})
+
+	t.Run("disabled for this folder reuses the settings message", func(t *testing.T) {
+		// Folder config is part of plugin settings, so a folder-level disable shows
+		// the same tooltip as the product toggle being off.
+		builder := newBuilderWithCompletedScans()
+		builder.SetProductScanErrors(map[types.FilePath]map[product.Product]string{
+			"/project": {product.ProductOpenSource: utils.ErrSnykOssNotEnabledForFolder},
+		})
+		data := builder.BuildTreeFromFolderData([]FolderData{{
+			FolderPath: "/project", FolderName: "project",
+			SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
+		}})
+
+		ossNode := findChildByProduct(data.Nodes, product.ProductOpenSource)
+		require.NotNil(t, ossNode)
+		assert.Contains(t, ossNode.Tooltip, "disabled in Snyk plugin settings")
+		assert.Contains(t, ossNode.Tooltip, "gear icon")
+	})
+
+	t.Run("genuine scan failure keeps the generic hint", func(t *testing.T) {
+		builder := newBuilderWithCompletedScans()
+		builder.SetProductScanErrors(map[types.FilePath]map[product.Product]string{
+			"/project": {product.ProductOpenSource: "dependency graph failed"},
+		})
+		data := builder.BuildTreeFromFolderData([]FolderData{{
+			FolderPath: "/project", FolderName: "project",
+			SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
+		}})
+
+		ossNode := findChildByProduct(data.Nodes, product.ProductOpenSource)
+		require.NotNil(t, ossNode)
+		assert.Contains(t, ossNode.Tooltip, "couldn't be scanned")
+		assert.Contains(t, ossNode.Tooltip, "Click for details")
+	})
+}
+
 func TestBuildTree_ProductNode_ScanError_UsesErrorCatalogTreeSuffix(t *testing.T) {
 	cases := []struct {
 		errMsg     string

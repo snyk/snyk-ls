@@ -285,15 +285,16 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 		}
 		// else: no scan registered yet → empty description (initial state)
 
-		// IDE-1864: hover tooltip explaining a non-running scanner. Disabled
-		// scanners explain how to re-enable; errored scanners hint the row is
-		// clickable for the full error overlay. Mirrors the description precedence
-		// above (disabled wins over error, since a disabled product never scans).
+		// IDE-1864 / IDE-2027: hover tooltip explaining a non-running scanner.
+		// The copy is tailored to *why* it isn't running so the user knows what
+		// (if anything) they can do about it. Mirrors the description precedence
+		// above (settings-disabled wins over error, since a product turned off in
+		// settings never scans).
 		var tooltip string
 		if !enabled {
-			tooltip = fmt.Sprintf("%s scanning is disabled in Snyk plugin settings. Click the gear icon to re-enable it.", productDisplayName(p))
+			tooltip = productSettingsDisabledTooltip(p)
 		} else if scanError != "" {
-			tooltip = fmt.Sprintf("%s couldn't be scanned. Click for details.", productDisplayName(p))
+			tooltip = productDisabledTooltip(p, scanError)
 		} else if scanRegistered && !scanning && totalIssues == 0 {
 			// Surfaces the ✅ tick's meaning on hover; the child node carries any
 			// filter-aware detail.
@@ -807,4 +808,33 @@ func productScanErrorDescription(scanError string) string {
 		return "- " + meta.TreeRootSuffix
 	}
 	return "- (scan failed)"
+}
+
+// productSettingsDisabledTooltip is the hint for a scanner turned off via plugin
+// settings. Used both when the product toggle is off (enabled == false) and when
+// a scanner reports it's disabled for the folder — folder config is part of the
+// plugin settings, so the user sees one consistent message either way.
+func productSettingsDisabledTooltip(p product.Product) string {
+	return fmt.Sprintf("%s scanning is disabled in Snyk plugin settings. Click the gear icon to re-enable it.", productDisplayName(p))
+}
+
+// productDisabledTooltip returns the hover hint for a scanner that produced a
+// scan error. The wording is tailored to *why* it didn't run so the user knows
+// whether they can act on it (IDE-1864 / IDE-2027):
+//   - org/entitlement disablement ("…not enabled for this organization") is not
+//     self-serve, so the copy points the user at their org admin.
+//   - folder-level disablement is a plugin-settings choice (folder config), so it
+//     reuses the same settings message as the product toggle being off.
+//   - anything else is a genuine scan failure the user can inspect via the
+//     click-to-open error overlay.
+func productDisabledTooltip(p product.Product, scanError string) string {
+	switch scanError {
+	case utils.ErrSnykCodeNotEnabled, utils.ErrSnykSecretsNotEnabled:
+		return fmt.Sprintf("%s is disabled for your Snyk organization. Contact your org admin if you expected it to be available.", productDisplayName(p))
+	case utils.ErrSnykCodeNotEnabledForFolder, utils.ErrSnykSecretsNotEnabledForFolder,
+		utils.ErrSnykIacNotEnabledForFolder, utils.ErrSnykOssNotEnabledForFolder:
+		return productSettingsDisabledTooltip(p)
+	default:
+		return fmt.Sprintf("%s couldn't be scanned. Click for details.", productDisplayName(p))
+	}
 }
