@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -35,51 +34,8 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Helpers (initGitRepo and commitFile are defined in remy_test.go)
 // ---------------------------------------------------------------------------
-
-// initGitRepo creates a temporary directory and initializes a new git repo in it.
-func initGitRepo(t *testing.T) string {
-	t.Helper()
-	dir := t.TempDir()
-	// Canonicalize so the returned path matches git's view (git rev-parse
-	// --show-toplevel resolves symlinks). On macOS t.TempDir() is under
-	// /var (a symlink to /private/var) and on Windows it can be an 8.3 short
-	// name; without this the production canonicalization in Remediate produces
-	// cache keys the test's non-canonical paths never match, so Remediate
-	// returns a nil WorkspaceEdit and the cache tests fail on those platforms.
-	if canonical, err := filepath.EvalSymlinks(dir); err == nil {
-		dir = canonical
-	}
-	for _, args := range [][]string{
-		{"init"},
-		{"config", "user.email", "test@test.com"},
-		{"config", "user.name", "Test"},
-		{"config", "core.checkStat", "minimal"},
-	} {
-		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
-		cmd.Stdout = nil
-		cmd.Stderr = nil
-		require.NoError(t, cmd.Run(), "git %v", args)
-	}
-	return dir
-}
-
-// commitFile writes content to name inside repo and commits it.
-func commitFile(t *testing.T, repo, name, content string) {
-	t.Helper()
-	path := filepath.Join(repo, name)
-	require.NoError(t, os.WriteFile(path, []byte(content), 0644))
-	for _, args := range [][]string{
-		{"add", name},
-		{"commit", "-m", "add " + name},
-	} {
-		cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
-		cmd.Stdout = nil
-		cmd.Stderr = nil
-		require.NoError(t, cmd.Run(), "git %v", args)
-	}
-}
 
 // noopRunner is a fake remyRunner that makes no file changes.
 func noopRunner(_ context.Context, _ workflow.Engine, _, _ string) error {
