@@ -155,6 +155,6 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 	w := workspace.New(gafConfiguration, logger, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, configResolver, engine)
 	config.SetWorkspace(gafConfiguration, w)
 	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(engine, w, fileWatcher, notifier, featureFlagService, configResolver, nil)
+	codeActionService = codeaction.NewService(engine, w, fileWatcher, notifier, featureFlagService, configResolver)
 	return currentDependencies()
 }
