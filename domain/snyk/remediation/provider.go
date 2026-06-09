@@ -17,28 +17,3 @@
 // Package remediation defines the interface for autonomous finding remediation.
 package remediation
 
-import (
-	"context"
-
-	"github.com/snyk/snyk-ls/internal/product"
-	"github.com/snyk/snyk-ls/internal/types"
-)
-
-// RemediationRequest describes the finding for which a fix is requested.
-type RemediationRequest struct {
-	FindingId   string
-	FilePath    types.FilePath
-	ContentRoot types.FilePath
-	Range       types.Range
-	Product     product.Product
-}
-
-// RemediationProvider computes an autonomous fix for a single finding.
-// Returns nil when no fix can be computed; callers treat nil as "no fix available".
-//
-// Isolation contract: implementations may mutate ContentRoot in place.
-// Callers must supply an isolated copy of the workspace (e.g. a git worktree)
-// as ContentRoot and are responsible for post-fix verification and rollback.
-type RemediationProvider interface {
-	Remediate(ctx context.Context, req RemediationRequest) (*types.WorkspaceEdit, error)
-}
