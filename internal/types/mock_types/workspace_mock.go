@@ -387,6 +387,20 @@ func (mr *MockFolderMockRecorder) IsTrusted() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsTrusted", reflect.TypeOf((*MockFolder)(nil).IsTrusted))
 }
 
+// IssueViewOptions mocks base method.
+func (m *MockFolder) IssueViewOptions() types.IssueViewOptions {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IssueViewOptions")
+	ret0, _ := ret[0].(types.IssueViewOptions)
+	return ret0
+}
+
+// IssueViewOptions indicates an expected call of IssueViewOptions.
+func (mr *MockFolderMockRecorder) IssueViewOptions() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IssueViewOptions", reflect.TypeOf((*MockFolder)(nil).IssueViewOptions))
+}
+
 // Name mocks base method.
 func (m *MockFolder) Name() string {
 	m.ctrl.T.Helper()

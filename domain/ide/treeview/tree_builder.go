@@ -62,7 +62,6 @@ type TreeBuilder struct {
 	productScanStates map[types.FilePath]map[product.Product]bool
 	productScanErrors map[types.FilePath]map[product.Product]string
 	pendingAutoExpand map[string]bool // deferred auto-expand writes applied after build
-	issueViewOptions  types.IssueViewOptions
 }
 
 // NewTreeBuilder creates a new TreeBuilder with the given expand state.
@@ -83,11 +82,6 @@ func (b *TreeBuilder) SetProductScanStates(states map[types.FilePath]map[product
 // SetProductScanErrors sets the per-(folder, product) scan error messages.
 func (b *TreeBuilder) SetProductScanErrors(errors map[types.FilePath]map[product.Product]string) {
 	b.productScanErrors = errors
-}
-
-// SetIssueViewOptions sets the current issue view options for building info nodes.
-func (b *TreeBuilder) SetIssueViewOptions(opts types.IssueViewOptions) {
-	b.issueViewOptions = opts
 }
 
 // BuildTree constructs tree view data from a workspace.
@@ -114,7 +108,7 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 			AllIssues:           allIssues,
 			FilteredIssues:      filtered,
 			DeltaEnabled:        f.IsDeltaFindingsEnabled(),
-			IssueViewOptions:    b.issueViewOptions,
+			IssueViewOptions:    f.IssueViewOptions(),
 		}
 		if cfg := f.FolderConfigReadOnly(); cfg != nil {
 			fd.ConsistentIgnoresEnabled = cfg.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores)

@@ -80,4 +80,6 @@ type Folder interface {
 	IsAutoScanEnabled() bool
 	// DisplayableIssueTypes returns which issue types are enabled for this folder.
 	DisplayableIssueTypes() map[product.FilterableIssueType]bool
+	// IssueViewOptions returns the issue view options for this folder, respecting folder-level overrides.
+	IssueViewOptions() IssueViewOptions
 }

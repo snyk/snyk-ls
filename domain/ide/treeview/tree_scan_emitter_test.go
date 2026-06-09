@@ -207,3 +207,55 @@ func TestTreeScanStateEmitter_Dispose_StopsRenderLoop(t *testing.T) {
 	// Emit after Dispose must not block or panic.
 	emitter.Emit(scanstates.StateSnapshot{AnyScanInProgressWorkingDirectory: true})
 }
+
+// TestTreeScanStateEmitter_FolderLevelIssueViewOptions verifies that the info-node message
+// reflects folder-level IssueViewOptions overrides rather than the global setting.
+// Regression for: global open+ignored disabled, folder-level open+ignored enabled →
+// "Open and Ignored issues are disabled!" must NOT appear.
+func TestTreeScanStateEmitter_FolderLevelIssueViewOptions(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+
+	// Enable products so product nodes (and their info nodes) are rendered.
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+
+	// Global: both open and ignored issues disabled.
+	conf.Set(configresolver.UserGlobalKey(types.SettingIssueViewOpenIssues), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingIssueViewIgnoredIssues), false)
+
+	folderPath := types.FilePath("/project-folder-ivo")
+	workspaceutil.SetupWorkspace(t, engine, folderPath)
+
+	// Folder-level override: both enabled (takes precedence over global).
+	folderKey := string(types.PathKey(folderPath))
+	conf.Set(configresolver.UserFolderKey(folderKey, types.SettingIssueViewOpenIssues), &configresolver.LocalConfigField{Value: true, Changed: true})
+	conf.Set(configresolver.UserFolderKey(folderKey, types.SettingIssueViewIgnoredIssues), &configresolver.LocalConfigField{Value: true, Changed: true})
+
+	notif := notification.NewNotifier()
+	var mu sync.Mutex
+	var receivedPayload any
+	notif.CreateListener(func(params any) {
+		mu.Lock()
+		defer mu.Unlock()
+		receivedPayload = params
+	})
+	t.Cleanup(func() { notif.DisposeListener() })
+
+	emitter, err := NewTreeScanStateEmitter(conf, engine.GetLogger(), notif)
+	require.NoError(t, err)
+	t.Cleanup(emitter.Dispose)
+
+	emitter.Emit(scanstates.StateSnapshot{})
+
+	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return receivedPayload != nil
+	}, 2*time.Second, 50*time.Millisecond)
+
+	mu.Lock()
+	treeView := receivedPayload.(types.TreeView)
+	mu.Unlock()
+	assert.NotContains(t, treeView.TreeViewHtml, "Open and Ignored issues are disabled!",
+		"folder-level enabled override must suppress the disabled info message")
+}

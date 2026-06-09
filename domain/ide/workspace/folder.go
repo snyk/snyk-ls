@@ -925,6 +925,11 @@ func (f *Folder) DisplayableIssueTypes() map[product.FilterableIssueType]bool {
 	return f.displayableIssueTypesForFolder(f.FolderConfigReadOnly())
 }
 
+// IssueViewOptions returns the issue view options for this folder, respecting folder-level overrides.
+func (f *Folder) IssueViewOptions() types.IssueViewOptions {
+	return f.issueViewOptionsForFolder(f.FolderConfigReadOnly())
+}
+
 func (f *Folder) IssuesForRange(path types.FilePath, r types.Range) (matchingIssues []types.Issue) {
 	method := "domain.ide.workspace.folder.getCodeActions"
 	if !f.Contains(path) {
