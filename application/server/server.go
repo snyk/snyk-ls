@@ -106,40 +106,32 @@ func Start(engine workflow.Engine, tokenService *config.TokenServiceImpl) {
 // All deps in this list are always created by di.Init and di.TestInit; a nil value
 // means the server was started with broken wiring and cannot function correctly.
 func validateMandatoryDeps(deps di.Dependencies) error {
-	switch {
-	case deps.ConfigResolver == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: ConfigResolver")
-	case deps.AuthenticationService == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: AuthenticationService")
-	case deps.LdxSyncService == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: LdxSyncService")
-	case deps.Notifier == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: Notifier")
-	case deps.FeatureFlagService == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: FeatureFlagService")
-	case deps.ErrorReporter == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: ErrorReporter")
-	case deps.LearnService == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: LearnService")
-	case deps.Scanner == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: Scanner")
-	case deps.HoverService == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: HoverService")
-	case deps.ScanNotifier == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: ScanNotifier")
-	case deps.ScanPersister == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: ScanPersister")
-	case deps.ScanStateAggregator == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: ScanStateAggregator")
-	case deps.FileWatcher == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: FileWatcher")
-	case deps.CodeActionService == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: CodeActionService")
-	case deps.CommandService == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: CommandService")
-	default:
-		return nil
+	checks := []struct {
+		name  string
+		value any
+	}{
+		{"ConfigResolver", deps.ConfigResolver},
+		{"AuthenticationService", deps.AuthenticationService},
+		{"LdxSyncService", deps.LdxSyncService},
+		{"Notifier", deps.Notifier},
+		{"FeatureFlagService", deps.FeatureFlagService},
+		{"ErrorReporter", deps.ErrorReporter},
+		{"LearnService", deps.LearnService},
+		{"Scanner", deps.Scanner},
+		{"HoverService", deps.HoverService},
+		{"ScanNotifier", deps.ScanNotifier},
+		{"ScanPersister", deps.ScanPersister},
+		{"ScanStateAggregator", deps.ScanStateAggregator},
+		{"FileWatcher", deps.FileWatcher},
+		{"CodeActionService", deps.CodeActionService},
+		{"CommandService", deps.CommandService},
 	}
+	for _, c := range checks {
+		if c.value == nil {
+			return fmt.Errorf("snyk-ls: mandatory DI dependency missing: %s", c.name)
+		}
+	}
+	return nil
 }
 
 // withContext wraps a jrpc2.Handler to inject logger, configuration, engine,
