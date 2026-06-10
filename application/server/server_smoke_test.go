@@ -1864,8 +1864,8 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			_ = os.Remove(s)
 		})
 		prev := os.Getenv("SNYK_TOKEN")
-		t.Setenv("SNYK_TOKEN", "")
-		t.Cleanup(func() { _ = os.Setenv("SNYK_TOKEN", prev) }) //nolint:usetesting // restoring to pre-test value
+		_ = os.Setenv("SNYK_TOKEN", "")                         //nolint:usetesting // t.Setenv panics in parent-parallel subtests
+		t.Cleanup(func() { _ = os.Setenv("SNYK_TOKEN", prev) }) //nolint:usetesting // restoring env, not setting for test isolation
 
 		ensureInitialized(t, engine, tokenService, loc, initParams, nil)
 
