@@ -72,11 +72,8 @@ func Test_SmokeInstanceTest(t *testing.T) {
 	runSmokeTest(t, engine, tokenService, testsupport.NodejsGoof, "0336589", ossFile, codeFile, true, endpoint, product.ProductOpenSource, product.ProductCode)
 }
 
-//nolint:tparallel // os.Setenv must come before t.Parallel(); t.Setenv panics after t.Parallel()
 func Test_SmokeWorkspaceScan(t *testing.T) {
-	if os.Getenv("SNYK_API") == "" {
-		_ = os.Setenv("SNYK_API", "https://api.snyk.io") //nolint:usetesting // t.Setenv cannot be used: it panics when called before t.Parallel()
-	}
+	setSmokeAPIEndpoint("https://api.snyk.io")
 	t.Parallel()
 	ossFile := "package.json"
 	iacFile := "main.tf"
@@ -596,8 +593,7 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.TokenServiceImpl, repo string, commit string, file1 string, file2 string, hasVulns bool, endpoint string, products ...product.Product) {
 	t.Helper()
 	if endpoint != "" && endpoint != "/v1" {
-		// os.Setenv: runSmokeTest is called from parallel tests; t.Setenv panics there.
-		_ = os.Setenv("SNYK_API", endpoint) //nolint:usetesting // t.Setenv panics in parallel tests
+		setSmokeAPIEndpoint(endpoint)
 	}
 	// Allocate temp dir BEFORE setupServer so t.Cleanup LIFO order ensures
 	// the server shuts down before the temp dir is removed (fixes Windows file locking).
@@ -1861,16 +1857,16 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		assert.Equal(t, globalOrg, config.FolderOrganization(engine.GetConfiguration(), repo, engine.GetLogger()), "Folder should use global org when PreferredOrg is blank and OrgSetByUser is true")
 	})
 
+	//nolint:tparallel // this subtest writes SNYK_TOKEN=""; running it in parallel would race with siblings that read the token
 	t.Run("unauthenticated - re-adding folder with changing the config through workspace/didChangeConfiguration", func(t *testing.T) {
-		t.Parallel()
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {
 			s, _ := folderconfig.ConfigFileFromConfig(engine.GetConfiguration())
 			_ = os.Remove(s)
 		})
 		prev := os.Getenv("SNYK_TOKEN")
-		_ = os.Setenv("SNYK_TOKEN", "")                         //nolint:usetesting // t.Setenv panics in parallel subtests
-		t.Cleanup(func() { _ = os.Setenv("SNYK_TOKEN", prev) }) //nolint:usetesting // restoring env, not setting for test isolation
+		t.Setenv("SNYK_TOKEN", "")
+		t.Cleanup(func() { _ = os.Setenv("SNYK_TOKEN", prev) }) //nolint:usetesting // restoring to pre-test value
 
 		ensureInitialized(t, engine, tokenService, loc, initParams, nil)
 
@@ -2037,10 +2033,9 @@ func ensureInitialized(t *testing.T, engine workflow.Engine, tokenService *confi
 	t.Helper()
 	if os.Getenv("SNYK_LOG_LEVEL") == "" {
 		config.SetLogLevel(zerolog.LevelInfoValue)
-		prevLogLevel := os.Getenv("SNYK_LOG_LEVEL") // always "" here, captured for symmetry with SNYK_TOKEN pattern
-		// os.Setenv: ensureInitialized is called from parallel tests; t.Setenv panics there.
-		_ = os.Setenv("SNYK_LOG_LEVEL", config.GetLogLevel())               //nolint:usetesting // t.Setenv panics in parallel tests
-		t.Cleanup(func() { _ = os.Setenv("SNYK_LOG_LEVEL", prevLogLevel) }) //nolint:usetesting // restoring env, not setting for test isolation
+		// setSmokeLogLevel is once-guarded: concurrent callers from parallel tests
+		// all write the same constant value so no restore is needed.
+		setSmokeLogLevel(config.GetLogLevel())
 	}
 	config.SetupLogging(engine, tokenService, nil) // we don't need to send logs to the client
 	engineConfig := engine.GetConfiguration()

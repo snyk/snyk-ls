@@ -64,9 +64,16 @@ func NewTestTracker(channel chan types.ProgressParams, cancelChannel chan bool, 
 	return t
 }
 
-func NewTracker(cancellable bool, logger *zerolog.Logger) *Tracker {
+// NewTrackerWithChannel creates a Tracker that routes progress events to the
+// provided channel. This is the correct constructor for per-server isolation:
+// each server passes its own channel so progress events are never misrouted
+// to another server's listener.
+//
+// Existing callers that do not need isolation can use NewTracker, which
+// continues to route to the global ToServerProgressChannel.
+func NewTrackerWithChannel(channel chan types.ProgressParams, cancellable bool, logger *zerolog.Logger) *Tracker {
 	t := &Tracker{
-		channel:       ToServerProgressChannel,
+		channel:       channel,
 		cancelChannel: make(chan bool, 1),
 		cancellable:   cancellable,
 		finished:      false,
@@ -77,6 +84,10 @@ func NewTracker(cancellable bool, logger *zerolog.Logger) *Tracker {
 	trackers[t.token] = t
 	trackersMutex.Unlock()
 	return t
+}
+
+func NewTracker(cancellable bool, logger *zerolog.Logger) *Tracker {
+	return NewTrackerWithChannel(ToServerProgressChannel, cancellable, logger)
 }
 
 func (t *Tracker) GetChannel() chan types.ProgressParams {

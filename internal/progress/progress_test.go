@@ -86,6 +86,56 @@ func TestEndProgress(t *testing.T) {
 	assert.Equal(t, output, <-channel)
 }
 
+// TestNewTrackerWithChannel_RoutesToGivenChannel (IDE-2036-UNIT-001) verifies
+// that NewTrackerWithChannel sends progress to the supplied channel and that
+// NewTracker still sends to the global ToServerProgressChannel.
+//
+// Not parallel: it inspects the global ToServerProgressChannel for absence; a
+// concurrent NewTracker call from another test goroutine would produce false
+// positives. We drain first and then write only via NewTrackerWithChannel so
+// any residual item on the global channel is a genuine routing bug.
+func TestNewTrackerWithChannel_RoutesToGivenChannel(t *testing.T) {
+	// Drain global channel so previous test writes don't interfere.
+	for len(ToServerProgressChannel) > 0 {
+		<-ToServerProgressChannel
+	}
+
+	logger := zerolog.Nop()
+	customCh := make(chan types.ProgressParams, 10)
+
+	tr := NewTrackerWithChannel(customCh, false, &logger)
+	tr.Begin("test-title")
+	tr.End()
+
+	// custom channel must receive the begin event
+	if len(customCh) == 0 {
+		t.Fatal("expected progress event on customCh, got none")
+	}
+
+	// global channel must NOT receive anything (we did not use NewTracker)
+	if len(ToServerProgressChannel) != 0 {
+		t.Fatal("NewTrackerWithChannel must not write to ToServerProgressChannel")
+	}
+}
+
+// TestNewTracker_RoutesToGlobalChannel verifies backward compatibility: the
+// existing NewTracker still routes to ToServerProgressChannel.
+func TestNewTracker_RoutesToGlobalChannel(t *testing.T) {
+	// Drain the global channel first so previous test runs don't interfere.
+	for len(ToServerProgressChannel) > 0 {
+		<-ToServerProgressChannel
+	}
+
+	logger := zerolog.Nop()
+	tr := NewTracker(false, &logger)
+	tr.Begin("test-title")
+	tr.End()
+
+	if len(ToServerProgressChannel) == 0 {
+		t.Fatal("expected progress event on ToServerProgressChannel, got none")
+	}
+}
+
 func TestEndProgressTwice(t *testing.T) {
 	output := types.ProgressParams{
 		Value: types.WorkDoneProgressEnd{
