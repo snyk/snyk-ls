@@ -1868,7 +1868,9 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			s, _ := folderconfig.ConfigFileFromConfig(engine.GetConfiguration())
 			_ = os.Remove(s)
 		})
-		t.Setenv("SNYK_TOKEN", "")
+		prev := os.Getenv("SNYK_TOKEN")
+		_ = os.Setenv("SNYK_TOKEN", "")                         //nolint:usetesting // t.Setenv panics in parallel subtests
+		t.Cleanup(func() { _ = os.Setenv("SNYK_TOKEN", prev) }) //nolint:usetesting // restoring env, not setting for test isolation
 
 		ensureInitialized(t, engine, tokenService, loc, initParams, nil)
 
@@ -2035,7 +2037,10 @@ func ensureInitialized(t *testing.T, engine workflow.Engine, tokenService *confi
 	t.Helper()
 	if os.Getenv("SNYK_LOG_LEVEL") == "" {
 		config.SetLogLevel(zerolog.LevelInfoValue)
-		t.Setenv("SNYK_LOG_LEVEL", config.GetLogLevel())
+		prevLogLevel := os.Getenv("SNYK_LOG_LEVEL") // always "" here, captured for symmetry with SNYK_TOKEN pattern
+		// os.Setenv: ensureInitialized is called from parallel tests; t.Setenv panics there.
+		_ = os.Setenv("SNYK_LOG_LEVEL", config.GetLogLevel())               //nolint:usetesting // t.Setenv panics in parallel tests
+		t.Cleanup(func() { _ = os.Setenv("SNYK_LOG_LEVEL", prevLogLevel) }) //nolint:usetesting // restoring env, not setting for test isolation
 	}
 	config.SetupLogging(engine, tokenService, nil) // we don't need to send logs to the client
 	engineConfig := engine.GetConfiguration()
