@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/creachadair/jrpc2"
+	"github.com/creachadair/jrpc2/handler"
 	"github.com/golang/mock/gomock"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -154,10 +156,20 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockLdxSyncService := mockcommand.NewMockLdxSyncService(ctrl)
+
+	// Build base deps first so we can create a real command service that shares
+	// the same auth service instance as the server — both must point to the same
+	// FakeAuthenticationProvider so that IsAuthenticated=false is visible to the
+	// command handler that runs inside the server.
+	baseDeps := di.TestInit(t, engine, tokenService, &di.Dependencies{
+		LdxSyncService: mockLdxSyncService,
+	})
+	realCommandService := command.NewService(engine, engine.GetLogger(), baseDeps.AuthenticationService, baseDeps.FeatureFlagService, baseDeps.Notifier, baseDeps.LearnService, nil, nil, nil, mockLdxSyncService, nil, nil)
+	baseDeps.CommandService = realCommandService
+
+	// Pass all pre-built deps so setupServer reuses the same service instances.
 	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService,
-		WithDeps(di.Dependencies{
-			LdxSyncService: mockLdxSyncService,
-		}))
+		WithDeps(baseDeps))
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 
@@ -180,9 +192,6 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 			assert.Len(t, folders, 1)
 			assert.Equal(t, folder.Path(), folders[0].Path())
 		})
-
-	// reset to use real service with mock injected
-	command.SetService(command.NewService(engine, engine.GetLogger(), authenticationService, deps.FeatureFlagService, deps.Notifier, deps.LearnService, nil, nil, nil, mockLdxSyncService, nil, nil))
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
@@ -336,20 +345,72 @@ func (tcs *testCommandService) ExecuteCommandData(ctx context.Context, cmdData t
 	return tcs.testCmd.Execute(ctx)
 }
 
+// myTestCommandService is a pointer-type sentinel used to prove pointer identity.
+type myTestCommandService struct {
+	called bool
+}
+
+func (m *myTestCommandService) ExecuteCommandData(_ context.Context, _ types.CommandData, _ types.Server) (any, error) {
+	m.called = true
+	return "sentinel-called", nil
+}
+
+// Test_ExecuteCommandHandler_UsesContextInjectedCommandService proves that
+// executeCommandHandler reads CommandService from the context deps map (injected
+// by withContext) and NOT from the command.Service() process-global.
+//
+// It sets a different sentinel as the process-global and verifies the handler
+// invokes the deps-injected sentinel, not the global one.
+func Test_ExecuteCommandHandler_UsesContextInjectedCommandService(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	// contextSentinel is the instance we inject via deps — the handler must use this.
+	contextSentinel := &myTestCommandService{}
+	// globalSentinel is set as the process-global — the handler must NOT use this.
+	globalSentinel := &myTestCommandService{}
+
+	// Prime the mandatory deps base, then override CommandService with contextSentinel.
+	baseDeps := di.TestInit(t, engine, tokenService, nil)
+	deps := baseDeps
+	deps.CommandService = contextSentinel
+
+	// Set the global to globalSentinel to detect if the handler accidentally reads it.
+	command.SetService(globalSentinel)
+	t.Cleanup(func() { command.SetService(nil) })
+
+	// Use withContext to inject deps (including CommandService) into the handler context,
+	// and read back what CommandService the handler sees.
+	var gotCommandService types.CommandService
+	wrapped := withContext(
+		handler.New(func(ctx context.Context, _ *jrpc2.Request) (any, error) {
+			gotCommandService, _ = commandServiceFromContext(ctx)
+			return nil, nil
+		}),
+		logger, conf, engine, deps, nil,
+	)
+
+	_, err := wrapped(t.Context(), nil)
+	require.NoError(t, err)
+
+	// Proof: the context must carry the deps-injected sentinel, not the global one.
+	require.NotNil(t, gotCommandService, "CommandService must be injected into context by withContext")
+	assert.Same(t, contextSentinel, gotCommandService,
+		"withContext must inject deps.CommandService into context, not the command.Service() global")
+	assert.NotSame(t, globalSentinel, gotCommandService,
+		"handler must not see the command.Service() process-global")
+}
+
 func Test_ExecuteCommand_CancelRequest(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _, _ := setupServer(t, engine, tokenService)
 
 	testCmd := newWaitForCancelTestCommand(t)
 
-	originalCmdService := command.Service()
 	fakeCommandService := &testCommandService{
 		testCmd: testCmd,
 	}
-	command.SetService(fakeCommandService)
-	t.Cleanup(func() {
-		command.SetService(originalCmdService)
-	})
+	loc, _, _ := setupServer(t, engine, tokenService, WithDeps(di.Dependencies{CommandService: fakeCommandService}))
 
 	var cmdDone atomic.Bool
 	go func() {

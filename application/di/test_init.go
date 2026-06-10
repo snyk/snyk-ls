@@ -59,11 +59,6 @@ import (
 //
 // Remaining global side effects (not safe for parallel tests without further work):
 //   - types.SetGlobalSystemDefault — stores into the per-engine configuration.
-//   - command.SetService — writes the process-global command singleton so that
-//     execute_command.go's handler (which calls command.Service() directly) uses
-//     a mock rather than nil. Concurrent parallel TestInit calls race on this
-//     write; do not add t.Parallel() to tests that exercise workspace/executeCommand
-//     unless command.Service is migrated to context injection.
 func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenService, overrideDeps *Dependencies) Dependencies {
 	t.Helper()
 	gafConfiguration := engine.GetConfiguration()
@@ -175,8 +170,12 @@ func buildTestDependencies(t *testing.T, engine workflow.Engine, tokenService ty
 		localLdxSyncService = command.NewLdxSyncService(localConfigResolver)
 	}
 
-	mockCommandService := types.NewCommandServiceMock()
-	command.SetService(mockCommandService)
+	var localCommandService types.CommandService
+	if overrideDeps != nil && overrideDeps.CommandService != nil {
+		localCommandService = overrideDeps.CommandService
+	} else {
+		localCommandService = types.NewCommandServiceMock()
+	}
 	w := workspace.New(gafConfiguration, logger, localInstrumentor, localScanner, localHoverService, localScanNotifier, localNotifier, localScanPersister, localScanStateAggregator, localFeatureFlagService, localConfigResolver, engine)
 	config.SetWorkspace(gafConfiguration, w)
 	localFileWatcher := watcher.NewFileWatcher()
@@ -205,5 +204,6 @@ func buildTestDependencies(t *testing.T, engine workflow.Engine, tokenService ty
 		ErrorReporter:         localErrorReporter,
 		CodeActionService:     localCodeActionService,
 		Installer:             localInstaller,
+		CommandService:        localCommandService,
 	}
 }

@@ -135,6 +135,8 @@ func validateMandatoryDeps(deps di.Dependencies) error {
 		return errors.New("snyk-ls: mandatory DI dependency missing: FileWatcher")
 	case deps.CodeActionService == nil:
 		return errors.New("snyk-ls: mandatory DI dependency missing: CodeActionService")
+	case deps.CommandService == nil:
+		return errors.New("snyk-ls: mandatory DI dependency missing: CommandService")
 	default:
 		return nil
 	}
@@ -232,6 +234,9 @@ func injectCoreServicesIntoMap(m map[string]any, deps di.Dependencies) {
 	}
 	if deps.TreeEmitter != nil {
 		m[ctx2.DepTreeEmitter] = deps.TreeEmitter
+	}
+	if deps.CommandService != nil {
+		m[ctx2.DepCommandService] = deps.CommandService
 	}
 }
 
@@ -504,6 +509,23 @@ func mustConfigResolverFromContext(ctx context.Context) types.ConfigResolverInte
 	return cr
 }
 
+func commandServiceFromContext(ctx context.Context) (types.CommandService, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	svc, ok := deps[ctx2.DepCommandService].(types.CommandService)
+	return svc, ok
+}
+
+func mustCommandServiceFromContext(ctx context.Context) types.CommandService {
+	svc, ok := commandServiceFromContext(ctx)
+	if !ok {
+		panic("CommandService missing from context")
+	}
+	return svc
+}
+
 func textDocumentDidChangeHandler(conf configuration.Configuration) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidChangeTextDocumentParams) (any, error) {
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "TextDocumentDidChangeHandler").Logger()
@@ -657,7 +679,7 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		// goroutine reads this channel on its first message.
 		types.NewLspInitializedChannel(conf)
 		go createProgressListener(progress.ToServerProgressChannel, progressStopChan, srv, &logger)
-		registerNotifier(conf, &logger, srv, mustNotifierFromContext(ctx))
+		registerNotifier(conf, &logger, srv, mustNotifierFromContext(ctx), mustCommandServiceFromContext(ctx))
 
 		result := types.InitializeResult{
 			ServerInfo: types.ServerInfo{
