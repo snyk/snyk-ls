@@ -28,7 +28,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -47,7 +46,7 @@ func TestRegisterNotifier_NilNotifier_Panics(t *testing.T) {
 	srv := mock_types.NewMockServer(ctrl)
 
 	assert.Panics(t, func() {
-		registerNotifier(conf, logger, srv, nil)
+		registerNotifier(conf, logger, srv, nil, nil)
 	}, "registerNotifier must panic when notifier is nil")
 }
 
@@ -288,7 +287,6 @@ func TestShowMessageRequest(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		command.SetService(types.NewCommandServiceMock())
 		actionCommandMap := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
 
 		actionCommandMap.Add(types.MessageAction(selectedAction), types.CommandData{CommandId: types.OpenBrowserCommand, Arguments: []any{"https://snyk.io"}})
@@ -297,12 +295,13 @@ func TestShowMessageRequest(t *testing.T) {
 		engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
 		deps2.Notifier.Send(request)
 
+		// The command service injected into the notifier via context is deps2.CommandService
+		// (a *types.CommandServiceMock produced by di.TestInit). Check it, not the global.
+		commandServiceMock := deps2.CommandService.(*types.CommandServiceMock)
 		assert.Eventually(
 			t,
 			func() bool {
 				// verify that passed command is eventually executed
-				commandService := command.Service()
-				commandServiceMock := commandService.(*types.CommandServiceMock)
 				executedCommands := commandServiceMock.ExecutedCommands()
 				if len(executedCommands) == 0 {
 					return false

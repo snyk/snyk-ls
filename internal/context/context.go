@@ -111,6 +111,7 @@ const DepFileWatcher = "fileWatcher"
 const DepCodeActionService = "codeActionService"
 const DepFeatureFlagService = "featureFlagService"
 const DepInstaller = "installer"
+const DepCommandService = "commandService"
 
 // NewContextWithDependencies returns a new Context that carries dependencies.
 // This can be used to pass pointers to injected (service) dependencies, e.g. a pointer

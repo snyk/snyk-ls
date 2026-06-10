@@ -377,7 +377,9 @@ func startE2ELocalServer(
 	if configureDeps != nil {
 		deps = configureDeps(deps)
 	}
-	command.SetService(command.NewService(
+	// Build and inject a real command service into deps so that the context-injected
+	// handler sees it, rather than the CommandServiceMock produced by di.TestInit.
+	deps.CommandService = command.NewService(
 		engine,
 		engine.GetLogger(),
 		deps.AuthenticationService,
@@ -390,7 +392,7 @@ func startE2ELocalServer(
 		deps.LdxSyncService,
 		deps.ConfigResolver,
 		nil,
-	))
+	)
 	recorder := &testsupport.JsonRPCRecorder{}
 	loc := startServer(engine, tokenService, nil, recorder, deps)
 	cleanupChannels(deps)
