@@ -915,6 +915,12 @@ func (f *Folder) IsDeltaFindingsEnabled() bool {
 	return f.isDeltaFindingsEnabledForFolder(f.FolderConfigReadOnly())
 }
 
+// IsDeltaFindingsEnabledFromConfig is like IsDeltaFindingsEnabled but accepts a pre-fetched
+// FolderConfig to avoid a redundant FolderConfigReadOnly() call.
+func (f *Folder) IsDeltaFindingsEnabledFromConfig(cfg *types.FolderConfig) bool {
+	return f.isDeltaFindingsEnabledForFolder(cfg)
+}
+
 // IsAutoScanEnabled returns whether automatic scanning is enabled for this folder.
 func (f *Folder) IsAutoScanEnabled() bool {
 	return f.isAutoScanEnabledForFolder(f.FolderConfigReadOnly())
@@ -925,9 +931,21 @@ func (f *Folder) DisplayableIssueTypes() map[product.FilterableIssueType]bool {
 	return f.displayableIssueTypesForFolder(f.FolderConfigReadOnly())
 }
 
+// DisplayableIssueTypesFromConfig is like DisplayableIssueTypes but accepts a pre-fetched
+// FolderConfig to avoid a redundant FolderConfigReadOnly() call.
+func (f *Folder) DisplayableIssueTypesFromConfig(cfg *types.FolderConfig) map[product.FilterableIssueType]bool {
+	return f.displayableIssueTypesForFolder(cfg)
+}
+
 // IssueViewOptions returns the issue view options for this folder, respecting folder-level overrides.
 func (f *Folder) IssueViewOptions() types.IssueViewOptions {
 	return f.issueViewOptionsForFolder(f.FolderConfigReadOnly())
+}
+
+// IssueViewOptionsFromConfig is like IssueViewOptions but accepts a pre-fetched FolderConfig
+// to avoid a redundant FolderConfigReadOnly() call.
+func (f *Folder) IssueViewOptionsFromConfig(cfg *types.FolderConfig) types.IssueViewOptions {
+	return f.issueViewOptionsForFolder(cfg)
 }
 
 func (f *Folder) IssuesForRange(path types.FilePath, r types.Range) (matchingIssues []types.Issue) {

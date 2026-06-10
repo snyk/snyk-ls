@@ -97,19 +97,22 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 		if !ok {
 			continue
 		}
-		supportedTypes := f.DisplayableIssueTypes()
+		// Fetch FolderConfig once; all derived values are computed from this single call
+		// to avoid repeated storage reads inside DisplayableIssueTypes, IsDeltaFindingsEnabled,
+		// and IssueViewOptions (each would otherwise invoke FolderConfigReadOnly separately).
+		cfg := f.FolderConfigReadOnly()
+		supportedTypes := f.DisplayableIssueTypesFromConfig(cfg)
 		allIssues := fip.Issues()
 		filtered := fip.FilterIssues(allIssues, supportedTypes)
 
-		cfg := f.FolderConfigReadOnly()
 		fd := FolderData{
 			FolderPath:          f.Path(),
 			FolderName:          f.Name(),
 			SupportedIssueTypes: supportedTypes,
 			AllIssues:           allIssues,
 			FilteredIssues:      filtered,
-			DeltaEnabled:        f.IsDeltaFindingsEnabled(),
-			IssueViewOptions:    f.IssueViewOptions(),
+			DeltaEnabled:        f.IsDeltaFindingsEnabledFromConfig(cfg),
+			IssueViewOptions:    f.IssueViewOptionsFromConfig(cfg),
 		}
 		if cfg != nil {
 			fd.ConsistentIgnoresEnabled = cfg.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores)

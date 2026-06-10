@@ -305,6 +305,20 @@ func (mr *MockFolderMockRecorder) DisplayableIssueTypes() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DisplayableIssueTypes", reflect.TypeOf((*MockFolder)(nil).DisplayableIssueTypes))
 }
 
+// DisplayableIssueTypesFromConfig mocks base method.
+func (m *MockFolder) DisplayableIssueTypesFromConfig(arg0 *types.FolderConfig) map[product.FilterableIssueType]bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DisplayableIssueTypesFromConfig", arg0)
+	ret0, _ := ret[0].(map[product.FilterableIssueType]bool)
+	return ret0
+}
+
+// DisplayableIssueTypesFromConfig indicates an expected call of DisplayableIssueTypesFromConfig.
+func (mr *MockFolderMockRecorder) DisplayableIssueTypesFromConfig(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DisplayableIssueTypesFromConfig", reflect.TypeOf((*MockFolder)(nil).DisplayableIssueTypesFromConfig), arg0)
+}
+
 // FilterAndPublishDiagnostics mocks base method.
 func (m *MockFolder) FilterAndPublishDiagnostics(arg0 product.Product) {
 	m.ctrl.T.Helper()
@@ -359,6 +373,20 @@ func (mr *MockFolderMockRecorder) IsDeltaFindingsEnabled() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDeltaFindingsEnabled", reflect.TypeOf((*MockFolder)(nil).IsDeltaFindingsEnabled))
 }
 
+// IsDeltaFindingsEnabledFromConfig mocks base method.
+func (m *MockFolder) IsDeltaFindingsEnabledFromConfig(arg0 *types.FolderConfig) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsDeltaFindingsEnabledFromConfig", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsDeltaFindingsEnabledFromConfig indicates an expected call of IsDeltaFindingsEnabledFromConfig.
+func (mr *MockFolderMockRecorder) IsDeltaFindingsEnabledFromConfig(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDeltaFindingsEnabledFromConfig", reflect.TypeOf((*MockFolder)(nil).IsDeltaFindingsEnabledFromConfig), arg0)
+}
+
 // IsScanned mocks base method.
 func (m *MockFolder) IsScanned() bool {
 	m.ctrl.T.Helper()
@@ -399,6 +427,20 @@ func (m *MockFolder) IssueViewOptions() types.IssueViewOptions {
 func (mr *MockFolderMockRecorder) IssueViewOptions() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IssueViewOptions", reflect.TypeOf((*MockFolder)(nil).IssueViewOptions))
+}
+
+// IssueViewOptionsFromConfig mocks base method.
+func (m *MockFolder) IssueViewOptionsFromConfig(arg0 *types.FolderConfig) types.IssueViewOptions {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IssueViewOptionsFromConfig", arg0)
+	ret0, _ := ret[0].(types.IssueViewOptions)
+	return ret0
+}
+
+// IssueViewOptionsFromConfig indicates an expected call of IssueViewOptionsFromConfig.
+func (mr *MockFolderMockRecorder) IssueViewOptionsFromConfig(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IssueViewOptionsFromConfig", reflect.TypeOf((*MockFolder)(nil).IssueViewOptionsFromConfig), arg0)
 }
 
 // Name mocks base method.
