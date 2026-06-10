@@ -21,12 +21,13 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/adrg/xdg"
 	"github.com/creachadair/jrpc2/server"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -46,13 +47,24 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
+// setupTestConfigIsolation redirects config file I/O to a test-local temp directory
+// via the engine config, avoiding mutation of the package-level xdg.ConfigHome global.
+func setupTestConfigIsolation(t *testing.T, engine workflow.Engine) {
+	t.Helper()
+	ideName := engine.GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT)
+	if ideName == "" {
+		t.Fatalf("setupTestConfigIsolation: INTEGRATION_ENVIRONMENT not set — SmokeTestWithEngine must configure it")
+	}
+	configDir := t.TempDir()
+	configFilePath := filepath.Join(configDir, "snyk", fmt.Sprintf("ls-config-%s", ideName))
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingConfigFile), configFilePath)
+}
+
 func setupPrecedenceTest(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder, di.Dependencies) {
 	t.Helper()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
 
-	origConfigHome := xdg.ConfigHome
-	xdg.ConfigHome = t.TempDir()
-	t.Cleanup(func() { xdg.ConfigHome = origConfigHome })
+	setupTestConfigIsolation(t, engine)
 
 	loc, jsonRpcRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 
@@ -639,9 +651,7 @@ func setupScanPrecedenceTest(t *testing.T, codeEnabled, ossEnabled, iacEnabled b
 	t.Helper()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
 
-	origConfigHome := xdg.ConfigHome
-	xdg.ConfigHome = t.TempDir()
-	t.Cleanup(func() { xdg.ConfigHome = origConfigHome })
+	setupTestConfigIsolation(t, engine)
 
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, jsonRpcRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
@@ -833,9 +843,7 @@ func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing
 	t.Parallel()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
 
-	origConfigHome := xdg.ConfigHome
-	xdg.ConfigHome = t.TempDir()
-	t.Cleanup(func() { xdg.ConfigHome = origConfigHome })
+	setupTestConfigIsolation(t, engine)
 
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, jsonRpcRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
