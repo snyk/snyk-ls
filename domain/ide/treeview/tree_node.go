@@ -45,28 +45,40 @@ type SeverityCounts struct {
 
 // TreeNode represents a single node in the tree view hierarchy.
 type TreeNode struct {
-	ID                  string          `json:"id"`
-	Type                NodeType        `json:"type"`
-	Label               string          `json:"label"`
-	Description         string          `json:"description,omitempty"`
-	Severity            types.Severity  `json:"severity,omitempty"`
-	Product             product.Product `json:"product,omitempty"`
-	FilePath            types.FilePath  `json:"filePath,omitempty"`
-	IssueRange          types.Range     `json:"issueRange,omitempty"`
-	IssueID             string          `json:"issueId,omitempty"`
-	IsIgnored           bool            `json:"isIgnored,omitempty"`
-	IsNew               bool            `json:"isNew,omitempty"`
-	IsFixable           bool            `json:"isFixable,omitempty"`
-	SeverityCounts      *SeverityCounts `json:"severityCounts,omitempty"`
-	FixableCount        int             `json:"fixableCount,omitempty"`
-	IssueCount          int             `json:"issueCount,omitempty"`
-	Expanded            bool            `json:"expanded,omitempty"`
-	Enabled             *bool           `json:"enabled,omitempty"`
-	ErrorMessage        string          `json:"errorMessage,omitempty"`
-	DeltaEnabled        bool            `json:"deltaEnabled,omitempty"`
-	BaseBranch          string          `json:"baseBranch,omitempty"`
-	LocalBranches       []string        `json:"localBranches,omitempty"`
-	ReferenceFolderPath string          `json:"referenceFolderPath,omitempty"`
+	ID             string          `json:"id"`
+	Type           NodeType        `json:"type"`
+	Label          string          `json:"label"`
+	Description    string          `json:"description,omitempty"`
+	Severity       types.Severity  `json:"severity,omitempty"`
+	Product        product.Product `json:"product,omitempty"`
+	FilePath       types.FilePath  `json:"filePath,omitempty"`
+	IssueRange     types.Range     `json:"issueRange,omitempty"`
+	IssueID        string          `json:"issueId,omitempty"`
+	IsIgnored      bool            `json:"isIgnored,omitempty"`
+	IsNew          bool            `json:"isNew,omitempty"`
+	IsFixable      bool            `json:"isFixable,omitempty"`
+	SeverityCounts *SeverityCounts `json:"severityCounts,omitempty"`
+	FixableCount   int             `json:"fixableCount,omitempty"`
+	IssueCount     int             `json:"issueCount,omitempty"`
+	Expanded       bool            `json:"expanded,omitempty"`
+	Enabled        *bool           `json:"enabled,omitempty"`
+	ErrorMessage   string          `json:"errorMessage,omitempty"`
+	// Tooltip is a hover hint rendered as the `title` attribute on a node row.
+	// Two uses (IDE-1864): disabled scanners explain *why* they're off, and
+	// errored scanners hint that the row is clickable for details.
+	Tooltip string `json:"tooltip,omitempty"`
+	// InfoVariant selects an alternate rendering for info nodes. "" is the plain
+	// inline info row; "filter-empty" (IDE-1869) is hidden until the client
+	// reveals it when severity filters hide every issue; "untrusted-folder"
+	// (IDE-1882) is the workspace-trust banner with a folder list + Trust button.
+	InfoVariant string `json:"infoVariant,omitempty"`
+	// FolderPaths lists the untrusted folder paths shown in the "untrusted-folder"
+	// info banner (IDE-1882).
+	FolderPaths         []string `json:"folderPaths,omitempty"`
+	DeltaEnabled        bool     `json:"deltaEnabled,omitempty"`
+	BaseBranch          string   `json:"baseBranch,omitempty"`
+	LocalBranches       []string `json:"localBranches,omitempty"`
+	ReferenceFolderPath string   `json:"referenceFolderPath,omitempty"`
 	// FileIconHTML holds a pre-rendered HTML fragment (inline SVG or <img> tag)
 	// for the file icon shown on file-type nodes. Empty string falls back to the
 	// generic icon defined in the template.
@@ -175,6 +187,18 @@ func WithEnabled(enabled *bool) TreeNodeOption {
 
 func WithErrorMessage(msg string) TreeNodeOption {
 	return func(n *TreeNode) { n.ErrorMessage = msg }
+}
+
+func WithTooltip(tooltip string) TreeNodeOption {
+	return func(n *TreeNode) { n.Tooltip = tooltip }
+}
+
+func WithInfoVariant(variant string) TreeNodeOption {
+	return func(n *TreeNode) { n.InfoVariant = variant }
+}
+
+func WithFolderPaths(paths []string) TreeNodeOption {
+	return func(n *TreeNode) { n.FolderPaths = paths }
 }
 
 func WithDeltaEnabled(enabled bool) TreeNodeOption {
