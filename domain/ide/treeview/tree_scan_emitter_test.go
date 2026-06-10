@@ -251,7 +251,13 @@ func TestTreeScanStateEmitter_FolderLevelIssueViewOptions(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(emitter.Dispose)
 
-	emitter.Emit(scanstates.StateSnapshot{})
+	// Mark the Code product scan as completed (false = not in progress) so that info nodes are rendered.
+	// Without a scan-registered entry the product node renders no children and neither assertion would fire.
+	emitter.Emit(scanstates.StateSnapshot{
+		ProductScanStates: map[types.FilePath]map[product.Product]bool{
+			types.PathKey(folderPath): {product.ProductCode: false},
+		},
+	})
 
 	assert.Eventually(t, func() bool {
 		mu.Lock()
@@ -264,4 +270,63 @@ func TestTreeScanStateEmitter_FolderLevelIssueViewOptions(t *testing.T) {
 	mu.Unlock()
 	assert.NotContains(t, treeView.TreeViewHtml, "Open and Ignored issues are disabled!",
 		"folder-level enabled override must suppress the disabled info message")
+	assert.Contains(t, treeView.TreeViewHtml, "Congrats",
+		"product node must still render a non-empty info message so the NotContains above is non-vacuous")
+}
+
+// TestTreeScanStateEmitter_GlobalDisabledIVO_ShowsDisabledMessage is the positive counterpart
+// to TestTreeScanStateEmitter_FolderLevelIssueViewOptions: when SnykCodeConsistentIgnores is
+// enabled but there is NO folder-level override, the global disabled setting must produce the
+// "Open and Ignored issues are disabled!" info-node message.
+func TestTreeScanStateEmitter_GlobalDisabledIVO_ShowsDisabledMessage(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+
+	// Enable products so product nodes (and their info nodes) are rendered.
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+
+	// Global: both open and ignored issues disabled.
+	conf.Set(configresolver.UserGlobalKey(types.SettingIssueViewOpenIssues), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingIssueViewIgnoredIssues), false)
+
+	// SnykCodeConsistentIgnores must be true for the IVO branch in zeroIssuesText to execute.
+	ffSvc := featureflag.NewFakeService()
+	ffSvc.Override(featureflag.SnykCodeConsistentIgnores, true)
+
+	// No folder-level override: global disabled applies.
+	folderPath := types.FilePath("/project-global-disabled-ivo")
+	workspaceutil.SetupWorkspaceWithFeatureFlags(t, engine, ffSvc, folderPath)
+
+	notif := notification.NewNotifier()
+	var mu sync.Mutex
+	var receivedPayload any
+	notif.CreateListener(func(params any) {
+		mu.Lock()
+		defer mu.Unlock()
+		receivedPayload = params
+	})
+	t.Cleanup(func() { notif.DisposeListener() })
+
+	emitter, err := NewTreeScanStateEmitter(conf, engine.GetLogger(), notif)
+	require.NoError(t, err)
+	t.Cleanup(emitter.Dispose)
+
+	// Mark the Code product scan as completed so that info nodes are rendered.
+	emitter.Emit(scanstates.StateSnapshot{
+		ProductScanStates: map[types.FilePath]map[product.Product]bool{
+			types.PathKey(folderPath): {product.ProductCode: false},
+		},
+	})
+
+	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return receivedPayload != nil
+	}, 2*time.Second, 50*time.Millisecond)
+
+	mu.Lock()
+	treeView := receivedPayload.(types.TreeView)
+	mu.Unlock()
+	assert.Contains(t, treeView.TreeViewHtml, "Open and Ignored issues are disabled!",
+		"global disabled IVO with no folder override must produce the disabled info message")
 }
