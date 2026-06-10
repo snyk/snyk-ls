@@ -26,8 +26,9 @@ import (
 // constant "https://api.snyk.io"), so a single write is correct and avoids the
 // concurrent-write data race detected by -race.
 //
-//nolint:gochecknoglobals // package-level once is the canonical Go pattern for
 // idempotent one-time side effects in parallel tests.
+//
+//nolint:gochecknoglobals // package-level once is the canonical Go pattern for
 var snykAPIEnvOnce sync.Once
 
 // logLevelEnvOnce ensures SNYK_LOG_LEVEL is written at most once across all
@@ -42,7 +43,7 @@ var logLevelEnvOnce sync.Once
 // Safe to call from parallel tests.
 func setSmokeAPIEndpoint(endpoint string) {
 	snykAPIEnvOnce.Do(func() {
-		_ = os.Setenv("SNYK_API", endpoint) //nolint:usetesting // called from parallel tests; t.Setenv panics
+		_ = os.Setenv("SNYK_API", endpoint)
 	})
 }
 
@@ -50,6 +51,6 @@ func setSmokeAPIEndpoint(endpoint string) {
 // Safe to call from parallel tests.
 func setSmokeLogLevel(level string) {
 	logLevelEnvOnce.Do(func() {
-		_ = os.Setenv("SNYK_LOG_LEVEL", level) //nolint:usetesting // called from parallel tests; t.Setenv panics
+		_ = os.Setenv("SNYK_LOG_LEVEL", level)
 	})
 }
