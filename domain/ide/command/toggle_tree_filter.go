@@ -99,6 +99,9 @@ func (cmd *toggleTreeFilter) applySeverityFilter(value string, enabled bool) err
 }
 
 func (cmd *toggleTreeFilter) applyIssueViewFilter(value string, enabled bool) error {
+	// toggleTreeFilter intentionally writes global IVO: the filter panel is a
+	// workspace-wide concept. Per-folder tree info nodes read folder-level IVO
+	// (see BuildTree / FolderData.IssueViewOptions) — these are separate concerns by design.
 	current := config.GetIssueViewOptions(cmd.engine.GetConfiguration())
 	switch value {
 	case "openIssues":
