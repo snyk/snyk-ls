@@ -28,14 +28,14 @@ import (
 //
 // idempotent one-time side effects in parallel tests.
 //
-//nolint:gochecknoglobals // package-level once is the canonical Go pattern for
+//nolint:gochecknoglobals // package-level sync.Once is the canonical Go pattern for idempotent one-time setup
 var snykAPIEnvOnce sync.Once
 
 // logLevelEnvOnce ensures SNYK_LOG_LEVEL is written at most once across all
 // parallel tests. The value is constant for the process lifetime, so a
 // per-test restore via Cleanup is unnecessary and itself a racing write.
 //
-//nolint:gochecknoglobals
+//nolint:gochecknoglobals // package-level sync.Once is the canonical Go pattern for idempotent one-time setup
 var logLevelEnvOnce sync.Once
 
 // setSmokeAPIEndpoint sets SNYK_API to endpoint exactly once for the process.
