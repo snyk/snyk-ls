@@ -2053,7 +2053,7 @@ func TestConfigResolver_GlobalOrg_SkipsUnsetOrganizationKey(t *testing.T) {
 
 	t.Run("returns empty when ORGANIZATION is not set", func(t *testing.T) {
 		resolver, _ := newResolverWithConfig(t)
-		assert.Equal(t, "", resolver.GlobalOrg(), "must not invoke ORGANIZATION default-value function on hot path")
+		assert.Equal(t, "", resolver.GlobalOrg(), "GlobalOrg must return empty for an unset ORGANIZATION rather than resolving it via the default-value function")
 	})
 
 	t.Run("reads from ORGANIZATION even if UserGlobalKey is also set", func(t *testing.T) {
@@ -2062,4 +2062,22 @@ func TestConfigResolver_GlobalOrg_SkipsUnsetOrganizationKey(t *testing.T) {
 		conf.Set(configuration.ORGANIZATION, "gaf-org")
 		assert.Equal(t, "gaf-org", resolver.GlobalOrg(), "only ORGANIZATION key is read")
 	})
+}
+
+// TestGlobalOrg_SurfacesDefaultResolvedOrg_AfterPriming shows the end-to-end: GlobalOrg's
+// IsSet guard returns "" until GetGlobalOrganization primes the key; after priming it surfaces
+// the resolved org without the caller performing its own explicit Set.
+func TestGlobalOrg_SurfacesDefaultResolvedOrg_AfterPriming(t *testing.T) {
+	resolver, conf := newResolverWithConfig(t)
+	conf.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction("resolved-org-uuid"))
+
+	// Before priming, the IsSet guard returns "" even though the value would resolve.
+	require.False(t, conf.IsSet(configuration.ORGANIZATION))
+	assert.Equal(t, "", resolver.GlobalOrg(),
+		"GlobalOrg returns empty until ORGANIZATION is primed")
+
+	// Priming via GetGlobalOrganization (get-then-set) makes IsSet true; GlobalOrg now surfaces it.
+	types.GetGlobalOrganization(conf)
+	require.True(t, conf.IsSet(configuration.ORGANIZATION))
+	assert.Equal(t, "resolved-org-uuid", resolver.GlobalOrg())
 }

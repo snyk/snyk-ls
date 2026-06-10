@@ -161,6 +161,7 @@ func initDomain(tokenService types.TokenService, conf configuration.Configuratio
 
 func initInfrastructure(tokenService types.TokenService, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) {
 	gafConfiguration := conf
+	gafConfiguration.Set(configuration.STOP_REQUESTS_WITHOUT_AUTH, true)
 
 	fs := pflag.NewFlagSet("snyk-ls-config", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)

@@ -244,12 +244,15 @@ func (r *ConfigResolver) getAutoDeterminedOrgFromConf(folderPath string) string 
 	return autoDetermined
 }
 
-// GlobalOrg returns the global organization from configuration, using the bare
-// ORGANIZATION key — but only if it is already cached in viper. Calling Get on
-// configuration.ORGANIZATION when unset would invoke GAF's defaultFuncOrganization,
-// which issues /rest/self synchronously. IsSet bypasses default-value functions,
-// keeping this read network-free for hot paths like StateSnapshot. If you need
-// the organization to be resolved, use GetGlobalOrganization instead.
+// GlobalOrg returns the global organization from the bare ORGANIZATION key, or
+// "" when it has not been set. Reading a set value resolves it through GAF's
+// defaultFuncOrganization (e.g. slug -> id). That resolution is safe on hot paths
+// like StateSnapshot: GAF default-value caching is always enabled in the prod CLI
+// path, so after priming (see GetGlobalOrganization) the value is served from
+// cache, and GAF's STOP_REQUESTS_WITHOUT_AUTH middleware short-circuits any
+// unauthenticated API call with an in-memory 401. The IsSet guard keeps an unset
+// key from triggering default-org resolution; use GetGlobalOrganization if you
+// also want resolution when the key is unset.
 func (r *ConfigResolver) GlobalOrg() string {
 	if r.prefixKeyConf == nil {
 		return ""
@@ -257,25 +260,7 @@ func (r *ConfigResolver) GlobalOrg() string {
 	if !r.prefixKeyConf.IsSet(configuration.ORGANIZATION) {
 		return ""
 	}
-	// Clone the configuration and override the ORGANIZATION default function with a no-op.
-	// This prevents triggering GAF's defaultFuncOrganization which would attempt slug
-	// resolution via /rest/self API call. The no-op function just returns the cached value.
-	// TODO: This is a bodge fix on a bodge fix. It should be removed and done properly with
-	// authentication checks or similar.
-	cloned := r.prefixKeyConf.Clone()
-	cloned.AddDefaultValue(configuration.ORGANIZATION, func(c configuration.Configuration, existing interface{}) (interface{}, error) {
-		return existing, nil
-	})
-
-	value, err := cloned.GetWithError(configuration.ORGANIZATION)
-	if err != nil {
-		// If even the no-op function fails, return empty to avoid breaking hot paths
-		return ""
-	}
-	if s, ok := value.(string); ok && s != "" {
-		return s
-	}
-	return ""
+	return r.prefixKeyConf.GetString(configuration.ORGANIZATION)
 }
 
 // GetValue resolves a configuration value for the given setting and folder.

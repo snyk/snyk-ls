@@ -50,10 +50,23 @@ func userGlobalValue(conf configuration.Configuration, key string) (any, bool) {
 	return v, true
 }
 
-// GetGlobalOrganization returns the global organization from the bare ORGANIZATION key.
-// If GAF caching is enabled and this value needed to be resolved, then the resolved value will be cached.
+// GetGlobalOrganization returns the effective global organization via GAF's standard
+// resolution chain (configuration.ORGANIZATION). GetString triggers /rest/self
+// auto-determination if no org is stored (GAF's default-value cache memoizes that
+// result, so repeat reads are already network-free).
+//
+// Doubles as the priming entry point for ConfigResolver.GlobalOrg(), which is gated on
+// IsSet. A resolving GetString populates GAF's default-value cache but does NOT mark the
+// key as explicitly set, so we store the result back to flip IsSet true. Callers in
+// updateCredentials and initializedHandler invoke this so hot-path readers like
+// StateSnapshot surface the org via GlobalOrg() without each needing to resolve it.
 func GetGlobalOrganization(conf configuration.Configuration) string {
-	return conf.GetString(configuration.ORGANIZATION)
+	org := conf.GetString(configuration.ORGANIZATION)
+	if org != "" {
+		// Mark the resolved org as explicitly set so the IsSet-guarded GlobalOrg() surfaces it.
+		conf.Set(configuration.ORGANIZATION, org)
+	}
+	return org
 }
 
 // settingName is the bare name (e.g. "automatic_download"), not a prefixed key.
