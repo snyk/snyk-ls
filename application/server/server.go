@@ -1178,54 +1178,54 @@ func textDocumentHover() jrpc2.Handler {
 
 func windowWorkDoneProgressCancelHandler(conf configuration.Configuration) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params types.WorkdoneProgressCancelParams) (any, error) {
-		logger := ctx2.LoggerFromContext(ctx)
-		logger.Debug().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
-
-		// Only reset the summary panel for scan cancellations. Generic progress
-		// tokens (e.g. CLI download/install) must not wipe valid scan results.
-		isScan := progress.IsScanToken(params.Token)
-
-		// Defer the cancel so any RegisterCancelCallback below is in place
-		// before scan goroutines observe cancellation and drain through
-		// consumeCancelCallback (scanner.go). Otherwise the reset can be
-		// silently dropped, and a stale callback fires on the folder's
-		// next scan (IDE-1035 register-vs-consume race).
-		defer progress.Cancel(params.Token)
-
-		if !isScan {
-			return nil, nil
-		}
-
-		scanAgg, ok := scanStateAggregatorFromContext(ctx)
-		if !ok || scanAgg == nil {
-			logger.Warn().Str("method", "WindowWorkDoneProgressCancelHandler").
-				Msg("scan state aggregator not found in context; summary panel will not be reset")
-			return nil, nil
-		}
-		// Register the reset callback on the scanner so it fires AFTER all
-		// per-product goroutines have finished their SetScanDone writes (E,
-		// IDE-1035). The reset is keyed to each workspace folder so that
-		// concurrent folder scans reset independently.
-		sc, scOk := scannerFromContext(ctx)
-		if scOk {
-			if dcs, ok := sc.(*scanner2.DelegatingConcurrentScanner); ok {
-				folderPaths := workspaceFolderPaths(conf)
-				for _, fp := range folderPaths {
-					dcs.RegisterCancelCallback(fp, func() {
-						resetSummaryPanel(scanAgg, []types.FilePath{fp})
-					})
-				}
-				return nil, nil
-			}
-		}
-		// Fallback: scanner not available in context — reset synchronously.
-		// This path is only hit in tests or during early startup where the
-		// scanner is not yet wired into the context.
-		logger.Debug().Str("method", "WindowWorkDoneProgressCancelHandler").
-			Msg("scanner not in context; resetting summary panel synchronously")
-		resetSummaryPanel(scanAgg, workspaceFolderPaths(conf))
-		return nil, nil
+		return handleWindowWorkDoneProgressCancel(ctx, params, conf)
 	})
+}
+
+// handleWindowWorkDoneProgressCancel is the testable body of
+// windowWorkDoneProgressCancelHandler. Kept as a free function so integration
+// tests can drive it without going through jrpc2.Handler indirection.
+func handleWindowWorkDoneProgressCancel(ctx context.Context, params types.WorkdoneProgressCancelParams, conf configuration.Configuration) (any, error) {
+	logger := ctx2.LoggerFromContext(ctx)
+	logger.Debug().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
+
+	// Only reset the summary panel for scan cancellations. Generic progress
+	// tokens (e.g. CLI download/install) must not wipe valid scan results.
+	isScan := progress.IsScanToken(params.Token)
+
+	// Defer the cancel so any RegisterCancelCallback below is in place
+	// before scan goroutines observe cancellation and drain through
+	// consumeCancelCallback (scanner.go). Otherwise the reset can be
+	// silently dropped, and a stale callback fires on the folder's
+	// next scan (IDE-1035 register-vs-consume race).
+	defer progress.Cancel(params.Token)
+
+	if !isScan {
+		return nil, nil
+	}
+
+	scanAgg, ok := scanStateAggregatorFromContext(ctx)
+	if !ok || scanAgg == nil {
+		logger.Warn().Str("method", "WindowWorkDoneProgressCancelHandler").
+			Msg("scan state aggregator not found in context; summary panel will not be reset")
+		return nil, nil
+	}
+	// Register the reset callback on the scanner so it fires AFTER all
+	// per-product goroutines have finished their SetScanDone writes
+	// (IDE-1035). The reset is keyed to each workspace folder so that
+	// concurrent folder scans reset independently.
+	sc, scOk := scannerFromContext(ctx)
+	if !scOk {
+		logger.Debug().Str("method", "WindowWorkDoneProgressCancelHandler").
+			Msg("scanner not in context; summary panel will not be reset")
+		return nil, nil
+	}
+	for _, fp := range workspaceFolderPaths(conf) {
+		sc.RegisterCancelCallback(fp, func() {
+			resetSummaryPanel(scanAgg, []types.FilePath{fp})
+		})
+	}
+	return nil, nil
 }
 
 func codeActionResolveHandler(logger *zerolog.Logger, svc *codeaction.CodeActionsService, server types.Server) handler.Func {

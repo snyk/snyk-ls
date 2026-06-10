@@ -38,12 +38,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/vcs"
 )
 
-// cancelCallbacks maps folderPath → reset function registered by the LSP
-// cancel handler (IDE-1035). Callbacks are consumed (and removed) by Scan()
-// after all per-product goroutines have finished, ensuring the reset happens
-// only once and only after all SetScanDone writes are complete.
-type cancelCallbackMap = sync.Map
-
 var (
 	_ Scanner                  = (*DelegatingConcurrentScanner)(nil)
 	_ snyk.InlineValueProvider = (*DelegatingConcurrentScanner)(nil)
@@ -53,6 +47,11 @@ var (
 type Scanner interface {
 	types.Scanner
 	Init(ctx context.Context) error
+	// RegisterCancelCallback registers fn to be invoked by Scan() for
+	// folderPath after all per-product goroutines have exited following a
+	// user-initiated cancel. Used by the LSP cancel handler to schedule a
+	// reset of the scan-state aggregator without racing in-flight writes.
+	RegisterCancelCallback(folderPath types.FilePath, fn func())
 }
 
 // DelegatingConcurrentScanner is a simple Scanner Implementation that delegates on other scanners asynchronously
@@ -70,8 +69,12 @@ type DelegatingConcurrentScanner struct {
 	snykApiClient       snyk_api.SnykApiClient
 	configResolver      types.ConfigResolverInterface
 	// cancelCallbacks stores per-folder reset functions registered by the LSP
-	// cancel handler. Consumed by Scan() after all goroutines exit (IDE-1035).
-	cancelCallbacks cancelCallbackMap
+	// cancel handler (IDE-1035). Consumed and removed by Scan() after all
+	// per-product goroutines have exited so the reset happens only once and
+	// only after all SetScanDone writes are complete. A plain map guarded by
+	// cancelCallbacksMu keeps func() values typed without sync.Map's any cast.
+	cancelCallbacksMu sync.Mutex
+	cancelCallbacks   map[types.FilePath]func()
 }
 
 // RegisterCancelCallback stores fn to be called by Scan() for folderPath once
@@ -80,22 +83,27 @@ type DelegatingConcurrentScanner struct {
 // overwrites the previous one. This is intentional: the handler is only ever
 // called once per active cancel notification.
 func (sc *DelegatingConcurrentScanner) RegisterCancelCallback(folderPath types.FilePath, fn func()) {
-	sc.cancelCallbacks.Store(folderPath, fn)
+	sc.cancelCallbacksMu.Lock()
+	defer sc.cancelCallbacksMu.Unlock()
+	if sc.cancelCallbacks == nil {
+		sc.cancelCallbacks = make(map[types.FilePath]func())
+	}
+	sc.cancelCallbacks[folderPath] = fn
 }
 
 // consumeCancelCallback fires and removes any cancel callback registered for
 // folderPath. Called by Scan() after both WaitGroups return so the callback
 // runs only after all SetScanDone writes have completed (IDE-1035).
 func (sc *DelegatingConcurrentScanner) consumeCancelCallback(folderPath types.FilePath) {
-	v, loaded := sc.cancelCallbacks.LoadAndDelete(folderPath)
-	if !loaded {
-		return
+	sc.cancelCallbacksMu.Lock()
+	fn, ok := sc.cancelCallbacks[folderPath]
+	if ok {
+		delete(sc.cancelCallbacks, folderPath)
 	}
-	fn, ok := v.(func())
-	if !ok {
-		return
+	sc.cancelCallbacksMu.Unlock()
+	if ok {
+		fn()
 	}
-	fn()
 }
 
 func (sc *DelegatingConcurrentScanner) Issue(key string) types.Issue {
