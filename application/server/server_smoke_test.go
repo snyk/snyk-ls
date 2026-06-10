@@ -1857,7 +1857,6 @@ func Test_SmokeOrgSelection(t *testing.T) {
 		assert.Equal(t, globalOrg, config.FolderOrganization(engine.GetConfiguration(), repo, engine.GetLogger()), "Folder should use global org when PreferredOrg is blank and OrgSetByUser is true")
 	})
 
-	//nolint:tparallel // this subtest writes SNYK_TOKEN=""; running it in parallel would race with siblings that read the token
 	t.Run("unauthenticated - re-adding folder with changing the config through workspace/didChangeConfiguration", func(t *testing.T) {
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {
