@@ -128,7 +128,9 @@ func Test_SmokeSecretsScan(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
 	engineConfig := engine.GetConfiguration()
 	engineConfig.Set(configresolver.UserGlobalKey(types.SettingOrganization), secretsSmokeOrg)
-	t.Setenv("SNYK_LOG_LEVEL", "debug")
+	prevLogLevel := os.Getenv("SNYK_LOG_LEVEL")
+	os.Setenv("SNYK_LOG_LEVEL", "debug")                                //nolint:usetesting // t.Setenv panics after t.Parallel()
+	t.Cleanup(func() { _ = os.Setenv("SNYK_LOG_LEVEL", prevLogLevel) }) //nolint:usetesting // t.Setenv panics after t.Parallel()
 
 	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlySecrets(engine)
