@@ -37,7 +37,9 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	srv, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
-	t.Setenv("SNYK_LOG_LEVEL", "info")
+	prev := os.Getenv("SNYK_LOG_LEVEL")
+	_ = os.Setenv("SNYK_LOG_LEVEL", "info")                          //nolint:usetesting // t.Setenv panics after t.Parallel()
+	t.Cleanup(func() { _ = os.Setenv("SNYK_LOG_LEVEL", prev) })      //nolint:usetesting // restoring env, not setting for test isolation
 	lspClient := srv.Client
 
 	// create clones and make them workspace folders
