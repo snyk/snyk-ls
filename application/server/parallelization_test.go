@@ -32,8 +32,10 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
+// Note: t.Parallel() is intentionally omitted — WithRealDI() calls di.Init() which
+// modifies process-global package variables; concurrent execution causes context
+// cancellation in shared HTTP clients.
 func Test_Concurrent_CLI_Runs(t *testing.T) {
-	t.Parallel()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	srv, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
