@@ -116,10 +116,11 @@ type Dependencies struct {
 	CodeActionService *codeaction.CodeActionsService
 	Installer         install.Installer
 	CommandService    types.CommandService
-	// ProgressChannel is the per-server channel that collects scanner progress
-	// events. createProgressListener drains it and forwards to the LSP client.
-	// Each server instance creates its own buffered channel so that progress
-	// events from parallel test servers are never misrouted.
+	// ProgressChannel receives scanner progress events that createProgressListener
+	// drains and forwards to the LSP client. Currently points to the process-global
+	// progress.ToServerProgressChannel because all scanners write to it via
+	// progress.NewTracker(). Full per-server isolation requires migrating scanner
+	// callers to progress.NewTrackerWithChannel — deferred to a follow-up.
 	ProgressChannel chan types.ProgressParams
 }
 
@@ -161,6 +162,120 @@ func Init(engine workflow.Engine, tokenService types.TokenService) Dependencies 
 	initDomain(tokenService, conf, engine, logger)
 	initApplication(conf, engine, logger)
 	return currentDependencies()
+}
+
+// RealDependencies builds a fully-initialized set of production dependencies
+// using only local variables. It mirrors the logic of initInfrastructure +
+// initDomain + initApplication but never writes to any package-level global,
+// so multiple callers (e.g. parallel smoke-test servers) are safe to run
+// concurrently without a data race.
+func RealDependencies(engine workflow.Engine, tokenService types.TokenService) Dependencies {
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	gafConfiguration := conf
+	gafConfiguration.Set(configuration.STOP_REQUESTS_WITHOUT_AUTH, true)
+
+	fs := pflag.NewFlagSet("snyk-ls-config", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	_ = gafConfiguration.AddFlagSet(fs)
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
+
+	// Network access
+	networkAccess := engine.GetNetworkAccess()
+	authorizedClient := networkAccess.GetHttpClient
+	unauthorizedHttpClient := networkAccess.GetUnauthorizedHttpClient
+
+	// Infrastructure layer — all local variables
+	localNotifier := domainNotify.NewNotifier()
+	resolver := types.NewConfigResolver(logger)
+	prefixKeyResolver := configresolver.New(gafConfiguration, fm)
+	resolver.SetPrefixKeyResolver(prefixKeyResolver, gafConfiguration, fm)
+	localConfigResolver := types.ConfigResolverInterface(resolver)
+
+	localErrorReporter := sentry.NewSentryErrorReporter(conf, logger, engine, localNotifier, localConfigResolver)
+	localInstaller := install.NewInstaller(engine, localErrorReporter, unauthorizedHttpClient, localConfigResolver)
+	localLearnService := learn.New(gafConfiguration, logger, unauthorizedHttpClient)
+	localInstrumentor := performance2.NewInstrumentor()
+	localFeatureFlagService := featureflag.New(conf, logger, engine, localConfigResolver)
+	localSnykApiClient := snyk_api.NewSnykApiClient(conf, logger, authorizedClient, localConfigResolver)
+	localScanPersister := persistence.NewGitPersistenceProvider(logger, gafConfiguration)
+
+	localSummaryEmitter := scanstates.NewSummaryEmitter(conf, logger, localNotifier, engine, localConfigResolver)
+	localTreeEmitter, localTreeEmitterErr := treeview.NewTreeScanStateEmitter(conf, logger, localNotifier)
+	var localTreeEmitterInstance *treeview.TreeScanStateEmitter
+	var localScanStateChangeEmitter scanstates.ScanStateChangeEmitter
+	if localTreeEmitterErr != nil {
+		logger.Warn().Err(localTreeEmitterErr).Msg("failed to create tree scan state emitter, using summary emitter only")
+		localTreeEmitterInstance = nil
+		localScanStateChangeEmitter = localSummaryEmitter
+	} else {
+		localTreeEmitterInstance = localTreeEmitter
+		localScanStateChangeEmitter = scanstates.NewCompositeEmitter(localSummaryEmitter, localTreeEmitter)
+	}
+
+	localScanStateAggregator := scanstates.NewScanStateAggregator(conf, logger, localScanStateChangeEmitter, localConfigResolver, engine)
+	localAuthenticationService := authentication.NewAuthenticationService(engine, tokenService, nil, localErrorReporter, localNotifier, localConfigResolver)
+
+	localSnykCli := cli.NewExecutor(engine, localErrorReporter, localNotifier, localConfigResolver)
+	if gafConfiguration.GetString(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION {
+		localSnykCli = cli.NewExtensionExecutor(engine, localConfigResolver)
+	}
+
+	localCodeInstrumentor := code.NewCodeInstrumentor()
+	localCodeErrorReporter := code.NewCodeErrorReporter(localErrorReporter)
+
+	localIaCScanner := iac.New(conf, logger, localInstrumentor, localErrorReporter, localSnykCli, localConfigResolver)
+	localOpenSourceScanner := oss.NewCLIScanner(engine, localInstrumentor, localErrorReporter, localSnykCli, localLearnService, localNotifier, localConfigResolver)
+	localScanNotifier, _ := appNotification.NewScanNotifier(localNotifier, localConfigResolver)
+	localSnykCodeScanner := code.New(engine, localInstrumentor, localSnykApiClient, localCodeErrorReporter, localLearnService, localFeatureFlagService, localNotifier, localCodeInstrumentor, localCodeErrorReporter, code.CreateCodeScanner, localConfigResolver)
+	localSecretsScanner := secrets.New(conf, engine, logger, localInstrumentor, localSnykApiClient, localFeatureFlagService, localNotifier, localConfigResolver)
+
+	localCLIInitializer := cli.NewInitializer(conf, logger, localErrorReporter, localInstaller, localNotifier, localSnykCli, localConfigResolver)
+	localAuthInitializer := authentication.NewInitializer(conf, logger, localAuthenticationService, localErrorReporter, localNotifier, localConfigResolver)
+	localScanInitializer := initialize.NewDelegatingInitializer(
+		localAuthInitializer,
+		localCLIInitializer,
+	)
+
+	// Domain layer
+	localHoverService := hover.NewDefaultService(logger)
+	localScanner := scanner2.NewDelegatingScanner(engine, tokenService, localScanInitializer, localInstrumentor, localScanNotifier, localSnykApiClient, localAuthenticationService, localNotifier, localScanPersister, localScanStateAggregator, localConfigResolver, localSnykCodeScanner, localIaCScanner, localOpenSourceScanner, localSecretsScanner)
+	localLdxSyncService := command.NewLdxSyncService(localConfigResolver)
+
+	// Application layer
+	w := workspace.New(conf, logger, localInstrumentor, localScanner, localHoverService, localScanNotifier, localNotifier, localScanPersister, localScanStateAggregator, localFeatureFlagService, localConfigResolver, engine)
+	config.SetWorkspace(conf, w)
+	localFileWatcher := watcher.NewFileWatcher()
+	localCodeActionService := codeaction.NewService(engine, w, localFileWatcher, localNotifier, localFeatureFlagService, localConfigResolver)
+	localCommandService := command.NewService(engine, logger, localAuthenticationService, localFeatureFlagService, localNotifier, localLearnService, w, localSnykCodeScanner, localSnykCli, localLdxSyncService, localConfigResolver, localScanStateAggregator.StateSnapshot)
+
+	var localInlineValueProvider snyk.InlineValueProvider
+	if ivp, ok := localScanner.(snyk.InlineValueProvider); ok {
+		localInlineValueProvider = ivp
+	}
+
+	return Dependencies{
+		AuthenticationService: localAuthenticationService,
+		ConfigResolver:        localConfigResolver,
+		FeatureFlagService:    localFeatureFlagService,
+		Notifier:              localNotifier,
+		LearnService:          localLearnService,
+		LdxSyncService:        localLdxSyncService,
+		ScanStateAggregator:   localScanStateAggregator,
+		InlineValueProvider:   localInlineValueProvider,
+		TreeEmitter:           localTreeEmitterInstance,
+		Scanner:               localScanner,
+		HoverService:          localHoverService,
+		ScanNotifier:          localScanNotifier,
+		ScanPersister:         localScanPersister,
+		FileWatcher:           localFileWatcher,
+		ErrorReporter:         localErrorReporter,
+		CodeActionService:     localCodeActionService,
+		Installer:             localInstaller,
+		CommandService:        localCommandService,
+		ProgressChannel:       progress.ToServerProgressChannel,
+	}
 }
 
 func initDomain(tokenService types.TokenService, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) {
