@@ -1535,3 +1535,79 @@ func Test_filterIssuesWithConfig_UsesCachedIsNew(t *testing.T) {
 	require.Len(t, filtered[filePath], 1, "should only return new issues when delta is enabled")
 	assert.Equal(t, "new-issue", filtered[filePath][0].GetID())
 }
+
+// TestFolder_IssueViewOptions covers the three resolution paths for IssueViewOptions():
+//   - nil cfg → falls back to global defaults (open=true, ignored=false)
+//   - cfg with no folder override → returns global setting (e.g. open=false, ignored=false)
+//   - cfg with folder-level override → folder value overrides global (e.g. open=true, ignored=true)
+func TestFolder_IssueViewOptions(t *testing.T) {
+	t.Run("nil cfg returns global defaults", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		// Leave IVO at default (open=true, ignored=false per DefaultIssueViewOptions).
+		f := NewMockFolder(engine, notification.NewMockNotifier())
+
+		got := f.IssueViewOptionsFromConfig(nil)
+
+		// With default GAF config the resolver returns the registered defaults: open=true, ignored=false.
+		assert.True(t, got.OpenIssues, "nil cfg: OpenIssues should be true (global default)")
+		assert.False(t, got.IgnoredIssues, "nil cfg: IgnoredIssues should be false (global default)")
+	})
+
+	t.Run("cfg with no folder override returns global setting", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		conf := engine.GetConfiguration()
+
+		// Override global to both-disabled.
+		conf.Set(configresolver.UserGlobalKey(types.SettingIssueViewOpenIssues), false)
+		conf.Set(configresolver.UserGlobalKey(types.SettingIssueViewIgnoredIssues), false)
+
+		resolver := defaultResolver(engine)
+		folderPath := types.FilePath(t.TempDir())
+		folderConfig := &types.FolderConfig{
+			FolderPath:     folderPath,
+			ConfigResolver: resolver,
+		}
+		f := NewFolder(conf, engine.GetLogger(), folderPath, "test", scanner.NewTestScanner(),
+			hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(),
+			persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(),
+			featureflag.NewFakeService(), resolver, engine)
+
+		got := f.IssueViewOptionsFromConfig(folderConfig)
+
+		assert.False(t, got.OpenIssues, "no folder override: OpenIssues should follow global (false)")
+		assert.False(t, got.IgnoredIssues, "no folder override: IgnoredIssues should follow global (false)")
+	})
+
+	t.Run("cfg with folder-level override takes precedence over global", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		conf := engine.GetConfiguration()
+
+		// Global: both disabled.
+		conf.Set(configresolver.UserGlobalKey(types.SettingIssueViewOpenIssues), false)
+		conf.Set(configresolver.UserGlobalKey(types.SettingIssueViewIgnoredIssues), false)
+
+		resolver := defaultResolver(engine)
+		folderPath := types.FilePath(t.TempDir())
+
+		// Folder-level override: both enabled via UserFolderKey.
+		folderKey := string(types.PathKey(folderPath))
+		conf.Set(configresolver.UserFolderKey(folderKey, types.SettingIssueViewOpenIssues),
+			&configresolver.LocalConfigField{Value: true, Changed: true})
+		conf.Set(configresolver.UserFolderKey(folderKey, types.SettingIssueViewIgnoredIssues),
+			&configresolver.LocalConfigField{Value: true, Changed: true})
+
+		folderConfig := &types.FolderConfig{
+			FolderPath:     folderPath,
+			ConfigResolver: resolver,
+		}
+		f := NewFolder(conf, engine.GetLogger(), folderPath, "test", scanner.NewTestScanner(),
+			hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(),
+			persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(),
+			featureflag.NewFakeService(), resolver, engine)
+
+		got := f.IssueViewOptionsFromConfig(folderConfig)
+
+		assert.True(t, got.OpenIssues, "folder override: OpenIssues should be true (folder-level wins)")
+		assert.True(t, got.IgnoredIssues, "folder override: IgnoredIssues should be true (folder-level wins)")
+	})
+}
