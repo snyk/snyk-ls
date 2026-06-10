@@ -128,12 +128,8 @@ func (fc *FolderConfig) GetFeatureFlag(flag string) bool {
 	if fc == nil {
 		return false
 	}
-	conf := fc.Conf()
-	if conf == nil {
-		return false
-	}
 	key := configresolver.FolderMetadataKey(string(PathKey(fc.FolderPath)), FeatureFlagPrefix+flag)
-	return conf.GetBool(key)
+	return fc.Conf().GetBool(key)
 }
 
 // SetFeatureFlag writes a feature flag value to configuration under the folder metadata prefix.
@@ -144,12 +140,8 @@ func (fc *FolderConfig) SetFeatureFlag(flag string, value bool) {
 	if fc == nil {
 		return
 	}
-	conf := fc.Conf()
-	if conf == nil {
-		return
-	}
 	key := configresolver.FolderMetadataKey(string(PathKey(fc.FolderPath)), FeatureFlagPrefix+flag)
-	conf.Set(key, value)
+	fc.Conf().Set(key, value)
 }
 
 // Conf returns the configuration for prefix key access.
