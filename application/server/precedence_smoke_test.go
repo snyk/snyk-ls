@@ -21,13 +21,11 @@ package server
 
 import (
 	"encoding/json"
-	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/creachadair/jrpc2/server"
-	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -51,12 +49,11 @@ import (
 // via the engine config, avoiding mutation of the package-level xdg.ConfigHome global.
 func setupTestConfigIsolation(t *testing.T, engine workflow.Engine) {
 	t.Helper()
-	ideName := engine.GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT)
-	if ideName == "" {
-		t.Fatalf("setupTestConfigIsolation: INTEGRATION_ENVIRONMENT not set — SmokeTestWithEngine must configure it")
-	}
-	configDir := t.TempDir()
-	configFilePath := filepath.Join(configDir, "snyk", fmt.Sprintf("ls-config-%s", ideName))
+	// Use a test-local temp dir for config isolation instead of mutating the
+	// package-level xdg.ConfigHome global. The path just needs to be in a
+	// per-test temp dir — ConfigFileFromConfig reads SettingConfigFile first,
+	// bypassing xdg.ConfigHome entirely.
+	configFilePath := filepath.Join(t.TempDir(), "snyk", "ls-config-test")
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingConfigFile), configFilePath)
 }
 
