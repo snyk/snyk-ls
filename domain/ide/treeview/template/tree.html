@@ -30,10 +30,10 @@
   <div class="tree-filters" id="filterToolbar">
     <span class="filter-group">
       <span class="filter-label">Severity:</span>
-      <button data-filter-type="severity" data-filter-value="critical" class="filter-btn filter-btn-icon{{if .FilterState.SeverityFilter.Critical}} filter-active{{end}}" title="Critical">{{severitySVGByName "critical"}}</button>
-      <button data-filter-type="severity" data-filter-value="high" class="filter-btn filter-btn-icon{{if .FilterState.SeverityFilter.High}} filter-active{{end}}" title="High">{{severitySVGByName "high"}}</button>
-      <button data-filter-type="severity" data-filter-value="medium" class="filter-btn filter-btn-icon{{if .FilterState.SeverityFilter.Medium}} filter-active{{end}}" title="Medium">{{severitySVGByName "medium"}}</button>
-      <button data-filter-type="severity" data-filter-value="low" class="filter-btn filter-btn-icon{{if .FilterState.SeverityFilter.Low}} filter-active{{end}}" title="Low">{{severitySVGByName "low"}}</button>
+      <button data-filter-type="severity" data-filter-value="critical" class="filter-btn filter-btn-icon{{if .FilterState.MixedSeverity.Critical}} filter-mixed{{else if .FilterState.SeverityFilter.Critical}} filter-active{{end}}" title="{{if .FilterState.MixedSeverity.Critical}}Open folders use different Critical severity filters{{else}}Critical{{end}}">{{severitySVGByName "critical"}}</button>
+      <button data-filter-type="severity" data-filter-value="high" class="filter-btn filter-btn-icon{{if .FilterState.MixedSeverity.High}} filter-mixed{{else if .FilterState.SeverityFilter.High}} filter-active{{end}}" title="{{if .FilterState.MixedSeverity.High}}Open folders use different High severity filters{{else}}High{{end}}">{{severitySVGByName "high"}}</button>
+      <button data-filter-type="severity" data-filter-value="medium" class="filter-btn filter-btn-icon{{if .FilterState.MixedSeverity.Medium}} filter-mixed{{else if .FilterState.SeverityFilter.Medium}} filter-active{{end}}" title="{{if .FilterState.MixedSeverity.Medium}}Open folders use different Medium severity filters{{else}}Medium{{end}}">{{severitySVGByName "medium"}}</button>
+      <button data-filter-type="severity" data-filter-value="low" class="filter-btn filter-btn-icon{{if .FilterState.MixedSeverity.Low}} filter-mixed{{else if .FilterState.SeverityFilter.Low}} filter-active{{end}}" title="{{if .FilterState.MixedSeverity.Low}}Open folders use different Low severity filters{{else}}Low{{end}}">{{severitySVGByName "low"}}</button>
     </span>
     {{/* IDE-1863: Expand/Collapse All removed from the toolbar — they aren't
         filters, and per-scanner chevrons (see .tree-chevron in styles.css) now

@@ -540,7 +540,10 @@
 
       // Optimistically reflect the toggle in the button's class so the active
       // state updates immediately, rather than waiting for the LS to re-render
-      // the tree in response to the command below.
+      // the tree in response to the command below. A "mixed" button (open folders
+      // disagree) counts as not-active, so the first click enables the severity
+      // for every folder, resolving the mismatch (IDE-1866).
+      btn.classList.remove('filter-mixed');
       if (enabled) {
         btn.classList.add('filter-active');
       } else {

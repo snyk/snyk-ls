@@ -86,9 +86,22 @@ type TreeNode struct {
 	Children     []TreeNode `json:"children,omitempty"`
 }
 
+// MixedSeverity marks, per severity, whether the open folders disagree on that
+// severity's filter (some show it, some hide it). The tree shows all open
+// folders under one workspace-wide toolbar, so when folders disagree the toolbar
+// button is rendered in a "mixed" (translucent) state rather than on/off.
+// (IDE-1866)
+type MixedSeverity struct {
+	Critical bool `json:"critical,omitempty"`
+	High     bool `json:"high,omitempty"`
+	Medium   bool `json:"medium,omitempty"`
+	Low      bool `json:"low,omitempty"`
+}
+
 // TreeViewFilterState captures the current filter settings for the tree view.
 type TreeViewFilterState struct {
 	SeverityFilter   types.SeverityFilter   `json:"severityFilter"`
+	MixedSeverity    MixedSeverity          `json:"mixedSeverity,omitempty"`
 	IssueViewOptions types.IssueViewOptions `json:"issueViewOptions"`
 }
 
