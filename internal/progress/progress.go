@@ -37,10 +37,10 @@ var ToServerProgressChannel = make(chan types.ProgressParams, 1000)
 var _ ui.ProgressBar = (*Tracker)(nil)
 
 type Tracker struct {
-	channel              chan types.ProgressParams
-	cancelChannel        chan bool
-	token                types.ProgressToken
-	cancellable          bool
+	channel       chan types.ProgressParams
+	cancelChannel chan bool
+	token         types.ProgressToken
+	cancellable   bool
 	// isScan distinguishes scan-operation trackers (NewScanTracker) from
 	// generic progress trackers so window/workDoneProgress/cancel can scope
 	// the summary-panel reset to scan cancellations only (IDE-1035).

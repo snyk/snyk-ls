@@ -98,7 +98,7 @@ func TestHandleWindowWorkDoneProgressCancel_ScanToken_RegistersBeforeCancel(t *t
 	assert.Len(t, got, 2, "exactly one callback per folder")
 
 	// The deferred progress.Cancel must have run by the time the handler returns,
-	// so the scan token is no longer recognised. This is the ordering guarantee
+	// so the scan token is no longer recognized. This is the ordering guarantee
 	// that prevents the register-vs-consume race.
 	assert.False(t, progress.IsScanToken(token),
 		"progress.Cancel must have fired (deferred) — registration happened first, then cancel")
