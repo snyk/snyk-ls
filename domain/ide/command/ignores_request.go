@@ -100,14 +100,13 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 	}
 	contentRoot := issue.GetContentRoot()
 
-	if err := cmd.validateIgnoreRequest(logger, contentRoot); err != nil {
-		return nil, err
-	}
-
 	engine := cmd.engine
 
 	switch workflowType {
 	case "create":
+		if err := cmd.validateIgnoreRequest(logger, contentRoot); err != nil {
+			return nil, err
+		}
 		err := cmd.createIgnoreRequest(engine, findingId, contentRoot, issue)
 		if err != nil {
 			return nil, err
