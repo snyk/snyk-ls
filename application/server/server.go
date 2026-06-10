@@ -261,7 +261,15 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	// progressStopChan is per-server: only this server's shutdown handler can stop
 	// this server's progress listener, preventing cross-test signal interference.
 	progressStopChan := make(chan bool, 1)
-	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv, progressStopChan))
+	// Use the per-server ProgressChannel from deps so that progress events from
+	// this server's scanners are never misrouted to another server's listener.
+	// Fall back to the global channel only when deps has no channel set (e.g.
+	// legacy callers that have not been migrated).
+	progressCh := deps.ProgressChannel
+	if progressCh == nil {
+		progressCh = progress.ToServerProgressChannel
+	}
+	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv, progressStopChan, progressCh))
 	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv))
 	handlers["textDocument/didChange"] = enrich(textDocumentDidChangeHandler(conf))
 	handlers["textDocument/didClose"] = enrich(noOpHandler())
@@ -623,7 +631,7 @@ func initNetworkAccessHeaders(engine workflow.Engine) {
 	engine.GetNetworkAccess().AddHeaderField("User-Agent", ua.String())
 }
 
-func initializeHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server, progressStopChan <-chan bool) handler.Func {
+func initializeHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server, progressStopChan <-chan bool, progressCh chan types.ProgressParams) handler.Func {
 	return handler.New(func(ctx context.Context, params types.InitializeParams) (any, error) {
 		method := "initializeHandler"
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", method).Logger()
@@ -670,7 +678,7 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		// NewLspInitializedChannel must precede registerNotifier: the notifier
 		// goroutine reads this channel on its first message.
 		types.NewLspInitializedChannel(conf)
-		go createProgressListener(progress.ToServerProgressChannel, progressStopChan, srv, &logger)
+		go createProgressListener(progressCh, progressStopChan, srv, &logger)
 		registerNotifier(conf, &logger, srv, mustNotifierFromContext(ctx), mustCommandServiceFromContext(ctx))
 
 		result := types.InitializeResult{
