@@ -24,7 +24,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/domain/ide/command"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -68,7 +67,7 @@ func notifyProgress(server types.Server, p types.ProgressParams) {
 }
 
 //nolint:gocyclo // this is ok, as it's so high because of forwarding the calls
-func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, srv types.Server, n noti.Notifier) {
+func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, srv types.Server, n noti.Notifier, commandService types.CommandService) {
 	if n == nil {
 		panic("registerNotifier: Notifier must not be nil — check server startup wiring")
 	}
@@ -107,7 +106,7 @@ func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, 
 				Interface("status", params.Status).
 				Msg("sending scan data to client")
 		case types.ShowMessageRequest:
-			go handleShowMessageRequest(srv, params, &l)
+			go handleShowMessageRequest(srv, params, &l, commandService)
 			l.Debug().Msg("sending show message request to client")
 		case types.PublishDiagnosticsParams:
 			notifyClient(logger, srv, "textDocument/publishDiagnostics", params)
@@ -243,7 +242,7 @@ func handleApplyWorkspaceEdit(conf configuration.Configuration, srv types.Server
 		Msgf("Workspace edit applied %t. %s", editResult.Applied, editResult.FailureReason)
 }
 
-func handleShowMessageRequest(srv types.Server, params types.ShowMessageRequest, logger *zerolog.Logger) {
+func handleShowMessageRequest(srv types.Server, params types.ShowMessageRequest, logger *zerolog.Logger, commandService types.CommandService) {
 	// convert our internal message request to LSP message request
 	requestParams := types.ShowMessageRequestParams{
 		Type:    params.Type,
@@ -288,7 +287,7 @@ func handleShowMessageRequest(srv types.Server, params types.ShowMessageRequest,
 			return
 		}
 
-		_, err := command.Service().ExecuteCommandData(context.Background(), selectedCommand, srv)
+		_, err := commandService.ExecuteCommandData(context.Background(), selectedCommand, srv)
 		if err != nil {
 			logger.Error().
 				Err(err).
