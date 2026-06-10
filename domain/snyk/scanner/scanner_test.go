@@ -139,17 +139,7 @@ func setupScannerWithResolver(t *testing.T, engine workflow.Engine, tokenService
 	scanNotifier ScanNotifier,
 ) {
 	t.Helper()
-	scanNotifier = NewMockScanNotifier()
-	notifier := notification.NewNotifier()
-	apiClient := &snyk_api.FakeApiClient{CodeEnabled: false}
-	persister := persistence.NewNopScanPersister()
-	scanStateAggregator := scanstates.NewNoopStateAggregator()
-	er := error_reporting.NewTestErrorReporter(engine)
-	authenticationProvider := authentication.NewFakeCliAuthenticationProvider(engine)
-	authenticationProvider.IsAuthenticated = true
-	authenticationService := authentication.NewAuthenticationService(engine, tokenService, authenticationProvider, er, notifier, configResolver)
-	sc = NewDelegatingScanner(engine, tokenService, initialize.NewDelegatingInitializer(), performance.NewInstrumentor(), scanNotifier, apiClient, authenticationService, notifier, persister, scanStateAggregator, configResolver, testProductScanners...)
-	return sc, scanNotifier
+	return setupScannerWithResolverAndAgg(t, engine, tokenService, configResolver, scanstates.NewNoopStateAggregator(), testProductScanners...)
 }
 
 func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
