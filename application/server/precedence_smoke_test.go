@@ -21,6 +21,7 @@ package server
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -50,11 +51,15 @@ import (
 func setupTestConfigIsolation(t *testing.T, engine workflow.Engine) {
 	t.Helper()
 	// Use a test-local temp dir for config isolation instead of mutating the
-	// package-level xdg.ConfigHome global. The path just needs to be in a
-	// per-test temp dir — ConfigFileFromConfig reads SettingConfigFile first,
-	// bypassing xdg.ConfigHome entirely.
-	configFilePath := filepath.Join(t.TempDir(), "snyk", "ls-config-test")
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingConfigFile), configFilePath)
+	// package-level xdg.ConfigHome global. ConfigFileFromConfig reads
+	// SettingConfigFile first, bypassing xdg.ConfigHome entirely.
+	// Must create parent directory: xdg.ConfigFile did this automatically,
+	// a raw filepath does not.
+	configDir := filepath.Join(t.TempDir(), "snyk")
+	if err := os.MkdirAll(configDir, 0o700); err != nil {
+		t.Fatalf("setupTestConfigIsolation: failed to create config dir: %v", err)
+	}
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingConfigFile), filepath.Join(configDir, "ls-config-test"))
 }
 
 func setupPrecedenceTest(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder, di.Dependencies) {
