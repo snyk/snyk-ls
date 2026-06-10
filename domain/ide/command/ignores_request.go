@@ -33,10 +33,10 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 
 	"github.com/snyk/code-client-go/sarif"
-	"github.com/snyk/code-client-go/scan"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
+	"github.com/snyk/go-application-framework/pkg/utils/git"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 )
@@ -350,11 +350,13 @@ func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, wo
 
 const userMsgCannotDetermineRepoURL = "Cannot submit ignore: could not determine the repository URL for this folder. Please ensure the folder is part of a Git repository with a configured remote."
 
-// validateIgnoreRequest checks that a repository URL can be resolved for contentRoot.
-// If not, it sends a user-facing warning notification and returns an error.
-// The raw error from go-git is kept in the structured log only, to avoid leaking filesystem paths.
+// validateIgnoreRequest checks that a repository URL can be resolved for contentRoot
+// using the same resolver as GAF's ignore workflow (git.RepoUrlFromDir) so the two
+// agree. If not, it sends a user-facing warning notification and returns an error.
+// The raw error from go-git is kept in the structured log only, to avoid leaking
+// filesystem paths.
 func (cmd *submitIgnoreRequest) validateIgnoreRequest(logger zerolog.Logger, contentRoot types.FilePath) error {
-	if _, err := scan.NewRepositoryTarget(string(contentRoot)); err != nil {
+	if _, err := git.RepoUrlFromDir(string(contentRoot)); err != nil {
 		logger.Warn().Err(err).Str("contentRoot", string(contentRoot)).Msg("could not determine repository URL for ignore request")
 		if cmd.notifier != nil {
 			cmd.notifier.SendShowMessage(sglsp.MTWarning, userMsgCannotDetermineRepoURL)
