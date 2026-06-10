@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adrg/xdg"
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
@@ -46,9 +45,7 @@ func setupLdxSyncTest(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, 
 	t.Helper()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_4")
 
-	origConfigHome := xdg.ConfigHome
-	xdg.ConfigHome = t.TempDir()
-	t.Cleanup(func() { xdg.ConfigHome = origConfigHome })
+	setupTestConfigIsolation(t, engine)
 
 	loc, jsonRpcRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 
