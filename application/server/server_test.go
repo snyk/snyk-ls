@@ -141,7 +141,7 @@ func setupServer(
 	// Initialize dependencies
 	var deps di.Dependencies
 	if cfg.useRealDI {
-		deps = di.Init(engine, tokenService)
+		deps = di.RealDependencies(engine, tokenService)
 	} else {
 		deps = di.TestInit(t, engine, tokenService, cfg.overrideDeps)
 
