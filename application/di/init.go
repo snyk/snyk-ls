@@ -29,6 +29,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/infrastructure/secrets"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/types"
 
 	codeClientObservability "github.com/snyk/code-client-go/observability"
@@ -115,6 +116,11 @@ type Dependencies struct {
 	CodeActionService *codeaction.CodeActionsService
 	Installer         install.Installer
 	CommandService    types.CommandService
+	// ProgressChannel is the per-server channel that collects scanner progress
+	// events. createProgressListener drains it and forwards to the LSP client.
+	// Each server instance creates its own buffered channel so that progress
+	// events from parallel test servers are never misrouted.
+	ProgressChannel chan types.ProgressParams
 }
 
 func currentDependencies() Dependencies {
@@ -142,6 +148,7 @@ func currentDependencies() Dependencies {
 		CodeActionService: codeActionService,
 		Installer:         installer,
 		CommandService:    commandService,
+		ProgressChannel:   progress.ToServerProgressChannel,
 	}
 }
 

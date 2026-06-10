@@ -50,6 +50,7 @@ import (
 	domainNotify "github.com/snyk/snyk-ls/internal/notification"
 	er "github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -176,6 +177,19 @@ func buildTestDependencies(t *testing.T, engine workflow.Engine, tokenService ty
 	} else {
 		localCommandService = types.NewCommandServiceMock()
 	}
+
+	// Default to the global progress channel so progress.NewTracker() events
+	// (which always write to progress.ToServerProgressChannel) reach the server.
+	// Tests that need per-server isolation must set overrideDeps.ProgressChannel
+	// to a dedicated channel and use progress.NewTrackerWithChannel to route
+	// tracker events to that channel explicitly.
+	var localProgressChannel chan types.ProgressParams
+	if overrideDeps != nil && overrideDeps.ProgressChannel != nil {
+		localProgressChannel = overrideDeps.ProgressChannel
+	} else {
+		localProgressChannel = progress.ToServerProgressChannel
+	}
+
 	w := workspace.New(gafConfiguration, logger, localInstrumentor, localScanner, localHoverService, localScanNotifier, localNotifier, localScanPersister, localScanStateAggregator, localFeatureFlagService, localConfigResolver, engine)
 	config.SetWorkspace(gafConfiguration, w)
 	localFileWatcher := watcher.NewFileWatcher()
@@ -205,5 +219,6 @@ func buildTestDependencies(t *testing.T, engine workflow.Engine, tokenService ty
 		CodeActionService:     localCodeActionService,
 		Installer:             localInstaller,
 		CommandService:        localCommandService,
+		ProgressChannel:       localProgressChannel,
 	}
 }
