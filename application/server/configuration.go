@@ -877,14 +877,6 @@ func resetSummaryPanel(scanAgg scanstates.Aggregator, folderPaths []types.FilePa
 	scanAgg.Init(folderPaths)
 }
 
-// resetSummaryPanelOnStopScan resets the summary panel to its initial state
-// when the user cancels a scan via the IDE stop-scan button (IDE-1035).
-// It resolves current workspace folder paths from conf and delegates to
-// resetSummaryPanel, which guards against nil aggregator and empty folder list.
-func resetSummaryPanelOnStopScan(scanAgg scanstates.Aggregator, conf configuration.Configuration) {
-	resetSummaryPanel(scanAgg, workspaceFolderPaths(conf))
-}
-
 func workspaceFolderPaths(conf configuration.Configuration) []types.FilePath {
 	ws := config.GetWorkspace(conf)
 	if ws == nil {
