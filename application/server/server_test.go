@@ -35,6 +35,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
@@ -1319,6 +1320,61 @@ func Test_initialized_CallsRefreshConfigFromLdxSync(t *testing.T) {
 
 	_, err := loc.Client.Call(t.Context(), "initialize", params)
 	assert.NoError(t, err)
+}
+
+// Init ordering: feature flags and SAST settings are populated during initialized (HandleFolders),
+// not while merging folder config during initialize. See processSingleLspFolderConfig.
+func Test_initializedHandler_PopulatesFeatureFlagsAndSastSettingsForWorkspaceFolders(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+
+	folderPaths := []types.FilePath{types.FilePath(t.TempDir()), types.FilePath(t.TempDir())}
+	params := types.InitializeParams{
+		WorkspaceFolders: []types.WorkspaceFolder{
+			{Uri: uri.PathToUri(folderPaths[0]), Name: "workspace1"},
+			{Uri: uri.PathToUri(folderPaths[1]), Name: "workspace2"},
+		},
+	}
+
+	fakeFF := featureflag.NewFakeService()
+	fakeFF.Flags[featureflag.SnykCodeConsistentIgnores] = true
+	fakeFF.Conf = engine.GetConfiguration()
+	fakeFF.SastSettings = &sast_contract.SastResponse{SastEnabled: true}
+
+	loc, _, _ := setupServer(t, engine, tokenService, WithDeps(di.Dependencies{
+		FeatureFlagService: fakeFF,
+	}))
+
+	configResolver := testutil.DefaultConfigResolver(engine)
+
+	// Call initialize and assert that FFs and SAST settings are not set.
+	_, err := loc.Client.Call(t.Context(), "initialize", params)
+	require.NoError(t, err)
+
+	assert.Equal(t, 0, fakeFF.PopulateFolderConfigCallCount, "PopulateFolderConfig must not run during initialize")
+	for _, p := range folderPaths {
+		fc := config.GetFolderConfigFromEngine(engine, configResolver, p, engine.GetLogger())
+		require.NotNil(t, fc)
+		assert.False(t, fc.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores),
+			"processSingleLspFolderConfig must skip flag population before SettingIsLspInitialized")
+		assert.Nil(t, types.GetSastSettings(fc.Conf(), p))
+	}
+
+	disableAutoScan(t, engine.GetConfiguration())
+
+	// Call initialized and assert that FFs and SAST settings are now set correctly.
+	_, err = loc.Client.Call(t.Context(), "initialized", types.InitializedParams{})
+	require.NoError(t, err)
+
+	assert.Equal(t, len(folderPaths), fakeFF.PopulateFolderConfigCallCount,
+		"PopulateFolderConfig must be called once per workspace folder")
+	for _, p := range folderPaths {
+		fc := config.GetFolderConfigFromEngine(engine, configResolver, p, engine.GetLogger())
+		require.NotNil(t, fc)
+		assert.True(t, fc.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores))
+		sastSettings := types.GetSastSettings(fc.Conf(), p)
+		require.NotNil(t, sastSettings)
+		assert.True(t, sastSettings.SastEnabled)
+	}
 }
 
 // Test_initialize_UsesIdeGlobalOrgNotCliOrg verifies that when the IDE sends a global org
