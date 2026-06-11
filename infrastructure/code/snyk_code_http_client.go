@@ -35,7 +35,7 @@ const (
 )
 
 var (
-	issueSeverities = map[string]types.Severity{
+	issueSeverities = map[string]types.Severity{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 		"3":       types.High,
 		"2":       types.Medium,
 		"warning": types.Medium, // Sarif Level

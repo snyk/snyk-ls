@@ -54,17 +54,17 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-var scanCount = 1
+var scanCount = 1 //nolint:gochecknoglobals // legacy process-global state
 var _ types.ProductScanner = (*Scanner)(nil)
 
 var (
-	issueSeverities = map[string]types.Severity{
+	issueSeverities = map[string]types.Severity{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 		"high": types.High,
 		"low":  types.Low,
 	}
 )
 
-var extensions = map[string]bool{
+var extensions = map[string]bool{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	".yaml": true,
 	".yml":  true,
 	".json": true,

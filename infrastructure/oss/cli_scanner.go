@@ -54,7 +54,7 @@ import (
 )
 
 var (
-	lockFilesToManifestMap = map[string]string{
+	lockFilesToManifestMap = map[string]string{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 		"Gemfile.lock":      "Gemfile",
 		"package-lock.json": "package.json",
 		"yarn.lock":         "package.json",
@@ -67,7 +67,7 @@ var (
 	}
 
 	// see https://github.com/snyk/cli/blob/765e53a67ea1cbad79c2ee8c436e5e5816003744/src/cli/main.ts#L388-L397
-	allProjectsParamBlacklist = map[string]bool{
+	allProjectsParamBlacklist = map[string]bool{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 		"--file":             true,
 		"--package-manager":  true,
 		"--project-name":     true,
@@ -632,7 +632,7 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 
 // legacyOnlyFlags are CLI flags that require routing to the legacy scan path
 // because the new ostest workflow does not support them.
-var legacyOnlyFlags = map[string]bool{
+var legacyOnlyFlags = map[string]bool{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	"--print-graph":     true,
 	"--print-deps":      true,
 	"--print-dep-paths": true,
@@ -640,7 +640,7 @@ var legacyOnlyFlags = map[string]bool{
 }
 
 // newFeatureFlags are CLI flags whose presence indicates the scan requires the new ostest workflow.
-var newFeatureFlags = map[string]bool{
+var newFeatureFlags = map[string]bool{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	"--reachability": true,
 	"--sbom":         true,
 }

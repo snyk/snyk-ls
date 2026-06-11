@@ -32,7 +32,7 @@ import (
 
 const sentryDsn = "https://f760a2feb30c40198cef550edf6221de@o30291.ingest.sentry.io/6242547"
 
-var initialized = concurrency.AtomicBool{}
+var initialized = concurrency.AtomicBool{} //nolint:gochecknoglobals // legacy process-global state
 
 func initializeSentry(conf configuration.Configuration, logger *zerolog.Logger, engine workflow.Engine) {
 	if initialized.Get() {

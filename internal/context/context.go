@@ -41,7 +41,7 @@ const (
 
 type scanSourceKeyType int
 
-var scanSourceKey scanSourceKeyType
+var scanSourceKey scanSourceKeyType //nolint:gochecknoglobals // unexported context key — singleton by design, never mutated
 
 func NewContextWithScanSource(ctx context.Context, source ScanSource) context.Context {
 	return context.WithValue(ctx, scanSourceKey, source)
@@ -60,7 +60,7 @@ func (d DeltaScanType) String() string {
 
 type deltaScanTypeKeyType int
 
-var deltaScanTypeKey deltaScanTypeKeyType
+var deltaScanTypeKey deltaScanTypeKeyType //nolint:gochecknoglobals // unexported context key — singleton by design, never mutated
 
 const (
 	Reference        DeltaScanType = "Reference"
@@ -84,7 +84,7 @@ func (d dependenciesKeyType) String() string {
 	return string(d)
 }
 
-var dependenciesKey dependenciesKeyType
+var dependenciesKey dependenciesKeyType //nolint:gochecknoglobals // unexported context key — singleton by design, never mutated
 
 const DepInlineValueProvider = "inlineValueProvider"
 const DepScanners = "scanners"
@@ -252,7 +252,7 @@ func (l loggerKeyType) String() string {
 	return string(l)
 }
 
-var loggerKey loggerKeyType
+var loggerKey loggerKeyType //nolint:gochecknoglobals // unexported context key — singleton by design, never mutated
 
 func NewContextWithLogger(ctx context.Context, logger *zerolog.Logger) context.Context {
 	return context.WithValue(ctx, loggerKey, logger)
@@ -281,8 +281,8 @@ func (w workDirKeyType) String() string {
 	return string(w)
 }
 
-var filePathKey filePathKeyType
-var workDirKey workDirKeyType
+var filePathKey filePathKeyType //nolint:gochecknoglobals // unexported context key — singleton by design, never mutated
+var workDirKey workDirKeyType   //nolint:gochecknoglobals // unexported context key — singleton by design, never mutated
 
 func NewContextWithWorkDirAndFilePath(ctx context.Context, workDir, filePath types.FilePath) context.Context {
 	newCtx := context.WithValue(ctx, filePathKey, filePath)
