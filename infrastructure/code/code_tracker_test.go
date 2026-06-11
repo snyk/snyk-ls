@@ -99,27 +99,20 @@ func Test_Tracker_End(t *testing.T) {
 	)
 }
 
-// TestGenerateTrackerRoutesToGlobalChannel (IDE-2036-regression) documents the
-// CURRENT KNOWN BEHAVIOR of GenerateTracker: it routes progress events to the
-// global progress.ToServerProgressChannel rather than to a per-server channel.
+// TestGenerateTrackerRoutesToInjectedChannel (IDE-2036) verifies that
+// GenerateTracker routes progress events to the per-server channel injected
+// via NewCodeTrackerFactory, NOT to the global progress.ToServerProgressChannel.
 //
-// This test is intentionally a regression gate. When the TODO in
-// GenerateTracker is resolved by migrating to progress.NewTrackerWithChannel,
-// this test must be updated to assert per-server isolation instead — preventing
-// silent regression to the global-channel path.
-//
-// Not parallel: inspects the global ToServerProgressChannel, so concurrent
-// writers would cause false positives.
-func TestGenerateTrackerRoutesToGlobalChannel(t *testing.T) {
+// This ensures upload-phase progress events from code-client-go are isolated
+// per language-server instance, preventing cross-test context cancellations in
+// parallel smoke tests.
+func TestGenerateTrackerRoutesToInjectedChannel(t *testing.T) {
 	testutil.UnitTest(t)
 
-	// Drain the global channel so prior test runs don't interfere.
-	for len(progress.ToServerProgressChannel) > 0 {
-		<-progress.ToServerProgressChannel
-	}
+	ch := make(chan types.ProgressParams, 100)
 
 	logger := zerolog.Nop()
-	factory := NewCodeTrackerFactory(&logger)
+	factory := NewCodeTrackerFactory(&logger, ch)
 
 	ct := factory.GenerateTracker()
 
@@ -129,10 +122,12 @@ func TestGenerateTrackerRoutesToGlobalChannel(t *testing.T) {
 		t.Fatalf("GenerateTracker returned unexpected type %T; expected *tracker", ct)
 	}
 
-	// The channel held by the tracker must be the global ToServerProgressChannel.
-	// When GenerateTracker is migrated to NewTrackerWithChannel this assertion
-	// will fail, reminding the author to update the test.
-	if internal.channel != progress.ToServerProgressChannel {
-		t.Error("GenerateTracker must route to progress.ToServerProgressChannel (global) until IDE-2036 migration is complete")
+	// The channel held by the tracker must be the injected per-server channel,
+	// NOT the global ToServerProgressChannel.
+	if internal.channel != ch {
+		t.Error("GenerateTracker must route to the injected per-server channel, not the global channel")
+	}
+	if internal.channel == progress.ToServerProgressChannel {
+		t.Error("GenerateTracker must NOT route to the global progress.ToServerProgressChannel")
 	}
 }
