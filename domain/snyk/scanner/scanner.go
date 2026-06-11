@@ -279,11 +279,23 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 
 			scanSpan := sc.instrumentor.StartSpan(span.Context(), "scan")
 
+			preScanStart := time.Now()
 			err := sc.executePreScanCommand(span.Context(), sc.engine, s.Product(), workspaceFolderConfig, folderPath, true)
 			if err != nil {
 				scanLogger.Err(err).Send()
 				sc.scanNotifier.SendError(scanner.Product(), folderPath, err.Error())
 				sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), false, err)
+				// Route through processResults purely for failure analytics; UserNotified
+				// suppresses the duplicate SendError that sendScanError would otherwise emit.
+				processResults(span.Context(), types.ScanData{
+					Product:           s.Product(),
+					Err:               err,
+					Duration:          time.Since(preScanStart),
+					TimestampFinished: time.Now().UTC(),
+					Path:              folderPath,
+					SendAnalytics:     true,
+					UserNotified:      true,
+				})
 				return
 			}
 

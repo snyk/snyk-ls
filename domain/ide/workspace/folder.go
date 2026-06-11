@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/samber/lo"
@@ -357,7 +358,16 @@ func (f *Folder) scan(ctx context.Context, path types.FilePath) {
 
 func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 	if scanData.Err != nil {
-		f.sendScanError(scanData.Product, scanData.Err)
+		// UserNotified means the caller has already surfaced the error (toast +
+		// any diagnostic) and only routed through here for analytics emission.
+		// Skip sendScanError entirely so we don't fire a duplicate SendError or
+		// an unwanted SendErrorDiagnostic.
+		if !scanData.UserNotified {
+			f.sendScanError(scanData.Product, scanData.Err)
+		}
+		if shouldEmitAnalytics(&scanData) {
+			go sendAnalytics(ctx, f.engine, f.configResolver, f.logger, &scanData)
+		}
 		return
 	}
 
@@ -375,7 +385,9 @@ func (f *Folder) ProcessResults(ctx context.Context, scanData types.ScanData) {
 		return
 	}
 
-	go sendAnalytics(ctx, f.engine, f.configResolver, f.logger, &scanData)
+	if shouldEmitAnalytics(&scanData) {
+		go sendAnalytics(ctx, f.engine, f.configResolver, f.logger, &scanData)
+	}
 
 	// Filter and publish cached diagnostics
 	f.FilterAndPublishDiagnostics(scanData.Product)
@@ -449,20 +461,11 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *types.ScanData) {
 	}
 }
 
+// sendAnalytics emits a "Scan done" analytics event for data. Callers MUST gate
+// the call with shouldEmitAnalytics — this function does not re-check the
+// SendAnalytics / Product / cancellation / non-failing-error policy.
 func sendAnalytics(ctx context.Context, engine workflow.Engine, configResolver types.ConfigResolverInterface, logger *zerolog.Logger, data *types.ScanData) {
 	log := logger.With().Str("method", "folder.sendAnalytics").Logger()
-	if !data.SendAnalytics {
-		return
-	}
-	if data.Product == "" {
-		log.Debug().Any("data", data).Msg("Skipping analytics for empty product")
-		return
-	}
-
-	if data.Err != nil {
-		log.Debug().Err(data.Err).Msg("Skipping analytics for error")
-		return
-	}
 
 	// this information is not filled automatically, so we need to collect it
 	folderConfig := config.GetFolderConfigFromEngine(engine, configResolver, data.Path, logger)
@@ -485,12 +488,34 @@ func sendAnalytics(ctx context.Context, engine workflow.Engine, configResolver t
 		extension["scan_type"] = deltaScanType.String()
 	}
 
+	// Emit failure analytics events alongside success ones so the
+	// "Is Snyk OK?" dashboard's IDE panel reflects scan errors. classifyError
+	// returns (category, code): the category is a low-cardinality catalog
+	// prefix (e.g. "SNYK-CLI") for rollups, the code is the full catalog code
+	// (e.g. "SNYK-CLI-0008") for drill-down.
+	status := gafanalytics.Success
+	if data.Err != nil {
+		status = gafanalytics.Failure
+		category, code := classifyError(data.Err)
+		extension["error_category"] = category
+		if code != "" {
+			extension["error_code"] = code
+		}
+	}
+
+	// Failure paths may build ScanData without TimestampFinished; the zero
+	// time.Time produces a negative epoch via UnixMilli(). Default to now.
+	timestampFinished := data.TimestampFinished
+	if timestampFinished.IsZero() {
+		timestampFinished = time.Now().UTC()
+	}
+
 	param := types.AnalyticsEventParam{
 		InteractionType: "Scan done",
 		Category:        categories,
-		Status:          string(gafanalytics.Success),
+		Status:          string(status),
 		TargetId:        targetId,
-		TimestampMs:     data.TimestampFinished.UnixMilli(),
+		TimestampMs:     timestampFinished.UnixMilli(),
 		DurationMs:      int64(data.Duration),
 		Extension:       extension,
 	}
@@ -890,6 +915,12 @@ func (f *Folder) IsDeltaFindingsEnabled() bool {
 	return f.isDeltaFindingsEnabledForFolder(f.FolderConfigReadOnly())
 }
 
+// IsDeltaFindingsEnabledFromConfig is like IsDeltaFindingsEnabled but accepts a pre-fetched
+// FolderConfig to avoid a redundant FolderConfigReadOnly() call.
+func (f *Folder) IsDeltaFindingsEnabledFromConfig(cfg *types.FolderConfig) bool {
+	return f.isDeltaFindingsEnabledForFolder(cfg)
+}
+
 // IsAutoScanEnabled returns whether automatic scanning is enabled for this folder.
 func (f *Folder) IsAutoScanEnabled() bool {
 	return f.isAutoScanEnabledForFolder(f.FolderConfigReadOnly())
@@ -898,6 +929,23 @@ func (f *Folder) IsAutoScanEnabled() bool {
 // DisplayableIssueTypes returns which issue types are enabled for this folder.
 func (f *Folder) DisplayableIssueTypes() map[product.FilterableIssueType]bool {
 	return f.displayableIssueTypesForFolder(f.FolderConfigReadOnly())
+}
+
+// DisplayableIssueTypesFromConfig is like DisplayableIssueTypes but accepts a pre-fetched
+// FolderConfig to avoid a redundant FolderConfigReadOnly() call.
+func (f *Folder) DisplayableIssueTypesFromConfig(cfg *types.FolderConfig) map[product.FilterableIssueType]bool {
+	return f.displayableIssueTypesForFolder(cfg)
+}
+
+// IssueViewOptions returns the issue view options for this folder, respecting folder-level overrides.
+func (f *Folder) IssueViewOptions() types.IssueViewOptions {
+	return f.issueViewOptionsForFolder(f.FolderConfigReadOnly())
+}
+
+// IssueViewOptionsFromConfig is like IssueViewOptions but accepts a pre-fetched FolderConfig
+// to avoid a redundant FolderConfigReadOnly() call.
+func (f *Folder) IssueViewOptionsFromConfig(cfg *types.FolderConfig) types.IssueViewOptions {
+	return f.issueViewOptionsForFolder(cfg)
 }
 
 func (f *Folder) IssuesForRange(path types.FilePath, r types.Range) (matchingIssues []types.Issue) {

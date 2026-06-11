@@ -24,15 +24,15 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
+	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-func notifier(logger *zerolog.Logger, srv types.Server, method string, params any) {
+func notifyClient(logger *zerolog.Logger, srv types.Server, method string, params any) {
 	err := srv.Notify(context.Background(), method, params)
-	logError(logger, err, "notifier")
+	logError(logger, nil, err, "notifier")
 }
 
 var progressStopChan = make(chan bool, 1000)
@@ -83,14 +83,15 @@ func disposeProgressListener() {
 }
 
 //nolint:gocyclo // this is ok, as it's so high because of forwarding the calls
-func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, srv types.Server) {
+func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, srv types.Server, n noti.Notifier) {
+	if n == nil {
+		panic("registerNotifier: Notifier must not be nil — check server startup wiring")
+	}
 	l := logger.With().Str("method", "registerNotifier").Logger()
 	callbackFunction := func(params any) {
 		if !conf.GetBool(types.SettingIsLspInitialized) {
 			l.Debug().Msg("waiting for lsp initialization to be finished...")
-			for !conf.GetBool(types.SettingIsLspInitialized) {
-				time.Sleep(time.Millisecond)
-			}
+			types.WaitForLspInitialized(conf)
 			l.Debug().Msg("lsp initialization finished.")
 		}
 
@@ -98,24 +99,24 @@ func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, 
 		case types.GetSdk:
 			handleGetSdks(params, l, srv)
 		case types.LspConfigurationParam:
-			notifier(logger, srv, "$/snyk.configuration", params)
+			notifyClient(logger, srv, "$/snyk.configuration", params)
 			l.Debug().Int("folderConfigs", len(params.FolderConfigs)).Msg("sending configuration to client")
 		case types.AuthenticationParams:
-			notifier(logger, srv, "$/snyk.hasAuthenticated", params)
+			notifyClient(logger, srv, "$/snyk.hasAuthenticated", params)
 			l.Debug().Msg("sending token")
 		case types.SnykIsAvailableCli:
-			notifier(logger, srv, "$/snyk.isAvailableCli", params)
+			notifyClient(logger, srv, "$/snyk.isAvailableCli", params)
 			l.Debug().Msg("sending cli path")
 		case sglsp.ShowMessageParams:
-			notifier(logger, srv, "window/showMessage", params)
+			notifyClient(logger, srv, "window/showMessage", params)
 			l.Debug().Interface("message", params.Message).Msg("showing message")
 		case types.SnykTrustedFoldersParams:
-			notifier(logger, srv, "$/snyk.addTrustedFolders", params)
+			notifyClient(logger, srv, "$/snyk.addTrustedFolders", params)
 			l.Info().
 				Interface("trustedPaths", params.TrustedFolders).
 				Msg("sending trusted Folders to client")
 		case types.SnykScanParams:
-			notifier(logger, srv, "$/snyk.scan", params)
+			notifyClient(logger, srv, "$/snyk.scan", params)
 			l.Info().
 				Interface("product", params.Product).
 				Interface("status", params.Status).
@@ -124,8 +125,8 @@ func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, 
 			go handleShowMessageRequest(srv, params, &l)
 			l.Debug().Msg("sending show message request to client")
 		case types.PublishDiagnosticsParams:
-			notifier(logger, srv, "textDocument/publishDiagnostics", params)
-			notifier(logger, srv, "$/snyk.publishDiagnostics316", params)
+			notifyClient(logger, srv, "textDocument/publishDiagnostics", params)
+			notifyClient(logger, srv, "$/snyk.publishDiagnostics316", params)
 			source := "LSP"
 			if len(params.Diagnostics) > 0 {
 				source = params.Diagnostics[0].Source
@@ -136,10 +137,10 @@ func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, 
 				Interface("diagnosticCount", len(params.Diagnostics)).
 				Msg("publishing diagnostics")
 		case types.ScanSummary:
-			notifier(logger, srv, "$/snyk.scanSummary", params)
+			notifyClient(logger, srv, "$/snyk.scanSummary", params)
 			l.Debug().Msg("sending scan summary to client")
 		case types.TreeView:
-			notifier(logger, srv, "$/snyk.treeView", params)
+			notifyClient(logger, srv, "$/snyk.treeView", params)
 			l.Debug().Msg("sending tree view to client")
 		case types.ApplyWorkspaceEditParams:
 			handleApplyWorkspaceEdit(conf, srv, params, &l)
@@ -154,7 +155,7 @@ func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, 
 			l.Debug().
 				Msg("sending inline value refresh request to client")
 		case types.SnykRegisterMcpParams:
-			notifier(logger, srv, "$/snyk.registerMcp", params)
+			notifyClient(logger, srv, "$/snyk.registerMcp", params)
 			l.Debug().Interface("mcpConfig", params).Msg("sending MCP config to client")
 		default:
 			l.Warn().
@@ -162,7 +163,7 @@ func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, 
 				Msg("received unconfigured notification object")
 		}
 	}
-	di.Notifier().CreateListener(callbackFunction)
+	n.CreateListener(callbackFunction)
 	l.Debug().Str("method", "registerNotifier").Msg("registered notifier")
 }
 

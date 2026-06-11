@@ -52,5 +52,15 @@
 
 		// Initialize reset handlers
 		window.ConfigApp.resetHandler.init();
+
+		// Save when the panel becomes hidden (e.g. closed in VS Code) without a prior blur.
+		// Closing a webview does not fire blur on the focused element, so text field changes
+		// typed but not yet blurred would otherwise be silently discarded.
+		// Only fires for auto-save IDEs; non-auto-save IDEs use an explicit OK/Cancel flow.
+		dom.addEvent(document, 'visibilitychange', function() {
+			if (document.visibilityState === 'hidden' && window.ConfigApp.ideBridge.isAutoSaveEnabled()) {
+				window.ConfigApp.autoSave.getAndSaveIdeConfig();
+			}
+		});
 	});
 })();

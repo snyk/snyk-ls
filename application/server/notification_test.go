@@ -37,6 +37,21 @@ import (
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
+func TestRegisterNotifier_NilNotifier_Panics(t *testing.T) {
+	// registerNotifier has "notifier" in its name; a nil notifier is a programming error
+	// that must be caught at initialization time — not silently produce no-op behavior.
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+	srv := mock_types.NewMockServer(ctrl)
+
+	assert.Panics(t, func() {
+		registerNotifier(conf, logger, srv, nil)
+	}, "registerNotifier must panic when notifier is nil")
+}
+
 func TestCreateProgressListener(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 	ctrl := gomock.NewController(t)
@@ -298,4 +313,39 @@ func TestShowMessageRequest(t *testing.T) {
 			time.Millisecond,
 		)
 	})
+}
+
+func Test_NotifierWaitsForLspInitializedChannel(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conf := engine.GetConfiguration()
+	// Replace the channel set by initializeHandler; the previous channel has no waiters and is GC'd.
+	types.NewLspInitializedChannel(conf)
+
+	expected := types.AuthenticationParams{Token: "channel-wait-test", ApiUrl: "https://api.snyk.io"}
+	di.Notifier().Send(expected)
+
+	delivered := func() bool {
+		for _, n := range jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasAuthenticated") {
+			var actual types.AuthenticationParams
+			_ = n.UnmarshalParams(&actual)
+			if actual == expected {
+				return true
+			}
+		}
+		return false
+	}
+	assert.Never(t, delivered, 200*time.Millisecond, 10*time.Millisecond,
+		"notification must not be delivered before LspInitialized is signaled")
+
+	types.SignalLspInitialized(conf)
+
+	assert.Eventually(t, delivered, 2*time.Second, time.Millisecond,
+		"notification must be delivered after LspInitialized is signaled")
 }

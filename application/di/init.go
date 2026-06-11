@@ -101,6 +101,19 @@ type Dependencies struct {
 	LdxSyncService        command.LdxSyncService
 	ScanStateAggregator   scanstates.Aggregator
 	InlineValueProvider   snyk.InlineValueProvider
+	TreeEmitter           command.TreeEmitter
+	// Handler-accessed dependencies (previously read via di.*() globals).
+	// Note: Installer and Initializer are intentionally absent — they are
+	// process-lifecycle dependencies used during startup, not per-request.
+	// Access them via di.Installer() / di.Initializer() until those global
+	// accessors are retired.
+	Scanner           scanner2.Scanner
+	HoverService      hover.Service
+	ScanNotifier      scanner2.ScanNotifier
+	ScanPersister     persistence.ScanSnapshotPersister
+	FileWatcher       *watcher.FileWatcher
+	ErrorReporter     er.ErrorReporter
+	CodeActionService *codeaction.CodeActionsService
 }
 
 func currentDependencies() Dependencies {
@@ -117,6 +130,15 @@ func currentDependencies() Dependencies {
 		LdxSyncService:        ldxSyncService,
 		ScanStateAggregator:   scanStateAggregator,
 		InlineValueProvider:   inlineValueProvider,
+		TreeEmitter:           treeEmitterInstance,
+		// Handler-accessed dependencies:
+		Scanner:           scanner,
+		HoverService:      hoverService,
+		ScanNotifier:      scanNotifier,
+		ScanPersister:     scanPersister,
+		FileWatcher:       fileWatcher,
+		ErrorReporter:     errorReporter,
+		CodeActionService: codeActionService,
 	}
 }
 
@@ -139,6 +161,7 @@ func initDomain(tokenService types.TokenService, conf configuration.Configuratio
 
 func initInfrastructure(tokenService types.TokenService, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) {
 	gafConfiguration := conf
+	gafConfiguration.Set(configuration.STOP_REQUESTS_WITHOUT_AUTH, true)
 
 	fs := pflag.NewFlagSet("snyk-ls-config", pflag.ContinueOnError)
 	types.RegisterAllConfigurations(fs)
@@ -295,6 +318,15 @@ func FeatureFlagService() featureflag.Service {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return featureFlagService
+}
+
+// SetFeatureFlagService replaces the global featureFlagService for future calls
+// to FeatureFlagService(). Objects already constructed before this call retain
+// their previous reference. Intended for test use only.
+func SetFeatureFlagService(service featureflag.Service) {
+	initMutex.Lock()
+	defer initMutex.Unlock()
+	featureFlagService = service
 }
 
 func LdxSyncService() command.LdxSyncService {
