@@ -60,10 +60,10 @@ import (
 )
 
 // codeAPISem limits the number of tests that concurrently use the Snyk Code API
-// within a single shard. The Code API throttles when ~6+ scans run simultaneously,
-// manifesting as context canceled or indefinite hangs. 3 concurrent Code scans
-// is within the API's tolerance for the CI test org.
-var codeAPISem = make(chan struct{}, 3)
+// within a single shard. Capacity 1 serializes Code scans within each shard —
+// only 1 Code scan runs per shard at a time, with 4 shards running on separate
+// machines = 4 concurrent scans total across CI, which is within the API's tolerance.
+var codeAPISem = make(chan struct{}, 1)
 
 // acquireCodeAPISlot acquires a slot in the Code API semaphore and releases it
 // via t.Cleanup. Call this at the start of any test that triggers a Snyk Code scan.
