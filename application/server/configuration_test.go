@@ -2813,4 +2813,3 @@ func TestApplyUserSettingsPath_IgnoresUnchanged(t *testing.T) {
 
 	assert.Equal(t, "/original", types.GetGlobalString(conf, types.SettingUserSettingsPath))
 }
-
