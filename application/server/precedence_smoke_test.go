@@ -733,6 +733,7 @@ func Test_SmokeScanPrecedence_OSSEnabled_CodeDisabled(t *testing.T) {
 // and OSS is disabled globally, the LSP server runs a Code scan but NOT an OSS scan.
 func Test_SmokeScanPrecedence_CodeEnabled_OSSDisabled(t *testing.T) {
 	t.Parallel()
+	acquireCodeAPISlot(t)
 	engine, _, _, jsonRpcRecorder, folder, deps := setupScanPrecedenceTest(t, true, false, false)
 
 	waitForScan(t, string(folder), engine)
@@ -766,6 +767,7 @@ func Test_SmokeScanPrecedence_AllDisabled_NoScansRun(t *testing.T) {
 // 5. Verify OSS scan runs
 func Test_SmokeScanPrecedence_UserOverrideEnablesProduct(t *testing.T) {
 	t.Parallel()
+	acquireCodeAPISlot(t)
 	engine, _, loc, jsonRpcRecorder, folder, deps := setupScanPrecedenceTest(t, true, false, false)
 
 	waitForScan(t, string(folder), engine)
@@ -809,6 +811,7 @@ func Test_SmokeScanPrecedence_UserOverrideEnablesProduct(t *testing.T) {
 // is enabled globally but a folder override disables it, no scan runs for that product.
 func Test_SmokeScanPrecedence_UserOverrideDisablesProduct(t *testing.T) {
 	t.Parallel()
+	acquireCodeAPISlot(t)
 	engine, _, loc, jsonRpcRecorder, folder, deps := setupScanPrecedenceTest(t, true, false, false)
 
 	// Wait for initial Code scan to complete
@@ -843,6 +846,7 @@ func Test_SmokeScanPrecedence_UserOverrideDisablesProduct(t *testing.T) {
 // diagnostics only contain issues matching the allowed severities.
 func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing.T) {
 	t.Parallel()
+	acquireCodeAPISlot(t)
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
 
 	setupTestConfigIsolation(t, engine)
@@ -912,6 +916,7 @@ func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing
 // IaC is excluded because the test org lacks the infrastructureAsCode entitlement.
 func Test_SmokeScanPrecedence_EnableAllProducts_AllScansRun(t *testing.T) {
 	t.Parallel()
+	acquireCodeAPISlot(t)
 	engine, _, _, jsonRpcRecorder, folder, deps := setupScanPrecedenceTest(t, true, true, false)
 
 	waitForScan(t, string(folder), engine)
