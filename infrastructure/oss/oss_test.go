@@ -717,7 +717,7 @@ func TestCLIScanner_ostestScan_AddsFlagSetAndAllowsUnknownFlags(t *testing.T) {
 	}
 
 	workDir := types.FilePath(t.TempDir())
-	folderConfig := &types.FolderConfig{FolderPath: workDir}
+	folderConfig := &types.FolderConfig{FolderPath: workDir, ConfigResolver: testutil.DefaultConfigResolver(engine)}
 	path := types.FilePath(filepath.Join(string(workDir), "package.json"))
 
 	cmdWithoutFlag := []string{"snyk", "test"}
@@ -762,7 +762,7 @@ func TestCLIScanner_ostestScan_SetsSubprocessEnvironment(t *testing.T) {
 	}
 
 	workDir := types.FilePath(t.TempDir())
-	folderConfig := &types.FolderConfig{FolderPath: workDir}
+	folderConfig := &types.FolderConfig{FolderPath: workDir, ConfigResolver: testutil.DefaultConfigResolver(engine)}
 	targetPath := types.FilePath(filepath.Join(string(workDir), "package.json"))
 	cmd := []string{"snyk", "test"}
 	inputEnv := gotenv.Env{
