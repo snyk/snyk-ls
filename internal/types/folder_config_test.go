@@ -91,9 +91,9 @@ func TestFolderConfig_GetFeatureFlag(t *testing.T) {
 		assert.False(t, fc.GetFeatureFlag("missing"))
 	})
 
-	t.Run("returns false when ConfigResolver is nil", func(t *testing.T) {
+	t.Run("panics when ConfigResolver is nil", func(t *testing.T) {
 		fc := &FolderConfig{}
-		assert.False(t, fc.GetFeatureFlag("myFlag"))
+		assert.Panics(t, func() { fc.GetFeatureFlag("myFlag") })
 	})
 
 	t.Run("returns false for nil receiver", func(t *testing.T) {
