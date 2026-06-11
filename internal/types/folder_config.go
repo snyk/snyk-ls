@@ -145,7 +145,7 @@ func (fc *FolderConfig) SetFeatureFlag(flag string, value bool) {
 }
 
 // Conf returns the configuration for prefix key access.
-// Delegates to ConfigResolver.Configuration() when available.
+// Returns nil if the ConfigResolver is nil.
 func (fc *FolderConfig) Conf() configuration.Configuration {
 	if fc.ConfigResolver != nil {
 		return fc.ConfigResolver.Configuration()
