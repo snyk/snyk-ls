@@ -85,7 +85,18 @@ func Test_GetCodeLensForPath(t *testing.T) {
 
 func dummyProgressListeners(t *testing.T) {
 	t.Helper()
-	t.Cleanup(func() { progress.CleanupChannels() })
+	t.Cleanup(func() {
+		// Do NOT call CleanupChannels() — it cancels all global trackers.
+		// Drain the global channel only.
+	drainCodelens:
+		for {
+			select {
+			case <-progress.ToServerProgressChannel:
+			default:
+				break drainCodelens
+			}
+		}
+	})
 	go func() {
 		for {
 			<-progress.ToServerProgressChannel
