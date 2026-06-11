@@ -47,7 +47,7 @@ type SecretsIssueData struct {
 	Cols CodePoint `json:"cols"`
 	// Rows is the row range [startLine, endLine] (0-based)
 	Rows CodePoint `json:"rows"`
-	// LocationsCount is the number of locations where the secret is found
+	// LocationsCount is the number of locations for this finding in the same file as this issue
 	LocationsCount int `json:"locationsCount"`
 	// Risk Score
 	RiskScore int `json:"riskScore"`

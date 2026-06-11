@@ -32,36 +32,69 @@ import (
 //goland:noinspection GoRedundantConversion because a json unmarshal would produce a float64, not an int8
 func Test_openLearnLesson_Execute(t *testing.T) {
 	testutil.UnitTest(t)
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
-	// overwrite openbrowser func
-	openBrowserCalledChan := make(chan string)
-	openBrowserHandlerFunc := func(url string) {
-		go func() { openBrowserCalledChan <- url }()
+	tests := []struct {
+		name      string
+		eco       string
+		rule      string
+		cwes      string
+		cves      string
+		issueType types.IssueType
+		expCWEs   []string
+		expCVEs   []string
+	}{
+		{
+			name:      "DependencyVulnerability",
+			eco:       "javascript",
+			rule:      "javascript%2Fsqlinjection",
+			cwes:      "CWE-89,CWE-ZZ",
+			cves:      "CVE-2020-1234",
+			issueType: types.DependencyVulnerability,
+			expCWEs:   []string{"CWE-89", "CWE-ZZ"},
+			expCVEs:   []string{"CVE-2020-1234"},
+		},
+		{
+			// Confirms the JSON-number round-trip lands on int8(5) for SecretsIssue.
+			name:      "SecretsIssue",
+			eco:       "",
+			rule:      "",
+			cwes:      "CWE-798",
+			cves:      "",
+			issueType: types.SecretsIssue,
+			expCWEs:   []string{"CWE-798"},
+			expCVEs:   []string{""},
+		},
 	}
 
-	eco := "javascript"
-	rule := "javascript%2Fsqlinjection"
-	cwes := "CWE-89,CWE-ZZ"
-	cves := "CVE-2020-1234"
-	data := types.CommandData{
-		Title:     types.OpenLearnLesson,
-		CommandId: types.OpenLearnLesson,
-		Arguments: []any{rule, eco, cwes, cves, float64(types.DependencyVulnerability)},
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			openBrowserCalledChan := make(chan string)
+			openBrowserHandlerFunc := func(url string) {
+				go func() { openBrowserCalledChan <- url }()
+			}
+
+			data := types.CommandData{
+				Title:     types.OpenLearnLesson,
+				CommandId: types.OpenLearnLesson,
+				Arguments: []any{tt.rule, tt.eco, tt.cwes, tt.cves, float64(tt.issueType)},
+			}
+			mockService := mock_learn.NewMockService(ctrl)
+			cut := openLearnLesson{learnService: mockService, command: data, openBrowserHandleFunc: openBrowserHandlerFunc}
+			expectedLessonURL := "https://lessonURL"
+			expectedLesson := &learn.Lesson{Url: expectedLessonURL}
+			mockService.EXPECT().
+				GetLesson(tt.eco, tt.rule, tt.expCWEs, tt.expCVEs, tt.issueType).
+				Return(expectedLesson, nil)
+
+			_, err := cut.Execute(t.Context())
+
+			assert.NoError(t, err)
+			assert.Eventuallyf(t, func() bool {
+				return expectedLessonURL == <-openBrowserCalledChan
+			}, 5*time.Second, time.Millisecond, "open browser was not called")
+		})
 	}
-	mockService := mock_learn.NewMockService(ctrl)
-	cut := openLearnLesson{learnService: mockService, command: data, openBrowserHandleFunc: openBrowserHandlerFunc}
-	expectedLessonURL := "https://lessonURL"
-	expectedLesson := &learn.Lesson{Url: expectedLessonURL}
-	mockService.EXPECT().
-		GetLesson(eco, rule, []string{"CWE-89", "CWE-ZZ"}, []string{"CVE-2020-1234"}, types.DependencyVulnerability).
-		Return(expectedLesson, nil)
-
-	_, err := cut.Execute(t.Context())
-
-	assert.NoError(t, err)
-	assert.Eventuallyf(t, func() bool {
-		return expectedLessonURL == <-openBrowserCalledChan
-	}, 5*time.Second, time.Millisecond, "open browser was not called")
 }
