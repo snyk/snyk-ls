@@ -116,7 +116,7 @@ type Dependencies struct {
 // It returns the Dependencies struct, the initialize.Initializer, and the concrete
 // *treeview.TreeScanStateEmitter (nil when creation failed) so Init() can assign
 // the global treeEmitterInstance without a runtime type assertion.
-func buildDependencies(engine workflow.Engine, tokenService types.TokenService) (Dependencies, initialize.Initializer, *treeview.TreeScanStateEmitter) {
+func buildDependencies(engine workflow.Engine, tokenService types.TokenService, progressCh chan types.ProgressParams) (Dependencies, initialize.Initializer, *treeview.TreeScanStateEmitter) {
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 
@@ -175,7 +175,7 @@ func buildDependencies(engine workflow.Engine, tokenService types.TokenService) 
 	localIaCScanner := iac.New(conf, logger, localInstrumentor, localErrorReporter, localSnykCli, localConfigResolver)
 	localOpenSourceScanner := oss.NewCLIScanner(engine, localInstrumentor, localErrorReporter, localSnykCli, localLearnService, localNotifier, localConfigResolver)
 	localScanNotifier, _ := appNotification.NewScanNotifier(localNotifier, localConfigResolver)
-	localSnykCodeScanner := code.New(engine, localInstrumentor, localSnykApiClient, localCodeErrorReporter, localLearnService, localFeatureFlagService, localNotifier, localCodeInstrumentor, localCodeErrorReporter, code.CreateCodeScanner, localConfigResolver, progress.ToServerProgressChannel)
+	localSnykCodeScanner := code.New(engine, localInstrumentor, localSnykApiClient, localCodeErrorReporter, localLearnService, localFeatureFlagService, localNotifier, localCodeInstrumentor, localCodeErrorReporter, code.CreateCodeScanner, localConfigResolver, progressCh)
 	localSecretsScanner := secrets.New(conf, engine, logger, localInstrumentor, localSnykApiClient, localFeatureFlagService, localNotifier, localConfigResolver)
 
 	localCLIInitializer := cli.NewInitializer(conf, logger, localErrorReporter, localInstaller, localNotifier, localSnykCli, localConfigResolver)
@@ -221,7 +221,7 @@ func buildDependencies(engine workflow.Engine, tokenService types.TokenService) 
 		CodeActionService:     localCodeActionService,
 		Installer:             localInstaller,
 		CommandService:        localCommandService,
-		ProgressChannel:       progress.ToServerProgressChannel,
+		ProgressChannel:       progressCh,
 	}
 	return deps, localScanInitializer, localTreeEmitterInstance
 }
@@ -234,7 +234,7 @@ func Init(engine workflow.Engine, tokenService types.TokenService) Dependencies 
 		treeEmitterInstance.Dispose()
 	}
 
-	deps, initializer, treeEmitter := buildDependencies(engine, tokenService)
+	deps, initializer, treeEmitter := buildDependencies(engine, tokenService, progress.ToServerProgressChannel)
 
 	// Populate package-level globals for accessor functions.
 	notifier = deps.Notifier
@@ -264,7 +264,8 @@ func Init(engine workflow.Engine, tokenService types.TokenService) Dependencies 
 // package-level global, so multiple callers (e.g. parallel smoke-test servers)
 // are safe to run concurrently without a data race.
 func RealDependencies(engine workflow.Engine, tokenService types.TokenService) Dependencies {
-	deps, _, _ := buildDependencies(engine, tokenService)
+	progressCh := make(chan types.ProgressParams, 1000)
+	deps, _, _ := buildDependencies(engine, tokenService, progressCh)
 	return deps
 }
 

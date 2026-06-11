@@ -2069,7 +2069,6 @@ func ensureInitialized(t *testing.T, engine workflow.Engine, tokenService *confi
 
 	documentURI := initParams.WorkspaceFolders[0].Uri
 	commitHash := getCurrentCommitHash(t, uri.PathFromUri(documentURI))
-	config.Version = commitHash
 
 	// Sanitize test name to make it safe for file system paths
 	sanitizedTestName := testsupport.PathSafeTestName(t)
