@@ -551,7 +551,7 @@ func CreateCodeScanner(scanner *Scanner, folderConfig *types.FolderConfig) (code
 	return codeClient.NewCodeScanner(
 		codeConfig,
 		httpClient,
-		codeClient.WithTrackerFactory(NewCodeTrackerFactory(scanner.engine.GetLogger())),
+		codeClient.WithTrackerFactory(NewCodeTrackerFactory(scanner.engine.GetLogger(), scanner.progressChannel)),
 		codeClient.WithLogger(scanner.engine.GetLogger()),
 		codeClient.WithInstrumentor(scanner.codeInstrumentor),
 		codeClient.WithErrorReporter(scanner.codeErrorReporter),
