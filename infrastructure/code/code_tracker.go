@@ -37,6 +37,7 @@ func NewCodeTrackerFactory(logger *zerolog.Logger) codeClientScan.TrackerFactory
 }
 
 func (t trackerFactory) GenerateTracker() codeClientScan.Tracker {
+	// TODO(IDE-2036): migrate to NewTrackerWithChannel for full per-server isolation
 	newTracker := progress.NewTracker(true, t.logger)
 	return newCodeTracker(newTracker.GetChannel(), newTracker.GetCancelChannel())
 }

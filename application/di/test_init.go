@@ -152,7 +152,19 @@ func buildTestDependencies(t *testing.T, engine workflow.Engine, tokenService ty
 		localFeatureFlagService = featureflag.New(gafConfiguration, logger, engine, localConfigResolver)
 	}
 
-	localSnykCodeScanner := code.New(engine, localInstrumentor, localSnykApiClient, localCodeErrorReporter, localLearnService, localFeatureFlagService, localNotifier, localCodeInstrumentor, localCodeErrorReporter, code.NewFakeCodeScannerClient, localConfigResolver)
+	// Default to the global progress channel so progress.NewTracker() events
+	// (which always write to progress.ToServerProgressChannel) reach the server.
+	// Tests that need per-server isolation must set overrideDeps.ProgressChannel
+	// to a dedicated channel and use progress.NewTrackerWithChannel to route
+	// tracker events to that channel explicitly.
+	var localProgressChannel chan types.ProgressParams
+	if overrideDeps != nil && overrideDeps.ProgressChannel != nil {
+		localProgressChannel = overrideDeps.ProgressChannel
+	} else {
+		localProgressChannel = progress.ToServerProgressChannel
+	}
+
+	localSnykCodeScanner := code.New(engine, localInstrumentor, localSnykApiClient, localCodeErrorReporter, localLearnService, localFeatureFlagService, localNotifier, localCodeInstrumentor, localCodeErrorReporter, code.NewFakeCodeScannerClient, localConfigResolver, localProgressChannel)
 	localOpenSourceScanner := oss.NewCLIScanner(engine, localInstrumentor, localErrorReporter, localSnykCli, localLearnService, localNotifier, localConfigResolver)
 	localIaCScanner := iac.New(gafConfiguration, logger, localInstrumentor, localErrorReporter, localSnykCli, localConfigResolver)
 	localScanner := scanner2.NewDelegatingScanner(engine, tokenService, localScanInitializer, localInstrumentor, localScanNotifier, localSnykApiClient, localAuthenticationService, localNotifier, localScanPersister, localScanStateAggregator, localConfigResolver, localSnykCodeScanner, localIaCScanner, localOpenSourceScanner)
@@ -176,18 +188,6 @@ func buildTestDependencies(t *testing.T, engine workflow.Engine, tokenService ty
 		localCommandService = overrideDeps.CommandService
 	} else {
 		localCommandService = types.NewCommandServiceMock()
-	}
-
-	// Default to the global progress channel so progress.NewTracker() events
-	// (which always write to progress.ToServerProgressChannel) reach the server.
-	// Tests that need per-server isolation must set overrideDeps.ProgressChannel
-	// to a dedicated channel and use progress.NewTrackerWithChannel to route
-	// tracker events to that channel explicitly.
-	var localProgressChannel chan types.ProgressParams
-	if overrideDeps != nil && overrideDeps.ProgressChannel != nil {
-		localProgressChannel = overrideDeps.ProgressChannel
-	} else {
-		localProgressChannel = progress.ToServerProgressChannel
 	}
 
 	w := workspace.New(gafConfiguration, logger, localInstrumentor, localScanner, localHoverService, localScanNotifier, localNotifier, localScanPersister, localScanStateAggregator, localFeatureFlagService, localConfigResolver, engine)

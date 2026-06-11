@@ -305,13 +305,3 @@ func WorkDirFromContext(ctx context.Context) types.FilePath {
 	}
 	return w
 }
-
-// Clone returns a copy of ctx with all its values preserved but its cancellation
-// severed from the parent. context.WithoutCancel is used instead of a whitelist
-// so that any context key (including future additions like DepProgressChannel)
-// is automatically preserved without requiring manual updates to this function.
-// The newCtx parameter is kept for backward compatibility but is no longer used;
-// callers may pass context.Background() or any value — it has no effect.
-func Clone(ctx, _ context.Context) context.Context {
-	return context.WithoutCancel(ctx)
-}
