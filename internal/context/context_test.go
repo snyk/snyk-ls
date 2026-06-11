@@ -473,6 +473,45 @@ func TestClone(t *testing.T) {
 	})
 }
 
+// TestClone_PreservesUnknownKeys verifies that Clone preserves arbitrary context values
+// that are not in the previous whitelist (e.g. DepProgressChannel or any future key).
+// This is the regression test for the cross-test cancellation bug fixed in IDE-2036.
+func TestClone_PreservesUnknownKeys(t *testing.T) {
+	type unknownKey struct{}
+	sentinel := &struct{ id int }{id: 42}
+
+	ctx := stdctx.WithValue(t.Context(), unknownKey{}, sentinel)
+	cloned := Clone(ctx, stdctx.Background())
+
+	got, ok := cloned.Value(unknownKey{}).(interface{ id_field() })
+	_ = got
+	_ = ok
+	// Direct value retrieval — the key type is unexported so use Value directly.
+	raw := cloned.Value(unknownKey{})
+	require.NotNil(t, raw, "Clone must preserve unknown context keys, not silently drop them")
+	require.Same(t, sentinel, raw)
+}
+
+// TestClone_CancellationSevered verifies that Clone severs the cancellation chain:
+// canceling the parent must not cancel the cloned context.
+func TestClone_CancellationSevered(t *testing.T) {
+	parent, cancel := stdctx.WithCancel(t.Context())
+	defer cancel()
+
+	cloned := Clone(parent, stdctx.Background())
+
+	// Cancel the parent.
+	cancel()
+
+	// The cloned context must NOT be done.
+	select {
+	case <-cloned.Done():
+		t.Fatal("Clone must sever the cancellation chain; cloned context was canceled when parent was canceled")
+	default:
+		// expected: cloned context is still alive
+	}
+}
+
 // TestConfigResolverFromContext FC-060: NewContextWithConfigResolver/ConfigResolverFromContext round-trip
 func TestConfigResolverFromContext_RoundTrip(t *testing.T) {
 	ctrl := gomock.NewController(t)

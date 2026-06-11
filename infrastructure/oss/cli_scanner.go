@@ -598,7 +598,7 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 	cliScanner.scheduledScanMtx.Unlock()
 
 	// decouple scheduled scan from session but keep context values
-	newCtx := ctx2.Clone(ctx, context.Background())
+	newCtx := context.WithoutCancel(ctx)
 
 	go func() {
 		select {
