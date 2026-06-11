@@ -651,7 +651,7 @@ func setupScanPrecedenceTest(t *testing.T, codeEnabled, ossEnabled, iacEnabled b
 	workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder, types.FilePath, di.Dependencies,
 ) {
 	t.Helper()
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
 
 	setupTestConfigIsolation(t, engine)
 
@@ -847,7 +847,7 @@ func Test_SmokeScanPrecedence_UserOverrideDisablesProduct(t *testing.T) {
 func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing.T) {
 	t.Parallel()
 	acquireCodeAPISlot(t)
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
 
 	setupTestConfigIsolation(t, engine)
 
