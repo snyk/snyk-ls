@@ -59,6 +59,20 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
+// codeAPISem limits the number of tests that concurrently use the Snyk Code API
+// within a single shard. The Code API throttles when ~6+ scans run simultaneously,
+// manifesting as context canceled or indefinite hangs. 3 concurrent Code scans
+// is within the API's tolerance for the CI test org.
+var codeAPISem = make(chan struct{}, 3)
+
+// acquireCodeAPISlot acquires a slot in the Code API semaphore and releases it
+// via t.Cleanup. Call this at the start of any test that triggers a Snyk Code scan.
+func acquireCodeAPISlot(t *testing.T) {
+	t.Helper()
+	codeAPISem <- struct{}{}
+	t.Cleanup(func() { <-codeAPISem })
+}
+
 func Test_SmokeInstanceTest(t *testing.T) {
 	t.Parallel()
 	endpoint := os.Getenv("SNYK_API")
@@ -229,6 +243,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
 	t.Run("adds issues to cache correctly", func(t *testing.T) {
 		t.Parallel()
+		acquireCodeAPISlot(t)
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_1")
 		loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 		enableOnlyProducts(t, engine, product.ProductOpenSource, product.ProductCode)
@@ -312,6 +327,7 @@ func Test_SmokeIssueCaching(t *testing.T) {
 
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
 		t.Parallel()
+		acquireCodeAPISlot(t)
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_1")
 		loc, jsonRPCRecorder, deps2 := setupServer(t, engine, tokenService, WithRealDI())
 		enableOnlyProducts(t, engine, product.ProductOpenSource, product.ProductCode)
@@ -592,6 +608,7 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 
 func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.TokenServiceImpl, repo string, commit string, file1 string, file2 string, hasVulns bool, endpoint string, products ...product.Product) {
 	t.Helper()
+	acquireCodeAPISlot(t)
 	if endpoint != "" && endpoint != "/v1" {
 		setSmokeAPIEndpoint(endpoint)
 	}
@@ -1236,6 +1253,7 @@ func checkFeatureFlagStatus(t *testing.T, engine workflow.Engine, loc *server.Lo
 
 func Test_SmokeSnykCodeFileScan(t *testing.T) {
 	t.Parallel()
+	acquireCodeAPISlot(t)
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
@@ -1254,6 +1272,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 
 func Test_SmokeUncFilePath(t *testing.T) {
 	t.Parallel()
+	acquireCodeAPISlot(t)
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	testsupport.OnlyOnWindows(t, "testing windows UNC file paths")
 	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
@@ -1281,6 +1300,7 @@ func Test_SmokeUncFilePath(t *testing.T) {
 
 func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 	t.Parallel()
+	acquireCodeAPISlot(t)
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductCode)
@@ -1310,6 +1330,7 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 	t.Parallel()
+	acquireCodeAPISlot(t)
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductCode)
@@ -1337,6 +1358,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 	t.Parallel()
+	acquireCodeAPISlot(t)
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
 	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductCode)
@@ -1369,6 +1391,7 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 // walk up parent directories to find .git. The fix uses PlainOpenWithOptions with DetectDotGit.
 func Test_SmokeSnykCodeDelta_SubfolderWorkspace(t *testing.T) {
 	t.Parallel()
+	acquireCodeAPISlot(t)
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	testutil.OnlyEnableCode(t, engine)
@@ -1413,8 +1436,10 @@ app.get('/unique_subfolder_test', function(req, res) {
 	assertDeltaNewIssuesInFile(t, jsonRPCRecorder, subfolderPath, newVulnFilePath)
 }
 
+// Note: t.Parallel() omitted — the unmanaged CLI scan (--unmanaged for C/C++ repos)
+// is CPU/IO-intensive and consistently times out at maxIntegTestDuration when competing
+// with parallel shard-1 tests for CLI resources and API bandwidth.
 func Test_SmokeScanUnmanaged(t *testing.T) {
-	t.Parallel()
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_1")
 	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
