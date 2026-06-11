@@ -651,7 +651,7 @@ func setupScanPrecedenceTest(t *testing.T, codeEnabled, ossEnabled, iacEnabled b
 	workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder, types.FilePath, di.Dependencies,
 ) {
 	t.Helper()
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
 
 	setupTestConfigIsolation(t, engine)
 
@@ -732,7 +732,8 @@ func Test_SmokeScanPrecedence_OSSEnabled_CodeDisabled(t *testing.T) {
 // Test_SmokeScanPrecedence_CodeEnabled_OSSDisabled verifies that when Code is enabled
 // and OSS is disabled globally, the LSP server runs a Code scan but NOT an OSS scan.
 func Test_SmokeScanPrecedence_CodeEnabled_OSSDisabled(t *testing.T) {
-	t.Parallel()
+	// Note: t.Parallel() omitted — concurrent non-Code SHARD_3 tests interfere
+	// with Code scan context initialization under high parallel load.
 	acquireCodeAPISlot(t)
 	engine, _, _, jsonRpcRecorder, folder, deps := setupScanPrecedenceTest(t, true, false, false)
 
@@ -766,7 +767,8 @@ func Test_SmokeScanPrecedence_AllDisabled_NoScansRun(t *testing.T) {
 // 4. Trigger workspace scan via executeCommand
 // 5. Verify OSS scan runs
 func Test_SmokeScanPrecedence_UserOverrideEnablesProduct(t *testing.T) {
-	t.Parallel()
+	// Note: t.Parallel() omitted — concurrent non-Code SHARD_3 tests interfere
+	// with Code scan context initialization under high parallel load.
 	acquireCodeAPISlot(t)
 	engine, _, loc, jsonRpcRecorder, folder, deps := setupScanPrecedenceTest(t, true, false, false)
 
@@ -810,7 +812,8 @@ func Test_SmokeScanPrecedence_UserOverrideEnablesProduct(t *testing.T) {
 // Test_SmokeScanPrecedence_UserOverrideDisablesProduct verifies that when a product
 // is enabled globally but a folder override disables it, no scan runs for that product.
 func Test_SmokeScanPrecedence_UserOverrideDisablesProduct(t *testing.T) {
-	t.Parallel()
+	// Note: t.Parallel() omitted — concurrent non-Code SHARD_3 tests interfere
+	// with Code scan context initialization under high parallel load.
 	acquireCodeAPISlot(t)
 	engine, _, loc, jsonRpcRecorder, folder, deps := setupScanPrecedenceTest(t, true, false, false)
 
@@ -845,9 +848,10 @@ func Test_SmokeScanPrecedence_UserOverrideDisablesProduct(t *testing.T) {
 // a severity filter (Critical+High only) is configured at initialization, published
 // diagnostics only contain issues matching the allowed severities.
 func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing.T) {
-	t.Parallel()
+	// Note: t.Parallel() omitted — concurrent non-Code SHARD_3 tests interfere
+	// with Code scan context initialization under high parallel load.
 	acquireCodeAPISlot(t)
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
 
 	setupTestConfigIsolation(t, engine)
 
@@ -915,7 +919,8 @@ func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing
 // when Code and OSS are enabled, both scan types execute successfully.
 // IaC is excluded because the test org lacks the infrastructureAsCode entitlement.
 func Test_SmokeScanPrecedence_EnableAllProducts_AllScansRun(t *testing.T) {
-	t.Parallel()
+	// Note: t.Parallel() omitted — concurrent non-Code SHARD_3 tests interfere
+	// with Code scan context initialization under high parallel load.
 	acquireCodeAPISlot(t)
 	engine, _, _, jsonRpcRecorder, folder, deps := setupScanPrecedenceTest(t, true, true, false)
 
