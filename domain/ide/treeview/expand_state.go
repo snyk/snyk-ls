@@ -28,7 +28,7 @@ type ExpandState struct {
 
 // globalExpandState is the package-level singleton used by emitters and commands.
 // Tests should create their own via NewExpandState() for isolation.
-var globalExpandState = NewExpandState()
+var globalExpandState = NewExpandState() //nolint:gochecknoglobals // legacy process-global state
 
 // GlobalExpandState returns the shared expand state used across the tree view pipeline.
 func GlobalExpandState() *ExpandState {

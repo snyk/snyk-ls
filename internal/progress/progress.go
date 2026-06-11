@@ -30,9 +30,9 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var trackersMutex sync.RWMutex
-var trackers = make(map[types.ProgressToken]*Tracker)
-var ToServerProgressChannel = make(chan types.ProgressParams, 1000)
+var trackersMutex sync.RWMutex                                      //nolint:gochecknoglobals // legacy process-global tracker registry; per-session isolation is a follow-up (IDE-2036)
+var trackers = make(map[types.ProgressToken]*Tracker)               //nolint:gochecknoglobals // legacy process-global tracker registry; per-session isolation is a follow-up (IDE-2036)
+var ToServerProgressChannel = make(chan types.ProgressParams, 1000) //nolint:gochecknoglobals // process-global progress channel; per-session isolation is a follow-up (IDE-2036)
 var _ ui.ProgressBar = (*Tracker)(nil)
 
 type Tracker struct {

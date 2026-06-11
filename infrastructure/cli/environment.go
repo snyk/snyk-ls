@@ -29,15 +29,15 @@ import (
 )
 
 var (
-	ApiEnvVar                           = strings.ToUpper(configuration.API_URL)
-	TokenEnvVar                         = strings.ToUpper(configuration.AUTHENTICATION_TOKEN)
-	DisableAnalyticsEnvVar              = strings.ToUpper(configuration.ANALYTICS_DISABLED)
-	SnykOauthTokenEnvVar                = strings.ToUpper(configuration.AUTHENTICATION_BEARER_TOKEN)
-	OAuthEnabledEnvVar                  = strings.ToUpper(configuration.FF_OAUTH_AUTH_FLOW_ENABLED)
-	IntegrationNameEnvVarKey            = "SNYK_INTEGRATION_NAME"
-	IntegrationVersionEnvVarKey         = "SNYK_INTEGRATION_VERSION"
-	IntegrationEnvironmentEnvVarKey     = "SNYK_INTEGRATION_ENVIRONMENT"
-	IntegrationEnvironmentVersionEnvVar = "SNYK_INTEGRATION_ENVIRONMENT_VERSION"
+	ApiEnvVar                           = strings.ToUpper(configuration.API_URL)                     //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
+	TokenEnvVar                         = strings.ToUpper(configuration.AUTHENTICATION_TOKEN)        //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
+	DisableAnalyticsEnvVar              = strings.ToUpper(configuration.ANALYTICS_DISABLED)          //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
+	SnykOauthTokenEnvVar                = strings.ToUpper(configuration.AUTHENTICATION_BEARER_TOKEN) //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
+	OAuthEnabledEnvVar                  = strings.ToUpper(configuration.FF_OAUTH_AUTH_FLOW_ENABLED)  //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
+	IntegrationNameEnvVarKey            = "SNYK_INTEGRATION_NAME"                                    //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
+	IntegrationVersionEnvVarKey         = "SNYK_INTEGRATION_VERSION"                                 //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
+	IntegrationEnvironmentEnvVarKey     = "SNYK_INTEGRATION_ENVIRONMENT"                             //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
+	IntegrationEnvironmentVersionEnvVar = "SNYK_INTEGRATION_ENVIRONMENT_VERSION"                     //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 )
 
 // AppendCliEnvironmentVariables Returns the input array with additional variables used in the CLI run in the form of "key=value".

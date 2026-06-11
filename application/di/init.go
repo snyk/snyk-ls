@@ -59,25 +59,25 @@ import (
 )
 
 var (
-	scanInitializer       initialize.Initializer
-	authenticationService authentication.AuthenticationService
-	learnService          learn.Service
-	errorReporter         er.ErrorReporter
-	installer             install.Installer
-	hoverService          hover.Service
-	scanner               scanner2.Scanner
-	featureFlagService    featureflag.Service
-	scanNotifier          scanner2.ScanNotifier
-	codeActionService     *codeaction.CodeActionsService
-	fileWatcher           *watcher.FileWatcher
-	initMutex             = &sync.Mutex{}
-	notifier              domainNotify.Notifier
-	scanPersister         persistence.ScanSnapshotPersister
-	scanStateAggregator   scanstates.Aggregator
-	treeEmitterInstance   *treeview.TreeScanStateEmitter
-	ldxSyncService        command.LdxSyncService
-	configResolver        types.ConfigResolverInterface
-	commandService        types.CommandService
+	scanInitializer       initialize.Initializer               //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
+	authenticationService authentication.AuthenticationService //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
+	learnService          learn.Service                        //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
+	errorReporter         er.ErrorReporter                     //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
+	installer             install.Installer                    //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
+	hoverService          hover.Service                        //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
+	scanner               scanner2.Scanner                     //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
+	featureFlagService    featureflag.Service                  //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
+	scanNotifier          scanner2.ScanNotifier                //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
+	codeActionService     *codeaction.CodeActionsService       //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
+	fileWatcher           *watcher.FileWatcher                 //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
+	initMutex             = &sync.Mutex{}                      //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
+	notifier              domainNotify.Notifier                //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
+	scanPersister         persistence.ScanSnapshotPersister    //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
+	scanStateAggregator   scanstates.Aggregator                //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
+	treeEmitterInstance   *treeview.TreeScanStateEmitter       //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
+	ldxSyncService        command.LdxSyncService               //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
+	configResolver        types.ConfigResolverInterface        //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
+	commandService        types.CommandService                 //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
 )
 
 type Dependencies struct {

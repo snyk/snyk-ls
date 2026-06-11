@@ -179,7 +179,7 @@ func getRangeFromNode(issueDepNode *ast.Node) types.Range {
 // currently convertScanResultToIssues is the only place where a
 // packageIssueCache is changed at all, so the mutex is defined here
 // to keep it close to the code that needs it.
-var packageIssueCacheMutex sync.Mutex
+var packageIssueCacheMutex sync.Mutex //nolint:gochecknoglobals // required guard for mutable package state
 
 func convertScanResultToIssues(engine workflow.Engine, configResolver types.ConfigResolverInterface, res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte, learnService learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue, format string, folderConfig *types.FolderConfig) []types.Issue {
 	logger := engine.GetLogger().With().Str("method", "convertScanResultToIssues").Logger()

@@ -20,6 +20,7 @@ linters:
     - exhaustive
     - forbidigo
     - forcetypeassert
+    - gochecknoglobals
     - gocyclo
     - goprintffuncname
     - misspell
@@ -135,6 +136,10 @@ linters:
         path: internal/types/config_writers\.go
       - linters: [forbidigo]
         path: _test\.go
+      - linters: [gochecknoglobals]
+        path: _test\.go
+      - linters: [gochecknoglobals]
+        path: fake_.*\.go|mock_.*\.go|.*_mock\.go
     paths:
       - docs
       - licenses

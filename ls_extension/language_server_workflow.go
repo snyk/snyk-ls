@@ -39,7 +39,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/user_interface"
 )
 
-var WORKFLOWID_LS = workflow.NewWorkflowIdentifier("language-server")
+var WORKFLOWID_LS = workflow.NewWorkflowIdentifier("language-server") //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 
 const configCacheTTL = 30 * time.Second
 

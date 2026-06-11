@@ -63,7 +63,7 @@ const svgPMLinux = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" 
 
 // packageManagerSVGs maps lowercase package manager keys to their inline SVG strings.
 // Keys mirror the mapping in IntelliJ's PackageManagerIconProvider.
-var packageManagerSVGs = map[string]string{
+var packageManagerSVGs = map[string]string{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	"gradle":         svgPMGradle,
 	"maven":          svgPMMaven,
 	"npm":            svgPMNpm,

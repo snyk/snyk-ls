@@ -70,7 +70,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
-var cacheCheckCancel context.CancelFunc
+var cacheCheckCancel context.CancelFunc //nolint:gochecknoglobals // process-global cancel for the periodic cache-check goroutine
 
 func Start(engine workflow.Engine, tokenService *config.TokenServiceImpl) {
 	var srv *jrpc2.Server

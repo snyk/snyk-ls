@@ -82,7 +82,7 @@ type HtmlRenderer struct {
 	featureFlagService   featureflag.Service
 }
 
-var codeRenderer *HtmlRenderer
+var codeRenderer *HtmlRenderer //nolint:gochecknoglobals // legacy process-global state
 
 func GetHTMLRenderer(engine workflow.Engine, featureFlagService featureflag.Service) (*HtmlRenderer, error) {
 	if codeRenderer != nil && codeRenderer.engine == engine {

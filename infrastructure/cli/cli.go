@@ -50,9 +50,9 @@ type SnykCli struct {
 	configResolver types.ConfigResolverInterface
 }
 
-var Mutex = &sync.Mutex{}
+var Mutex = &sync.Mutex{} //nolint:gochecknoglobals // process-global CLI concurrency limiter
 
-var concurrencyLimit = calcConcurrencyLimit()
+var concurrencyLimit = calcConcurrencyLimit() //nolint:gochecknoglobals // process-global CLI concurrency limiter
 
 func calcConcurrencyLimit() int {
 	cpus := runtime.NumCPU()

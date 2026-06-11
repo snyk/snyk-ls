@@ -67,7 +67,7 @@ const (
 type OpenBrowserFunc func(url string)
 
 var (
-	DefaultOpenBrowserFunc OpenBrowserFunc = func(url string) {
+	DefaultOpenBrowserFunc OpenBrowserFunc = func(url string) { //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 		browser.Stdout = log.Logger
 		_ = browser.OpenURL(url)
 	}
