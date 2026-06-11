@@ -261,6 +261,11 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	// progressStopChan is per-server: only this server's shutdown handler can stop
 	// this server's progress listener, preventing cross-test signal interference.
 	progressStopChan := make(chan bool, 1)
+	// scanCtx is a server-lifetime context for workspace scan goroutines.
+	// Canceling it on shutdown ensures in-flight scan goroutines exit cleanly,
+	// which prevents file-handle leaks on Windows when t.TempDir() cleans up
+	// after a test that spawned scan goroutines [IDE-2036].
+	scanCtx, scanCancel := context.WithCancel(context.Background())
 	// Use the per-server ProgressChannel from deps so that progress events from
 	// this server's scanners are never misrouted to another server's listener.
 	// Fall back to the global channel only when deps has no channel set (e.g.
@@ -270,7 +275,7 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 		progressCh = progress.ToServerProgressChannel
 	}
 	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv, progressStopChan, progressCh))
-	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv))
+	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv, scanCtx))
 	handlers["textDocument/didChange"] = enrich(textDocumentDidChangeHandler(conf))
 	handlers["textDocument/didClose"] = enrich(noOpHandler())
 	handlers[textDocumentDidOpenOperation] = enrich(textDocumentDidOpenHandler(conf))
@@ -282,7 +287,7 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	handlers["textDocument/willSave"] = enrich(noOpHandler())
 	handlers["textDocument/willSaveWaitUntil"] = enrich(noOpHandler())
 	handlers["codeAction/resolve"] = enrich(codeActionResolveHandler(logger, deps.CodeActionService, srv))
-	handlers["shutdown"] = enrich(shutdownHandler(progressStopChan))
+	handlers["shutdown"] = enrich(shutdownHandler(progressStopChan, scanCancel))
 	handlers["exit"] = enrich(exitHandler(srv))
 	handlers["workspace/didChangeWorkspaceFolders"] = enrich(workspaceDidChangeWorkspaceFoldersHandler(conf, engine, srv))
 	handlers["workspace/willDeleteFiles"] = enrich(workspaceWillDeleteFilesHandler(conf))
@@ -842,7 +847,7 @@ func getDownloadURL(conf configuration.Configuration, engine workflow.Engine, pr
 	}
 }
 
-func initializedHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server) handler.Func {
+func initializedHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server, scanCtx context.Context) handler.Func { //nolint:revive // scanCtx follows stdlib convention for context parameters passed by value
 	return handler.New(func(ctx context.Context, params types.InitializedParams) (any, error) {
 		initialLogger := ctx2.LoggerFromContext(ctx)
 		defer func() {
@@ -906,7 +911,7 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 		autoScanEnabled := configRes.GetBool(types.SettingScanAutomatic, nil)
 		if autoScanEnabled {
 			logger.Info().Msg("triggering workspace scan after successful initialization")
-			config.GetWorkspace(conf).ScanWorkspace(context.Background())
+			config.GetWorkspace(conf).ScanWorkspace(scanCtx)
 		} else {
 			msg := fmt.Sprintf(
 				"No automatic workspace scan on initialization: autoScanEnabled=%v",
@@ -1079,7 +1084,7 @@ func monitorClientProcess(pid int) time.Duration {
 	return time.Since(start)
 }
 
-func shutdownHandler(progressStopChan chan<- bool) jrpc2.Handler {
+func shutdownHandler(progressStopChan chan<- bool, scanCancel context.CancelFunc) jrpc2.Handler {
 	return handler.New(func(ctx context.Context) (any, error) {
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "Shutdown").Logger()
 		logger.Info().Msg("ENTERING")
@@ -1097,6 +1102,10 @@ func shutdownHandler(progressStopChan chan<- bool) jrpc2.Handler {
 		case progressStopChan <- true:
 		default:
 		}
+		// Cancel the server-lifetime scan context so that any in-flight workspace
+		// scan goroutines exit cleanly. context.WithCancel cancel funcs are
+		// idempotent, so a second shutdown call is safe.
+		scanCancel()
 		mustNotifierFromContext(ctx).DisposeListener()
 		command.StopPendingRescanTimers()
 		return nil, nil
