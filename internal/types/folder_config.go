@@ -585,11 +585,11 @@ func (fc *FolderConfig) applyPreferredOrg(update *LspFolderConfig, handled map[s
 	// Blanking preferredOrg means "use global org" (not auto-org), so preserve
 	// curOrgSetByUser — unless the global org is also blank, in which case revert
 	// to auto-org mode (orgSetByUser=false at all levels).
-	// GetGlobalString reads via UserGlobalKey (phase-2 lookup), which correctly
-	// returns "" when SetOrganization("") was explicitly called, unlike conf.Get/
-	// conf.GetString which invoke the defaultFunc and return a non-empty fallback.
+	// SettingLastSetOrganization is written by SetOrganization via SetGlobalUser
+	// and lives at UserGlobalKey — no GAF default function, no /rest/self call.
+	// Returns "" when the user never called SetOrganization or explicitly cleared it.
 	curOrgSetByUser := getBoolFromConfig(conf, fp, SettingOrgSetByUser)
-	globalOrg := GetGlobalString(conf, SettingOrganization)
+	globalOrg := GetGlobalString(conf, SettingLastSetOrganization)
 	orgSetByUser := preferredOrg != "" || (curOrgSetByUser && globalOrg != "")
 	conf.PersistInStorage(keyPreferred)
 	conf.PersistInStorage(keyOrgSetByUser)

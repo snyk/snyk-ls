@@ -638,15 +638,18 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		if err := addWorkspaceFolders(ctx, conf, &logger, engine, params); err != nil {
 			return nil, err
 		}
+
 		// Prime ORGANIZATION for hot-path GlobalOrg(); see GetGlobalOrganization.
 		// Must run before RefreshConfigFromLdxSync and HandleFolders, which rely
 		// on the resolver's global-org fallback for folders without a preferred org.
 		_ = types.GetGlobalOrganization(conf)
-		// withContext guarantees LdxSyncService is non-nil before any handler runs.
-		mustLdxSyncServiceFromContext(ctx).RefreshConfigFromLdxSync(ctx, conf, engine, &logger, config.GetWorkspace(conf).Folders(), nil)
+
 		if err := InitializeSettings(ctx, conf, engine, &logger, params.InitializationOptions); err != nil {
 			return nil, err
 		}
+
+		// withContext guarantees LdxSyncService is non-nil before any handler runs.
+		mustLdxSyncServiceFromContext(ctx).RefreshConfigFromLdxSync(ctx, conf, engine, &logger, config.GetWorkspace(conf).Folders(), nil)
 
 		startClientMonitor(params, logger)
 
