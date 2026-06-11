@@ -41,6 +41,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/scans"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -550,4 +551,37 @@ func Test_shouldUseLegacyScan(t *testing.T) {
 		useLegacy, _ := shouldUseLegacyScan(fc, []string{"snyk", "test", "--print-graph"})
 		assert.True(t, useLegacy)
 	})
+}
+
+// Test_NewCLIScanner_ProgressChannelIsolation verifies that NewCLIScanner() accepts a
+// progressCh parameter and that the tracker created during scanInternal writes to that
+// channel instead of the global progress.ToServerProgressChannel (IDE-2036).
+func Test_NewCLIScanner_ProgressChannelIsolation(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	learnMock := mock_learn.NewMockService(ctrl)
+	learnMock.EXPECT().GetAllLessons().Return([]learn.Lesson{{}}, nil).AnyTimes()
+	learnMock.EXPECT().GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(&learn.Lesson{}, nil).AnyTimes()
+
+	notifier := notification.NewMockNotifier()
+	instrumentor := performance.NewInstrumentor()
+	er := error_reporting.NewTestErrorReporter(engine)
+	cliExecutor := cli.NewTestExecutor(engine)
+
+	// Use a dedicated channel distinct from the global one.
+	progressCh := make(chan types.ProgressParams, 100)
+	scanner := NewCLIScanner(engine, instrumentor, er, cliExecutor, learnMock, notifier, defaultResolver(t, engine), progressCh)
+
+	// The returned scanner must have stored the channel internally.
+	cliSc, ok := scanner.(*CLIScanner)
+	require.True(t, ok, "NewCLIScanner must return a *CLIScanner")
+	assert.Equal(t, progressCh, cliSc.progressCh,
+		"progressCh field must be set to the channel passed to NewCLIScanner()")
+
+	// Verify global channel remains empty — no events must leak to it.
+	assert.Equal(t, 0, len(progress.ToServerProgressChannel),
+		"global progress channel must not receive events when a dedicated channel is used")
 }

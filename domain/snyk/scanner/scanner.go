@@ -230,6 +230,10 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 	tokenChangeChannel := sc.tokenService.TokenChangesChannel()
 	done := make(chan bool)
 	defer close(done)
+	// serverCtx is the server-lifetime context (scanCtx) — canceled on server shutdown.
+	// We save it before adding the per-scan cancelFunc so that reference scans
+	// are not detached from the server lifecycle.
+	serverCtx := ctx
 	ctx, cancelFunc := context.WithCancel(ctx)
 	defer cancelFunc()
 
@@ -324,7 +328,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 			go func() {
 				defer referenceBranchScanWaitGroup.Done()
 				isSingleFileScan := pathToScan != folderPath
-				scanTypeCtx := ctx2.NewContextWithDeltaScanType(context.WithoutCancel(ctx), ctx2.Reference)
+				scanTypeCtx := ctx2.NewContextWithDeltaScanType(serverCtx, ctx2.Reference)
 				refScanCtx, refLogger := sc.enrichContextAndLogger(scanTypeCtx, scanLogger, folderPath, pathToScan)
 
 				// only trigger a base scan if we are scanning an actual working directory. It could also be a
