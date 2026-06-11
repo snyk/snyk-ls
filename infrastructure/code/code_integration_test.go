@@ -37,6 +37,7 @@ import (
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -91,6 +92,7 @@ func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 		newTestCodeErrorReporter(),
 		NewFakeCodeScannerClient,
 		resolver,
+		progress.ToServerProgressChannel,
 	)
 
 	// Create folder configs with SAST enabled
