@@ -35,6 +35,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
@@ -59,7 +60,7 @@ func Test_Scan_UsesConfigResolverFromContext(t *testing.T) {
 		Return(false).
 		Times(1)
 
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine), progress.ToServerProgressChannel)
 	folderConfig := &types.FolderConfig{FolderPath: "."}
 	ctx := ctx2.NewContextWithConfigResolver(context.Background(), mockResolver)
 	ctx = ctx2.NewContextWithFolderConfig(ctx, folderConfig)
@@ -83,7 +84,7 @@ func Test_Scan_FallsBackToStructFieldWhenNoResolverInContext(t *testing.T) {
 		Return(false).
 		Times(1)
 
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), mockResolver)
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), mockResolver, progress.ToServerProgressChannel)
 	folderConfig := &types.FolderConfig{FolderPath: "."}
 	ctx := ctx2.NewContextWithFolderConfig(context.Background(), folderConfig)
 
@@ -97,7 +98,7 @@ func Test_Scan_FallsBackToStructFieldWhenNoResolverInContext(t *testing.T) {
 func Test_Scan_IsInstrumented(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	instrumentor := performance.NewInstrumentor()
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), instrumentor, error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), instrumentor, error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine), progress.ToServerProgressChannel)
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), &types.FolderConfig{FolderPath: "."})
 
 	_, _ = scanner.Scan(ctx, "fake.yml")
@@ -114,7 +115,7 @@ func Test_Scan_IsInstrumented(t *testing.T) {
 
 func Test_toHover_asHTML(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine), progress.ToServerProgressChannel)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 
 	h := scanner.getExtendedMessage(sampleIssue(), nil)
@@ -128,7 +129,7 @@ func Test_toHover_asHTML(t *testing.T) {
 
 func Test_toHover_asMD(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine), progress.ToServerProgressChannel)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatMd)
 
 	h := scanner.getExtendedMessage(sampleIssue(), nil)
@@ -144,7 +145,7 @@ func Test_Scan_CancelledContext_DoesNotScan(t *testing.T) {
 	// Arrange
 	engine := testutil.UnitTest(t)
 	cliMock := cli.NewTestExecutor(engine)
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine), progress.ToServerProgressChannel)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	ctx = ctx2.NewContextWithFolderConfig(ctx, &types.FolderConfig{FolderPath: "."})
@@ -176,7 +177,7 @@ func Test_Scan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, workspacePath, expectedOrg, true)
 
 	cliMock := cli.NewTestExecutor(engine)
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine), progress.ToServerProgressChannel)
 
 	// Act - scan a specific file within the workspace
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
@@ -206,7 +207,7 @@ func Test_Scan_SubfolderScan_UsesFolderConfigOrganization(t *testing.T) {
 	types.SetPreferredOrgAndOrgSetByUser(engineConf, workspacePath, expectedOrg, true)
 
 	cliMock := cli.NewTestExecutor(engine)
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine), progress.ToServerProgressChannel)
 
 	// Act - scan a subfolder (not the workspace root)
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
@@ -238,7 +239,7 @@ func Test_Scan_UsesFolderConfigOrg(t *testing.T) {
 			types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath, tt.expectedOrg, true)
 
 			cliMock := cli.NewTestExecutor(engine)
-			scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))
+			scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine), progress.ToServerProgressChannel)
 
 			ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
 			_, _ = scanner.Scan(ctx, folderPath)
@@ -287,7 +288,7 @@ func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 	passedFolderConfig.ConfigResolver = types.NewMinimalConfigResolver(passedConf)
 
 	cliMock := cli.NewTestExecutor(engine)
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine), progress.ToServerProgressChannel)
 
 	// Act
 	ctx := ctx2.NewContextWithFolderConfig(t.Context(), passedFolderConfig)
@@ -308,7 +309,7 @@ func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 	engine := testutil.UnitTest(t)
 
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine), progress.ToServerProgressChannel)
 
 	results := []iacScanResult{
 		{
@@ -335,7 +336,7 @@ func Test_retrieveIssues_IgnoresParsingErrors(t *testing.T) {
 func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	sampleIssue := sampleIssue()
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine), progress.ToServerProgressChannel)
 	issue, err := scanner.toIssue("/path/to/issue", "test.yml", sampleIssue, "", nil)
 
 	expectedAdditionalData := snyk.IaCIssueData{
@@ -379,7 +380,7 @@ func Test_createIssueDataForCustomUI_SuccessfullyParses(t *testing.T) {
 func Test_toIssue_issueHasHtmlTemplate(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	sampleIssue := sampleIssue()
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), defaultResolver(engine), progress.ToServerProgressChannel)
 	issue, err := scanner.toIssue("/path/to/issue", "test.yml", sampleIssue, "", nil)
 
 	assert.NoError(t, err)
@@ -437,7 +438,7 @@ func Test_parseIacResult(t *testing.T) {
 	testResult := "testdata/RBAC-iac-result.json"
 	result, err := os.ReadFile(testResult)
 	assert.NoError(t, err)
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine), progress.ToServerProgressChannel)
 
 	issues, err := scanner.unmarshal(result)
 	assert.NoError(t, err)
@@ -453,7 +454,7 @@ func Test_parseIacResult_failOnInvalidPath(t *testing.T) {
 	testResult := "testdata/RBAC-iac-result-invalid-path.json"
 	result, err := os.ReadFile(testResult)
 	assert.NoError(t, err)
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine))
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine), progress.ToServerProgressChannel)
 
 	issues, err := scanner.unmarshal(result)
 	assert.NoError(t, err)
@@ -462,6 +463,30 @@ func Test_parseIacResult_failOnInvalidPath(t *testing.T) {
 	assert.Error(t, err)
 
 	assert.Len(t, retrieveIssues, 0)
+}
+
+// Test_New_ProgressChannelIsolation verifies that New() accepts a progressCh parameter
+// and that the tracker created during Scan writes to that channel instead of the global
+// progress.ToServerProgressChannel. This is the unit-level guard for IDE-2036 isolation.
+func Test_New_ProgressChannelIsolation(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	// Use a dedicated channel that is distinct from the global one.
+	progressCh := make(chan types.ProgressParams, 100)
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(),
+		performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine),
+		cli.NewTestExecutor(engine), defaultResolver(engine), progressCh)
+	folderConfig := &types.FolderConfig{FolderPath: "."}
+	ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
+
+	// Scan a yaml file so the tracker fires. It will fail (no real CLI) but the
+	// progress Begin event should still have been sent before the CLI is called.
+	_, _ = scanner.Scan(ctx, "fake.yml")
+
+	// The progress event must have gone to our dedicated channel, not the global one.
+	assert.Greater(t, len(progressCh), 0,
+		"progress events should be routed to the channel passed to New()")
+	assert.Equal(t, 0, len(progress.ToServerProgressChannel),
+		"global progress channel must not receive events when a dedicated channel is used")
 }
 
 func sampleIssue() iacIssue {

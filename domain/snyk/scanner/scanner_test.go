@@ -490,6 +490,74 @@ func TestEnrichContextAndLogger_PreservesExistingDeps(t *testing.T) {
 	require.Same(t, folderConfig, fc, "FolderConfig should be the same instance")
 }
 
+// Test_ServerCtxCanceled_RefScanCtxCanceled verifies that when the outer
+// server-lifetime context is canceled, the reference scan goroutine's context
+// is also canceled. With context.WithoutCancel this test fails because the
+// reference scan context is permanently non-cancelable. After the fix (using
+// serverCtx instead), the reference scan context inherits cancellation from
+// the server-lifetime context.
+func Test_ServerCtxCanceled_RefScanCtxCanceled(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	// Arrange: valid token so the scan proceeds.
+	tokenService.SetToken(engine.GetConfiguration(), uuid.New().String())
+	wdScanStarted := make(chan bool, 1)
+	wdScanRelease := make(chan bool, 1)
+
+	mockScanner := mock_types.NewMockProductScanner(ctrl)
+	mockScanner.EXPECT().Product().Return(product.ProductCode).AnyTimes()
+	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
+	// WD scan: signal start, block until released.
+	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ types.FilePath) ([]types.Issue, error) {
+			wdScanStarted <- true
+			<-wdScanRelease
+			return []types.Issue{}, nil
+		}).Times(1)
+
+	sc, _ := setupScanner(t, engine, tokenService, mockScanner)
+
+	// serverCtx simulates the server-lifetime context that shutdownHandler cancels.
+	serverCtx, serverCancel := context.WithCancel(t.Context())
+	defer serverCancel()
+
+	// Capture the context passed to processResults for the reference scan.
+	var refScanCtxErr error
+	refScanDone := make(chan bool, 1)
+	captureProcessor := func(ctx context.Context, data types.ScanData) {
+		if data.IsReferenceScan {
+			refScanCtxErr = ctx.Err()
+			refScanDone <- true
+		}
+	}
+
+	done := make(chan bool, 1)
+	go func() {
+		// pathToScan == folderPath ("") triggers the reference scan goroutine.
+		fc := &types.FolderConfig{FolderPath: ""}
+		scanCtx := ctx2.NewContextWithFolderConfig(serverCtx, fc)
+		sc.Scan(scanCtx, "", captureProcessor, nil)
+		done <- true
+	}()
+
+	// Wait for WD scan to start, then cancel the server context (simulating shutdown).
+	testsupport.RequireEventuallyReceive(t, wdScanStarted, 5*time.Second, 10*time.Millisecond, "WD scan should start")
+	serverCancel()
+	wdScanRelease <- true
+
+	// Wait for Scan to return.
+	testsupport.RequireEventuallyReceive(t, done, 5*time.Second, 10*time.Millisecond, "Scan should complete")
+
+	// Wait for the reference scan processResults callback to fire.
+	testsupport.RequireEventuallyReceive(t, refScanDone, 5*time.Second, 10*time.Millisecond, "reference scan should complete")
+
+	// The reference scan context must be canceled because serverCtx was canceled.
+	assert.ErrorIs(t, refScanCtxErr, context.Canceled,
+		"reference scan context must be canceled when the server-lifetime context is canceled")
+}
+
 func TestDelegatingConcurrentScanner_getPersistHash_ErrorOnMissingReference(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)

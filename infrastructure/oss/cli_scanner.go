@@ -104,9 +104,10 @@ type CLIScanner struct {
 	engine                  workflow.Engine
 	logger                  *zerolog.Logger
 	configResolver          types.ConfigResolverInterface
+	progressCh              chan types.ProgressParams
 }
 
-func NewCLIScanner(engine workflow.Engine, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, learnService learn.Service, notifier noti.Notifier, configResolver types.ConfigResolverInterface) types.ProductScanner {
+func NewCLIScanner(engine workflow.Engine, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, learnService learn.Service, notifier noti.Notifier, configResolver types.ConfigResolverInterface, progressCh chan types.ProgressParams) types.ProductScanner {
 	scanner := CLIScanner{
 		instrumentor:            instrumentor,
 		errorReporter:           errorReporter,
@@ -125,6 +126,7 @@ func NewCLIScanner(engine workflow.Engine, instrumentor performance.Instrumentor
 		engine:                  engine,
 		logger:                  engine.GetLogger(),
 		configResolver:          configResolver,
+		progressCh:              progressCh,
 		supportedFiles: map[string]bool{
 			"yarn.lock":               true,
 			"package-lock.json":       true,
@@ -248,7 +250,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	ctx, cancel := context.WithCancel(s.Context())
 	defer cancel()
 
-	p := progress.NewTracker(true, cliScanner.engine.GetLogger())
+	p := progress.NewTrackerWithChannel(cliScanner.progressCh, true, cliScanner.engine.GetLogger())
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
 	p.BeginUnquantifiableLength("Scanning for Snyk Open Source issues", string(path))
 	defer p.EndWithMessage("Snyk Open Source scan completed.")
