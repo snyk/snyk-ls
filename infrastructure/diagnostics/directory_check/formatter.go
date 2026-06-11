@@ -27,11 +27,11 @@ import (
 
 // Style definitions for colored output
 var (
-	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("2")) // Green
-	warningStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3")) // Yellow
-	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("1")) // Red
-	infoStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("4")) // Blue
-	dimStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("8")) // Gray
+	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("2")) //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
+	warningStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3")) //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
+	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("1")) //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
+	infoStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("4")) //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
+	dimStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("8")) //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 )
 
 // FormatResultsText formats the diagnostics result as human-readable text

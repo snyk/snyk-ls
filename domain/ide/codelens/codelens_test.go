@@ -47,7 +47,7 @@ func Test_GetCodeLensFromCommand(t *testing.T) {
 
 func Test_GetCodeLensForPath(t *testing.T) {
 	engine, tokenService := testutil.IntegTestWithEngine(t)
-	di.TestInit(t, engine, tokenService, nil) // IntegTest doesn't automatically inits DI
+	deps := di.TestInit(t, engine, tokenService, nil) // IntegTest doesn't automatically inits DI
 	testutil.EnableSastAndAutoFix(engine)
 	// this is using the real progress channel, so we need to listen to it
 	dummyProgressListeners(t)
@@ -55,12 +55,12 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	// Configure fake authentication to avoid real API calls
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 	tokenService.SetToken(engine.GetConfiguration(), "00000000-0000-0000-0000-000000000001")
-	di.AuthenticationService().ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
+	deps.AuthenticationService.ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
+	fakeAuthenticationProvider := deps.AuthenticationService.Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	filePath, dir := code.TempWorkdirWithIssues(t)
-	folder := workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), dir, "dummy", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine)
+	folder := workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), dir, "dummy", deps.Scanner, deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine)
 	config.GetWorkspace(engine.GetConfiguration()).AddFolder(folder)
 
 	// as code is only enabled if sast settings are enabled, and sast settings are checked in folder config
@@ -85,7 +85,18 @@ func Test_GetCodeLensForPath(t *testing.T) {
 
 func dummyProgressListeners(t *testing.T) {
 	t.Helper()
-	t.Cleanup(func() { progress.CleanupChannels() })
+	t.Cleanup(func() {
+		// Do NOT call CleanupChannels() — it cancels all global trackers.
+		// Drain the global channel only.
+	drainCodelens:
+		for {
+			select {
+			case <-progress.ToServerProgressChannel:
+			default:
+				break drainCodelens
+			}
+		}
+	})
 	go func() {
 		for {
 			<-progress.ToServerProgressChannel

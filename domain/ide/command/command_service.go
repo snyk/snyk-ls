@@ -37,7 +37,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var instance types.CommandService
+var instance types.CommandService //nolint:gochecknoglobals // legacy process-global state
 
 type serviceImpl struct {
 	authService        authentication.AuthenticationService

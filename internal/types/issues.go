@@ -50,7 +50,7 @@ func (s Severity) String() string {
 	}
 }
 
-var IssuesSeverity = map[string]Severity{
+var IssuesSeverity = map[string]Severity{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	"critical": Critical,
 	"high":     High,
 	"low":      Low,

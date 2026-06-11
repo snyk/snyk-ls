@@ -26,7 +26,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -34,10 +33,11 @@ import (
 )
 
 func Test_Concurrent_CLI_Runs(t *testing.T) {
+	t.Parallel()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
-	srv, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	srv, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
-	t.Setenv("SNYK_LOG_LEVEL", "info")
+	setSmokeLogLevel("info")
 	lspClient := srv.Client
 
 	// create clones and make them workspace folders
@@ -152,5 +152,5 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 
 	// Wait for reference branch scans to complete so their goroutines don't outlive the test
 	// and cause the cleanup shutdown to block for an extended period.
-	waitForAllScansToComplete(t, di.ScanStateAggregator())
+	waitForAllScansToComplete(t, deps.ScanStateAggregator)
 }

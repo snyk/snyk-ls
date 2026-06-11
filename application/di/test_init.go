@@ -34,6 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/scanstates"
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	scanner2 "github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
@@ -49,22 +50,34 @@ import (
 	domainNotify "github.com/snyk/snyk-ls/internal/notification"
 	er "github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-//nolint:gocyclo // high branching is inherent: one nil-check per overrideable dependency
+// TestInit builds an isolated set of dependencies for a single test run.
+// The returned Dependencies struct is self-contained; all service fields are
+// independent per-call instances.
+//
+// Remaining global side effects (not safe for parallel tests without further work):
+//   - types.SetGlobalSystemDefault — stores into the per-engine configuration.
 func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenService, overrideDeps *Dependencies) Dependencies {
 	t.Helper()
-	initMutex.Lock()
-	defer initMutex.Unlock()
 	gafConfiguration := engine.GetConfiguration()
 	types.SetGlobalSystemDefault(gafConfiguration, types.SettingCliPath, filepath.Join(t.TempDir(), "fake-cli"))
-	types.DefaultOpenBrowserFunc = func(url string) {}
 
+	return buildTestDependencies(t, engine, tokenService, overrideDeps)
+}
+
+//nolint:gocyclo // high branching is inherent: one nil-check per overrideable dependency
+func buildTestDependencies(t *testing.T, engine workflow.Engine, tokenService types.TokenService, overrideDeps *Dependencies) Dependencies {
+	t.Helper()
+	gafConfiguration := engine.GetConfiguration()
+
+	var localNotifier domainNotify.Notifier
 	if overrideDeps != nil && overrideDeps.Notifier != nil {
-		notifier = overrideDeps.Notifier
+		localNotifier = overrideDeps.Notifier
 	} else {
-		notifier = domainNotify.NewNotifier()
+		localNotifier = domainNotify.NewNotifier()
 	}
 
 	fs := pflag.NewFlagSet("snyk-ls-config-test", pflag.ContinueOnError)
@@ -74,40 +87,43 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 
 	logger := engine.GetLogger()
 
+	var localConfigResolver types.ConfigResolverInterface
 	if overrideDeps != nil && overrideDeps.ConfigResolver != nil {
-		configResolver = overrideDeps.ConfigResolver
+		localConfigResolver = overrideDeps.ConfigResolver
 	} else {
 		resolver := types.NewConfigResolver(logger)
 		prefixKeyResolver := configresolver.New(gafConfiguration, fm)
 		resolver.SetPrefixKeyResolver(prefixKeyResolver, gafConfiguration, fm)
-		configResolver = resolver
+		localConfigResolver = resolver
 	}
 
-	instrumentor = performance.NewInstrumentor()
-	errorReporter = er.NewTestErrorReporter(engine)
-	installer = install.NewFakeInstaller(engine, configResolver)
+	localInstrumentor := performance.NewInstrumentor()
+	localErrorReporter := er.NewTestErrorReporter(engine)
+	localInstaller := install.NewFakeInstaller(engine, localConfigResolver)
 	authProvider := authentication.NewFakeCliAuthenticationProvider(engine)
-	snykApiClient = &snyk_api.FakeApiClient{CodeEnabled: true}
+	localSnykApiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
 
+	var localAuthenticationService authentication.AuthenticationService
 	if overrideDeps != nil && overrideDeps.AuthenticationService != nil {
-		authenticationService = overrideDeps.AuthenticationService
+		localAuthenticationService = overrideDeps.AuthenticationService
 	} else {
-		authenticationService = authentication.NewAuthenticationService(engine, tokenService, authProvider, errorReporter, notifier, configResolver)
+		localAuthenticationService = authentication.NewAuthenticationService(engine, tokenService, authProvider, localErrorReporter, localNotifier, localConfigResolver)
 	}
 
-	snykCli := cli.NewExecutor(engine, errorReporter, notifier, configResolver)
-	cliInitializer = cli.NewInitializer(gafConfiguration, logger, errorReporter, installer, notifier, snykCli, configResolver)
-	authInitializer := authentication.NewInitializer(gafConfiguration, logger, authenticationService, errorReporter, notifier, configResolver)
-	scanInitializer = initialize.NewDelegatingInitializer(
-		cliInitializer,
-		authInitializer,
+	localSnykCli := cli.NewExecutor(engine, localErrorReporter, localNotifier, localConfigResolver)
+	localCLIInitializer := cli.NewInitializer(gafConfiguration, logger, localErrorReporter, localInstaller, localNotifier, localSnykCli, localConfigResolver)
+	localAuthInitializer := authentication.NewInitializer(gafConfiguration, logger, localAuthenticationService, localErrorReporter, localNotifier, localConfigResolver)
+	localScanInitializer := initialize.NewDelegatingInitializer(
+		localCLIInitializer,
+		localAuthInitializer,
 	)
 
-	codeInstrumentor = code.NewCodeInstrumentor()
-	scanNotifier, _ = appNotification.NewScanNotifier(notifier, configResolver)
+	localCodeInstrumentor := code.NewCodeInstrumentor()
+	localScanNotifier, _ := appNotification.NewScanNotifier(localNotifier, localConfigResolver)
 
+	var localLearnService learn.Service
 	if overrideDeps != nil && overrideDeps.LearnService != nil {
-		learnService = overrideDeps.LearnService
+		localLearnService = overrideDeps.LearnService
 	} else {
 		ctrl := gomock.NewController(t)
 		learnMock := mock_learn.NewMockService(ctrl)
@@ -117,44 +133,92 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 			EXPECT().
 			GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(&learn.Lesson{}, nil).AnyTimes()
-		learnService = learnMock
+		localLearnService = learnMock
 	}
 
-	scanPersister = persistence.NopScanPersister{}
+	localScanPersister := persistence.NopScanPersister{}
+	var localScanStateAggregator scanstates.Aggregator
 	if overrideDeps != nil && overrideDeps.ScanStateAggregator != nil {
-		scanStateAggregator = overrideDeps.ScanStateAggregator
+		localScanStateAggregator = overrideDeps.ScanStateAggregator
 	} else {
-		scanStateAggregator = scanstates.NewNoopStateAggregator()
+		localScanStateAggregator = scanstates.NewNoopStateAggregator()
 	}
-	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
+	localCodeErrorReporter := code.NewCodeErrorReporter(localErrorReporter)
 
+	var localFeatureFlagService featureflag.Service
 	if overrideDeps != nil && overrideDeps.FeatureFlagService != nil {
-		featureFlagService = overrideDeps.FeatureFlagService
+		localFeatureFlagService = overrideDeps.FeatureFlagService
 	} else {
-		featureFlagService = featureflag.New(gafConfiguration, logger, engine, configResolver)
+		localFeatureFlagService = featureflag.New(gafConfiguration, logger, engine, localConfigResolver)
 	}
 
-	snykCodeScanner = code.New(engine, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.NewFakeCodeScannerClient, configResolver)
-	openSourceScanner = oss.NewCLIScanner(engine, instrumentor, errorReporter, snykCli, learnService, notifier, configResolver)
-	infrastructureAsCodeScanner = iac.New(gafConfiguration, logger, instrumentor, errorReporter, snykCli, configResolver)
-	scanner = scanner2.NewDelegatingScanner(engine, tokenService, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, configResolver, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner)
+	// Default to the global progress channel so progress.NewTracker() events
+	// (which always write to progress.ToServerProgressChannel) reach the server.
+	// Tests that need per-server isolation must set overrideDeps.ProgressChannel
+	// to a dedicated channel and use progress.NewTrackerWithChannel to route
+	// tracker events to that channel explicitly.
+	var localProgressChannel chan types.ProgressParams
+	if overrideDeps != nil && overrideDeps.ProgressChannel != nil {
+		localProgressChannel = overrideDeps.ProgressChannel
+	} else {
+		localProgressChannel = progress.ToServerProgressChannel
+	}
+
+	localSnykCodeScanner := code.New(engine, localInstrumentor, localSnykApiClient, localCodeErrorReporter, localLearnService, localFeatureFlagService, localNotifier, localCodeInstrumentor, localCodeErrorReporter, code.NewFakeCodeScannerClient, localConfigResolver, localProgressChannel)
+	localOpenSourceScanner := oss.NewCLIScanner(engine, localInstrumentor, localErrorReporter, localSnykCli, localLearnService, localNotifier, localConfigResolver, localProgressChannel)
+	localIaCScanner := iac.New(gafConfiguration, logger, localInstrumentor, localErrorReporter, localSnykCli, localConfigResolver, localProgressChannel)
+	localScanner := scanner2.NewDelegatingScanner(engine, tokenService, localScanInitializer, localInstrumentor, localScanNotifier, localSnykApiClient, localAuthenticationService, localNotifier, localScanPersister, localScanStateAggregator, localConfigResolver, localSnykCodeScanner, localIaCScanner, localOpenSourceScanner)
+
+	var localHoverService hover.Service
 	if overrideDeps != nil && overrideDeps.HoverService != nil {
-		hoverService = overrideDeps.HoverService
+		localHoverService = overrideDeps.HoverService
 	} else {
-		hoverService = hover.NewDefaultService(logger)
+		localHoverService = hover.NewDefaultService(logger)
 	}
 
+	var localLdxSyncService command.LdxSyncService
 	if overrideDeps != nil && overrideDeps.LdxSyncService != nil {
-		ldxSyncService = overrideDeps.LdxSyncService
+		localLdxSyncService = overrideDeps.LdxSyncService
 	} else {
-		ldxSyncService = command.NewLdxSyncService(configResolver)
+		localLdxSyncService = command.NewLdxSyncService(localConfigResolver)
 	}
 
-	mockCommandService := types.NewCommandServiceMock()
-	command.SetService(mockCommandService)
-	w := workspace.New(gafConfiguration, logger, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, configResolver, engine)
+	var localCommandService types.CommandService
+	if overrideDeps != nil && overrideDeps.CommandService != nil {
+		localCommandService = overrideDeps.CommandService
+	} else {
+		localCommandService = types.NewCommandServiceMock()
+	}
+
+	w := workspace.New(gafConfiguration, logger, localInstrumentor, localScanner, localHoverService, localScanNotifier, localNotifier, localScanPersister, localScanStateAggregator, localFeatureFlagService, localConfigResolver, engine)
 	config.SetWorkspace(gafConfiguration, w)
-	fileWatcher = watcher.NewFileWatcher()
-	codeActionService = codeaction.NewService(engine, w, fileWatcher, notifier, featureFlagService, configResolver)
-	return currentDependencies()
+	localFileWatcher := watcher.NewFileWatcher()
+	localCodeActionService := codeaction.NewService(engine, w, localFileWatcher, localNotifier, localFeatureFlagService, localConfigResolver)
+
+	var localInlineValueProvider snyk.InlineValueProvider
+	if ivp, ok := localScanner.(snyk.InlineValueProvider); ok {
+		localInlineValueProvider = ivp
+	}
+
+	return Dependencies{
+		AuthenticationService: localAuthenticationService,
+		ConfigResolver:        localConfigResolver,
+		FeatureFlagService:    localFeatureFlagService,
+		Notifier:              localNotifier,
+		LearnService:          localLearnService,
+		LdxSyncService:        localLdxSyncService,
+		ScanStateAggregator:   localScanStateAggregator,
+		InlineValueProvider:   localInlineValueProvider,
+		TreeEmitter:           nil,
+		Scanner:               localScanner,
+		HoverService:          localHoverService,
+		ScanNotifier:          localScanNotifier,
+		ScanPersister:         localScanPersister,
+		FileWatcher:           localFileWatcher,
+		ErrorReporter:         localErrorReporter,
+		CodeActionService:     localCodeActionService,
+		Installer:             localInstaller,
+		CommandService:        localCommandService,
+		ProgressChannel:       localProgressChannel,
+	}
 }

@@ -27,7 +27,7 @@ const (
 	invalidYamlFileError               = 1022
 )
 
-var ignorableIacErrorCodes = map[int]bool{
+var ignorableIacErrorCodes = map[int]bool{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	noLoadableInputErrorCode: true,
 
 	// Ignoring IAC errors for .json files with broken syntax.

@@ -42,12 +42,12 @@ var rangeFragmentRegexp = regexp.MustCompile(`^(.+)://((.*)@)?(.+?)(:(\d*))?/?((
 
 // Cache for storing case sensitivity results by path
 var (
-	caseSensitivityCache    = make(map[string]bool)
-	caseSensitivityCacheMux sync.RWMutex
+	caseSensitivityCache    = make(map[string]bool) //nolint:gochecknoglobals // legacy process-global state
+	caseSensitivityCacheMux sync.RWMutex            //nolint:gochecknoglobals // required guard for mutable package state
 )
 
 // For testing - allows us to mock os.Create
-var osCreate = os.Create
+var osCreate = os.Create //nolint:gochecknoglobals // legacy process-global state
 
 func FolderContains(folderPath types.FilePath, path types.FilePath) bool {
 	filePathSeparator := string(filepath.Separator)

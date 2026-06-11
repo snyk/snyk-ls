@@ -25,7 +25,7 @@ const maxParsedURLStringCacheEntries = 4096
 
 // parsedURLStringCache stores one *url.URL per distinct raw URL string while keeping
 // a hard cap so long-lived language-server sessions do not retain every unique URL.
-var parsedURLStringCache = newBoundedURLParseCache(maxParsedURLStringCacheEntries)
+var parsedURLStringCache = newBoundedURLParseCache(maxParsedURLStringCacheEntries) //nolint:gochecknoglobals // legacy process-global state
 
 type boundedURLParseCache struct {
 	mu     sync.RWMutex

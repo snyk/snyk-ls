@@ -78,16 +78,16 @@ const (
 )
 
 var (
-	Version                        = "SNAPSHOT"
-	LsProtocolVersion              = "development"
-	Development                    = "true"
-	LicenseInformation             = "License information\n FILLED DURING BUILD"
-	analyticsPermittedEnvironments = map[string]bool{
+	Version                        = "SNAPSHOT"                                  //nolint:gochecknoglobals // package-level constant; cannot use const because it is set at link time
+	LsProtocolVersion              = "development"                               //nolint:gochecknoglobals // package-level constant; cannot use const because it is set at link time
+	Development                    = "true"                                      //nolint:gochecknoglobals // package-level constant; cannot use const because it is set at link time
+	LicenseInformation             = "License information\n FILLED DURING BUILD" //nolint:gochecknoglobals // package-level constant; cannot use const because it is set at link time
+	analyticsPermittedEnvironments = map[string]bool{                            //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 		"api.snyk.io":    true,
 		"api.us.snyk.io": true,
 	}
-	loggingMu      sync.Mutex
-	currentLogFile *os.File
+	loggingMu      sync.Mutex //nolint:gochecknoglobals // required guard for mutable package state
+	currentLogFile *os.File   //nolint:gochecknoglobals // legacy process-global state
 )
 
 // GetLogLevel returns the current zerolog global level as a string.

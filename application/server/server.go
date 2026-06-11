@@ -70,7 +70,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
-var cacheCheckCancel context.CancelFunc
+var cacheCheckCancel context.CancelFunc //nolint:gochecknoglobals // process-global cancel for the periodic cache-check goroutine
 
 func Start(engine workflow.Engine, tokenService *config.TokenServiceImpl) {
 	var srv *jrpc2.Server
@@ -106,38 +106,32 @@ func Start(engine workflow.Engine, tokenService *config.TokenServiceImpl) {
 // All deps in this list are always created by di.Init and di.TestInit; a nil value
 // means the server was started with broken wiring and cannot function correctly.
 func validateMandatoryDeps(deps di.Dependencies) error {
-	switch {
-	case deps.ConfigResolver == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: ConfigResolver")
-	case deps.AuthenticationService == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: AuthenticationService")
-	case deps.LdxSyncService == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: LdxSyncService")
-	case deps.Notifier == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: Notifier")
-	case deps.FeatureFlagService == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: FeatureFlagService")
-	case deps.ErrorReporter == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: ErrorReporter")
-	case deps.LearnService == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: LearnService")
-	case deps.Scanner == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: Scanner")
-	case deps.HoverService == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: HoverService")
-	case deps.ScanNotifier == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: ScanNotifier")
-	case deps.ScanPersister == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: ScanPersister")
-	case deps.ScanStateAggregator == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: ScanStateAggregator")
-	case deps.FileWatcher == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: FileWatcher")
-	case deps.CodeActionService == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: CodeActionService")
-	default:
-		return nil
+	checks := []struct {
+		name  string
+		value any
+	}{
+		{"ConfigResolver", deps.ConfigResolver},
+		{"AuthenticationService", deps.AuthenticationService},
+		{"LdxSyncService", deps.LdxSyncService},
+		{"Notifier", deps.Notifier},
+		{"FeatureFlagService", deps.FeatureFlagService},
+		{"ErrorReporter", deps.ErrorReporter},
+		{"LearnService", deps.LearnService},
+		{"Scanner", deps.Scanner},
+		{"HoverService", deps.HoverService},
+		{"ScanNotifier", deps.ScanNotifier},
+		{"ScanPersister", deps.ScanPersister},
+		{"ScanStateAggregator", deps.ScanStateAggregator},
+		{"FileWatcher", deps.FileWatcher},
+		{"CodeActionService", deps.CodeActionService},
+		{"CommandService", deps.CommandService},
 	}
+	for _, c := range checks {
+		if c.value == nil {
+			return fmt.Errorf("snyk-ls: mandatory DI dependency missing: %s", c.name)
+		}
+	}
+	return nil
 }
 
 // withContext wraps a jrpc2.Handler to inject logger, configuration, engine,
@@ -233,6 +227,9 @@ func injectCoreServicesIntoMap(m map[string]any, deps di.Dependencies) {
 	if deps.TreeEmitter != nil {
 		m[ctx2.DepTreeEmitter] = deps.TreeEmitter
 	}
+	if deps.CommandService != nil {
+		m[ctx2.DepCommandService] = deps.CommandService
+	}
 }
 
 func injectScanServicesIntoMap(m map[string]any, deps di.Dependencies) {
@@ -261,8 +258,24 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	enrich := func(h jrpc2.Handler) jrpc2.Handler {
 		return withContext(h, logger, conf, engine, deps, srv)
 	}
-	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv))
-	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv))
+	// progressStopChan is per-server: only this server's shutdown handler can stop
+	// this server's progress listener, preventing cross-test signal interference.
+	progressStopChan := make(chan bool, 1)
+	// scanCtx is a server-lifetime context for workspace scan goroutines.
+	// Canceling it on shutdown ensures in-flight scan goroutines exit cleanly,
+	// which prevents file-handle leaks on Windows when t.TempDir() cleans up
+	// after a test that spawned scan goroutines [IDE-2036].
+	scanCtx, scanCancel := context.WithCancel(context.Background())
+	// Use the per-server ProgressChannel from deps so that progress events from
+	// this server's scanners are never misrouted to another server's listener.
+	// Fall back to the global channel only when deps has no channel set (e.g.
+	// legacy callers that have not been migrated).
+	progressCh := deps.ProgressChannel
+	if progressCh == nil {
+		progressCh = progress.ToServerProgressChannel
+	}
+	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv, progressStopChan, progressCh))
+	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv, scanCtx))
 	handlers["textDocument/didChange"] = enrich(textDocumentDidChangeHandler(conf))
 	handlers["textDocument/didClose"] = enrich(noOpHandler())
 	handlers[textDocumentDidOpenOperation] = enrich(textDocumentDidOpenHandler(conf))
@@ -274,7 +287,7 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	handlers["textDocument/willSave"] = enrich(noOpHandler())
 	handlers["textDocument/willSaveWaitUntil"] = enrich(noOpHandler())
 	handlers["codeAction/resolve"] = enrich(codeActionResolveHandler(logger, deps.CodeActionService, srv))
-	handlers["shutdown"] = enrich(shutdownHandler())
+	handlers["shutdown"] = enrich(shutdownHandler(progressStopChan, scanCancel))
 	handlers["exit"] = enrich(exitHandler(srv))
 	handlers["workspace/didChangeWorkspaceFolders"] = enrich(workspaceDidChangeWorkspaceFoldersHandler(conf, engine, srv))
 	handlers["workspace/willDeleteFiles"] = enrich(workspaceWillDeleteFilesHandler(conf))
@@ -501,6 +514,23 @@ func mustConfigResolverFromContext(ctx context.Context) types.ConfigResolverInte
 	return cr
 }
 
+func commandServiceFromContext(ctx context.Context) (types.CommandService, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	svc, ok := deps[ctx2.DepCommandService].(types.CommandService)
+	return svc, ok
+}
+
+func mustCommandServiceFromContext(ctx context.Context) types.CommandService {
+	svc, ok := commandServiceFromContext(ctx)
+	if !ok {
+		panic("CommandService missing from context")
+	}
+	return svc
+}
+
 func textDocumentDidChangeHandler(conf configuration.Configuration) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidChangeTextDocumentParams) (any, error) {
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "TextDocumentDidChangeHandler").Logger()
@@ -606,7 +636,7 @@ func initNetworkAccessHeaders(engine workflow.Engine) {
 	engine.GetNetworkAccess().AddHeaderField("User-Agent", ua.String())
 }
 
-func initializeHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server) handler.Func {
+func initializeHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server, progressStopChan <-chan bool, progressCh chan types.ProgressParams) handler.Func {
 	return handler.New(func(ctx context.Context, params types.InitializeParams) (any, error) {
 		method := "initializeHandler"
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", method).Logger()
@@ -653,8 +683,8 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		// NewLspInitializedChannel must precede registerNotifier: the notifier
 		// goroutine reads this channel on its first message.
 		types.NewLspInitializedChannel(conf)
-		go createProgressListener(progress.ToServerProgressChannel, srv, &logger)
-		registerNotifier(conf, &logger, srv, mustNotifierFromContext(ctx))
+		go createProgressListener(progressCh, progressStopChan, srv, &logger)
+		registerNotifier(conf, &logger, srv, mustNotifierFromContext(ctx), mustCommandServiceFromContext(ctx))
 
 		result := types.InitializeResult{
 			ServerInfo: types.ServerInfo{
@@ -817,7 +847,7 @@ func getDownloadURL(conf configuration.Configuration, engine workflow.Engine, pr
 	}
 }
 
-func initializedHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server) handler.Func {
+func initializedHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server, scanCtx context.Context) handler.Func { //nolint:revive // scanCtx follows stdlib convention for context parameters passed by value
 	return handler.New(func(ctx context.Context, params types.InitializedParams) (any, error) {
 		initialLogger := ctx2.LoggerFromContext(ctx)
 		defer func() {
@@ -881,7 +911,7 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 		autoScanEnabled := configRes.GetBool(types.SettingScanAutomatic, nil)
 		if autoScanEnabled {
 			logger.Info().Msg("triggering workspace scan after successful initialization")
-			config.GetWorkspace(conf).ScanWorkspace(context.Background())
+			config.GetWorkspace(conf).ScanWorkspace(scanCtx)
 		} else {
 			msg := fmt.Sprintf(
 				"No automatic workspace scan on initialization: autoScanEnabled=%v",
@@ -1054,7 +1084,7 @@ func monitorClientProcess(pid int) time.Duration {
 	return time.Since(start)
 }
 
-func shutdownHandler() jrpc2.Handler {
+func shutdownHandler(progressStopChan chan<- bool, scanCancel context.CancelFunc) jrpc2.Handler {
 	return handler.New(func(ctx context.Context) (any, error) {
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "Shutdown").Logger()
 		logger.Info().Msg("ENTERING")
@@ -1065,7 +1095,17 @@ func shutdownHandler() jrpc2.Handler {
 			cacheCheckCancel()
 		}
 		di.DisposeTreeEmitter()
-		disposeProgressListener()
+		// Non-blocking: if initialize was never called the listener goroutine was
+		// never started, so no one reads the channel. A second shutdown call (e.g.
+		// from t.Cleanup after an explicit shutdown in the test body) must not block.
+		select {
+		case progressStopChan <- true:
+		default:
+		}
+		// Cancel the server-lifetime scan context so that any in-flight workspace
+		// scan goroutines exit cleanly. context.WithCancel cancel funcs are
+		// idempotent, so a second shutdown call is safe.
+		scanCancel()
 		mustNotifierFromContext(ctx).DisposeListener()
 		command.StopPendingRescanTimers()
 		return nil, nil

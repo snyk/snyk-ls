@@ -30,7 +30,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -45,13 +44,14 @@ const (
 // saving a binary (unsupported) file must not produce a "scan failed" error notification.
 // The secrets engine filters binary files out (SNYK-CLI-0008) which should be treated as success.
 func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
+	t.Parallel()
 	if len(os.Getenv("CI")) > 0 {
 		t.Skip("temporary skipped (still in CB)")
 	}
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingOrganization), secretsSmokeOrg)
 
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlySecrets(engine)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanAutomatic), false)
 
@@ -62,7 +62,7 @@ func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
 	// PNG magic bytes — definitively non-text, will be rejected by TextFileOnlyFilter
 	require.NoError(t, os.WriteFile(binaryFile, []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}, 0600))
 
-	folderConfig := config.GetFolderConfigFromEngine(engine, di.ConfigResolver(), types.FilePath(workspaceDir), engine.GetLogger())
+	folderConfig := config.GetFolderConfigFromEngine(engine, deps.ConfigResolver, types.FilePath(workspaceDir), engine.GetLogger())
 	require.NotNil(t, folderConfig)
 	types.SetPreferredOrgAndOrgSetByUser(engine.GetConfiguration(), types.FilePath(workspaceDir), secretsSmokeOrg, true)
 
@@ -120,6 +120,7 @@ func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
 }
 
 func Test_SmokeSecretsScan(t *testing.T) {
+	t.Parallel()
 	if len(os.Getenv("CI")) > 0 {
 		t.Skip("temporary skipped (still in CB)")
 	}
@@ -127,9 +128,11 @@ func Test_SmokeSecretsScan(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
 	engineConfig := engine.GetConfiguration()
 	engineConfig.Set(configresolver.UserGlobalKey(types.SettingOrganization), secretsSmokeOrg)
-	t.Setenv("SNYK_LOG_LEVEL", "debug")
+	prevLogLevel := os.Getenv("SNYK_LOG_LEVEL")
+	os.Setenv("SNYK_LOG_LEVEL", "debug")                                //nolint:usetesting // t.Setenv panics after t.Parallel()
+	t.Cleanup(func() { _ = os.Setenv("SNYK_LOG_LEVEL", prevLogLevel) }) //nolint:usetesting // t.Setenv panics after t.Parallel()
 
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlySecrets(engine)
 
 	// Clone the fake-leaks repo which contains intentional hardcoded secrets for testing
@@ -137,7 +140,7 @@ func Test_SmokeSecretsScan(t *testing.T) {
 	cloneTargetDirString := string(cloneTargetDir)
 
 	// Configure the folder with the pre-prod org and enable the secrets feature flag
-	folderConfig := config.GetFolderConfigFromEngine(engine, di.ConfigResolver(), types.FilePath(cloneTargetDirString), engine.GetLogger())
+	folderConfig := config.GetFolderConfigFromEngine(engine, deps.ConfigResolver, types.FilePath(cloneTargetDirString), engine.GetLogger())
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderConfig.FolderPath, secretsSmokeOrg, true)
 
 	initParams := prepareInitParams(t, cloneTargetDir, engine)

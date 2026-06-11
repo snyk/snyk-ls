@@ -30,9 +30,9 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var trackersMutex sync.RWMutex
-var trackers = make(map[types.ProgressToken]*Tracker)
-var ToServerProgressChannel = make(chan types.ProgressParams, 1000)
+var trackersMutex sync.RWMutex                                      //nolint:gochecknoglobals // legacy process-global tracker registry; per-session isolation is a follow-up (IDE-2036)
+var trackers = make(map[types.ProgressToken]*Tracker)               //nolint:gochecknoglobals // legacy process-global tracker registry; per-session isolation is a follow-up (IDE-2036)
+var ToServerProgressChannel = make(chan types.ProgressParams, 1000) //nolint:gochecknoglobals // process-global progress channel; per-session isolation is a follow-up (IDE-2036)
 var _ ui.ProgressBar = (*Tracker)(nil)
 
 type Tracker struct {
@@ -64,9 +64,16 @@ func NewTestTracker(channel chan types.ProgressParams, cancelChannel chan bool, 
 	return t
 }
 
-func NewTracker(cancellable bool, logger *zerolog.Logger) *Tracker {
+// NewTrackerWithChannel creates a Tracker that routes progress events to the
+// provided channel. This is the correct constructor for per-server isolation:
+// each server passes its own channel so progress events are never misrouted
+// to another server's listener.
+//
+// Existing callers that do not need isolation can use NewTracker, which
+// continues to route to the global ToServerProgressChannel.
+func NewTrackerWithChannel(channel chan types.ProgressParams, cancellable bool, logger *zerolog.Logger) *Tracker {
 	t := &Tracker{
-		channel:       ToServerProgressChannel,
+		channel:       channel,
 		cancelChannel: make(chan bool, 1),
 		cancellable:   cancellable,
 		finished:      false,
@@ -77,6 +84,10 @@ func NewTracker(cancellable bool, logger *zerolog.Logger) *Tracker {
 	trackers[t.token] = t
 	trackersMutex.Unlock()
 	return t
+}
+
+func NewTracker(cancellable bool, logger *zerolog.Logger) *Tracker {
+	return NewTrackerWithChannel(ToServerProgressChannel, cancellable, logger)
 }
 
 func (t *Tracker) GetChannel() chan types.ProgressParams {
