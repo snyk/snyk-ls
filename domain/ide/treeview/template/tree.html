@@ -54,7 +54,7 @@
 
 {{define "treeNode"}}
   {{if eq .Type "folder"}}
-    <div class="tree-node{{if .Expanded}} expanded{{end}}" data-node-id="{{.ID}}"{{if .DeltaEnabled}} data-delta-enabled="true" data-file-path="{{.FilePath}}"{{if .BaseBranch}} data-base-branch="{{.BaseBranch}}"{{end}}{{if .LocalBranches}} data-local-branches="{{joinStrings .LocalBranches ","}}"{{end}}{{if .ReferenceFolderPath}} data-reference-folder-path="{{.ReferenceFolderPath}}"{{end}}{{end}}>
+    <div class="tree-node{{if .Expanded}} expanded{{end}}{{if .Children}} tree-node-has-children{{end}}" data-node-id="{{.ID}}"{{if .DeltaEnabled}} data-delta-enabled="true" data-file-path="{{.FilePath}}"{{if .BaseBranch}} data-base-branch="{{.BaseBranch}}"{{end}}{{if .LocalBranches}} data-local-branches="{{joinStrings .LocalBranches ","}}"{{end}}{{if .ReferenceFolderPath}} data-reference-folder-path="{{.ReferenceFolderPath}}"{{end}}{{end}}>
       <div class="tree-node-row">
         <span class="tree-chevron"></span>
         <span class="folder-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" opacity="0.6"><path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h3.88l1.62 2H12.5A1.5 1.5 0 0 1 14 5.5v7A1.5 1.5 0 0 1 12.5 14h-9A1.5 1.5 0 0 1 2 12.5z"/></svg></span>
@@ -77,7 +77,7 @@
       </div>
     </div>
   {{else if eq .Type "file"}}
-    <div class="tree-node tree-node-file{{if .Expanded}} expanded{{end}}" data-node-id="{{.ID}}" data-file-path="{{.FilePath}}" data-product="{{.Product.ToProductCodename}}">
+    <div class="tree-node tree-node-file{{if .Expanded}} expanded{{end}}{{if .Children}} tree-node-has-children{{end}}" data-node-id="{{.ID}}" data-file-path="{{.FilePath}}" data-product="{{.Product.ToProductCodename}}">
       <div class="tree-node-row">
         <span class="tree-chevron"></span>
         {{if .FileIconHTML}}<span class="file-icon">{{fileIcon .FileIconHTML}}</span>{{end}}
@@ -90,7 +90,7 @@
     </div>
   {{else if eq .Type "issue"}}
     {{if .Children}}
-    <div class="tree-node tree-node-issue-group{{if .Expanded}} expanded{{end}}" data-node-id="{{.ID}}">
+    <div class="tree-node tree-node-issue-group tree-node-has-children{{if .Expanded}} expanded{{end}}" data-node-id="{{.ID}}">
       <div class="tree-node-row"
            data-file-path="{{.FilePath}}"
            data-start-line="{{.IssueRange.Start.Line}}"
@@ -118,6 +118,7 @@
            data-start-char="{{.IssueRange.Start.Character}}"
            data-end-char="{{.IssueRange.End.Character}}"
            data-issue-id="{{.IssueID}}">
+        <span class="tree-chevron"></span>
         <span class="severity-icon">{{severitySVG .Severity}}</span>
         {{if .IsIgnored}}<span class="badge badge-ignored">IGNORED</span>{{end}}
         {{if .IsFixable}}<span class="badge-fixable">⚡</span>{{end}}
@@ -135,6 +136,7 @@
            data-start-char="{{.IssueRange.Start.Character}}"
            data-end-char="{{.IssueRange.End.Character}}"
            data-issue-id="{{.IssueID}}">
+        <span class="tree-chevron"></span>
         <span class="severity-icon">{{severitySVG .Severity}}</span>
         {{if .IsIgnored}}<span class="badge badge-ignored">IGNORED</span>{{end}}
         <span class="tree-label">{{.Label}}</span>
@@ -160,6 +162,7 @@
     {{else}}
     <div class="tree-node tree-node-info{{if eq .InfoVariant "filter-empty"}} tree-node-info--filter-empty{{end}}" data-node-id="{{.ID}}"{{if eq .InfoVariant "filter-empty"}} hidden{{end}}>
       <div class="tree-node-row tree-node-row-info">
+        <span class="tree-chevron"></span>
         <span class="tree-label">{{.Label}}</span>
       </div>
     </div>
