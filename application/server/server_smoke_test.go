@@ -60,10 +60,9 @@ import (
 )
 
 // codeAPISem limits the number of tests that concurrently use the Snyk Code API
-// within a single shard. Capacity 2 allows 2 concurrent Code scans per shard —
-// with 4 shards running on separate machines = 8 concurrent scans total across CI,
-// which is within the API's tolerance while preventing starvation from cap=1.
-var codeAPISem = make(chan struct{}, 2)
+// within a single shard. Capacity 1 serializes Code scans within a shard to prevent
+// context cancellation races under high parallel load.
+var codeAPISem = make(chan struct{}, 1)
 
 // acquireCodeAPISlot acquires a slot in the Code API semaphore and releases it
 // via t.Cleanup. Call this at the start of any test that triggers a Snyk Code scan.
@@ -74,7 +73,9 @@ func acquireCodeAPISlot(t *testing.T) {
 }
 
 func Test_SmokeInstanceTest(t *testing.T) {
-	t.Parallel()
+	// Note: t.Parallel() omitted — this test holds the Code API semaphore slot for
+	// up to maxIntegTestDuration while waiting for scans; running it in parallel
+	// starves Test_SmokeUncFilePath on Windows (which also needs the slot).
 	endpoint := os.Getenv("SNYK_API")
 	if endpoint == "" {
 		endpoint = "https://api.snyk.io"
@@ -1357,7 +1358,8 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
-	t.Parallel()
+	// Note: t.Parallel() omitted — concurrent non-Code SHARD_3 tests interfere
+	// with Code scan context initialization under high parallel load.
 	acquireCodeAPISlot(t)
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
 	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
