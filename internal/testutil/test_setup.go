@@ -154,7 +154,16 @@ func UnitTestWithEngine(t *testing.T) (workflow.Engine, *config.TokenServiceImpl
 	})
 	t.Cleanup(func() {
 		cleanupFakeCliFile(conf, logger)
-		progress.CleanupChannels()
+		// Drain the global channel only — do NOT cancel trackers; under t.Parallel()
+		// CleanupChannels() would cancel active trackers in other tests (IDE-2036).
+	drain1:
+		for {
+			select {
+			case <-progress.ToServerProgressChannel:
+			default:
+				break drain1
+			}
+		}
 	})
 
 	return engine, ts
@@ -247,7 +256,16 @@ func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) (wor
 	CLIDownloadLockFileCleanUp(t, conf)
 	t.Cleanup(func() {
 		cleanupFakeCliFile(conf, logger)
-		progress.CleanupChannels()
+		// Drain the global channel only — do NOT cancel trackers; under t.Parallel()
+		// CleanupChannels() would cancel active trackers in other tests (IDE-2036).
+	drain2:
+		for {
+			select {
+			case <-progress.ToServerProgressChannel:
+			default:
+				break drain2
+			}
+		}
 	})
 	return engine, ts
 }
