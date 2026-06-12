@@ -48,15 +48,16 @@ func NewTreeHtmlRenderer(logger *zerolog.Logger) (*TreeHtmlRenderer, error) {
 	ctxLogger := logger.With().Str("method", "NewTreeHtmlRenderer").Logger()
 
 	funcMap := template.FuncMap{
-		"severityClass":     severityClass,
-		"severityLetter":    severityLetter,
-		"severitySVG":       func(s types.Severity) template.HTML { return template.HTML(severitySVG(s)) },
-		"severitySVGByName": severitySVGByName,
-		"productSVG":        func(p product.Product) template.HTML { return template.HTML(productSVG(p)) },
-		"checkmarkSVG":      func() template.HTML { return template.HTML(checkmarkSVG()) },
-		"fileIcon":          fileIconFunc,
-		"isEnabled":         isEnabledFunc,
-		"joinStrings":       func(s []string, sep string) string { return strings.Join(s, sep) },
+		"severityClass":         severityClass,
+		"severityLetter":        severityLetter,
+		"severitySVG":           func(s types.Severity) template.HTML { return template.HTML(severitySVG(s)) },
+		"severitySVGByName":     severitySVGByName,
+		"productSVG":            func(p product.Product) template.HTML { return template.HTML(productSVG(p)) },
+		"checkmarkSVG":          func() template.HTML { return template.HTML(checkmarkSVG()) },
+		"fileIcon":              fileIconFunc,
+		"isEnabled":             isEnabledFunc,
+		"joinStrings":           func(s []string, sep string) string { return strings.Join(s, sep) },
+		"untrustedLearnMoreURL": func() string { return untrustedFolderLearnMoreURL },
 	}
 
 	globalTemplate, err := template.New("treeView").Funcs(funcMap).Parse(treeHtmlTemplate)
@@ -164,6 +165,21 @@ func productSVG(p product.Product) string {
 func checkmarkSVG() string {
 	return svgCheckmark
 }
+
+// untrustedFolderLearnMoreURL is the "Learn more" target for the IDE-1882
+// untrusted-folder banner. Each Snyk IDE plugin has its own workspace-trust docs
+// page; this points at the VS Code page as the default.
+//
+// TODO(IDE-1882): branch on configuration.INTEGRATION_ENVIRONMENT (set from the
+// LSP clientInfo.Name in application/server/server.go) so Visual Studio and
+// JetBrains users get their IDE-specific page, mirroring how
+// infrastructure/configuration/config_html.go swaps "Project"/"Solution" by
+// integration name. Per-IDE URLs as of 2026-05-26:
+//
+//	VS Code       https://docs.snyk.io/ide-tools/visual-studio-code-extension/workspace-trust
+//	Visual Studio https://docs.snyk.io/developer-tools/snyk-ide-plugins-and-extensions/visual-studio-extension/visual-studio-workspace-trust
+//	JetBrains     https://docs.snyk.io/developer-tools/snyk-ide-plugins-and-extensions/jetbrains-plugin/jetbrains-plugin-folder-trust
+const untrustedFolderLearnMoreURL = "https://docs.snyk.io/ide-tools/visual-studio-code-extension/workspace-trust"
 
 // isEnabledFunc returns true if the Enabled pointer is nil (default=enabled) or points to true.
 func isEnabledFunc(enabled *bool) bool {
