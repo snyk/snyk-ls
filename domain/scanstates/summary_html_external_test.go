@@ -45,7 +45,7 @@ func Test_Summary_Html_DeduplicatesIssuesByFingerprint(t *testing.T) {
 
 	folderPath := types.FilePath(t.TempDir())
 	notifier := notification.NewMockNotifier()
-	resolver := types.NewConfigResolver(logger)
+	resolver := testutil.DefaultConfigResolver(engine)
 
 	w := workspace.New(
 		conf,
