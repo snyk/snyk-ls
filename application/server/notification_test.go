@@ -29,7 +29,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/internal/data_structure"
-	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
@@ -98,7 +97,7 @@ func TestCreateProgressListener(t *testing.T) {
 
 func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService)
 
 	clientParams := types.InitializeParams{
 		Capabilities: types.ClientCapabilities{
@@ -117,7 +116,9 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	progressTracker := progress.NewTracker(true, engine.GetLogger())
+	// Create a task via the per-server owner so progress events are routed
+	// to the channel the server's progress listener is reading.
+	progressTracker := deps.ProgressTracker.New(true)
 	progressTracker.BeginWithMessage("title", "message")
 	// should receive progress notification
 	assert.Eventually(
@@ -140,23 +141,27 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 
 func TestCancelProgress(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _, _ := setupServer(t, engine, tokenService)
+	loc, _, deps := setupServer(t, engine, tokenService)
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	expectedWorkdoneProgressCancelParams := types.WorkdoneProgressCancelParams{
-		Token: "token",
+	// Register a real task via the per-server owner so the cancel handler can
+	// look it up and remove it from the registry [IDE-2036].
+	task := deps.ProgressTracker.New(true)
+
+	cancelParams := types.WorkdoneProgressCancelParams{
+		Token: task.GetToken(),
 	}
-	_, err = loc.Client.Call(t.Context(), "window/workDoneProgress/cancel", expectedWorkdoneProgressCancelParams)
+	_, err = loc.Client.Call(t.Context(), "window/workDoneProgress/cancel", cancelParams)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	assert.Eventually(t, func() bool {
-		return progress.IsCanceled(expectedWorkdoneProgressCancelParams.Token)
+		return deps.ProgressTracker.IsCanceled(cancelParams.Token)
 	}, time.Second*5, time.Millisecond)
 }
 

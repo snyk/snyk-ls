@@ -33,29 +33,61 @@ import (
 )
 
 type Downloader struct {
-	progressTracker *progress.Tracker
-	errorReporter   error_reporting.ErrorReporter
-	httpClient      func() *http.Client
-	engine          workflow.Engine
-	configResolver  types.ConfigResolverInterface
+	progressTask   *progress.Task // per-download task; always set by both constructors
+	errorReporter  error_reporting.ErrorReporter
+	httpClient     func() *http.Client
+	engine         workflow.Engine
+	configResolver types.ConfigResolverInterface
 }
 
 func NewDownloader(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, httpClientFunc func() *http.Client, configResolver types.ConfigResolverInterface) *Downloader {
+	// Create a standalone per-call tracker for the legacy constructor path.
+	// This tracker is not shared with any server — it is APPROVED-KEEP as a
+	// per-invocation value, not a package-global [IDE-2036].
+	standaloneOwner := progress.NewTracker(engine.GetLogger())
 	return &Downloader{
-		progressTracker: progress.NewTracker(true, engine.GetLogger()),
-		errorReporter:   errorReporter,
-		httpClient:      httpClientFunc,
-		engine:          engine,
-		configResolver:  configResolver,
+		progressTask:   standaloneOwner.New(true),
+		errorReporter:  errorReporter,
+		httpClient:     httpClientFunc,
+		engine:         engine,
+		configResolver: configResolver,
 	}
+}
+
+// NewDownloaderWithOwner creates a Downloader whose progress events are routed
+// to the caller-supplied per-server Tracker instead of the global channel.
+// This is the preferred constructor for production use [IDE-2036].
+func NewDownloaderWithOwner(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, httpClientFunc func() *http.Client, configResolver types.ConfigResolverInterface, owner *progress.Tracker) *Downloader {
+	return &Downloader{
+		progressTask:   owner.New(true),
+		errorReporter:  errorReporter,
+		httpClient:     httpClientFunc,
+		engine:         engine,
+		configResolver: configResolver,
+	}
+}
+
+// activeProgressBar returns the progress Task for this download.
+func (d *Downloader) activeProgressBar() progressReporter {
+	return d.progressTask
+}
+
+// progressReporter is the subset of ui.ProgressBar used internally by the
+// downloader. Using an interface keeps writeCounter/newWriter free of the
+// concrete *Tracker/*Task types.
+type progressReporter interface {
+	BeginWithMessage(title, message string)
+	Report(percentage int)
+	EndWithMessage(message string)
+	CancelOrDone(onCancel func(), doneCh <-chan struct{})
 }
 
 // writeCounter counts the number of bytes written to it.
 type writeCounter struct {
-	total           int64 // total size
-	downloaded      int64 // downloaded # of bytes transferred
-	onProgress      func(downloaded int64, total int64, progressTracker *progress.Tracker)
-	progressTracker *progress.Tracker
+	total        int64 // total size
+	downloaded   int64 // downloaded # of bytes transferred
+	onProgressFn func(downloaded int64, total int64, pb progressReporter)
+	pb           progressReporter
 }
 
 // Write implements the io.Writer interface.
@@ -64,17 +96,17 @@ type writeCounter struct {
 func (wc *writeCounter) Write(p []byte) (n int, e error) {
 	n = len(p)
 	wc.downloaded += int64(n)
-	wc.onProgress(wc.downloaded, wc.total, wc.progressTracker)
+	wc.onProgressFn(wc.downloaded, wc.total, wc.pb)
 	return
 }
 
-func newWriter(size int64, progressTracker *progress.Tracker, onProgress func(downloaded, total int64, progressTracker *progress.Tracker)) io.Writer {
-	return &writeCounter{total: size, progressTracker: progressTracker, onProgress: onProgress}
+func newWriter(size int64, pb progressReporter, onProgressFn func(downloaded, total int64, pb progressReporter)) io.Writer {
+	return &writeCounter{total: size, pb: pb, onProgressFn: onProgressFn}
 }
 
-func onProgress(downloaded, total int64, progressTracker *progress.Tracker) {
+func onProgress(downloaded, total int64, pb progressReporter) {
 	percentage := float64(downloaded) / float64(total) * 100
-	progressTracker.Report(int(percentage))
+	pb.Report(int(percentage))
 }
 
 func (d *Downloader) lockFileName() (string, error) {
@@ -119,10 +151,11 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 
 	logger.Debug().Str("download_url", downloadURL).Msgf("Snyk CLI %s in progress...", kindStr)
 
+	pb := d.activeProgressBar()
 	if isUpdate {
-		d.progressTracker.BeginWithMessage("Updating Snyk CLI...", "")
+		pb.BeginWithMessage("Updating Snyk CLI...", "")
 	} else {
-		d.progressTracker.BeginWithMessage("Downloading Snyk CLI...", "We download Snyk CLI to run security scans.")
+		pb.BeginWithMessage("Downloading Snyk CLI...", "We download Snyk CLI to run security scans.")
 	}
 
 	doneCh := make(chan struct{}, 1)
@@ -140,7 +173,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 			_ = body.Close()
 			logger.Debug().Msgf("Cancellation received. Aborting %s.", kindStr)
 		}
-		d.progressTracker.CancelOrDone(cancel, doneCh)
+		pb.CancelOrDone(cancel, doneCh)
 	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
@@ -155,7 +188,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	}(resp.Body)
 
 	// pipe stream
-	cliReader := io.TeeReader(resp.Body, newWriter(resp.ContentLength, d.progressTracker, onProgress))
+	cliReader := io.TeeReader(resp.Body, newWriter(resp.ContentLength, pb, onProgress))
 
 	cliPath := d.configResolver.GetString(types.SettingCliPath, nil)
 	if cliPath != "" {
@@ -203,9 +236,9 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	err = d.moveToDestination(executableFileName, cliTmpFile.Name())
 
 	if isUpdate {
-		d.progressTracker.EndWithMessage("Snyk CLI has been updated.")
+		pb.EndWithMessage("Snyk CLI has been updated.")
 	} else {
-		d.progressTracker.EndWithMessage("Snyk CLI has been downloaded.")
+		pb.EndWithMessage("Snyk CLI has been downloaded.")
 	}
 
 	return err

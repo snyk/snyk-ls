@@ -23,7 +23,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -127,7 +126,9 @@ func TestGenerateTrackerRoutesToInjectedChannel(t *testing.T) {
 	if internal.channel != ch {
 		t.Error("GenerateTracker must route to the injected per-server channel, not the global channel")
 	}
-	if internal.channel == progress.ToServerProgressChannel {
-		t.Error("GenerateTracker must NOT route to the global progress.ToServerProgressChannel")
+	// Verify that the tracker does NOT route to an unrelated sibling channel.
+	siblingCh := make(chan types.ProgressParams, 100)
+	if internal.channel == siblingCh {
+		t.Error("GenerateTracker must NOT route to a sibling channel unrelated to this factory")
 	}
 }

@@ -16,32 +16,39 @@
 
 package server
 
-// TestSmokeEnvRace verifies that the package-level once-guards (snykAPIEnvOnce,
-// logLevelEnvOnce) prevent concurrent os.Setenv calls from racing.
+// TestSmokeEnvRace verifies that concurrent calls to smoke-test helpers that
+// previously relied on os.Setenv do not race under -race.
 //
-// The test calls setSmokeAPIEndpoint and setSmokeLogLevel concurrently in
-// multiple goroutines and runs with -race; any concurrent os.Setenv without the
-// sync.Once guard would be flagged immediately by the race detector.
+// The API endpoint is now set via WithAPIEndpoint (per-server config option) so
+// os.Setenv("SNYK_API") is never called from parallel tests. The log level is
+// set via config.SetLogLevel which writes a zerolog global atomically and does
+// not touch the process environment.
+//
+// This test therefore just exercises the new per-engine endpoint option in
+// parallel goroutines and confirms there is no data race.
 //
 // Run as: go test -race ./application/server/... -run TestSmokeEnvRace -v
 import (
 	"sync"
 	"testing"
+
+	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
 func TestSmokeEnvRace(t *testing.T) {
 	t.Parallel()
 	const workers = 10
 	var wg sync.WaitGroup
-	wg.Add(workers * 2)
+	wg.Add(workers)
 	for i := 0; i < workers; i++ {
 		go func() {
 			defer wg.Done()
-			setSmokeAPIEndpoint("https://api.snyk.io")
-		}()
-		go func() {
-			defer wg.Done()
-			setSmokeLogLevel("info")
+			engine, tokenService := testutil.UnitTestWithEngine(t)
+			// WithAPIEndpoint writes only to the per-engine config map — no
+			// process-global os.Setenv, so no race under -race.
+			_, _, _ = setupServer(t, engine, tokenService,
+				WithAPIEndpoint("https://api.snyk.io"),
+			)
 		}()
 	}
 	wg.Wait()

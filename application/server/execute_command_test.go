@@ -164,7 +164,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	baseDeps := di.TestInit(t, engine, tokenService, &di.Dependencies{
 		LdxSyncService: mockLdxSyncService,
 	})
-	realCommandService := command.NewService(engine, engine.GetLogger(), baseDeps.AuthenticationService, baseDeps.FeatureFlagService, baseDeps.Notifier, baseDeps.LearnService, nil, nil, nil, mockLdxSyncService, nil, nil)
+	realCommandService := command.NewService(engine, engine.GetLogger(), baseDeps.AuthenticationService, baseDeps.FeatureFlagService, baseDeps.Notifier, baseDeps.LearnService, nil, nil, nil, mockLdxSyncService, nil, nil, baseDeps.ScanCtx)
 	baseDeps.CommandService = realCommandService
 
 	// Pass all pre-built deps so setupServer reuses the same service instances.

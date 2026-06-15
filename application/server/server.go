@@ -230,6 +230,9 @@ func injectCoreServicesIntoMap(m map[string]any, deps di.Dependencies) {
 	if deps.CommandService != nil {
 		m[ctx2.DepCommandService] = deps.CommandService
 	}
+	if deps.ProgressTracker != nil {
+		m[ctx2.DepProgressTracker] = deps.ProgressTracker
+	}
 }
 
 func injectScanServicesIntoMap(m map[string]any, deps di.Dependencies) {
@@ -261,25 +264,20 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	// progressStopChan is per-server: only this server's shutdown handler can stop
 	// this server's progress listener, preventing cross-test signal interference.
 	progressStopChan := make(chan bool, 1)
-	// scanCtx is a server-lifetime context for workspace scan goroutines.
-	// Canceling it on shutdown ensures in-flight scan goroutines exit cleanly,
-	// which prevents file-handle leaks on Windows when t.TempDir() cleans up
-	// after a test that spawned scan goroutines [IDE-2036].
-	scanCtx, scanCancel := context.WithCancel(context.Background())
-	// Use the per-server ProgressChannel from deps so that progress events from
-	// this server's scanners are never misrouted to another server's listener.
-	// Fall back to the global channel only when deps has no channel set (e.g.
-	// legacy callers that have not been migrated).
-	progressCh := deps.ProgressChannel
-	if progressCh == nil {
-		progressCh = progress.ToServerProgressChannel
-	}
+	// scanCtx/scanCancel are owned by the DI Dependencies so the same server-lifetime
+	// context is shared by initHandlers, initializedHandler, and shutdownHandler
+	// without passing it through multiple closures [IDE-2036 Decision D1].
+	scanCtx := deps.ScanCtx
+	scanCancel := deps.ScanCancel
+	// Use the per-server progress channel from ProgressTracker so that progress
+	// events from this server's scanners are never misrouted to another server's listener.
+	progressCh := deps.ProgressTracker.Channel()
 	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv, progressStopChan, progressCh))
 	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv, scanCtx))
 	handlers["textDocument/didChange"] = enrich(textDocumentDidChangeHandler(conf))
 	handlers["textDocument/didClose"] = enrich(noOpHandler())
 	handlers[textDocumentDidOpenOperation] = enrich(textDocumentDidOpenHandler(conf))
-	handlers[textDocumentDidSaveOperation] = enrich(textDocumentDidSaveHandler(conf))
+	handlers[textDocumentDidSaveOperation] = enrich(textDocumentDidSaveHandler(conf, scanCtx))
 	handlers["textDocument/hover"] = enrich(textDocumentHover())
 	handlers["textDocument/codeAction"] = enrich(textDocumentCodeActionHandler(logger, deps.CodeActionService))
 	handlers["textDocument/codeLens"] = enrich(codeLensHandler())
@@ -289,7 +287,7 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	handlers["codeAction/resolve"] = enrich(codeActionResolveHandler(logger, deps.CodeActionService, srv))
 	handlers["shutdown"] = enrich(shutdownHandler(progressStopChan, scanCancel))
 	handlers["exit"] = enrich(exitHandler(srv))
-	handlers["workspace/didChangeWorkspaceFolders"] = enrich(workspaceDidChangeWorkspaceFoldersHandler(conf, engine, srv))
+	handlers["workspace/didChangeWorkspaceFolders"] = enrich(workspaceDidChangeWorkspaceFoldersHandler(conf, engine, srv, scanCtx))
 	handlers["workspace/willDeleteFiles"] = enrich(workspaceWillDeleteFilesHandler(conf))
 	handlers["workspace/didChangeConfiguration"] = enrich(workspaceDidChangeConfiguration(conf, srv))
 	handlers["window/workDoneProgress/cancel"] = enrich(windowWorkDoneProgressCancelHandler())
@@ -531,6 +529,23 @@ func mustCommandServiceFromContext(ctx context.Context) types.CommandService {
 	return svc
 }
 
+func progressTrackerFromContext(ctx context.Context) (*progress.Tracker, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	tracker, ok := deps[ctx2.DepProgressTracker].(*progress.Tracker)
+	return tracker, ok
+}
+
+func mustProgressTrackerFromContext(ctx context.Context) *progress.Tracker {
+	owner, ok := progressTrackerFromContext(ctx)
+	if !ok {
+		panic("ProgressTracker missing from context")
+	}
+	return owner
+}
+
 func textDocumentDidChangeHandler(conf configuration.Configuration) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidChangeTextDocumentParams) (any, error) {
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "TextDocumentDidChangeHandler").Logger()
@@ -596,11 +611,13 @@ func codeLensHandler() jrpc2.Handler {
 	})
 }
 
-func workspaceDidChangeWorkspaceFoldersHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server) jrpc2.Handler {
+func workspaceDidChangeWorkspaceFoldersHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server, scanCtx context.Context) jrpc2.Handler { //nolint:revive // scanCtx follows stdlib convention for context parameters passed by value
 	return handler.New(func(ctx context.Context, params types.DidChangeWorkspaceFoldersParams) (any, error) {
 		// The context provided by the JSON-RPC server is canceled once a new message is being processed,
-		// so we don't want to propagate it to functions that start background operations
-		bgCtx := context.Background()
+		// so we don't want to propagate it to functions that start background operations.
+		// Use the server-lifetime scanCtx instead of context.Background() so that all
+		// background work started here (config refresh, folder init, and scans) respects
+		// the shutdown cancel signal and does not leak goroutines or file handles [IDE-2036].
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Logger()
 
 		logger.Info().Msg("RECEIVING")
@@ -616,13 +633,13 @@ func workspaceDidChangeWorkspaceFoldersHandler(conf configuration.Configuration,
 		configResolver := mustConfigResolverFromContext(ctx)
 
 		if authService.IsAuthenticated() {
-			ldxSyncSvc.RefreshConfigFromLdxSync(bgCtx, conf, engine, &logger, changedFolders, notifier)
+			ldxSyncSvc.RefreshConfigFromLdxSync(scanCtx, conf, engine, &logger, changedFolders, notifier)
 		}
 
-		command.HandleFolders(conf, engine, &logger, bgCtx, srv, notifier, scanPersister, scanStateAgg, featureFlags, configResolver)
+		command.HandleFolders(conf, engine, &logger, scanCtx, srv, notifier, scanPersister, scanStateAgg, featureFlags, configResolver)
 		for _, f := range changedFolders {
 			if f.IsAutoScanEnabled() {
-				go f.ScanFolder(bgCtx)
+				go f.ScanFolder(scanCtx)
 			}
 		}
 		return nil, nil
@@ -901,7 +918,10 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 		scanPersister := mustScanPersisterFromContext(ctx)
 		scanStateAgg := mustScanStateAggregatorFromContext(ctx)
 		ffService := mustFeatureFlagServiceFromContext(ctx)
-		command.HandleFolders(conf, engine, &logger, context.Background(), srv, notifier, scanPersister, scanStateAgg, ffService, configRes)
+		// Use the server-lifetime scanCtx (not context.Background()) so that any
+		// scan goroutines spawned by HandleFolders / HandleUntrustedFolders are
+		// canceled when the server shuts down [IDE-2036].
+		command.HandleFolders(conf, engine, &logger, scanCtx, srv, notifier, scanPersister, scanStateAgg, ffService, configRes)
 
 		deleteExpiredCache(conf)
 		cacheCtx, cancel := context.WithCancel(context.Background())
@@ -1104,8 +1124,11 @@ func shutdownHandler(progressStopChan chan<- bool, scanCancel context.CancelFunc
 		}
 		// Cancel the server-lifetime scan context so that any in-flight workspace
 		// scan goroutines exit cleanly. context.WithCancel cancel funcs are
-		// idempotent, so a second shutdown call is safe.
-		scanCancel()
+		// idempotent, so a second shutdown call is safe. Guard against nil in case
+		// a caller has not set ScanCancel in deps (should not happen after D1).
+		if scanCancel != nil {
+			scanCancel()
+		}
 		mustNotifierFromContext(ctx).DisposeListener()
 		command.StopPendingRescanTimers()
 		return nil, nil
@@ -1172,9 +1195,8 @@ func textDocumentDidOpenHandler(conf configuration.Configuration) jrpc2.Handler 
 	})
 }
 
-func textDocumentDidSaveHandler(conf configuration.Configuration) jrpc2.Handler {
+func textDocumentDidSaveHandler(conf configuration.Configuration, scanCtx context.Context) jrpc2.Handler { //nolint:revive // scanCtx follows stdlib convention for context parameters passed by value
 	return handler.New(func(ctx context.Context, params sglsp.DidSaveTextDocumentParams) (any, error) {
-		bgCtx := context.Background()
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "TextDocumentDidSaveHandler").Logger()
 		logger.Debug().Interface("params", params).Msg("Receiving")
 
@@ -1193,12 +1215,12 @@ func textDocumentDidSaveHandler(conf configuration.Configuration) jrpc2.Handler 
 		}
 
 		if folder.IsAutoScanEnabled() && uri.IsDotSnykFile(params.TextDocument.URI) {
-			go folder.ScanFolder(bgCtx)
+			go folder.ScanFolder(scanCtx)
 			return nil, nil
 		}
 
 		if folder.IsAutoScanEnabled() {
-			go folder.ScanFile(bgCtx, filePath)
+			go folder.ScanFile(scanCtx, filePath)
 		} else {
 			logger.Warn().Msg("Not scanning, auto-scan is disabled")
 		}
@@ -1219,7 +1241,15 @@ func textDocumentHover() jrpc2.Handler {
 func windowWorkDoneProgressCancelHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params types.WorkdoneProgressCancelParams) (any, error) {
 		ctx2.LoggerFromContext(ctx).Debug().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
-		progress.Cancel(params.Token)
+		// Use the per-server owner to cancel: tokens are server-scoped, so a
+		// cancel from this server cannot affect another server's tasks [IDE-2036].
+		if owner, ok := progressTrackerFromContext(ctx); ok {
+			owner.Cancel(params.Token)
+		} else {
+			// No per-server owner in context; cancel is a no-op [IDE-2036].
+			ctx2.LoggerFromContext(ctx).Warn().Str("token", string(params.Token)).
+				Msg("WindowWorkDoneProgressCancelHandler: no per-server owner in context, ignoring cancel")
+		}
 		return nil, nil
 	})
 }

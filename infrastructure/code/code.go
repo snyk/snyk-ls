@@ -266,7 +266,7 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, l
 		Int("fileCount", len(filesToBeScanned)).
 		Msg("Code scanner: files to be scanned")
 
-	t := progress.NewTrackerWithChannel(sc.progressChannel, true, sc.engine.GetLogger())
+	t := progress.NewTaskWithChannel(sc.progressChannel, true, sc.engine.GetLogger())
 	go func() { t.CancelOrDone(cancel, ctx.Done()) }()
 
 	t.BeginWithMessage(string("Snyk Code: scanning "+folderPath), "starting scan")
@@ -288,8 +288,7 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, l
 
 	files := fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), rules)
 
-	if t.IsCanceled() || ctx.Err() != nil {
-		progress.Cancel(t.GetToken())
+	if ctx.Err() != nil {
 		return []types.Issue{}, nil
 	}
 
@@ -397,13 +396,12 @@ func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath types.
 	return false
 }
 
-func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, folderConfig *types.FolderConfig, files <-chan string, changedFiles map[types.FilePath]bool, codeConsistentIgnores bool, t *progress.Tracker) (issues []types.Issue, err error) {
+func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, folderConfig *types.FolderConfig, files <-chan string, changedFiles map[types.FilePath]bool, codeConsistentIgnores bool, t *progress.Task) (issues []types.Issue, err error) {
 	method := "code.UploadAndAnalyze"
 	logger := sc.engine.GetLogger().With().Str("method", method).Logger()
 
 	if ctx.Err() != nil {
-		progress.Cancel(t.GetToken())
-		logger.Info().Msg("Canceling Code scanner received cancellation signal")
+		logger.Info().Msg("Code scanner received cancellation signal")
 		return issues, nil
 	}
 	span := sc.Instrumentor.StartSpan(ctx, method)

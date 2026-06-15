@@ -17,6 +17,7 @@
 package di
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -152,17 +153,17 @@ func buildTestDependencies(t *testing.T, engine workflow.Engine, tokenService ty
 		localFeatureFlagService = featureflag.New(gafConfiguration, logger, engine, localConfigResolver)
 	}
 
-	// Default to the global progress channel so progress.NewTracker() events
-	// (which always write to progress.ToServerProgressChannel) reach the server.
-	// Tests that need per-server isolation must set overrideDeps.ProgressChannel
-	// to a dedicated channel and use progress.NewTrackerWithChannel to route
-	// tracker events to that channel explicitly.
-	var localProgressChannel chan types.ProgressParams
-	if overrideDeps != nil && overrideDeps.ProgressChannel != nil {
-		localProgressChannel = overrideDeps.ProgressChannel
+	// Resolve the per-test progress tracker.
+	// Priority: overrideDeps.ProgressTracker > default fresh tracker.
+	var localProgressOwner *progress.Tracker
+	if overrideDeps != nil && overrideDeps.ProgressTracker != nil {
+		localProgressOwner = overrideDeps.ProgressTracker
 	} else {
-		localProgressChannel = progress.ToServerProgressChannel
+		// Default: create a fresh per-test tracker. The process-global
+		// progress channel has been removed [IDE-2036].
+		localProgressOwner = progress.NewTracker(logger)
 	}
+	localProgressChannel := localProgressOwner.Channel()
 
 	localSnykCodeScanner := code.New(engine, localInstrumentor, localSnykApiClient, localCodeErrorReporter, localLearnService, localFeatureFlagService, localNotifier, localCodeInstrumentor, localCodeErrorReporter, code.NewFakeCodeScannerClient, localConfigResolver, localProgressChannel)
 	localOpenSourceScanner := oss.NewCLIScanner(engine, localInstrumentor, localErrorReporter, localSnykCli, localLearnService, localNotifier, localConfigResolver, localProgressChannel)
@@ -200,6 +201,11 @@ func buildTestDependencies(t *testing.T, engine workflow.Engine, tokenService ty
 		localInlineValueProvider = ivp
 	}
 
+	// Per-test server-lifetime scan context: canceled when the test calls shutdown
+	// (via the shutdown handler) or on t.Cleanup, whichever comes first [IDE-2036].
+	localScanCtx, localScanCancel := context.WithCancel(context.Background())
+	t.Cleanup(localScanCancel)
+
 	return Dependencies{
 		AuthenticationService: localAuthenticationService,
 		ConfigResolver:        localConfigResolver,
@@ -219,6 +225,8 @@ func buildTestDependencies(t *testing.T, engine workflow.Engine, tokenService ty
 		CodeActionService:     localCodeActionService,
 		Installer:             localInstaller,
 		CommandService:        localCommandService,
-		ProgressChannel:       localProgressChannel,
+		ProgressTracker:       localProgressOwner,
+		ScanCtx:               localScanCtx,
+		ScanCancel:            localScanCancel,
 	}
 }

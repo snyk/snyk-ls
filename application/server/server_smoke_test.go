@@ -88,7 +88,6 @@ func Test_SmokeInstanceTest(t *testing.T) {
 }
 
 func Test_SmokeWorkspaceScan(t *testing.T) {
-	setSmokeAPIEndpoint("https://api.snyk.io")
 	t.Parallel()
 	ossFile := "package.json"
 	iacFile := "main.tf"
@@ -610,14 +609,19 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.TokenServiceImpl, repo string, commit string, file1 string, file2 string, hasVulns bool, endpoint string, products ...product.Product) {
 	t.Helper()
 	acquireCodeAPISlot(t)
-	if endpoint != "" && endpoint != "/v1" {
-		setSmokeAPIEndpoint(endpoint)
-	}
 	// Allocate temp dir BEFORE setupServer so t.Cleanup LIFO order ensures
 	// the server shuts down before the temp dir is removed (fixes Windows file locking).
 	// TempDirWithRetry adds retry logic for os.RemoveAll to handle lingering file locks.
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
-	loc, jsonRPCRecorder, smokeDeps := setupServer(t, engine, tokenService, WithRealDI())
+	// Build server options: always use real DI; pass the endpoint directly to the
+	// per-server config via WithAPIEndpoint so parallel tests don't interfere with
+	// each other through os.Setenv. Empty or "/v1" endpoints are no-ops (engine
+	// keeps whatever UpdateApiEndpointsOnConfig set as the default).
+	serverOpts := []ServerTestOption{WithRealDI()}
+	if endpoint != "" && endpoint != "/v1" {
+		serverOpts = append(serverOpts, WithAPIEndpoint(endpoint))
+	}
+	loc, jsonRPCRecorder, smokeDeps := setupServer(t, engine, tokenService, serverOpts...)
 	if len(products) == 0 {
 		// Default mirrors the original all-enabled state. Secrets intentionally excluded:
 		// its registered default is false and no callers in this suite require it.
@@ -2058,10 +2062,11 @@ func Test_SmokeOrgSelection(t *testing.T) {
 func ensureInitialized(t *testing.T, engine workflow.Engine, tokenService *config.TokenServiceImpl, loc server.Local, initParams types.InitializeParams, preInitSetupFunc func(workflow.Engine)) {
 	t.Helper()
 	if os.Getenv("SNYK_LOG_LEVEL") == "" {
+		// Set the in-process log level to "info" when no env-level override is
+		// active. config.SetLogLevel writes the zerolog global atomically; there
+		// is no need to propagate this through os.Setenv because SetupLogging
+		// (called immediately below) reads GetLogLevel() for the in-process level.
 		config.SetLogLevel(zerolog.LevelInfoValue)
-		// setSmokeLogLevel is once-guarded: concurrent callers from parallel tests
-		// all write the same constant value so no restore is needed.
-		setSmokeLogLevel(config.GetLogLevel())
 	}
 	config.SetupLogging(engine, tokenService, nil) // we don't need to send logs to the client
 	engineConfig := engine.GetConfiguration()

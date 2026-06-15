@@ -154,16 +154,6 @@ func UnitTestWithEngine(t *testing.T) (workflow.Engine, *config.TokenServiceImpl
 	})
 	t.Cleanup(func() {
 		cleanupFakeCliFile(conf, logger)
-		// Drain the global channel only — do NOT cancel trackers; under t.Parallel()
-		// CleanupChannels() would cancel active trackers in other tests (IDE-2036).
-	drain1:
-		for {
-			select {
-			case <-progress.ToServerProgressChannel:
-			default:
-				break drain1
-			}
-		}
 	})
 
 	return engine, ts
@@ -207,24 +197,31 @@ func CLIDownloadLockFileCleanUp(t *testing.T, conf configuration.Configuration) 
 	})
 }
 
-func CreateDummyProgressListener(t *testing.T) {
+// CreateDummyProgressListener is retained for call-site compatibility.
+// The process-global progress channel has been removed [IDE-2036]; each server
+// now uses a per-server progress owner, so no global drainer is needed.
+// Callers that still invoke this function are safe to keep it — it is a no-op.
+func CreateDummyProgressListener(_ *testing.T) {}
+
+// NewTestProgressTracker creates a per-test *progress.Tracker with a 1000-item
+// buffered channel. A t.Cleanup drainer prevents the channel from blocking
+// producers after the test ends. The caller may pass the tracker's channel to
+// any scanner constructor, achieving full per-test isolation [IDE-2036].
+func NewTestProgressTracker(t *testing.T) *progress.Tracker {
 	t.Helper()
-	var dummyProgressStopChannel = make(chan bool, 1)
-
+	ch := make(chan types.ProgressParams, 1000)
+	owner := progress.NewTrackerWithChannel(ch, nil)
 	t.Cleanup(func() {
-		dummyProgressStopChannel <- true
-	})
-
-	go func() {
+	drain:
 		for {
 			select {
-			case <-progress.ToServerProgressChannel:
-				continue
-			case <-dummyProgressStopChannel:
-				return
+			case <-ch:
+			default:
+				break drain
 			}
 		}
-	}()
+	})
+	return owner
 }
 
 func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) (workflow.Engine, *config.TokenServiceImpl) {
@@ -256,16 +253,6 @@ func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) (wor
 	CLIDownloadLockFileCleanUp(t, conf)
 	t.Cleanup(func() {
 		cleanupFakeCliFile(conf, logger)
-		// Drain the global channel only — do NOT cancel trackers; under t.Parallel()
-		// CleanupChannels() would cancel active trackers in other tests (IDE-2036).
-	drain2:
-		for {
-			select {
-			case <-progress.ToServerProgressChannel:
-			default:
-				break drain2
-			}
-		}
 	})
 	return engine, ts
 }

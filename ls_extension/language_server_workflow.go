@@ -107,7 +107,7 @@ func lsWorkflow(
 
 	engine.SetUserInterface(user_interface.NewLsUserInterface(
 		user_interface.WithLogger(engine.GetLogger()),
-		user_interface.WithProgressBar(progress.NewTracker(true, engine.GetLogger()))))
+		user_interface.WithProgressBar(progress.NewTracker(engine.GetLogger()).New(true))))
 
 	if extensionConfig.GetBool("v") {
 		fmt.Println(config.Version)

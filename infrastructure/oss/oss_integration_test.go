@@ -38,7 +38,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
-	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -71,7 +70,7 @@ func Test_Scan(t *testing.T) {
 	er := error_reporting.NewTestErrorReporter(engine)
 	notifier := notification.NewMockNotifier()
 	cliExecutor := cli.NewExecutor(engine, er, notifier, testutil.DefaultConfigResolver(engine))
-	scanner := oss.NewCLIScanner(engine, instrumentor, er, cliExecutor, di.LearnService(), notifier, di.ConfigResolver(), progress.ToServerProgressChannel)
+	scanner := oss.NewCLIScanner(engine, instrumentor, er, cliExecutor, di.LearnService(), notifier, di.ConfigResolver(), testutil.NewTestProgressTracker(t).Channel())
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(filepath.Join(workingDir, "testdata", "package.json"))
