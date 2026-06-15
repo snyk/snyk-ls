@@ -38,7 +38,7 @@ func NewCodeTrackerFactory(logger *zerolog.Logger, progressChannel chan types.Pr
 }
 
 func (t trackerFactory) GenerateTracker() codeClientScan.Tracker {
-	newTracker := progress.NewTrackerWithChannel(t.progressChannel, true, t.logger)
+	newTracker := progress.NewTaskWithChannel(t.progressChannel, true, t.logger)
 	return newCodeTracker(newTracker.GetChannel(), newTracker.GetCancelChannel())
 }
 

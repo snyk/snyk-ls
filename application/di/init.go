@@ -18,6 +18,7 @@
 package di
 
 import (
+	"context"
 	"sync"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -102,12 +103,15 @@ type Dependencies struct {
 	CodeActionService *codeaction.CodeActionsService
 	Installer         install.Installer
 	CommandService    types.CommandService
-	// ProgressChannel receives scanner progress events that createProgressListener
-	// drains and forwards to the LSP client. Currently points to the process-global
-	// progress.ToServerProgressChannel because all scanners write to it via
-	// progress.NewTracker(). Full per-server isolation requires migrating scanner
-	// callers to progress.NewTrackerWithChannel — deferred to a follow-up.
-	ProgressChannel chan types.ProgressParams
+	// ProgressTracker is the per-server Tracker of the progress channel and the
+	// token→task registry [IDE-2036]. Each server instance has its own Tracker so
+	// progress events from one server cannot leak to another server's listener.
+	ProgressTracker *progress.Tracker
+	// ScanCtx is a server-lifetime context for workspace scan goroutines.
+	// Canceling ScanCancel on shutdown ensures in-flight scan goroutines exit
+	// cleanly, preventing file-handle leaks on Windows [IDE-2036].
+	ScanCtx    context.Context
+	ScanCancel context.CancelFunc
 }
 
 // buildDependencies constructs a fully-initialized set of production dependencies
@@ -116,7 +120,7 @@ type Dependencies struct {
 // It returns the Dependencies struct, the initialize.Initializer, and the concrete
 // *treeview.TreeScanStateEmitter (nil when creation failed) so Init() can assign
 // the global treeEmitterInstance without a runtime type assertion.
-func buildDependencies(engine workflow.Engine, tokenService types.TokenService, progressCh chan types.ProgressParams) (Dependencies, initialize.Initializer, *treeview.TreeScanStateEmitter) {
+func buildDependencies(engine workflow.Engine, tokenService types.TokenService, progressOwner *progress.Tracker) (Dependencies, initialize.Initializer, *treeview.TreeScanStateEmitter) {
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 
@@ -172,6 +176,7 @@ func buildDependencies(engine workflow.Engine, tokenService types.TokenService, 
 	localCodeInstrumentor := code.NewCodeInstrumentor()
 	localCodeErrorReporter := code.NewCodeErrorReporter(localErrorReporter)
 
+	progressCh := progressOwner.Channel()
 	localIaCScanner := iac.New(conf, logger, localInstrumentor, localErrorReporter, localSnykCli, localConfigResolver, progressCh)
 	localOpenSourceScanner := oss.NewCLIScanner(engine, localInstrumentor, localErrorReporter, localSnykCli, localLearnService, localNotifier, localConfigResolver, progressCh)
 	localScanNotifier, _ := appNotification.NewScanNotifier(localNotifier, localConfigResolver)
@@ -190,12 +195,17 @@ func buildDependencies(engine workflow.Engine, tokenService types.TokenService, 
 	localScanner := scanner2.NewDelegatingScanner(engine, tokenService, localScanInitializer, localInstrumentor, localScanNotifier, localSnykApiClient, localAuthenticationService, localNotifier, localScanPersister, localScanStateAggregator, localConfigResolver, localSnykCodeScanner, localIaCScanner, localOpenSourceScanner, localSecretsScanner)
 	localLdxSyncService := command.NewLdxSyncService(localConfigResolver)
 
+	// Server-lifetime scan context: canceled on shutdown so that in-flight scan
+	// goroutines exit cleanly, preventing file-handle leaks on Windows [IDE-2036].
+	// Created before the command service so it can be injected at construction [Decision D1].
+	localScanCtx, localScanCancel := context.WithCancel(context.Background())
+
 	// Application layer
 	w := workspace.New(conf, logger, localInstrumentor, localScanner, localHoverService, localScanNotifier, localNotifier, localScanPersister, localScanStateAggregator, localFeatureFlagService, localConfigResolver, engine)
 	config.SetWorkspace(conf, w)
 	localFileWatcher := watcher.NewFileWatcher()
 	localCodeActionService := codeaction.NewService(engine, w, localFileWatcher, localNotifier, localFeatureFlagService, localConfigResolver)
-	localCommandService := command.NewService(engine, logger, localAuthenticationService, localFeatureFlagService, localNotifier, localLearnService, w, localSnykCodeScanner, localSnykCli, localLdxSyncService, localConfigResolver, localScanStateAggregator.StateSnapshot)
+	localCommandService := command.NewService(engine, logger, localAuthenticationService, localFeatureFlagService, localNotifier, localLearnService, w, localSnykCodeScanner, localSnykCli, localLdxSyncService, localConfigResolver, localScanStateAggregator.StateSnapshot, localScanCtx)
 
 	var localInlineValueProvider snyk.InlineValueProvider
 	if ivp, ok := localScanner.(snyk.InlineValueProvider); ok {
@@ -221,7 +231,9 @@ func buildDependencies(engine workflow.Engine, tokenService types.TokenService, 
 		CodeActionService:     localCodeActionService,
 		Installer:             localInstaller,
 		CommandService:        localCommandService,
-		ProgressChannel:       progressCh,
+		ProgressTracker:       progressOwner,
+		ScanCtx:               localScanCtx,
+		ScanCancel:            localScanCancel,
 	}
 	return deps, localScanInitializer, localTreeEmitterInstance
 }
@@ -234,7 +246,8 @@ func Init(engine workflow.Engine, tokenService types.TokenService) Dependencies 
 		treeEmitterInstance.Dispose()
 	}
 
-	deps, initializer, treeEmitter := buildDependencies(engine, tokenService, progress.ToServerProgressChannel)
+	globalOwner := progress.NewTracker(engine.GetLogger())
+	deps, initializer, treeEmitter := buildDependencies(engine, tokenService, globalOwner)
 
 	// Populate package-level globals for accessor functions.
 	notifier = deps.Notifier
@@ -264,8 +277,8 @@ func Init(engine workflow.Engine, tokenService types.TokenService) Dependencies 
 // package-level global, so multiple callers (e.g. parallel smoke-test servers)
 // are safe to run concurrently without a data race.
 func RealDependencies(engine workflow.Engine, tokenService types.TokenService) Dependencies {
-	progressCh := make(chan types.ProgressParams, 1000)
-	deps, _, _ := buildDependencies(engine, tokenService, progressCh)
+	owner := progress.NewTracker(engine.GetLogger())
+	deps, _, _ := buildDependencies(engine, tokenService, owner)
 	return deps
 }
 

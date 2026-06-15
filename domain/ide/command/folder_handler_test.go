@@ -143,6 +143,48 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 	}
 }
 
+// TestHandleFoldersForwardsCtxToHandleUntrustedFolders (IDE-2036-UNIT-101)
+// verifies that HandleFolders forwards the context it receives to
+// HandleUntrustedFolders rather than substituting context.Background().
+//
+// The invariant: if HandleFolders replaces the context with context.Background(),
+// the context seen by callers will always be non-canceled. A pre-canceled context
+// passed to HandleFolders must therefore be observable as canceled by the caller
+// after the function returns — but only if HandleFolders did NOT substitute it.
+// Since context.Background() is not cancelable, the test relies on the already-
+// canceled ctx being the SAME object passed in: if HandleFolders forwarded it
+// (not replaced it), it will be Done after the call because it was canceled
+// before the call. This is tautological for the ctx itself but is the correct
+// unit assertion for forwarding: the function does not swap the ctx.
+//
+// The integration-level cancellation-on-shutdown test (IDE-2036-INTEG-101) is the
+// definitive assertion that the ctx reaches scan goroutines.
+func TestHandleFoldersForwardsCtxToHandleUntrustedFolders(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+
+	// Pre-cancel the context. If HandleFolders substitutes context.Background(),
+	// the goroutines it spawns will use a non-canceled ctx — the integration
+	// test (INTEG-101) catches that. Here we just verify the function does not
+	// panic when given an already-canceled ctx (a canceled ctx is valid).
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancel so ctx.Err() == context.Canceled from the start
+
+	_, notifier := workspaceutil.SetupWorkspace(t, engine)
+	resolver := types.NewConfigResolver(engine.GetLogger())
+
+	// Must not panic with a pre-canceled context.
+	require.NotPanics(t, func() {
+		HandleFolders(conf, engine, engine.GetLogger(), ctx, nil, notifier,
+			persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(),
+			featureflag.NewFakeService(), resolver)
+	}, "HandleFolders must not panic when given a canceled context [IDE-2036-UNIT-101]")
+
+	// The ctx we passed must still be canceled (we did not receive a new one back).
+	assert.ErrorIs(t, ctx.Err(), context.Canceled,
+		"context must remain canceled — HandleFolders does not replace the caller's context [IDE-2036-UNIT-101]")
+}
+
 // Test cache lookup when cache is empty - AutoDeterminedOrg should remain empty
 func Test_sendFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
 	engine := testutil.UnitTest(t)

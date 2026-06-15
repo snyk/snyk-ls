@@ -37,7 +37,6 @@ func Test_Concurrent_CLI_Runs(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	srv, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
-	setSmokeLogLevel("info")
 	lspClient := srv.Client
 
 	// create clones and make them workspace folders

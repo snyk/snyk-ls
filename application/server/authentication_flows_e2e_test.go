@@ -392,6 +392,7 @@ func startE2ELocalServer(
 		deps.LdxSyncService,
 		deps.ConfigResolver,
 		nil,
+		deps.ScanCtx,
 	)
 	recorder := &testsupport.JsonRPCRecorder{}
 	loc := startServer(engine, tokenService, nil, recorder, deps)

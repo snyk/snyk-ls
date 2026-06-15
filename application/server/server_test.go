@@ -93,6 +93,7 @@ type serverTestConfig struct {
 	useRealDI    bool
 	overrideDeps *di.Dependencies
 	callbackFn   onCallbackFn
+	apiEndpoint  string
 }
 
 func WithRealDI() ServerTestOption {
@@ -110,6 +111,19 @@ func WithDeps(deps di.Dependencies) ServerTestOption {
 func WithCallback(fn onCallbackFn) ServerTestOption {
 	return func(cfg *serverTestConfig) {
 		cfg.callbackFn = fn
+	}
+}
+
+// WithAPIEndpoint sets the Snyk API endpoint directly on the per-server engine
+// configuration instead of routing it through os.Setenv("SNYK_API"). This makes
+// the endpoint deterministic and parallel-safe: each server sees the endpoint it
+// was configured with, regardless of what other parallel tests have set in the
+// process environment.
+//
+// An empty endpoint is a no-op (the engine's existing config is left unchanged).
+func WithAPIEndpoint(endpoint string) ServerTestOption {
+	return func(cfg *serverTestConfig) {
+		cfg.apiEndpoint = endpoint
 	}
 }
 
@@ -132,8 +146,16 @@ func setupServer(
 		t.Fatal("cannot use WithRealDI and WithDeps together - choose one or the other")
 	}
 
-	// Ensure SNYK_API endpoint is set in config if environment variable is present
-	endpoint := os.Getenv("SNYK_API")
+	// Apply API endpoint to the engine configuration.
+	// WithAPIEndpoint takes precedence over the SNYK_API environment variable:
+	// it sets the endpoint directly on the per-server config object, making it
+	// parallel-safe and per-server deterministic. The env var fallback is kept
+	// for tests that don't call WithAPIEndpoint but still respect a CI-level
+	// SNYK_API override.
+	endpoint := cfg.apiEndpoint
+	if endpoint == "" {
+		endpoint = os.Getenv("SNYK_API")
+	}
 	if endpoint != "" {
 		config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), endpoint)
 	}
@@ -172,12 +194,11 @@ func setupServer(
 // the shutdown handler (per-server stop channel), so hover state is the only
 // thing that needs explicit cleanup here.
 //
-// Note: progress.CleanupChannels() is intentionally NOT called. Under t.Parallel(),
-// canceling all active trackers in the global map would silently abort concurrent
-// tests' in-flight scans. progress.ToServerProgressChannel is a shared bounded
-// buffer (1000); stale messages from completed tests are display-only noise and do
-// not affect test correctness. Full isolation requires threading a per-server
-// progress channel through NewTracker — deferred to a follow-up.
+// Per-server progress isolation is fully in place [IDE-2036]: each server owns
+// its own *progress.Tracker (deps.ProgressTracker) whose channel is the only
+// source of progress events for that server's listener. No global progress
+// channel exists; cleanup of the per-server channel is handled by the
+// server's shutdown path (progressStopChan).
 func cleanupChannels(deps di.Dependencies) {
 	if deps.HoverService != nil {
 		deps.HoverService.ClearAllHovers()
@@ -1030,15 +1051,16 @@ func Test_textDocumentDidSaveHandler_shouldTriggerScanForDotSnykFile(t *testing.
 			// notifications expected (one per product). The reference-scan goroutine
 			// returns early (!SettingScanNetNew) and emits no additional notification.
 			return terminal >= 2
-		}, 60*time.Second, time.Second)
+		}, 120*time.Second, time.Second)
 	})
 
 	// Wait for $/snyk.scan notification
+	// Generous timeout: under all-shards-in-one-process smoke runs the CLI scan queues for a slot on the process-global semaphore; isolation/CI (separate-process shards) complete fast [IDE-2036].
 	assert.Eventually(
 		t,
 		checkForSnykScan(t, jsonRPCRecorder),
-		5*time.Second,
-		time.Millisecond,
+		120*time.Second,
+		100*time.Millisecond,
 	)
 }
 

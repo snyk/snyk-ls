@@ -35,7 +35,10 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// CreateFromCommandData gets a command based on the given parameters that can be passed to the CommandService
+// CreateFromCommandData gets a command based on the given parameters that can be passed to the CommandService.
+// scanCtx is the server-lifetime context injected into scan commands so their background goroutines are
+// canceled on shutdown rather than running forever on context.Background() [IDE-2036].
+//
 // nolint: gocyclo, nolintlint // this is a factory, it's ok to have high cyclomatic complexity here
 func CreateFromCommandData(
 	ctx context.Context,
@@ -52,6 +55,7 @@ func CreateFromCommandData(
 	ldxSyncService LdxSyncService,
 	configResolver types.ConfigResolverInterface,
 	scanStateFunc func() scanstates.StateSnapshot,
+	scanCtx context.Context, //nolint:revive // context.Context as non-first param: stored dependency, not call-scoped
 ) (types.Command, error) {
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
@@ -67,9 +71,9 @@ func CreateFromCommandData(
 			featureFlagService: featureFlagService,
 		}, nil
 	case types.WorkspaceScanCommand:
-		return &workspaceScanCommand{command: commandData, srv: srv, engine: engine}, nil
+		return &workspaceScanCommand{command: commandData, srv: srv, engine: engine, scanCtx: scanCtx}, nil
 	case types.WorkspaceFolderScanCommand:
-		return &workspaceFolderScanCommand{command: commandData, srv: srv, engine: engine}, nil
+		return &workspaceFolderScanCommand{command: commandData, srv: srv, engine: engine, scanCtx: scanCtx}, nil
 	case types.OpenBrowserCommand:
 		return &openBrowserCommand{command: commandData, logger: logger}, nil
 	case types.LoginCommand:
@@ -122,7 +126,7 @@ func CreateFromCommandData(
 	case types.DirectoryDiagnosticsCommand:
 		return &directoryDiagnosticsCommand{command: commandData, engine: engine, configResolver: configResolver}, nil
 	case types.ClearCacheCommand:
-		return &clearCache{command: commandData, engine: engine}, nil
+		return &clearCache{command: commandData, engine: engine, scanCtx: scanCtx}, nil
 	case types.GenerateIssueDescriptionCommand:
 		return &generateIssueDescription{
 			command:            commandData,

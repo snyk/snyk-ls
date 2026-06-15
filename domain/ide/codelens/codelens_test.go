@@ -29,7 +29,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/code"
-	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -49,8 +48,8 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	engine, tokenService := testutil.IntegTestWithEngine(t)
 	deps := di.TestInit(t, engine, tokenService, nil) // IntegTest doesn't automatically inits DI
 	testutil.EnableSastAndAutoFix(engine)
-	// this is using the real progress channel, so we need to listen to it
-	dummyProgressListeners(t)
+	// Drain the per-test progress channel so scanners do not block on a full buffer.
+	dummyProgressListeners(t, deps.ProgressTracker.Channel())
 
 	// Configure fake authentication to avoid real API calls
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
@@ -83,23 +82,14 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	assert.Equal(t, lenses[0].Command.Title, code.FixIssuePrefix+code.DontUsePrintStackTrace)
 }
 
-func dummyProgressListeners(t *testing.T) {
+// dummyProgressListeners starts a goroutine that drains the given per-test
+// progress channel so scanner goroutines do not block on a full buffer.
+// The channel is the one owned by the per-test progress.Tracker (deps.ProgressTracker.Channel()).
+func dummyProgressListeners(t *testing.T, ch <-chan types.ProgressParams) {
 	t.Helper()
-	t.Cleanup(func() {
-		// Do NOT call CleanupChannels() — it cancels all global trackers.
-		// Drain the global channel only.
-	drainCodelens:
-		for {
-			select {
-			case <-progress.ToServerProgressChannel:
-			default:
-				break drainCodelens
-			}
-		}
-	})
 	go func() {
-		for {
-			<-progress.ToServerProgressChannel
+		for range ch {
+			// discard: we only need to keep the channel empty so scanners can proceed
 		}
 	}()
 }

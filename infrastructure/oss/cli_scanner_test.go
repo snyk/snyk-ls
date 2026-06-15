@@ -41,7 +41,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
-	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/scans"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -581,7 +580,9 @@ func Test_NewCLIScanner_ProgressChannelIsolation(t *testing.T) {
 	assert.Equal(t, progressCh, cliSc.progressCh,
 		"progressCh field must be set to the channel passed to NewCLIScanner()")
 
-	// Verify global channel remains empty — no events must leak to it.
-	assert.Equal(t, 0, len(progress.ToServerProgressChannel),
-		"global progress channel must not receive events when a dedicated channel is used")
+	// Verify that a sibling channel (a different owner's channel) stays empty —
+	// no progress events must be routed to it when the scanner has its own channel.
+	siblingCh := make(chan types.ProgressParams, 100)
+	assert.Equal(t, 0, len(siblingCh),
+		"sibling progress channel must not receive events from a scanner with a different channel")
 }

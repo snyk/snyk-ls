@@ -250,7 +250,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	ctx, cancel := context.WithCancel(s.Context())
 	defer cancel()
 
-	p := progress.NewTrackerWithChannel(cliScanner.progressCh, true, cliScanner.engine.GetLogger())
+	p := progress.NewTaskWithChannel(cliScanner.progressCh, true, cliScanner.engine.GetLogger())
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
 	p.BeginUnquantifiableLength("Scanning for Snyk Open Source issues", string(path))
 	defer p.EndWithMessage("Snyk Open Source scan completed.")

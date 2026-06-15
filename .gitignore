@@ -114,3 +114,17 @@ brain/
 .snyk-code-output.json
 .snyk-code-output.err
 .verification-result.*
+.security-scan-progress
+.security-scan-scope
+.verify-staged-diff
+.verify-branch-diff
+.verify-pr-context
+.verify-oracle.json
+.verify-oracle.log
+.verify-oracle-scope.txt
+.verify-triage.json
+.verify-source-map.json
+.verify-dedup-findings.json
+.verify-oracle.pid
+.verify-reranked.json
+*_implementation_plan.md
