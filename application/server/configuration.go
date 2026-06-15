@@ -1118,6 +1118,10 @@ func applyEnvironment(conf configuration.Configuration, logger *zerolog.Logger, 
 			logger.Err(err).Msgf("couldn't set env variable %s", envVar)
 		}
 	}
+	// Persist the raw string so the settings dialog can repopulate this field on reopen.
+	// os.Setenv alone is not readable back from config; SetGlobalUser writes to UserGlobalKey
+	// which r.GetString(SettingAdditionalEnvironment, nil) resolves via the folder-scope chain.
+	types.SetGlobalUser(conf, types.SettingAdditionalEnvironment, v)
 }
 
 func applyCodeEndpoint(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {

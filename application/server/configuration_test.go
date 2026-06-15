@@ -2880,3 +2880,26 @@ func Test_ApplyOrganization_LDXSyncRefreshesForGlobalOrgFallback(t *testing.T) {
 		})
 	}
 }
+
+func TestApplyEnvironment_PersistsGlobalUser(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	t.Setenv("SNYK_TEST_IDE2110_X", "") // ensure clean state; t.Setenv restores on cleanup
+
+	settings := map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "SNYK_TEST_IDE2110_X=hello;SNYK_TEST_IDE2110_Y=world", Changed: true},
+	}
+	applyEnvironment(conf, logger, settings)
+
+	// os.Setenv side effect
+	assert.Equal(t, "hello", os.Getenv("SNYK_TEST_IDE2110_X"))
+	assert.Equal(t, "world", os.Getenv("SNYK_TEST_IDE2110_Y"))
+
+	// Persisted to config for dialog pre-population
+	assert.Equal(t, "SNYK_TEST_IDE2110_X=hello;SNYK_TEST_IDE2110_Y=world", types.GetGlobalString(conf, types.SettingAdditionalEnvironment))
+
+	// Cleanup SNYK_TEST_IDE2110_Y (only X is tracked by t.Setenv)
+	t.Cleanup(func() { _ = os.Unsetenv("SNYK_TEST_IDE2110_Y") })
+}

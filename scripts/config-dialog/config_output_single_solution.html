@@ -1170,6 +1170,34 @@ button.secondary[disabled] {
                         </div>
                     </div>
                 </div>
+
+                
+                <div class="section">
+                    <div class="form-group">
+                        <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#defaults-advanced" aria-expanded="false" aria-controls="defaults-advanced">
+                            <span data-toggle="tooltip" title="Advanced default settings including CLI parameters and environment variables applied to all solutions.">Advanced</span>
+                            <span class="collapse-icon">&#9660;</span>
+                        </button>
+                        <div class="collapse ml-1" id="defaults-advanced">
+                            <div class="mt-2">
+                                <div class="info-box">
+                                    <p>These values combine with any per-solution values rather than replacing them. CLI parameters from both levels are used together; environment variables defined here are overridden by per-solution values when the same key is set in both.</p>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="additional_parameters"><span data-toggle="tooltip" title="<p>Default CLI parameters for all solution scans (space-separated).</p><p>Example: <code>--severity-threshold=high --debug</code></p><p>These are combined with any per-solution parameters.</p>">Additional CLI parameters</span></label>
+                                    <input type="text" id="additional_parameters" name="additional_parameters" value="" placeholder="--severity-threshold=high">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="additional_environment"><span data-toggle="tooltip" title="<p>Default environment variables for all solution scans.</p><p>Format: <code>VAR1=value1;VAR2=value2</code></p><p>Per-solution values override these on key conflicts.</p>">Additional environment variables</span></label>
+                                    <input type="text" id="additional_environment" name="additional_environment" value="" placeholder="VAR1=value1;VAR2=value2">
+                                    <div id="additional_environment-error" class="error-message hidden">Invalid format. Use: VAR1=value1;VAR2=value2</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             
@@ -3096,6 +3124,20 @@ if (window.cssVars) {
 		}
 	};
 
+	// Validate global (Project Defaults) additional environment variables on input
+	validation.validateGlobalAdditionalEnvOnInput = function() {
+		validation.validateAndShowError("additional_environment", "additional_environment-error", validation.validateAdditionalEnv);
+	};
+
+	// Initialize validation event listener for the global additional environment field
+	validation.initializeGlobalAdditionalEnvValidation = function() {
+		var dom = window.ConfigApp.dom;
+		var input = dom.get("additional_environment");
+		if (input) {
+			dom.addEvent(input, "input", validation.validateGlobalAdditionalEnvOnInput);
+		}
+	};
+
 	// Initialize all validation event listeners
 	validation.initializeAllValidation = function() {
 		var dom = window.ConfigApp.dom;
@@ -3129,6 +3171,9 @@ if (window.cssVars) {
 		if (cliVersionInput) {
 			dom.addEvent(cliVersionInput, "input", validation.validateCliVersionOnInput);
 		}
+
+		// Global (Project Defaults) additional env validation
+		validation.initializeGlobalAdditionalEnvValidation();
 
 		// Per-folder additional env validation
 		validation.initializeFolderAdditionalEnvValidation();

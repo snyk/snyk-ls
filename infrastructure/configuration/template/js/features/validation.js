@@ -275,6 +275,20 @@
 		}
 	};
 
+	// Validate global (Project Defaults) additional environment variables on input
+	validation.validateGlobalAdditionalEnvOnInput = function() {
+		validation.validateAndShowError("additional_environment", "additional_environment-error", validation.validateAdditionalEnv);
+	};
+
+	// Initialize validation event listener for the global additional environment field
+	validation.initializeGlobalAdditionalEnvValidation = function() {
+		var dom = window.ConfigApp.dom;
+		var input = dom.get("additional_environment");
+		if (input) {
+			dom.addEvent(input, "input", validation.validateGlobalAdditionalEnvOnInput);
+		}
+	};
+
 	// Initialize all validation event listeners
 	validation.initializeAllValidation = function() {
 		var dom = window.ConfigApp.dom;
@@ -308,6 +322,9 @@
 		if (cliVersionInput) {
 			dom.addEvent(cliVersionInput, "input", validation.validateCliVersionOnInput);
 		}
+
+		// Global (Project Defaults) additional env validation
+		validation.initializeGlobalAdditionalEnvValidation();
 
 		// Per-folder additional env validation
 		validation.initializeFolderAdditionalEnvValidation();
