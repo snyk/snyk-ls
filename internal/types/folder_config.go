@@ -589,8 +589,8 @@ func (fc *FolderConfig) applyPreferredOrg(update *LspFolderConfig, handled map[s
 	// and lives at UserGlobalKey — no GAF default function, no /rest/self call.
 	// Returns "" when the user never called SetOrganization or explicitly cleared it.
 	curOrgSetByUser := getBoolFromConfig(conf, fp, SettingOrgSetByUser)
-	globalOrg := GetGlobalString(conf, SettingLastSetOrganization)
-	orgSetByUser := preferredOrg != "" || (curOrgSetByUser && globalOrg != "")
+	globalOrgSetByUser := GetGlobalString(conf, SettingLastSetOrganization) != ""
+	orgSetByUser := preferredOrg != "" || (curOrgSetByUser && globalOrgSetByUser)
 	conf.PersistInStorage(keyPreferred)
 	conf.PersistInStorage(keyOrgSetByUser)
 	conf.Set(keyPreferred, &configresolver.LocalConfigField{Value: preferredOrg, Changed: true})
