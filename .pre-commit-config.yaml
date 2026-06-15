@@ -28,6 +28,12 @@ repos:
     rev: v1.43.0
     hooks:
       - id: ggshield
+        alias: ggshield-auth-login
+        name: ggshield auth login
+        language_version: python3
+        stages: [pre-commit]
+        args: ["auth", "login"]
+      - id: ggshield
         language_version: python3
         stages: [pre-commit]
   - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
