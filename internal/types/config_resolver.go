@@ -244,29 +244,23 @@ func (r *ConfigResolver) getAutoDeterminedOrgFromConf(folderPath string) string 
 	return autoDetermined
 }
 
-// GlobalOrg returns the global organization from configuration, used as fallback
-// when no folder-specific org is available.
-// Reads from UserGlobalKey(SettingOrganization) first (set by SetOrganization via LSP
-// settings; no GAF default function, so no network call), then falls back to the bare
-// ORGANIZATION key — but only if it is already cached in viper. Calling Get on
-// configuration.ORGANIZATION when unset would invoke GAF's defaultFuncOrganization,
-// which issues /rest/self synchronously. IsSet bypasses default-value functions,
-// keeping this read network-free for hot paths like StateSnapshot. Auto-determination
-// stays the responsibility of GetGlobalOrganization.
+// GlobalOrg returns the global organization from the bare ORGANIZATION key, or
+// "" when it has not been set. Reading a set value resolves it through GAF's
+// defaultFuncOrganization (e.g. slug -> id). That resolution is safe on hot paths
+// like StateSnapshot: GAF default-value caching is always enabled in the prod CLI
+// path, so after priming (see GetGlobalOrganization) the value is served from
+// cache, and GAF's STOP_REQUESTS_WITHOUT_AUTH middleware short-circuits any
+// unauthenticated API call with an in-memory 401. The IsSet guard keeps an unset
+// key from triggering default-org resolution; use GetGlobalOrganization if you
+// also want resolution when the key is unset.
 func (r *ConfigResolver) GlobalOrg() string {
 	if r.prefixKeyConf == nil {
 		return ""
 	}
-	if s := GetGlobalString(r.prefixKeyConf, SettingOrganization); s != "" {
-		return s
-	}
 	if !r.prefixKeyConf.IsSet(configuration.ORGANIZATION) {
 		return ""
 	}
-	if s, ok := r.prefixKeyConf.Get(configuration.ORGANIZATION).(string); ok && s != "" {
-		return s
-	}
-	return ""
+	return r.prefixKeyConf.GetString(configuration.ORGANIZATION)
 }
 
 // GetValue resolves a configuration value for the given setting and folder.
