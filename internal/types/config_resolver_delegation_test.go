@@ -262,7 +262,7 @@ func TestConfigResolver_ProductEnablement_IDEGlobal_vs_LdxSyncLocked(t *testing.
 		resolver, conf := newResolver(t)
 		orgId := "test-org"
 		// Set global org so the resolver knows which org's remote config to use
-		conf.Set(configresolver.UserGlobalKey(types.SettingOrganization), orgId)
+		conf.Set(configuration.ORGANIZATION, orgId)
 		// IDE enables globally
 		conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
 		// Locked remote org disables — locked always wins
@@ -421,7 +421,7 @@ func TestConfigResolver_FC059_GetEffectiveOrgFromConfiguration(t *testing.T) {
 	t.Run("falls back to global org when both are empty", func(t *testing.T) {
 		conf.Set(configresolver.UserFolderKey(folderPath, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: false, Changed: true})
 		conf.Set(configresolver.FolderMetadataKey(folderPath, types.SettingAutoDeterminedOrg), nil)
-		conf.Set(configresolver.UserGlobalKey(types.SettingOrganization), "global-org")
+		conf.Set(configuration.ORGANIZATION, "global-org")
 		fc := &types.FolderConfig{FolderPath: "/test/folder"}
 
 		orgConfig := types.NewLDXSyncOrgConfig("global-org")
@@ -432,10 +432,9 @@ func TestConfigResolver_FC059_GetEffectiveOrgFromConfiguration(t *testing.T) {
 		assert.Equal(t, configresolver.ConfigSourceRemote, source)
 	})
 
-	t.Run("falls back to configuration.ORGANIZATION when UserGlobalKey is empty", func(t *testing.T) {
+	t.Run("falls back to configuration.ORGANIZATION when set", func(t *testing.T) {
 		conf.Set(configresolver.UserFolderKey(folderPath, types.SettingOrgSetByUser), &configresolver.LocalConfigField{Value: false, Changed: true})
 		conf.Set(configresolver.FolderMetadataKey(folderPath, types.SettingAutoDeterminedOrg), nil)
-		conf.Set(configresolver.UserGlobalKey(types.SettingOrganization), "")
 		conf.Set(configuration.ORGANIZATION, "gaf-global-org")
 		fc := &types.FolderConfig{FolderPath: "/test/folder"}
 

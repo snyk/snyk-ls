@@ -737,7 +737,7 @@ func setupMockOrgSetAndGet(t *testing.T, setCallCounter *int, fakeSlugToUUIDReso
 	// Track last_set_organization in GAF. SetOrganization writes wrap values in
 	// *configresolver.LocalConfigField{Changed:true}; the redundant-set check reads via
 	// types.GetGlobalString, which walks remote-machine -> user-global -> default. We
-	// stub the wrapper-internal Get calls accordingly.
+	// stub the wrapper-internal Get calls accordingly for last_set_organization.
 	var lastSetOrg string
 	lastSetOrgKey := configresolver.UserGlobalKey(types.SettingLastSetOrganization)
 	mockConfig.EXPECT().
@@ -770,11 +770,6 @@ func setupMockOrgSetAndGet(t *testing.T, setCallCounter *int, fakeSlugToUUIDReso
 				lastSetOrg = s
 			}
 		}).
-		AnyTimes()
-
-	// SetOrganization also sets UserGlobalKey(SettingOrganization) for /rest/self-free reads.
-	mockConfig.EXPECT().
-		Set(configresolver.UserGlobalKey(types.SettingOrganization), gomock.Any()).
 		AnyTimes()
 
 	return mockConfig

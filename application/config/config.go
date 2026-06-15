@@ -640,19 +640,20 @@ func getCustomEndpointUrlFromSnykApi(snykApi string, subdomain string) (string, 
 }
 
 // SetOrganization sets the organization on the given GAF configuration.
-// Also stores the org under UserGlobalKey(SettingOrganization) so it can be
-// read without triggering GAF's /rest/self auto-determination (which fires
-// on every Get("org") call when the result is a slug or the cache is cleared).
+// Also has checks to ensure the same org set multiple times will be a no-op,
+// and not cause more slug to UUID resolutions.
 func SetOrganization(conf configuration.Configuration, organization string) {
 	organization = strings.TrimSpace(organization)
 
+	// If the last set org is what they are trying to set, skip.
+	// This prevents us overriding a UUID in the GAF cache with the original slug
+	// and needing to resolve it again.
 	lastSet := types.GetGlobalString(conf, types.SettingLastSetOrganization)
 	if organization == lastSet {
 		return
 	}
 
 	conf.Set(configuration.ORGANIZATION, organization)
-	types.SetGlobalUser(conf, types.SettingOrganization, organization)
 	types.SetGlobalUser(conf, types.SettingLastSetOrganization, organization)
 }
 

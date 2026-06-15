@@ -64,7 +64,6 @@ type ExternalCallsProvider interface {
 	getIgnoreApprovalEnabled(org string) (bool, error)
 	getFeatureFlag(flag string, org string) (bool, error)
 	getSastSettings(org string) (*sast_contract.SastResponse, error)
-	folderOrganization(path types.FilePath) string
 }
 
 type Service interface {
@@ -109,32 +108,6 @@ func (p *externalCallsProvider) getSastSettings(org string) (*sast_contract.Sast
 	}
 
 	return sastResponse, nil
-}
-
-func (p *externalCallsProvider) folderOrganization(path types.FilePath) string {
-	// Read the org from already-stored config values only — never trigger GAF's
-	// /rest/self auto-determination. GAF's Get/GetString("org") calls the
-	// defaultFuncOrganization callback on every invocation when the result is a
-	// slug or the defaultCache is cleared (e.g. by processConfigSettings).
-	//
-	// Safe keys (no GAF default function registered):
-	//   1. AutoDeterminedOrg: stored by LDX-Sync via SetAutoDeterminedOrg.
-	//   2. PreferredOrg: stored by updateFolderOrgIfNeeded / user settings.
-	//   3. UserGlobalKey(SettingOrganization): stored by SetOrganization.
-	// If none of these are set, the org is unknown (e.g. LDX-Sync has not run
-	// yet or failed with 401), and callers will handle the empty string.
-	snapshot := types.ReadFolderConfigSnapshot(p.conf, path)
-	if snapshot.OrgSetByUser && snapshot.PreferredOrg != "" {
-		return snapshot.PreferredOrg
-	}
-	if snapshot.AutoDeterminedOrg != "" {
-		return snapshot.AutoDeterminedOrg
-	}
-	// UserGlobalKey(SettingOrganization) is set by SetOrganization (explicit IDE/user setting).
-	if s := types.GetGlobalString(p.conf, types.SettingOrganization); s != "" {
-		return s
-	}
-	return ""
 }
 
 type serviceImpl struct {
@@ -308,7 +281,7 @@ func (s *serviceImpl) GetFromFolderConfig(folderPath types.FilePath, flag string
 
 func (s *serviceImpl) PopulateFolderConfig(folderConfig *types.FolderConfig) {
 	logger := s.logger.With().Str("method", "PopulateFolderConfig").Str("folderPath", string(folderConfig.FolderPath)).Logger()
-	org := s.provider.folderOrganization(folderConfig.FolderPath)
+	org := config.FolderOrganizationFromConfig(s.conf, folderConfig.FolderPath, s.logger)
 	logger.Debug().Str("resolvedOrg", org).Msg("resolved org for feature flag fetch")
 
 	// Fetch feature flags and SAST settings in parallel

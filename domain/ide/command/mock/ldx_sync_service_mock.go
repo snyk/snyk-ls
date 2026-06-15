@@ -41,17 +41,17 @@ func (m *MockLdxSyncApiClient) EXPECT() *MockLdxSyncApiClientMockRecorder {
 }
 
 // GetUserConfigForProject mocks base method.
-func (m *MockLdxSyncApiClient) GetUserConfigForProject(ctx context.Context, engine workflow.Engine, projectPath, preferredOrg string) ldx_sync_config.LdxSyncConfigResult {
+func (m *MockLdxSyncApiClient) GetUserConfigForProject(ctx context.Context, engine workflow.Engine, projectPath, userSelectedOrg string) ldx_sync_config.LdxSyncConfigResult {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetUserConfigForProject", ctx, engine, projectPath, preferredOrg)
+	ret := m.ctrl.Call(m, "GetUserConfigForProject", ctx, engine, projectPath, userSelectedOrg)
 	ret0, _ := ret[0].(ldx_sync_config.LdxSyncConfigResult)
 	return ret0
 }
 
 // GetUserConfigForProject indicates an expected call of GetUserConfigForProject.
-func (mr *MockLdxSyncApiClientMockRecorder) GetUserConfigForProject(ctx, engine, projectPath, preferredOrg interface{}) *gomock.Call {
+func (mr *MockLdxSyncApiClientMockRecorder) GetUserConfigForProject(ctx, engine, projectPath, userSelectedOrg interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserConfigForProject", reflect.TypeOf((*MockLdxSyncApiClient)(nil).GetUserConfigForProject), ctx, engine, projectPath, preferredOrg)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserConfigForProject", reflect.TypeOf((*MockLdxSyncApiClient)(nil).GetUserConfigForProject), ctx, engine, projectPath, userSelectedOrg)
 }
 
 // MockLdxSyncService is a mock of LdxSyncService interface.

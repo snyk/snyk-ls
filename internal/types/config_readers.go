@@ -52,19 +52,18 @@ func userGlobalValue(conf configuration.Configuration, key string) (any, bool) {
 
 // GetGlobalOrganization returns the effective global organization via GAF's standard
 // resolution chain (configuration.ORGANIZATION). GetString triggers /rest/self
-// auto-determination if no org is stored; we cache a successful result by storing it
-// back so defaultFuncOrganization returns it directly on the next call (via the UUID
-// existingValue fast-path) without an additional /rest/self network call.
+// auto-determination if no org is stored (GAF's default-value cache memoizes that
+// result, so repeat reads are already network-free).
 //
-// Doubles as the priming entry point for ConfigResolver.GlobalOrg() (gated on IsSet):
-// callers in updateCredentials and initializedHandler invoke this to populate viper
-// so hot-path readers like StateSnapshot find the cached UUID without firing
-// /rest/self themselves.
+// Doubles as the priming entry point for ConfigResolver.GlobalOrg(), which is gated on
+// IsSet. A resolving GetString populates GAF's default-value cache but does NOT mark the
+// key as explicitly set, so we store the result back to flip IsSet true. Callers in
+// updateCredentials and initializedHandler invoke this so hot-path readers like
+// StateSnapshot surface the org via GlobalOrg() without each needing to resolve it.
 func GetGlobalOrganization(conf configuration.Configuration) string {
 	org := conf.GetString(configuration.ORGANIZATION)
 	if org != "" {
-		// Store the resolved org so that defaultFuncOrganization's UUID fast-path
-		// returns it directly next time, avoiding /rest/self.
+		// Mark the resolved org as explicitly set so the IsSet-guarded GlobalOrg() surfaces it.
 		conf.Set(configuration.ORGANIZATION, org)
 	}
 	return org

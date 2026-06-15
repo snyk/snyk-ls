@@ -32,6 +32,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -234,7 +235,7 @@ func Test_ExtensionExecutor_UsesGlobalOrgWhenNoFolderOrg(t *testing.T) {
 
 	// Set only global org (UUID to avoid API resolution), no folder-specific org
 	globalOrgUUID := "00000000-0000-0000-0000-000000000001"
-	engine.GetConfiguration().Set(configuration.ORGANIZATION, globalOrgUUID)
+	config.SetOrganization(engine.GetConfiguration(), globalOrgUUID)
 
 	// Test
 	executor := NewExtensionExecutor(engine, testutil.DefaultConfigResolver(engine))
@@ -249,7 +250,7 @@ func Test_ExtensionExecutor_HandlesEmptyWorkingDir(t *testing.T) {
 
 	// Set global org as UUID
 	globalOrgUUID := "00000000-0000-0000-0000-000000000001"
-	engine.GetConfiguration().Set(configuration.ORGANIZATION, globalOrgUUID)
+	config.SetOrganization(engine.GetConfiguration(), globalOrgUUID)
 
 	// Test
 	executor := NewExtensionExecutor(engine, testutil.DefaultConfigResolver(engine))
@@ -267,7 +268,7 @@ func Test_ExtensionExecutor_SubstitutesOrgInCommandArgs(t *testing.T) {
 
 	// Set global org as a UUID
 	globalOrgUUID := "00000000-0000-0000-0000-000000000001"
-	engine.GetConfiguration().Set(configuration.ORGANIZATION, globalOrgUUID)
+	config.SetOrganization(engine.GetConfiguration(), globalOrgUUID)
 
 	// Create and store folder config with specific org UUID
 	folderOrgUUID := "00000000-0000-0000-0000-000000000002"
@@ -301,7 +302,7 @@ func Test_ExtensionExecutor_FallsBackToGlobalOrgOnResolutionFailure(t *testing.T
 
 	// Set global org as a UUID
 	globalOrgUUID := "00000000-0000-0000-0000-000000000001"
-	engine.GetConfiguration().Set(configuration.ORGANIZATION, globalOrgUUID)
+	config.SetOrganization(engine.GetConfiguration(), globalOrgUUID)
 
 	// Create and store folder config with a slug that will need resolution
 	// Using a slug format that would require API resolution

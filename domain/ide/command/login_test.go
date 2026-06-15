@@ -336,19 +336,15 @@ func TestLoginCommand_Execute_FeatureFlagsPopulatedBeforeAuthNotification(t *tes
 	provider := authentication.NewFakeCliAuthenticationProvider(engine)
 	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), sharedNotifier, testutil.DefaultConfigResolver(engine))
 
-	// Feature flag service that records what was in the notifier at the time PopulateFolderConfig ran.
-	populateCalled := false
+	// Record what was in the notifier at the time PopulateFolderConfig ran.
 	var authNotificationsSentBeforePopulate int
-	fakeFF := &trackingFeatureFlagService{
-		inner: featureflag.NewFakeService(),
-		onPopulate: func() {
-			populateCalled = true
-			for _, msg := range sharedNotifier.SentMessages() {
-				if _, ok := msg.(types.AuthenticationParams); ok {
-					authNotificationsSentBeforePopulate++
-				}
+	fakeFF := featureflag.NewFakeService()
+	fakeFF.OnPopulate = func() {
+		for _, msg := range sharedNotifier.SentMessages() {
+			if _, ok := msg.(types.AuthenticationParams); ok {
+				authNotificationsSentBeforePopulate++
 			}
-		},
+		}
 	}
 
 	mockLdxSync := mock_command.NewMockLdxSyncService(ctrl)
@@ -368,40 +364,10 @@ func TestLoginCommand_Execute_FeatureFlagsPopulatedBeforeAuthNotification(t *tes
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, result)
-	assert.True(t, populateCalled, "PopulateFolderConfig must be called during login")
+	assert.Equal(t, 1, fakeFF.PopulateFolderConfigCallCount, "PopulateFolderConfig must be called during login")
 	assert.Equal(t, 0, authNotificationsSentBeforePopulate,
 		"feature flags must be populated BEFORE $/snyk.hasAuthenticated notification is sent — "+
 			"otherwise the IDE triggers a scan before SAST settings are cached (IDE-1901)")
-}
-
-// trackingFeatureFlagService wraps a feature flag service and calls onPopulate / onFlushCache
-// each time PopulateFolderConfig / FlushCache is invoked, allowing tests to observe side effects.
-type trackingFeatureFlagService struct {
-	inner        featureflag.Service
-	onPopulate   func()
-	onFlushCache func()
-}
-
-func (t *trackingFeatureFlagService) GetFromFolderConfig(folderPath types.FilePath, flag string) bool {
-	return t.inner.GetFromFolderConfig(folderPath, flag)
-}
-
-func (t *trackingFeatureFlagService) PopulateFolderConfig(folderConfig *types.FolderConfig) {
-	t.inner.PopulateFolderConfig(folderConfig)
-	if t.onPopulate != nil {
-		t.onPopulate()
-	}
-}
-
-func (t *trackingFeatureFlagService) FlushCache() {
-	t.inner.FlushCache()
-	if t.onFlushCache != nil {
-		t.onFlushCache()
-	}
-}
-
-func (t *trackingFeatureFlagService) Override(flag string, value bool) {
-	t.inner.Override(flag, value)
 }
 
 func TestLoginCommand_Execute_FlushCacheBeforePopulate(t *testing.T) {
@@ -428,11 +394,9 @@ func TestLoginCommand_Execute_FlushCacheBeforePopulate(t *testing.T) {
 	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), sharedNotifier, testutil.DefaultConfigResolver(engine))
 
 	var callOrder []string
-	fakeFF := &trackingFeatureFlagService{
-		inner:        featureflag.NewFakeService(),
-		onFlushCache: func() { callOrder = append(callOrder, "flush") },
-		onPopulate:   func() { callOrder = append(callOrder, "populate") },
-	}
+	fakeFF := featureflag.NewFakeService()
+	fakeFF.OnFlushCache = func() { callOrder = append(callOrder, "flush") }
+	fakeFF.OnPopulate = func() { callOrder = append(callOrder, "populate") }
 
 	mockLdxSync := mock_command.NewMockLdxSyncService(ctrl)
 	mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
