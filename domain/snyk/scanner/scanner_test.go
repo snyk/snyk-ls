@@ -18,6 +18,7 @@ package scanner
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -138,17 +139,7 @@ func setupScannerWithResolver(t *testing.T, engine workflow.Engine, tokenService
 	scanNotifier ScanNotifier,
 ) {
 	t.Helper()
-	scanNotifier = NewMockScanNotifier()
-	notifier := notification.NewNotifier()
-	apiClient := &snyk_api.FakeApiClient{CodeEnabled: false}
-	persister := persistence.NewNopScanPersister()
-	scanStateAggregator := scanstates.NewNoopStateAggregator()
-	er := error_reporting.NewTestErrorReporter(engine)
-	authenticationProvider := authentication.NewFakeCliAuthenticationProvider(engine)
-	authenticationProvider.IsAuthenticated = true
-	authenticationService := authentication.NewAuthenticationService(engine, tokenService, authenticationProvider, er, notifier, configResolver)
-	sc = NewDelegatingScanner(engine, tokenService, initialize.NewDelegatingInitializer(), performance.NewInstrumentor(), scanNotifier, apiClient, authenticationService, notifier, persister, scanStateAggregator, configResolver, testProductScanners...)
-	return sc, scanNotifier
+	return setupScannerWithResolverAndAgg(t, engine, tokenService, configResolver, scanstates.NewNoopStateAggregator(), testProductScanners...)
 }
 
 func Test_userNotAuthenticated_ScanSkipped(t *testing.T) {
@@ -220,6 +211,137 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 
 	// Assert - verify the scan was canceled, not timed out
 	assert.True(t, wasCanceled, "Scan should have been canceled when token changed")
+}
+
+// IDE-1035 (E): Outcome-level test — after user-initiated stop-scan during an
+// in-flight scan, the cancel callback registered via RegisterCancelCallback
+// must run AFTER all per-product goroutines have finished writing to the
+// aggregator, so the final snapshot is the initial (NotStarted) state.
+func TestScan_CancelCallback_CalledAfterGoroutinesFinish(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	tokenService.SetToken(engine.GetConfiguration(), uuid.New().String())
+
+	scanStarted := make(chan struct{})
+
+	mockProductScanner := mock_types.NewMockProductScanner(ctrl)
+	mockProductScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
+	mockProductScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
+	mockProductScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, _ types.FilePath) ([]types.Issue, error) {
+			close(scanStarted)
+			// Block until context is canceled (simulates in-flight cancellation).
+			<-ctx.Done()
+			return []types.Issue{}, nil
+		}).Times(1)
+
+	// Track call order to verify SetScanDone precedes the cancel callback.
+	type callRecord struct{ kind string }
+	var callsMu sync.Mutex
+	var calls []callRecord
+
+	agg := &recordingOrderAggregator{
+		SetScanDoneFn: func() {
+			callsMu.Lock()
+			calls = append(calls, callRecord{"SetScanDone"})
+			callsMu.Unlock()
+		},
+	}
+
+	resolver := defaultResolver(t, engine)
+	sc, _ := setupScannerWithResolverAndAgg(t, engine, tokenService, resolver, agg, mockProductScanner)
+
+	folderPath := types.FilePath(t.TempDir())
+	resetCalled := make(chan struct{}, 1)
+	sc.(*DelegatingConcurrentScanner).RegisterCancelCallback(folderPath, func() {
+		callsMu.Lock()
+		calls = append(calls, callRecord{"Init"})
+		callsMu.Unlock()
+		resetCalled <- struct{}{}
+	})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		fc := &types.FolderConfig{FolderPath: folderPath}
+		scanCtx := ctx2.NewContextWithFolderConfig(ctx, fc)
+		sc.Scan(scanCtx, folderPath, types.NoopResultProcessor, nil)
+		close(done)
+	}()
+
+	// Wait for scan to start, then cancel the outer context.
+	select {
+	case <-scanStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("scan did not start in time")
+	}
+	cancel()
+
+	// Wait for Scan() to return.
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Scan did not return in time after cancel")
+	}
+
+	// The cancel callback must have been called.
+	select {
+	case <-resetCalled:
+	case <-time.After(time.Second):
+		t.Fatal("cancel callback was not called after Scan returned")
+	}
+
+	// Verify order: SetScanDone must appear before Init.
+	callsMu.Lock()
+	defer callsMu.Unlock()
+	require.GreaterOrEqual(t, len(calls), 2, "expected at least SetScanDone then Init")
+	// Find Init call position
+	initIdx, setDoneIdx := -1, -1
+	for i, c := range calls {
+		if c.kind == "SetScanDone" && setDoneIdx == -1 {
+			setDoneIdx = i
+		}
+		if c.kind == "Init" {
+			initIdx = i
+		}
+	}
+	require.NotEqual(t, -1, setDoneIdx, "SetScanDone must be called")
+	require.NotEqual(t, -1, initIdx, "Init must be called")
+	assert.Less(t, setDoneIdx, initIdx, "SetScanDone must be called before Init (no late writes after reset)")
+}
+
+// recordingOrderAggregator wraps NoopStateAggregator and calls SetScanDoneFn on SetScanDone.
+type recordingOrderAggregator struct {
+	scanstates.NoopStateAggregator
+	SetScanDoneFn func()
+}
+
+func (r *recordingOrderAggregator) SetScanDone(fp types.FilePath, p product.Product, ref bool, err error) {
+	r.NoopStateAggregator.SetScanDone(fp, p, ref, err)
+	if r.SetScanDoneFn != nil {
+		r.SetScanDoneFn()
+	}
+}
+
+func setupScannerWithResolverAndAgg(t *testing.T, engine workflow.Engine, tokenService types.TokenService, configResolver types.ConfigResolverInterface, agg scanstates.Aggregator, testProductScanners ...types.ProductScanner) (
+	sc Scanner,
+	scanNotifier ScanNotifier,
+) {
+	t.Helper()
+	scanNotifier = NewMockScanNotifier()
+	notifier := notification.NewNotifier()
+	apiClient := &snyk_api.FakeApiClient{CodeEnabled: false}
+	persister := persistence.NewNopScanPersister()
+	er := error_reporting.NewTestErrorReporter(engine)
+	authenticationProvider := authentication.NewFakeCliAuthenticationProvider(engine)
+	authenticationProvider.IsAuthenticated = true
+	authenticationService := authentication.NewAuthenticationService(engine, tokenService, authenticationProvider, er, notifier, configResolver)
+	sc = NewDelegatingScanner(engine, tokenService, initialize.NewDelegatingInitializer(), performance.NewInstrumentor(), scanNotifier, apiClient, authenticationService, notifier, persister, agg, configResolver, testProductScanners...)
+	return sc, scanNotifier
 }
 
 func TestScan_whenProductScannerEnabled_SendsInProgress(t *testing.T) {

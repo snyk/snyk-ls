@@ -33,13 +33,20 @@ import (
 var trackersMutex sync.RWMutex
 var trackers = make(map[types.ProgressToken]*Tracker)
 var ToServerProgressChannel = make(chan types.ProgressParams, 1000)
+
 var _ ui.ProgressBar = (*Tracker)(nil)
 
 type Tracker struct {
-	channel              chan types.ProgressParams
-	cancelChannel        chan bool
-	token                types.ProgressToken
-	cancellable          bool
+	channel       chan types.ProgressParams
+	cancelChannel chan bool
+	token         types.ProgressToken
+	cancellable   bool
+	// isScan distinguishes scan-operation trackers (NewScanTracker) from
+	// generic progress trackers so window/workDoneProgress/cancel can scope
+	// the summary-panel reset to scan cancellations only (IDE-1035).
+	// Written under trackersMutex when the tracker is registered; only ever
+	// read via IsScanToken under the same lock.
+	isScan               bool
 	lastReport           time.Time
 	lastReportPercentage int
 	finished             bool
@@ -77,6 +84,33 @@ func NewTracker(cancellable bool, logger *zerolog.Logger) *Tracker {
 	trackers[t.token] = t
 	trackersMutex.Unlock()
 	return t
+}
+
+// NewScanTracker creates a progress tracker tagged as a scan token so
+// IsScanToken returns true for it. Use this for scan operations (OSS, Code,
+// IaC) instead of NewTracker. Download/install operations must continue to
+// use NewTracker so their cancel events do not reset the summary panel
+// (IDE-1035).
+func NewScanTracker(cancellable bool, logger *zerolog.Logger) *Tracker {
+	t := NewTracker(cancellable, logger)
+	trackersMutex.Lock()
+	t.isScan = true
+	trackersMutex.Unlock()
+	return t
+}
+
+// IsScanToken reports whether token belongs to an active scan tracker
+// created via NewScanTracker. Returns false once the tracker is removed
+// (e.g. after Cancel or deleteTracker), giving the cancel handler a
+// single source of truth without a parallel registry.
+func IsScanToken(token types.ProgressToken) bool {
+	trackersMutex.RLock()
+	defer trackersMutex.RUnlock()
+	t, ok := trackers[token]
+	if !ok {
+		return false
+	}
+	return t.isScan
 }
 
 func (t *Tracker) GetChannel() chan types.ProgressParams {
@@ -315,6 +349,9 @@ func Cancel(token types.ProgressToken) {
 		delete(trackers, token)
 		close(t.cancelChannel)
 	}
+	// Removing the tracker entry above is enough: IsScanToken looks up
+	// trackers and returns false once the entry is gone — no parallel
+	// registry to keep in sync.
 }
 
 func IsCanceled(token types.ProgressToken) bool {

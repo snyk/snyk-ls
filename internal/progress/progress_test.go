@@ -86,6 +86,32 @@ func TestEndProgress(t *testing.T) {
 	assert.Equal(t, output, <-channel)
 }
 
+// IDE-1035 (D): NewScanTracker must register the token so IsScanToken returns
+// true; a plain NewTracker must NOT be classified as a scan token.
+func TestIsScanToken_ScanTracker_ReturnsTrue(t *testing.T) {
+	logger := zerolog.Nop()
+	tr := NewScanTracker(true, &logger)
+	assert.True(t, IsScanToken(tr.GetToken()), "NewScanTracker token must be recognized as a scan token")
+}
+
+func TestIsScanToken_PlainTracker_ReturnsFalse(t *testing.T) {
+	logger := zerolog.Nop()
+	tr := NewTracker(true, &logger)
+	assert.False(t, IsScanToken(tr.GetToken()), "NewTracker token must NOT be recognized as a scan token")
+}
+
+func TestIsScanToken_UnknownToken_ReturnsFalse(t *testing.T) {
+	assert.False(t, IsScanToken("unknown-token"), "unknown token must NOT be recognized as a scan token")
+}
+
+func TestIsScanToken_AfterCancel_ReturnsFalse(t *testing.T) {
+	logger := zerolog.Nop()
+	tr := NewScanTracker(true, &logger)
+	token := tr.GetToken()
+	Cancel(token)
+	assert.False(t, IsScanToken(token), "canceled scan token must no longer be recognized as a scan token")
+}
+
 func TestEndProgressTwice(t *testing.T) {
 	output := types.ProgressParams{
 		Value: types.WorkDoneProgressEnd{
