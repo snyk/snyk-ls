@@ -342,6 +342,14 @@ func (cliScanner *CLIScanner) updateArgs(workDir types.FilePath, commandLineArgs
 
 	// this asks the client for the current SDK and blocks on it
 	additionalParameters, env := cliScanner.updateSDKs(folderConfig.FolderPath)
+	// merge folder-level additional_environment into env map (additive: folder wins on key conflict)
+	if ae := folderConfig.AdditionalEnv(); ae != "" {
+		for _, pair := range strings.Split(ae, ";") {
+			if k, v, ok := strings.Cut(pair, "="); ok && k != "" {
+				env[k] = v
+			}
+		}
+	}
 	// process folder config additional env
 	if len(folderConfigArgs) > 0 {
 		additionalParameters = append(additionalParameters, folderConfigArgs...)
