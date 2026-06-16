@@ -72,65 +72,73 @@ func (p *Parser) Parse(content string, path types.FilePath) *ast.Tree {
 			p.logger.Err(err).Msg("Couldn't parse XML")
 		}
 
-		switch xmlType := token.(type) {
-		case xml.StartElement:
-			if xmlType.Name.Local == "dependency" {
-				var dep Dependency
-				if err = d.DecodeElement(&dep, &xmlType); err != nil {
-					p.logger.Err(err).Msg("Couldn't decode Dependency")
-					continue
-				}
-
-				if strings.ToLower(dep.Type) == "bom" {
-					addDepsFromBOM(path, tree, dep)
-				}
-
-				offsetAfter := d.InputOffset()
-				node := p.addNewNodeTo(tree.Root, offset, offsetAfter, dep)
-				p.logger.Debug().Interface("nodeName", node.Name).Str("path", tree.Document).Msg("Added Dependency node")
-			}
-			if xmlType.Name.Local == "properties" {
-				// offset is the input position right after the <properties> start
-				// tag, i.e. where the inner XML begins.
-				innerStartOffset := offset
-				var holder struct {
-					Inner string `xml:",innerxml"`
-				}
-				if err = d.DecodeElement(&holder, &xmlType); err != nil {
-					p.logger.Err(err).Msg("Couldn't decode properties")
-					continue
-				}
-				p.addPropertyNodes(tree, content, int(innerStartOffset), holder.Inner)
-			}
-			if xmlType.Name.Local == "parent" {
-				// parse Parent pom
-				var parentPOM Parent
-				if err = d.DecodeElement(&parentPOM, &xmlType); err != nil {
-					p.logger.Err(err).Msg("Couldn't decode Parent")
-					continue
-				}
-
-				if parentPOM.RelativePath == "" {
-					parentPOM.RelativePath = filepath.Join("..", "pom.xml")
-				}
-
-				parentAbsPath, err := filepath.Abs(filepath.Join(pomDir, parentPOM.RelativePath))
-				if err != nil {
-					p.logger.Err(err).Msg("Couldn't resolve Parent path")
-					continue
-				}
-				content, err := os.ReadFile(parentAbsPath)
-				if err != nil {
-					p.logger.Err(err).Msg("Couldn't read Parent file")
-					continue
-				}
-				parentTree := p.Parse(string(content), types.FilePath(parentAbsPath))
-				tree.ParentTree = parentTree
-			}
-		default:
+		startElement, ok := token.(xml.StartElement)
+		if !ok {
+			continue
+		}
+		switch startElement.Name.Local {
+		case "dependency":
+			p.handleDependency(d, tree, path, &startElement, offset)
+		case "properties":
+			p.handleProperties(d, tree, content, &startElement, offset)
+		case "parent":
+			p.handleParent(d, tree, pomDir, &startElement)
 		}
 	}
 	return tree
+}
+
+func (p *Parser) handleDependency(d *xml.Decoder, tree *ast.Tree, path types.FilePath, element *xml.StartElement, offset int64) {
+	var dep Dependency
+	if err := d.DecodeElement(&dep, element); err != nil {
+		p.logger.Err(err).Msg("Couldn't decode Dependency")
+		return
+	}
+
+	if strings.ToLower(dep.Type) == "bom" {
+		addDepsFromBOM(path, tree, dep)
+	}
+
+	offsetAfter := d.InputOffset()
+	node := p.addNewNodeTo(tree.Root, offset, offsetAfter, dep)
+	p.logger.Debug().Interface("nodeName", node.Name).Str("path", tree.Document).Msg("Added Dependency node")
+}
+
+func (p *Parser) handleProperties(d *xml.Decoder, tree *ast.Tree, content string, element *xml.StartElement, offset int64) {
+	// offset is the input position right after the <properties> start tag, i.e.
+	// where the inner XML begins.
+	var holder struct {
+		Inner string `xml:",innerxml"`
+	}
+	if err := d.DecodeElement(&holder, element); err != nil {
+		p.logger.Err(err).Msg("Couldn't decode properties")
+		return
+	}
+	p.addPropertyNodes(tree, content, int(offset), holder.Inner)
+}
+
+func (p *Parser) handleParent(d *xml.Decoder, tree *ast.Tree, pomDir string, element *xml.StartElement) {
+	var parentPOM Parent
+	if err := d.DecodeElement(&parentPOM, element); err != nil {
+		p.logger.Err(err).Msg("Couldn't decode Parent")
+		return
+	}
+
+	if parentPOM.RelativePath == "" {
+		parentPOM.RelativePath = filepath.Join("..", "pom.xml")
+	}
+
+	parentAbsPath, err := filepath.Abs(filepath.Join(pomDir, parentPOM.RelativePath))
+	if err != nil {
+		p.logger.Err(err).Msg("Couldn't resolve Parent path")
+		return
+	}
+	content, err := os.ReadFile(parentAbsPath)
+	if err != nil {
+		p.logger.Err(err).Msg("Couldn't read Parent file")
+		return
+	}
+	tree.ParentTree = p.Parse(string(content), types.FilePath(parentAbsPath))
 }
 
 func addDepsFromBOM(path types.FilePath, tree *ast.Tree, dep Dependency) {
