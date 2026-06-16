@@ -165,6 +165,8 @@ func sourceToClass(source string) string {
 		return "source-org-locked"
 	case "ldx-sync":
 		return "source-org"
+	case "user-override":
+		return "source-user-override"
 	default:
 		return ""
 	}
@@ -175,7 +177,7 @@ func tmplIsSecretsFeatureEnabled(fc types.FolderConfig) bool {
 }
 
 // tmplSourceIndicator returns HTML for source indicators (icons with tooltips).
-// Returns: "🏢🔒" for locked, "🏢" for organization, empty for override (instead indicated by CSS border), empty for global/default.
+// Returns: "🏢🔒" for locked, "🏢" for organization, "👤" for per-project user override, empty for global/default.
 func tmplSourceIndicator(effectiveConfig map[string]types.EffectiveValue, settingName string) template.HTML {
 	if effectiveConfig == nil {
 		return ""
@@ -190,6 +192,8 @@ func tmplSourceIndicator(effectiveConfig map[string]types.EffectiveValue, settin
 		return template.HTML(`<span class="source-indicator" data-toggle="tooltip" title="Locked due to organization settings">🏢🔒</span>`)
 	case "ldx-sync":
 		return template.HTML(`<span class="source-indicator" data-toggle="tooltip" title="Set by your organization settings">🏢</span>`)
+	case "user-override":
+		return template.HTML(`<span class="source-indicator" data-toggle="tooltip" title="Overridden at project level">👤</span>`)
 	default:
 		return ""
 	}

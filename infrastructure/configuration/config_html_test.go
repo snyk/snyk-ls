@@ -584,13 +584,18 @@ func TestTmplSourceIndicator(t *testing.T) {
 			},
 		},
 		{
-			name: "user-override returns empty (indicated by CSS border)",
+			name: "user-override returns per-project indicator",
 			effectiveConfig: map[string]types.EffectiveValue{
 				"test_setting": {Value: "true", Source: "user-override"},
 			},
-			settingName:   "test_setting",
-			expectedHTML:  "",
-			shouldContain: []string{},
+			settingName:  "test_setting",
+			expectedHTML: `<span class="source-indicator" data-toggle="tooltip" title="Overridden at project level">👤</span>`,
+			shouldContain: []string{
+				`class="source-indicator"`,
+				`data-toggle="tooltip"`,
+				`title="Overridden at project level"`,
+				"👤",
+			},
 		},
 		{
 			name: "global source returns empty",
@@ -686,6 +691,10 @@ func TestConfigHtmlRenderer_SourceIndicatorsInOutput(t *testing.T) {
 	// Count occurrences to ensure we have at least one for the organization setting
 	orgIndicatorCount := strings.Count(html, `title="Set by your organization settings"`)
 	assert.Greater(t, orgIndicatorCount, 0, "Organization indicator should appear in HTML")
+
+	// Verify per-project override indicator (👤) appears for user-override
+	assert.Contains(t, html, "👤")
+	assert.Contains(t, html, `title="Overridden at project level"`)
 
 	// Verify HTML is not empty (basic sanity check)
 	assert.NotEmpty(t, html, "HTML output should not be empty")
