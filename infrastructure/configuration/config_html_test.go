@@ -40,7 +40,7 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 	assert.NotNil(t, renderer)
 
@@ -131,7 +131,7 @@ func TestConfigHtmlRenderer_LdxSyncConfigAlwaysRendered(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
 	settings := map[string]any{}
@@ -179,7 +179,7 @@ func TestConfigHtmlRenderer_SecretsHiddenWhenFeatureFlagOff(t *testing.T) {
 		},
 	}
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
 	settings := map[string]any{
@@ -225,7 +225,7 @@ func TestConfigHtmlRenderer_SecretsShownWhenFeatureFlagOn(t *testing.T) {
 	ffKey := configresolver.FolderMetadataKey(string(types.PathKey(folderPath)), types.FeatureFlagPrefix+featureflag.SnykSecretsEnabled)
 	engine.GetConfiguration().Set(ffKey, true)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
 	settings := map[string]any{
@@ -252,7 +252,7 @@ func TestConfigHtmlRenderer_NoFoldersShowsDisabledTab(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
 	settings := map[string]any{
@@ -290,7 +290,7 @@ func TestConfigHtmlRenderer_SingleFolderShowsDirectTab(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
 	settings := map[string]any{
@@ -331,7 +331,7 @@ func TestConfigHtmlRenderer_FolderNameDiffersFromBasename(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
 	settings := map[string]any{}
@@ -363,7 +363,7 @@ func TestConfigHtmlRenderer_EmptyNameFallsBackToBasename(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
 	settings := map[string]any{}
@@ -399,7 +399,7 @@ func TestConfigHtmlRenderer_MultiFolderShowsDropdown(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
 	settings := map[string]any{
@@ -457,7 +457,7 @@ func TestConfigHtmlRenderer_FolderNamesAlignWithStoredFolderConfigs(t *testing.T
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
 	// folderConfigs in REVERSED order: beta first, alpha second
@@ -500,7 +500,7 @@ func TestConfigHtmlRenderer_EclipseShowsProjectSettings(t *testing.T) {
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 	engine.GetConfiguration().Set(gafconfiguration.INTEGRATION_ENVIRONMENT, "ECLIPSE")
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 	assert.NotNil(t, renderer)
 
@@ -525,7 +525,7 @@ func TestConfigHtmlRenderer_EclipsePathField(t *testing.T) {
 		t.Helper()
 		engine := testutil.UnitTest(t)
 		engine.GetConfiguration().Set(gafconfiguration.INTEGRATION_NAME, integrationName)
-		renderer, err := NewConfigHtmlRenderer(engine)
+		renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 		require.NoError(t, err)
 		settings := map[string]any{
 			types.SettingUserSettingsPath: "/usr/local/bin",
@@ -664,7 +664,7 @@ func TestConfigHtmlRenderer_SourceIndicatorsInOutput(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
 	settings := map[string]any{}
@@ -703,7 +703,7 @@ func TestConfigHtmlRenderer_SourceIndicatorsInOutput(t *testing.T) {
 func TestComputeProjectDefaultScopes(t *testing.T) {
 	engine := testutil.UnitTest(t)
 
-	result := computeProjectDefaultScopes(engine)
+	result := computeProjectDefaultScopes(testutil.DefaultConfigResolver(engine))
 
 	// Should return a map with entries for all org-scope settings
 	assert.Equal(t, 14, len(result), "Should have entries for all 14 org-scope settings")
@@ -759,7 +759,7 @@ func TestConfigHtml_FormFieldNamesMatchRegisteredSettings(t *testing.T) {
 	mockWorkspace.EXPECT().GetFolderContaining(types.FilePath("/path/to/folder")).Return(mockFolder).AnyTimes()
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	require.NoError(t, err)
 
 	settings := map[string]any{
