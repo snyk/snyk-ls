@@ -26,6 +26,7 @@ package server
 
 import (
 	"context"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -240,10 +241,11 @@ func TestTextDocumentDidSaveHandlerUsesScanCtx(t *testing.T) {
 	require.NotNil(t, realWs, "workspace must be set after setupServer")
 
 	capturingFolder := newContextCapturingFolder()
-	fakePath := types.FilePath(t.TempDir() + "/fakefile.js")
+	fakePath := types.FilePath(filepath.Join(t.TempDir(), "fakefile.js"))
+	fakeURI := uri.PathToUri(fakePath)
 	wrappedWs := &folderCapturingWorkspace{
 		Workspace:     realWs,
-		interceptPath: fakePath,
+		interceptPath: uri.PathFromUri(fakeURI),
 		folder:        capturingFolder,
 	}
 	config.SetWorkspace(conf, wrappedWs)
@@ -252,7 +254,7 @@ func TestTextDocumentDidSaveHandlerUsesScanCtx(t *testing.T) {
 	// GetFolderContaining(fakePath), which returns the capturing folder, then
 	// call folder.ScanFile(scanCtx, fakePath) in a goroutine.
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
-		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(fakePath)},
+		TextDocument: sglsp.TextDocumentIdentifier{URI: fakeURI},
 	}
 	_, err := loc.Client.Call(t.Context(), textDocumentDidSaveOperation, didSaveParams)
 	require.NoError(t, err)
