@@ -35,6 +35,9 @@ import (
 type clearCache struct {
 	command types.CommandData
 	engine  workflow.Engine
+	// scanCtx is the server-lifetime context. Background scan goroutines started by
+	// purgeInMemoryCache use it so they are canceled on shutdown [IDE-2036].
+	scanCtx context.Context
 }
 
 func (cmd *clearCache) Command() types.CommandData {
@@ -92,7 +95,7 @@ func (cmd *clearCache) purgeInMemoryCache(logger *zerolog.Logger, conf configura
 		logger.Info().Msgf("deleting in-memory cache for folder %s", folder.Path())
 		folder.Clear()
 		if folder.IsAutoScanEnabled() {
-			go folder.ScanFolder(context.Background())
+			go folder.ScanFolder(cmd.scanCtx)
 		}
 	}
 }

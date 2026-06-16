@@ -39,13 +39,8 @@ func TestDownloader_Download(t *testing.T) {
 	engine := testutil.IntegTest(t)
 	r := getTestAsset()
 	progressCh := make(chan types.ProgressParams, 100000)
-	cancelProgressCh := make(chan bool, 1)
-	d := &Downloader{
-		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh, engine.GetLogger()),
-		httpClient:      func() *http.Client { return http.DefaultClient },
-		engine:          engine,
-		configResolver:  testutil.DefaultConfigResolver(engine),
-	}
+	owner := progress.NewTrackerWithChannel(progressCh, engine.GetLogger())
+	d := NewDownloaderWithOwner(engine, nil, func() *http.Client { return http.DefaultClient }, testutil.DefaultConfigResolver(engine), owner)
 	exec := (&Discovery{}).ExecutableName(false)
 	destination := filepath.Join(t.TempDir(), exec)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), destination)
@@ -71,21 +66,15 @@ func TestDownloader_Download(t *testing.T) {
 func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	engine := testutil.IntegTest(t)
 	progressCh := make(chan types.ProgressParams, 100000)
-	cancelProgressCh := make(chan bool, 1)
-	progressTracker := progress.NewTestTracker(progressCh, cancelProgressCh, engine.GetLogger())
-	d := &Downloader{
-		progressTracker: progressTracker,
-		httpClient:      func() *http.Client { return http.DefaultClient },
-		engine:          engine,
-		configResolver:  testutil.DefaultConfigResolver(engine),
-	}
+	owner := progress.NewTrackerWithChannel(progressCh, engine.GetLogger())
+	d := NewDownloaderWithOwner(engine, nil, func() *http.Client { return http.DefaultClient }, testutil.DefaultConfigResolver(engine), owner)
 
 	r := getTestAsset()
 
-	// simulate cancellation when some progress received
+	// simulate cancellation when some progress received: cancel the task via the owner
 	go func() {
-		<-progressCh
-		progress.Cancel(progressTracker.GetToken())
+		p := <-progressCh
+		owner.Cancel(p.Token)
 	}()
 
 	err := d.Download(r, false)

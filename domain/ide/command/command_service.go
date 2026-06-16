@@ -37,7 +37,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var instance types.CommandService
+var instance types.CommandService //nolint:gochecknoglobals // legacy process-global state
 
 type serviceImpl struct {
 	authService        authentication.AuthenticationService
@@ -52,9 +52,17 @@ type serviceImpl struct {
 	scanStateFunc      func() scanstates.StateSnapshot
 	engine             workflow.Engine
 	logger             *zerolog.Logger
+	// scanCtx is the server-lifetime context injected at construction. Scan commands
+	// that spawn un-awaited goroutines use this context so they are canceled on
+	// server shutdown rather than living forever on context.Background() [IDE-2036].
+	scanCtx context.Context
 }
 
-func NewService(engine workflow.Engine, logger *zerolog.Logger, authService authentication.AuthenticationService, featureFlagService featureflag.Service, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor, ldxSyncService LdxSyncService, configResolver types.ConfigResolverInterface, scanStateFunc func() scanstates.StateSnapshot) types.CommandService {
+// NewService constructs the command service. scanCtx must be the server-lifetime
+// context (sourced from di.Dependencies.ScanCtx) so that background scan goroutines
+// spawned by WorkspaceScanCommand, WorkspaceFolderScanCommand, and ClearCacheCommand
+// are canceled on shutdown [IDE-2036].
+func NewService(engine workflow.Engine, logger *zerolog.Logger, authService authentication.AuthenticationService, featureFlagService featureflag.Service, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor, ldxSyncService LdxSyncService, configResolver types.ConfigResolverInterface, scanStateFunc func() scanstates.StateSnapshot, scanCtx context.Context) types.CommandService { //nolint:revive // context.Context as non-first param: scanCtx is a stored dependency, not a call-scoped context
 	return &serviceImpl{
 		authService:        authService,
 		featureFlagService: featureFlagService,
@@ -68,6 +76,7 @@ func NewService(engine workflow.Engine, logger *zerolog.Logger, authService auth
 		scanStateFunc:      scanStateFunc,
 		engine:             engine,
 		logger:             logger,
+		scanCtx:            scanCtx,
 	}
 }
 
@@ -90,7 +99,7 @@ func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.
 
 	logger.Debug().Msgf("executing command %s", commandData.CommandId)
 	// TODO: move to DI
-	command, err := CreateFromCommandData(ctx, s.engine, commandData, server, s.authService, s.featureFlagService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli, s.ldxSyncService, s.configResolver, s.scanStateFunc)
+	command, err := CreateFromCommandData(ctx, s.engine, commandData, server, s.authService, s.featureFlagService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli, s.ldxSyncService, s.configResolver, s.scanStateFunc, s.scanCtx)
 	if err != nil {
 		logger.Err(err).Msg("failed to create command")
 		return nil, err

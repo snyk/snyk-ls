@@ -45,7 +45,7 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 	instrumentor := performance.NewInstrumentor()
 	snykApiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
 	codeErrorReporter := code.NewCodeErrorReporter(error_reporting.NewTestErrorReporter(engine))
-	codeScanner := code.New(engine, instrumentor, snykApiClient, codeErrorReporter, nil, featureflag.NewFakeService(), notification.NewNotifier(), code.NewCodeInstrumentor(), codeErrorReporter, code.NewFakeCodeScannerClient, testutil.DefaultConfigResolver(engine))
+	codeScanner := code.New(engine, instrumentor, snykApiClient, codeErrorReporter, nil, featureflag.NewFakeService(), notification.NewNotifier(), code.NewCodeInstrumentor(), codeErrorReporter, code.NewFakeCodeScannerClient, testutil.DefaultConfigResolver(engine), testutil.NewTestProgressTracker(t).Channel())
 	cut := codeFixDiffs{
 		notifier:           notification.NewMockNotifier(),
 		codeScanner:        codeScanner,

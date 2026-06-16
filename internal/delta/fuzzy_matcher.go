@@ -47,7 +47,7 @@ type Identity struct {
 	Confidence float64
 }
 
-var weights = struct {
+var weights = struct { //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	MinimumAcceptableConfidence float64
 	FilePositionDistance        float64
 	RecentHistoryDistance       float64

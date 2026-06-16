@@ -29,7 +29,7 @@ func TestBeginProgress(t *testing.T) {
 	channel := make(chan types.ProgressParams, 100000)
 	cancelChannel := make(chan bool, 1)
 	logger := zerolog.Nop()
-	progress := NewTestTracker(channel, cancelChannel, &logger)
+	progress := NewTestTask(channel, cancelChannel, &logger)
 
 	progress.BeginWithMessage("title", "message")
 
@@ -59,7 +59,7 @@ func TestReportProgress(t *testing.T) {
 	}
 	channel := make(chan types.ProgressParams, 2)
 	logger := zerolog.Nop()
-	progress := NewTestTracker(channel, nil, &logger)
+	progress := NewTestTask(channel, nil, &logger)
 
 	workProgressReport := output.Value.(types.WorkDoneProgressReport)
 	progress.Report(workProgressReport.Percentage)
@@ -78,12 +78,32 @@ func TestEndProgress(t *testing.T) {
 
 	channel := make(chan types.ProgressParams, 2)
 	logger := zerolog.Nop()
-	progress := NewTestTracker(channel, nil, &logger)
+	progress := NewTestTask(channel, nil, &logger)
 
 	workProgressEnd := output.Value.(types.WorkDoneProgressEnd)
 	progress.EndWithMessage(workProgressEnd.Message)
 
 	assert.Equal(t, output, <-channel)
+}
+
+// TestNewTaskWithChannel_RoutesToGivenChannel (IDE-2036-UNIT-001) verifies
+// that NewTaskWithChannel sends progress events to the supplied channel.
+// The process-global ToServerProgressChannel and NewTracker() wrapper have been
+// removed [IDE-2036]; each server/test now owns its own isolated channel.
+func TestNewTaskWithChannel_RoutesToGivenChannel(t *testing.T) {
+	t.Parallel()
+
+	logger := zerolog.Nop()
+	customCh := make(chan types.ProgressParams, 10)
+
+	tr := NewTaskWithChannel(customCh, false, &logger)
+	tr.Begin("test-title")
+	tr.End()
+
+	// custom channel must receive the begin event
+	if len(customCh) == 0 {
+		t.Fatal("expected progress event on customCh, got none")
+	}
 }
 
 func TestEndProgressTwice(t *testing.T) {
@@ -96,7 +116,7 @@ func TestEndProgressTwice(t *testing.T) {
 
 	channel := make(chan types.ProgressParams, 2)
 	logger := zerolog.Nop()
-	progress := NewTestTracker(channel, nil, &logger)
+	progress := NewTestTask(channel, nil, &logger)
 
 	workProgressEnd := output.Value.(types.WorkDoneProgressEnd)
 	progress.EndWithMessage(workProgressEnd.Message)

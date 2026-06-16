@@ -127,7 +127,7 @@ func (r AppliedPolicyRules) toAppliedPolicyRules() snyk.AppliedPolicyRules {
 }
 
 var (
-	LearnLicenseUrl = "https://learn.snyk.io/lesson/license-policy-management/?loc=ide"
+	LearnLicenseUrl = "https://learn.snyk.io/lesson/license-policy-management/?loc=ide" //nolint:gochecknoglobals // effectively a package-level constant
 )
 
 type Annotation struct {
@@ -248,7 +248,7 @@ const maxExtendedMessageCacheEntries = 4096
 
 // extendedMessageCache memoizes GetExtendedMessage for identical vulnerability rows while keeping
 // a hard cap so long-lived language-server sessions do not retain scan-derived text indefinitely.
-var extendedMessageCache = newBoundedExtendedMessageCache(maxExtendedMessageCacheEntries)
+var extendedMessageCache = newBoundedExtendedMessageCache(maxExtendedMessageCacheEntries) //nolint:gochecknoglobals // legacy process-global state
 
 type boundedExtendedMessageCache struct {
 	mu     sync.RWMutex

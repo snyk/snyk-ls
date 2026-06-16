@@ -20,6 +20,7 @@ linters:
     - exhaustive
     - forbidigo
     - forcetypeassert
+    - gochecknoglobals
     - gocyclo
     - goprintffuncname
     - misspell
@@ -135,6 +136,15 @@ linters:
         path: internal/types/config_writers\.go
       - linters: [forbidigo]
         path: _test\.go
+      - linters: [gochecknoglobals]
+        path: _test\.go
+      - linters: [gochecknoglobals]
+        path: fake_.*\.go|mock_.*\.go|.*_mock\.go
+      # govet 'inline' analyzer false-positive on generic stdlib calls (slices.Contains/ContainsFunc);
+      # analyzer reports "not yet supported" with no available fix.
+      # Real inline findings (e.g. reflect.Ptr deprecation) are still enforced.
+      - linters: [govet]
+        text: "inline: cannot inline: type parameter inference is not yet supported"
     paths:
       - docs
       - licenses

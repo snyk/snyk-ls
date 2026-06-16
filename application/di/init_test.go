@@ -17,10 +17,14 @@
 package di_test
 
 import (
+	"sync"
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
@@ -48,10 +52,9 @@ func TestDependencies_AllFieldsPopulated(t *testing.T) {
 	assert.NotNil(t, deps.ScanPersister, "ScanPersister must be set")
 	assert.NotNil(t, deps.ScanNotifier, "ScanNotifier must be set")
 	assert.NotNil(t, deps.CodeActionService, "CodeActionService must be set")
-	// Installer and Initializer are process-lifecycle deps not in di.Dependencies;
-	// verify their global accessors are still populated after Init.
-	assert.NotNil(t, di.Installer(), "di.Installer() must be non-nil after Init")
-	assert.NotNil(t, di.Initializer(), "di.Initializer() must be non-nil after Init")
+	assert.NotNil(t, deps.Installer, "Installer must be set")
+	// Initializer is a process-lifecycle dep intentionally absent from di.Dependencies;
+	// it is only set by di.Init() (production path), not di.TestInit().
 }
 
 // TestTestInit_ReturnedDepsAreIndependent verifies that two consecutive TestInit
@@ -74,4 +77,43 @@ func TestTestInit_ReturnedDepsAreIndependent(t *testing.T) {
 		"each TestInit call must return an independent HoverService, not a shared global")
 	assert.NotSame(t, deps1.ErrorReporter, deps2.ErrorReporter,
 		"each TestInit call must return an independent ErrorReporter, not a shared global")
+}
+
+// TestRealDependencies_ParallelSafe confirms that concurrent calls to
+// RealDependencies() with separate engines do not race on any shared global
+// state. Uses unit-test engines (no network required) because the test is
+// exercising constructor isolation, not end-to-end scanning.
+func TestRealDependencies_ParallelSafe(t *testing.T) {
+	t.Parallel()
+	const N = 3
+	type pair struct {
+		engine       workflow.Engine
+		tokenService *config.TokenServiceImpl
+	}
+	pairs := make([]pair, N)
+	for i := range pairs {
+		e, ts := testutil.UnitTestWithEngine(t)
+		pairs[i] = pair{engine: e, tokenService: ts}
+	}
+
+	var wg sync.WaitGroup
+	results := make([]di.Dependencies, N)
+	for i := 0; i < N; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			results[i] = di.RealDependencies(pairs[i].engine, pairs[i].tokenService)
+		}()
+	}
+	wg.Wait()
+
+	for i, deps := range results {
+		require.NotNil(t, deps.Scanner, "Scanner nil for instance %d", i)
+		require.NotNil(t, deps.Notifier, "Notifier nil for instance %d", i)
+		require.NotNil(t, deps.AuthenticationService, "AuthService nil for instance %d", i)
+		for j := i + 1; j < N; j++ {
+			require.NotSame(t, deps.Notifier, results[j].Notifier,
+				"instances %d and %d share the same Notifier — global state leak", i, j)
+		}
+	}
 }

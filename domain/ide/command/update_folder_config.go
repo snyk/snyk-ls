@@ -35,8 +35,8 @@ type pendingRescan struct {
 }
 
 var (
-	rescanMu     sync.Mutex
-	pendingScans = make(map[types.FilePath]*pendingRescan)
+	rescanMu     sync.Mutex                                //nolint:gochecknoglobals // required guard for mutable package state
+	pendingScans = make(map[types.FilePath]*pendingRescan) //nolint:gochecknoglobals // legacy process-global state
 )
 
 // StopPendingRescanTimers stops all pending debounced rescan timers,

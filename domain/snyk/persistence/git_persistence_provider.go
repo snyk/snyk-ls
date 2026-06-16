@@ -42,7 +42,7 @@ const (
 )
 
 var (
-	ExpirationInSeconds = 12 * 60 * 60
+	ExpirationInSeconds = 12 * 60 * 60 //nolint:gochecknoglobals // effectively a package-level constant
 )
 
 var (

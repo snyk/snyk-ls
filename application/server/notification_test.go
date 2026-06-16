@@ -28,10 +28,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/snyk-ls/application/di"
-	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/internal/data_structure"
-	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
@@ -48,7 +45,7 @@ func TestRegisterNotifier_NilNotifier_Panics(t *testing.T) {
 	srv := mock_types.NewMockServer(ctrl)
 
 	assert.Panics(t, func() {
-		registerNotifier(conf, logger, srv, nil)
+		registerNotifier(conf, logger, srv, nil, nil)
 	}, "registerNotifier must panic when notifier is nil")
 }
 
@@ -88,18 +85,19 @@ func TestCreateProgressListener(t *testing.T) {
 		}).
 		Times(1)
 
-	go createProgressListener(progressChannel, server, engine.GetLogger())
+	stopChan := make(chan bool, 1)
+	go createProgressListener(progressChannel, stopChan, server, engine.GetLogger())
 
 	assert.Eventually(t, func() bool {
 		return called.Load()
 	}, 2*time.Second, time.Millisecond)
 
-	disposeProgressListener()
+	stopChan <- true
 }
 
 func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService)
 
 	clientParams := types.InitializeParams{
 		Capabilities: types.ClientCapabilities{
@@ -118,7 +116,9 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	progressTracker := progress.NewTracker(true, engine.GetLogger())
+	// Create a task via the per-server owner so progress events are routed
+	// to the channel the server's progress listener is reading.
+	progressTracker := deps.ProgressTracker.New(true)
 	progressTracker.BeginWithMessage("title", "message")
 	// should receive progress notification
 	assert.Eventually(
@@ -141,29 +141,33 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 
 func TestCancelProgress(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _, _ := setupServer(t, engine, tokenService)
+	loc, _, deps := setupServer(t, engine, tokenService)
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	expectedWorkdoneProgressCancelParams := types.WorkdoneProgressCancelParams{
-		Token: "token",
+	// Register a real task via the per-server owner so the cancel handler can
+	// look it up and remove it from the registry [IDE-2036].
+	task := deps.ProgressTracker.New(true)
+
+	cancelParams := types.WorkdoneProgressCancelParams{
+		Token: task.GetToken(),
 	}
-	_, err = loc.Client.Call(t.Context(), "window/workDoneProgress/cancel", expectedWorkdoneProgressCancelParams)
+	_, err = loc.Client.Call(t.Context(), "window/workDoneProgress/cancel", cancelParams)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	assert.Eventually(t, func() bool {
-		return progress.IsCanceled(expectedWorkdoneProgressCancelParams.Token)
+		return deps.ProgressTracker.IsCanceled(cancelParams.Token)
 	}, time.Second*5, time.Millisecond)
 }
 
 func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService)
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
@@ -173,7 +177,7 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 
 	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
 
-	di.Notifier().Send(expected)
+	deps.Notifier.Send(expected)
 	assert.Eventually(
 		t,
 		func() bool {
@@ -197,7 +201,7 @@ func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
 
 func Test_IsAvailableCliNotification(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService)
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
@@ -205,7 +209,7 @@ func Test_IsAvailableCliNotification(t *testing.T) {
 	}
 	var expected = types.SnykIsAvailableCli{CliPath: filepath.Join(t.TempDir(), "cli")}
 	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
-	di.Notifier().Send(expected)
+	deps.Notifier.Send(expected)
 	assert.Eventually(
 		t,
 		func() bool {
@@ -230,7 +234,7 @@ func Test_IsAvailableCliNotification(t *testing.T) {
 func TestShowMessageRequest(t *testing.T) {
 	t.Run("should send request to client", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
-		loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+		loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService)
 
 		_, err := loc.Client.Call(t.Context(), "initialize", nil)
 		if err != nil {
@@ -255,7 +259,7 @@ func TestShowMessageRequest(t *testing.T) {
 
 		expected := types.ShowMessageRequest{Message: "message", Type: types.Info, Actions: actionCommandMap}
 
-		di.Notifier().Send(expected)
+		deps.Notifier.Send(expected)
 
 		assert.Eventually(
 			t,
@@ -279,7 +283,7 @@ func TestShowMessageRequest(t *testing.T) {
 	t.Run("should execute a command when action item is selected", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
 		selectedAction := "Open browser"
-		loc, _, _ := setupServer(t, engine, tokenService, WithCallback(func(_ context.Context, _ *jrpc2.Request) (any, error) {
+		loc, _, deps2 := setupServer(t, engine, tokenService, WithCallback(func(_ context.Context, _ *jrpc2.Request) (any, error) {
 			return types.MessageActionItem{
 				Title: selectedAction,
 			}, nil
@@ -288,21 +292,21 @@ func TestShowMessageRequest(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		command.SetService(types.NewCommandServiceMock())
 		actionCommandMap := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
 
 		actionCommandMap.Add(types.MessageAction(selectedAction), types.CommandData{CommandId: types.OpenBrowserCommand, Arguments: []any{"https://snyk.io"}})
 
 		request := types.ShowMessageRequest{Message: "message", Type: types.Info, Actions: actionCommandMap}
 		engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
-		di.Notifier().Send(request)
+		deps2.Notifier.Send(request)
 
+		// The command service injected into the notifier via context is deps2.CommandService
+		// (a *types.CommandServiceMock produced by di.TestInit). Check it, not the global.
+		commandServiceMock := deps2.CommandService.(*types.CommandServiceMock)
 		assert.Eventually(
 			t,
 			func() bool {
 				// verify that passed command is eventually executed
-				commandService := command.Service()
-				commandServiceMock := commandService.(*types.CommandServiceMock)
 				executedCommands := commandServiceMock.ExecutedCommands()
 				if len(executedCommands) == 0 {
 					return false
@@ -317,7 +321,7 @@ func TestShowMessageRequest(t *testing.T) {
 
 func Test_NotifierWaitsForLspInitializedChannel(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService)
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
@@ -329,7 +333,7 @@ func Test_NotifierWaitsForLspInitializedChannel(t *testing.T) {
 	types.NewLspInitializedChannel(conf)
 
 	expected := types.AuthenticationParams{Token: "channel-wait-test", ApiUrl: "https://api.snyk.io"}
-	di.Notifier().Send(expected)
+	deps.Notifier.Send(expected)
 
 	delivered := func() bool {
 		for _, n := range jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasAuthenticated") {

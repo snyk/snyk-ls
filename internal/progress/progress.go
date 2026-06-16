@@ -18,38 +18,19 @@
 package progress
 
 import (
-	"maps"
-	"math"
-	"sync"
-	"time"
-
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	"github.com/snyk/go-application-framework/pkg/ui"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var trackersMutex sync.RWMutex
-var trackers = make(map[types.ProgressToken]*Tracker)
-var ToServerProgressChannel = make(chan types.ProgressParams, 1000)
-var _ ui.ProgressBar = (*Tracker)(nil)
-
-type Tracker struct {
-	channel              chan types.ProgressParams
-	cancelChannel        chan bool
-	token                types.ProgressToken
-	cancellable          bool
-	lastReport           time.Time
-	lastReportPercentage int
-	finished             bool
-	lastMessage          string
-	m                    sync.Mutex
-	logger               *zerolog.Logger
-}
-
-func NewTestTracker(channel chan types.ProgressParams, cancelChannel chan bool, logger *zerolog.Logger) *Tracker {
-	t := &Tracker{
+// NewTestTask creates a standalone Task for use in tests that need to
+// inject a pre-wired channel and cancel channel. The task is not
+// registered with any Tracker; callers are responsible for draining
+// the channels when the test ends.
+func NewTestTask(channel chan types.ProgressParams, cancelChannel chan bool, logger *zerolog.Logger) *Task {
+	return &Task{
+		owner:         nil,
 		channel:       channel,
 		cancelChannel: cancelChannel,
 		// deepcode ignore HardcodedPassword: false positive
@@ -58,268 +39,25 @@ func NewTestTracker(channel chan types.ProgressParams, cancelChannel chan bool, 
 		lastReportPercentage: -1,
 		logger:               logger,
 	}
-	trackersMutex.Lock()
-	trackers[t.token] = t
-	trackersMutex.Unlock()
-	return t
 }
 
-func NewTracker(cancellable bool, logger *zerolog.Logger) *Tracker {
-	t := &Tracker{
-		channel:       ToServerProgressChannel,
+// NewTaskWithChannel creates a standalone Task that routes progress events to
+// the provided channel. This is the correct constructor for per-server
+// isolation: each server passes its own channel so progress events are never
+// misrouted to another server's listener.
+//
+// Unlike Tracker.New(), this constructor does NOT register the task with any
+// Tracker. Use it when you already hold a channel reference (e.g. from
+// Tracker.Channel()) and need a Task with a specific cancellable setting but
+// no owner-managed registry entry.
+func NewTaskWithChannel(channel chan types.ProgressParams, cancellable bool, logger *zerolog.Logger) *Task {
+	return &Task{
+		owner:         nil,
+		channel:       channel,
 		cancelChannel: make(chan bool, 1),
 		cancellable:   cancellable,
 		finished:      false,
 		token:         types.ProgressToken(uuid.NewString()),
 		logger:        logger,
 	}
-	trackersMutex.Lock()
-	trackers[t.token] = t
-	trackersMutex.Unlock()
-	return t
-}
-
-func (t *Tracker) GetChannel() chan types.ProgressParams {
-	return t.channel
-}
-
-func (t *Tracker) GetCancelChannel() chan bool {
-	return t.cancelChannel
-}
-
-func (t *Tracker) BeginUnquantifiableLength(title, message string) {
-	t.begin(title, message, true)
-}
-
-func (t *Tracker) begin(title string, message string, unquantifiableLength bool) {
-	logger := t.logger.With().Str("token", string(t.token)).Str("method", "progress.begin").Logger()
-	params := newProgressParams(title, message, t.cancellable, unquantifiableLength)
-	params.Token = t.token
-	t.send(params, logger)
-	t.lastReport = time.Now()
-	t.SetLastMessage(message)
-}
-
-func (t *Tracker) Begin(title string) {
-	t.begin(title, "", false)
-}
-
-func (t *Tracker) BeginWithMessage(title, message string) {
-	t.begin(title, message, false)
-}
-
-func (t *Tracker) SetTitle(title string) {
-	t.m.Lock()
-	started := !t.lastReport.IsZero()
-	percentage := t.lastReportPercentage
-	t.m.Unlock()
-
-	if !started {
-		t.Begin(title)
-		return
-	}
-
-	if percentage < 0 {
-		percentage = 0
-	}
-	t.ReportWithMessage(percentage, title)
-}
-
-func (t *Tracker) UpdateProgress(progress float64) error {
-	if math.IsNaN(progress) || math.IsInf(progress, 0) {
-		progress = 0
-	}
-
-	if progress < 0 {
-		progress = 0
-	}
-	if progress > 1 {
-		progress = 1
-	}
-
-	percentage := int(math.Round(progress * 100))
-	t.Report(percentage)
-	return nil
-}
-
-func (t *Tracker) ReportWithMessage(percentage int, message string) {
-	t.m.Lock()
-	defer t.m.Unlock()
-	logger := t.logger.With().Str("token", string(t.token)).Str("method", "progress.ReportWithMessage").Logger()
-	if time.Now().Before(t.lastReport.Add(200 * time.Millisecond)) {
-		return
-	}
-	progress := types.ProgressParams{
-		Token: t.token,
-		Value: types.WorkDoneProgressReport{
-			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: types.WorkDoneProgressReportKind},
-			Percentage:           percentage,
-			Message:              message,
-		},
-	}
-	t.send(progress, logger)
-	t.lastReport = time.Now()
-	t.lastReportPercentage = percentage
-	t.setLastMessage(message)
-}
-
-func (t *Tracker) Report(percentage int) {
-	t.ReportWithMessage(percentage, "")
-}
-
-func (t *Tracker) End() {
-	t.EndWithMessage("")
-}
-
-func (t *Tracker) EndWithMessage(message string) {
-	logger := t.logger.With().Str("token", string(t.token)).Str("method", "progress.EndWithMessage").Logger()
-	if t.finished {
-		panic("Called end progress twice. This breaks LSP in Eclipse fix me now and avoid headaches later")
-	}
-	t.finished = true
-	progress := types.ProgressParams{
-		Token: t.token,
-		Value: types.WorkDoneProgressEnd{
-			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: types.WorkDoneProgressEndKind},
-			Message:              message,
-		},
-	}
-
-	t.send(progress, logger)
-}
-
-func (t *Tracker) Clear() error {
-	logger := t.logger.With().Str("token", string(t.token)).Str("method", "progress.Clear").Logger()
-
-	t.m.Lock()
-	if t.finished {
-		t.m.Unlock()
-		return nil
-	}
-	t.finished = true
-	t.m.Unlock()
-
-	progress := types.ProgressParams{
-		Token: t.token,
-		Value: types.WorkDoneProgressEnd{
-			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: types.WorkDoneProgressEndKind},
-			Message:              "",
-		},
-	}
-
-	t.send(progress, logger)
-	t.deleteTracker()
-	return nil
-}
-
-func (t *Tracker) CancelOrDone(onCancel func(), doneCh <-chan struct{}) {
-	logger := t.logger
-	defer t.deleteTracker()
-	defer onCancel()
-	for {
-		select {
-		case <-t.cancelChannel:
-			t.m.Lock()
-			logger.Debug().Msgf("Canceling Progress %s. Last message: %s", t.token, t.lastMessage)
-			t.m.Unlock()
-			return
-		case <-doneCh:
-			t.m.Lock()
-			logger.Debug().Msgf("Received done from channel for progress %s", t.token)
-			t.m.Unlock()
-			return
-		}
-	}
-}
-
-func (t *Tracker) deleteTracker() {
-	trackersMutex.Lock()
-	delete(trackers, t.token)
-	trackersMutex.Unlock()
-}
-
-func (t *Tracker) GetToken() types.ProgressToken {
-	return t.token
-}
-
-func newProgressParams(title, message string, cancellable, unquantifiableLength bool) types.ProgressParams {
-	percentage := 1
-	if unquantifiableLength {
-		percentage = 0
-	}
-	return types.ProgressParams{
-		Value: types.WorkDoneProgressBegin{
-			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: types.WorkDoneProgressBeginKind},
-			Title:                title,
-			Message:              message,
-			Cancellable:          cancellable,
-			Percentage:           percentage,
-		},
-	}
-}
-
-func (t *Tracker) send(progress types.ProgressParams, logger zerolog.Logger) {
-	if progress.Token == "" || progress.Value == nil {
-		logger.Warn().Any("progress", progress).Msg("invalid progress param, token or value not filled")
-		return
-	}
-	t.channel <- progress
-}
-
-// SetLastMessage sets the last message if not empty
-// follow the pattern that lower case does not lock, upper case locks
-func (t *Tracker) SetLastMessage(message string) {
-	if message == "" {
-		return
-	}
-	t.m.Lock()
-	t.setLastMessage(message)
-	t.m.Unlock()
-}
-
-// setLastMessage sets the last message if not empty
-// follow the pattern that lower case does not lock, upper case locks
-func (t *Tracker) setLastMessage(message string) {
-	if message == "" {
-		return
-	}
-	t.lastMessage = message
-}
-
-// CleanupChannels is Test-Only. Don't use for non-test code
-func CleanupChannels() {
-	for len(ToServerProgressChannel) > 0 {
-		<-ToServerProgressChannel
-	}
-
-	trackersMutex.Lock()
-	tempTrackers := make(map[types.ProgressToken]*Tracker)
-	maps.Copy(tempTrackers, trackers)
-	trackersMutex.Unlock()
-
-	for token := range tempTrackers {
-		Cancel(token)
-	}
-}
-
-func (t *Tracker) IsCanceled() bool {
-	return IsCanceled(t.token)
-}
-
-func Cancel(token types.ProgressToken) {
-	trackersMutex.Lock()
-	defer trackersMutex.Unlock()
-	t, ok := trackers[token]
-	if ok {
-		t.cancelChannel <- true
-		delete(trackers, token)
-		close(t.cancelChannel)
-	}
-}
-
-func IsCanceled(token types.ProgressToken) bool {
-	trackersMutex.RLock()
-	defer trackersMutex.RUnlock()
-	_, ok := trackers[token]
-	return !ok
 }

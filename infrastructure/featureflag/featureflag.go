@@ -45,7 +45,7 @@ const (
 	SnykSecretsEnabled            string = "isSecretsEnabled"
 )
 
-var Flags = []string{
+var Flags = []string{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	SnykCodeConsistentIgnores,
 	SnykCodeInlineIgnore,
 	IgnoreApprovalEnabled,

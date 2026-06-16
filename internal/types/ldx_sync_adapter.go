@@ -31,7 +31,7 @@ import (
 
 // LDXSyncSettingKey maps our internal setting names to LDX-Sync API field names
 // TODO: Some settings were removed for the CB as part of IDE-1920.
-var ldxSyncSettingKeyMap = map[string]string{
+var ldxSyncSettingKeyMap = map[string]string{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	//SettingApiEndpoint: "api_endpoint",
 	//SettingCodeEndpoint: "code_endpoint",
 	//SettingAuthenticationMethod: "authentication_method",

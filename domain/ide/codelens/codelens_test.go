@@ -29,7 +29,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/code"
-	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -47,20 +46,20 @@ func Test_GetCodeLensFromCommand(t *testing.T) {
 
 func Test_GetCodeLensForPath(t *testing.T) {
 	engine, tokenService := testutil.IntegTestWithEngine(t)
-	di.TestInit(t, engine, tokenService, nil) // IntegTest doesn't automatically inits DI
+	deps := di.TestInit(t, engine, tokenService, nil) // IntegTest doesn't automatically inits DI
 	testutil.EnableSastAndAutoFix(engine)
-	// this is using the real progress channel, so we need to listen to it
-	dummyProgressListeners(t)
+	// Drain the per-test progress channel so scanners do not block on a full buffer.
+	dummyProgressListeners(t, deps.ProgressTracker.Channel())
 
 	// Configure fake authentication to avoid real API calls
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 	tokenService.SetToken(engine.GetConfiguration(), "00000000-0000-0000-0000-000000000001")
-	di.AuthenticationService().ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
+	deps.AuthenticationService.ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
+	fakeAuthenticationProvider := deps.AuthenticationService.Provider().(*authentication.FakeAuthenticationProvider)
 	fakeAuthenticationProvider.IsAuthenticated = true
 
 	filePath, dir := code.TempWorkdirWithIssues(t)
-	folder := workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), dir, "dummy", di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine)
+	folder := workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), dir, "dummy", deps.Scanner, deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine)
 	config.GetWorkspace(engine.GetConfiguration()).AddFolder(folder)
 
 	// as code is only enabled if sast settings are enabled, and sast settings are checked in folder config
@@ -83,12 +82,14 @@ func Test_GetCodeLensForPath(t *testing.T) {
 	assert.Equal(t, lenses[0].Command.Title, code.FixIssuePrefix+code.DontUsePrintStackTrace)
 }
 
-func dummyProgressListeners(t *testing.T) {
+// dummyProgressListeners starts a goroutine that drains the given per-test
+// progress channel so scanner goroutines do not block on a full buffer.
+// The channel is the one owned by the per-test progress.Tracker (deps.ProgressTracker.Channel()).
+func dummyProgressListeners(t *testing.T, ch <-chan types.ProgressParams) {
 	t.Helper()
-	t.Cleanup(func() { progress.CleanupChannels() })
 	go func() {
-		for {
-			<-progress.ToServerProgressChannel
+		for range ch {
+			// discard: we only need to keep the channel empty so scanners can proceed
 		}
 	}()
 }

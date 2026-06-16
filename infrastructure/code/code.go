@@ -98,6 +98,7 @@ type Scanner struct {
 	codeErrorReporter codeClientObservability.ErrorReporter
 	codeScanner       func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error)
 	configResolver    types.ConfigResolverInterface
+	progressChannel   chan types.ProgressParams
 }
 
 func (sc *Scanner) BundleHashes() map[types.FilePath]string {
@@ -115,7 +116,7 @@ func (sc *Scanner) AddBundleHash(key types.FilePath, value string) {
 	sc.bundleHashes[key] = value
 }
 
-func New(engine workflow.Engine, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, featureFlagService featureflag.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter, codeScanner func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error), configResolver types.ConfigResolverInterface) *Scanner {
+func New(engine workflow.Engine, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, featureFlagService featureflag.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter, codeScanner func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error), configResolver types.ConfigResolverInterface, progressChannel chan types.ProgressParams) *Scanner {
 	return &Scanner{
 		IssueCache:         issuecache.NewIssueCache(product.ProductCode),
 		SnykApiClient:      apiClient,
@@ -134,6 +135,7 @@ func New(engine workflow.Engine, instrumentor performance.Instrumentor, apiClien
 		codeErrorReporter:  codeErrorReporter,
 		codeScanner:        codeScanner,
 		configResolver:     configResolver,
+		progressChannel:    progressChannel,
 	}
 }
 
@@ -264,7 +266,7 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, l
 		Int("fileCount", len(filesToBeScanned)).
 		Msg("Code scanner: files to be scanned")
 
-	t := progress.NewTracker(true, sc.engine.GetLogger())
+	t := progress.NewTaskWithChannel(sc.progressChannel, true, sc.engine.GetLogger())
 	go func() { t.CancelOrDone(cancel, ctx.Done()) }()
 
 	t.BeginWithMessage(string("Snyk Code: scanning "+folderPath), "starting scan")
@@ -286,8 +288,7 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, l
 
 	files := fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), rules)
 
-	if t.IsCanceled() || ctx.Err() != nil {
-		progress.Cancel(t.GetToken())
+	if ctx.Err() != nil {
 		return []types.Issue{}, nil
 	}
 
@@ -395,13 +396,12 @@ func (sc *Scanner) waitForScanToFinish(scanStatus *ScanStatus, folderPath types.
 	return false
 }
 
-func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, folderConfig *types.FolderConfig, files <-chan string, changedFiles map[types.FilePath]bool, codeConsistentIgnores bool, t *progress.Tracker) (issues []types.Issue, err error) {
+func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, folderConfig *types.FolderConfig, files <-chan string, changedFiles map[types.FilePath]bool, codeConsistentIgnores bool, t *progress.Task) (issues []types.Issue, err error) {
 	method := "code.UploadAndAnalyze"
 	logger := sc.engine.GetLogger().With().Str("method", method).Logger()
 
 	if ctx.Err() != nil {
-		progress.Cancel(t.GetToken())
-		logger.Info().Msg("Canceling Code scanner received cancellation signal")
+		logger.Info().Msg("Code scanner received cancellation signal")
 		return issues, nil
 	}
 	span := sc.Instrumentor.StartSpan(ctx, method)
@@ -549,7 +549,7 @@ func CreateCodeScanner(scanner *Scanner, folderConfig *types.FolderConfig) (code
 	return codeClient.NewCodeScanner(
 		codeConfig,
 		httpClient,
-		codeClient.WithTrackerFactory(NewCodeTrackerFactory(scanner.engine.GetLogger())),
+		codeClient.WithTrackerFactory(NewCodeTrackerFactory(scanner.engine.GetLogger(), scanner.progressChannel)),
 		codeClient.WithLogger(scanner.engine.GetLogger()),
 		codeClient.WithInstrumentor(scanner.codeInstrumentor),
 		codeClient.WithErrorReporter(scanner.codeErrorReporter),
