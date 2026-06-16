@@ -25,10 +25,14 @@ import (
 )
 
 type FakeFeatureFlagService struct {
-	Flags            map[string]bool
-	FlushCacheCalled bool
-	SastSettings     *sast_contract.SastResponse
-	Conf             configuration.Configuration
+	Flags                         map[string]bool
+	FlushCacheCalled              bool
+	PopulateFolderConfigCallCount int
+	SastSettings                  *sast_contract.SastResponse
+	Conf                          configuration.Configuration
+	// Optional hooks for tests that need to observe call timing or ordering.
+	OnPopulate   func()
+	OnFlushCache func()
 }
 
 func NewFakeService() *FakeFeatureFlagService {
@@ -48,10 +52,17 @@ func (f *FakeFeatureFlagService) PopulateFolderConfig(folderConfig *types.Folder
 		folderConfig.SetFeatureFlag(name, value)
 	}
 	types.SetSastSettings(f.Conf, folderConfig.FolderPath, f.SastSettings)
+	f.PopulateFolderConfigCallCount++
+	if f.OnPopulate != nil {
+		f.OnPopulate()
+	}
 }
 
 func (f *FakeFeatureFlagService) FlushCache() {
 	f.FlushCacheCalled = true
+	if f.OnFlushCache != nil {
+		f.OnFlushCache()
+	}
 }
 
 func (f *FakeFeatureFlagService) Override(flag string, value bool) {
