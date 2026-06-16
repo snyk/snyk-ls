@@ -2110,36 +2110,36 @@ button.secondary[disabled] {
                             <div class="form-group">
                                 <h3>Scanners</h3>
                                 <div class="checkbox-group">
-                                    <div class="override-indicator-wrapper ">
+                                    <div class="override-indicator-wrapper source-user-override">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="folder_3_snyk_oss_enabled" data-setting="snyk_oss_enabled" checked >
                                             <span data-toggle="tooltip" title="Find and fix open source dependency issues.">Snyk Open Source</span>
-                                            
+                                            <span class="source-indicator" data-toggle="tooltip" title="Overridden at project level">👤</span>
                                         </label>
                                     </div>
-                                    <div class="override-indicator-wrapper ">
+                                    <div class="override-indicator-wrapper source-user-override">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="folder_3_snyk_code_enabled" data-setting="snyk_code_enabled" checked >
                                             <span data-toggle="tooltip" title="<p>Find and fix security issues in your application code in real time.</p><p><strong>Note:</strong> Snyk Code must be enabled for your organization in Snyk settings.</p>">Snyk Code</span>
-                                            
+                                            <span class="source-indicator" data-toggle="tooltip" title="Overridden at project level">👤</span>
                                         </label>
                                     </div>
-                                    <div class="override-indicator-wrapper ">
+                                    <div class="override-indicator-wrapper source-user-override">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="folder_3_snyk_iac_enabled" data-setting="snyk_iac_enabled"  >
                                             <span data-toggle="tooltip" title="Find and fix your IaC misconfigurations.">Snyk Infrastructure as Code</span>
-                                            
+                                            <span class="source-indicator" data-toggle="tooltip" title="Overridden at project level">👤</span>
                                         </label>
                                     </div>
                                     
                                 </div>
                             </div>
 
-                            <div class="override-indicator-wrapper ">
+                            <div class="override-indicator-wrapper source-user-override">
                                 <div class="form-group half-width">
                                     <label for="folder_3_scan_automatic">
                                         <span data-toggle="tooltip" title="Choose whether to run Snyk scans in the background (auto), or only when you run the Scan command (manual).">Scanning mode</span>
-                                        
+                                        <span class="source-indicator" data-toggle="tooltip" title="Overridden at project level">👤</span>
                                     </label>
                                     
                                     <select id="folder_3_scan_automatic" name="folder_3_scan_automatic" data-setting="scan_automatic" data-bool="1" >
@@ -2183,32 +2183,32 @@ button.secondary[disabled] {
                                             <span data-toggle="tooltip" title="Select which severity levels to display in the results.">Filter by severity</span>
                                         </label>
                                         <div class="checkbox-group">
-                                            <div class="override-indicator-wrapper ">
+                                            <div class="override-indicator-wrapper source-user-override">
                                                 <label class="checkbox-label">
                                                     <input type="checkbox" name="folder_3_severity_filter_critical" data-setting="severity_filter_critical" checked >
                                                     Critical
-                                                    
+                                                    <span class="source-indicator" data-toggle="tooltip" title="Overridden at project level">👤</span>
                                                 </label>
                                             </div>
-                                            <div class="override-indicator-wrapper ">
+                                            <div class="override-indicator-wrapper source-user-override">
                                                 <label class="checkbox-label">
                                                     <input type="checkbox" name="folder_3_severity_filter_high" data-setting="severity_filter_high" checked >
                                                     High
-                                                    
+                                                    <span class="source-indicator" data-toggle="tooltip" title="Overridden at project level">👤</span>
                                                 </label>
                                             </div>
-                                            <div class="override-indicator-wrapper ">
+                                            <div class="override-indicator-wrapper source-user-override">
                                                 <label class="checkbox-label">
                                                     <input type="checkbox" name="folder_3_severity_filter_medium" data-setting="severity_filter_medium"  >
                                                     Medium
-                                                    
+                                                    <span class="source-indicator" data-toggle="tooltip" title="Overridden at project level">👤</span>
                                                 </label>
                                             </div>
-                                            <div class="override-indicator-wrapper ">
+                                            <div class="override-indicator-wrapper source-user-override">
                                                 <label class="checkbox-label">
                                                     <input type="checkbox" name="folder_3_severity_filter_low" data-setting="severity_filter_low"  >
                                                     Low
-                                                    
+                                                    <span class="source-indicator" data-toggle="tooltip" title="Overridden at project level">👤</span>
                                                 </label>
                                             </div>
                                         </div>
@@ -2219,18 +2219,18 @@ button.secondary[disabled] {
                                     <div class="form-group">
                                         <label data-toggle="tooltip" title="<p>Code Consistent Ignores helps your teams focus on important tasks by filtering out distractions.</p><p>It ensures that once an ignore is created, it is consistently respected regardless of how and where the test is run.</p>">Issue view options</label>
                                         <div class="checkbox-group">
-                                            <div class="override-indicator-wrapper ">
+                                            <div class="override-indicator-wrapper source-user-override">
                                                 <label class="checkbox-label">
                                                     <input type="checkbox" name="folder_3_issue_view_open_issues" data-setting="issue_view_open_issues" checked >
                                                     Show open issues
-                                                    
+                                                    <span class="source-indicator" data-toggle="tooltip" title="Overridden at project level">👤</span>
                                                 </label>
                                             </div>
-                                            <div class="override-indicator-wrapper ">
+                                            <div class="override-indicator-wrapper source-user-override">
                                                 <label class="checkbox-label">
                                                     <input type="checkbox" name="folder_3_issue_view_ignored_issues" data-setting="issue_view_ignored_issues"  >
                                                     Show ignored issues
-                                                    
+                                                    <span class="source-indicator" data-toggle="tooltip" title="Overridden at project level">👤</span>
                                                 </label>
                                             </div>
                                         </div>
@@ -2238,22 +2238,22 @@ button.secondary[disabled] {
                                 </div>
                             </div>
 
-                            <div class="override-indicator-wrapper ">
+                            <div class="override-indicator-wrapper source-user-override">
                                 <div class="form-group half-width">
                                     <label for="folder_3_risk_score_threshold">
                                         <span data-toggle="tooltip" title="Minimum risk score to display issues (0-1000)">Filter by risk score<span class="deprecated-label">Closed Beta</span></span>
-                                        
+                                        <span class="source-indicator" data-toggle="tooltip" title="Overridden at project level">👤</span>
                                     </label>
                                     <input type="number" id="folder_3_risk_score_threshold" name="folder_3_risk_score_threshold" data-setting="risk_score_threshold" min="0" max="1000" value="500" placeholder="0" >
                                     <span id="folder_3_risk_score_threshold-error" class="error-message hidden">Risk score must be between 0 and 1000</span>
                                 </div>
                             </div>
 
-                            <div class="override-indicator-wrapper ">
+                            <div class="override-indicator-wrapper source-user-override">
                                 <div class="form-group half-width">
                                     <label for="folder_3_scan_net_new">
                                         <span data-toggle="tooltip" title="Choose to see all issues or only those newly introduced by your code changes.">Delta findings</span>
-                                        
+                                        <span class="source-indicator" data-toggle="tooltip" title="Overridden at project level">👤</span>
                                     </label>
                                     <select id="folder_3_scan_net_new" name="folder_3_scan_net_new" data-setting="scan_net_new" data-bool="1" >
                                         <option value="false" selected>All issues</option>
