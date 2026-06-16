@@ -19,6 +19,7 @@ package oss
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -56,6 +57,7 @@ func GetCodeActions(engine workflow.Engine, configResolver types.ConfigResolverI
 				types.FilePath(fixNode.Tree.Document),
 				getRangeFromNode(fixNode),
 				[]byte(fixNode.Tree.Root.Value),
+				nil,
 				true,
 				ossIssueData.PackageManager,
 				ossIssueData.From,
@@ -64,13 +66,35 @@ func GetCodeActions(engine workflow.Engine, configResolver types.ConfigResolverI
 			)
 		}
 	} else {
+		fixFilePath := affectedFilePath
+		fixRange := getRangeFromNode(issueDepNode)
+		var originalContent []byte
+		if issueDepNode.Tree != nil {
+			originalContent = []byte(issueDepNode.Tree.Root.Value)
+		}
+
+		// Maven versions are frequently declared indirectly via a property
+		// reference, e.g. <version>${foo.version}</version>. Hardcoding the
+		// upgraded version into the dependency block leaves the property
+		// orphaned and, on a second apply over the now-shorter text, corrupts
+		// the file. When the property can be resolved, redirect the edit to the
+		// matching <properties> entry instead.
+		if ossIssueData.PackageManager == "maven" {
+			if propNode := resolveMavenPropertyNode(issueDepNode); propNode != nil {
+				fixFilePath = types.FilePath(propNode.Tree.Document)
+				fixRange = getRangeFromNode(propNode)
+				originalContent = []byte(propNode.Tree.Root.Value)
+			}
+		}
+
 		quickFixAction = AddQuickFixAction(
 			engine,
 			configResolver,
-			affectedFilePath,
-			getRangeFromNode(issueDepNode),
+			fixFilePath,
+			fixRange,
 			nil,
-			false,
+			originalContent,
+			fixFilePath != affectedFilePath,
 			ossIssueData.PackageManager,
 			ossIssueData.From,
 			ossIssueData.UpgradePath,
@@ -155,7 +179,12 @@ func AddSnykLearnAction(
 	return action
 }
 
-func AddQuickFixAction(engine workflow.Engine, configResolver types.ConfigResolverInterface, affectedFilePath types.FilePath, issueRange types.Range, fileContent []byte, addFileNameToFixTitle bool, packageManager string, dependencyPath []string, upgradePath []any, folderConfig *types.FolderConfig) types.CodeAction {
+// AddQuickFixAction builds a deferred "upgrade" code action. fileContent, when
+// non-nil, is the document content used at apply time (otherwise the file is
+// read from disk on apply). originalContent is a snapshot of the document at
+// action-creation time; it is used to capture the exact text the edit expects
+// to replace so a stale edit can be refused at apply time.
+func AddQuickFixAction(engine workflow.Engine, configResolver types.ConfigResolverInterface, affectedFilePath types.FilePath, issueRange types.Range, fileContent []byte, originalContent []byte, addFileNameToFixTitle bool, packageManager string, dependencyPath []string, upgradePath []any, folderConfig *types.FolderConfig) types.CodeAction {
 	logger := engine.GetLogger().With().Str("method", "oss.AddQuickFixAction").Logger()
 	if !configResolver.GetBool(types.SettingEnableSnykOssQuickFixActions, folderConfig) {
 		return nil
@@ -170,13 +199,37 @@ func AddQuickFixAction(engine workflow.Engine, configResolver types.ConfigResolv
 	if addFileNameToFixTitle {
 		upgradeMessage += " [ in file: " + filePathString + " ]"
 	}
+
+	// Snapshot the text the edit is meant to replace, so the deferred edit can
+	// detect that the file has changed (e.g. the fix was already applied) and
+	// refuse to re-apply a stale, absolute-offset edit that would corrupt the
+	// file.
+	snapshot := originalContent
+	if snapshot == nil {
+		snapshot = fileContent
+	}
+	expectedText, haveExpectedText := textAtRange(snapshot, issueRange)
+
 	autofixEditCallback := func() *types.WorkspaceEdit {
 		edit := &types.WorkspaceEdit{}
-		var err error
-		if fileContent == nil {
-			fileContent, err = os.ReadFile(filePathString)
+		content := fileContent
+		if content == nil {
+			var err error
+			content, err = os.ReadFile(filePathString)
 			if err != nil {
 				logger.Error().Err(err).Str("file", filePathString).Msg("could not open file")
+				return edit
+			}
+		}
+
+		if haveExpectedText {
+			currentText, ok := textAtRange(content, issueRange)
+			if !ok || strings.TrimSpace(currentText) != strings.TrimSpace(expectedText) {
+				logger.Warn().
+					Str("file", filePathString).
+					Str("expected", expectedText).
+					Str("actual", currentText).
+					Msg("file content at the fix range has changed since the quickfix was created; refusing to apply a stale edit")
 				return edit
 			}
 		}
@@ -247,6 +300,48 @@ func getQuickfixEdit(engine workflow.Engine, affectedFilePath types.FilePath, up
 	}
 
 	return ""
+}
+
+var mavenPropertyRefRegexp = regexp.MustCompile(`^\s*\$\{([^}]+)\}\s*$`)
+
+// resolveMavenPropertyNode returns the <properties> node a dependency version
+// refers to when the version is a property reference (e.g. ${foo.version}),
+// searching the current pom and walking up the parent pom hierarchy. It returns
+// nil when the version is not a property reference or the property cannot be
+// found.
+func resolveMavenPropertyNode(depNode *ast.Node) *ast.Node {
+	if depNode == nil {
+		return nil
+	}
+	matches := mavenPropertyRefRegexp.FindStringSubmatch(depNode.Value)
+	if matches == nil {
+		return nil
+	}
+	propertyName := matches[1]
+	for tree := depNode.Tree; tree != nil; tree = tree.ParentTree {
+		if node, ok := tree.Properties[propertyName]; ok && node != nil && node.Tree != nil {
+			return node
+		}
+	}
+	return nil
+}
+
+// textAtRange returns the substring of content covered by the given single-line
+// range. ok is false when content is nil or the range falls outside it (e.g.
+// the file got shorter because the fix was already applied).
+func textAtRange(content []byte, r types.Range) (text string, ok bool) {
+	if content == nil {
+		return "", false
+	}
+	lines := strings.Split(string(content), "\n")
+	if r.Start.Line != r.End.Line || r.Start.Line < 0 || r.Start.Line >= len(lines) {
+		return "", false
+	}
+	line := lines[r.Start.Line]
+	if r.Start.Character < 0 || r.Start.Character > r.End.Character || r.End.Character > len(line) {
+		return "", false
+	}
+	return line[r.Start.Character:r.End.Character], true
 }
 
 func getUpgradedPathParts(upgradePath []any) (string, string, error) {

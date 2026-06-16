@@ -89,6 +89,19 @@ func (p *Parser) Parse(content string, path types.FilePath) *ast.Tree {
 				node := p.addNewNodeTo(tree.Root, offset, offsetAfter, dep)
 				p.logger.Debug().Interface("nodeName", node.Name).Str("path", tree.Document).Msg("Added Dependency node")
 			}
+			if xmlType.Name.Local == "properties" {
+				// offset is the input position right after the <properties> start
+				// tag, i.e. where the inner XML begins.
+				innerStartOffset := offset
+				var holder struct {
+					Inner string `xml:",innerxml"`
+				}
+				if err = d.DecodeElement(&holder, &xmlType); err != nil {
+					p.logger.Err(err).Msg("Couldn't decode properties")
+					continue
+				}
+				p.addPropertyNodes(tree, content, int(innerStartOffset), holder.Inner)
+			}
 			if xmlType.Name.Local == "parent" {
 				// parse Parent pom
 				var parentPOM Parent
@@ -138,10 +151,84 @@ func (p *Parser) initTree(path types.FilePath, content string) *ast.Tree {
 	}
 
 	root.Tree = &ast.Tree{
-		Root:     &root,
-		Document: string(path),
+		Root:       &root,
+		Document:   string(path),
+		Properties: map[string]*ast.Node{},
 	}
 	return root.Tree
+}
+
+// addPropertyNodes parses the children of a <properties> element and records a
+// node per property in tree.Properties, with a range pointing at the property
+// value. baseOffset is the absolute byte offset (in content) at which inner
+// begins, so per-property offsets in inner can be mapped back to content.
+func (p *Parser) addPropertyNodes(tree *ast.Tree, content string, baseOffset int, inner string) {
+	dec := xml.NewDecoder(strings.NewReader(inner))
+	for {
+		token, err := dec.Token()
+		if token == nil || errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			p.logger.Err(err).Msg("Couldn't parse properties")
+			break
+		}
+
+		start, ok := token.(xml.StartElement)
+		if !ok {
+			continue
+		}
+
+		// The value spans from just after this start tag up to its end tag.
+		valueStartInInner := int(dec.InputOffset())
+		valueEndInInner := valueStartInInner
+		for {
+			inner, innerErr := dec.Token()
+			if inner == nil || innerErr != nil {
+				break
+			}
+			if _, isEnd := inner.(xml.EndElement); isEnd {
+				break
+			}
+			if _, isCharData := inner.(xml.CharData); isCharData {
+				valueEndInInner = int(dec.InputOffset())
+			}
+		}
+
+		valueStartOffset := baseOffset + valueStartInInner
+		valueEndOffset := baseOffset + valueEndInInner
+		if valueStartOffset > valueEndOffset || valueEndOffset > len(content) {
+			continue
+		}
+
+		rawValue := content[valueStartOffset:valueEndOffset]
+		trimmedValue := strings.Trim(rawValue, " \t\n")
+		if trimmedValue == "" {
+			continue
+		}
+		leadingWhitespace := len(rawValue) - len(strings.TrimLeft(rawValue, " \t\n"))
+		valueStartOffset += leadingWhitespace
+		valueEndOffset = valueStartOffset + len(trimmedValue)
+
+		tree.Properties[start.Name.Local] = newValueNode(tree, content, valueStartOffset, valueEndOffset, start.Name.Local, trimmedValue)
+	}
+}
+
+// newValueNode builds an ast.Node whose range points at the value located at
+// [valueStartOffset, valueEndOffset) within content.
+func newValueNode(tree *ast.Tree, content string, valueStartOffset, valueEndOffset int, name, value string) *ast.Node {
+	contentToValueStart := content[0:valueStartOffset]
+	line := strings.Count(contentToValueStart, "\n")
+	lineStartOffset := strings.LastIndex(contentToValueStart, "\n") + 1
+	return &ast.Node{
+		Line:       line,
+		StartChar:  valueStartOffset - lineStartOffset,
+		EndChar:    valueEndOffset - lineStartOffset,
+		Name:       name,
+		Value:      value,
+		Attributes: make(map[string]string),
+		Tree:       tree,
+	}
 }
 
 func (p *Parser) addNewNodeTo(parent *ast.Node, offsetBefore int64, offsetAfter int64, dep Dependency) *ast.Node {

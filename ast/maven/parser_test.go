@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -54,6 +55,47 @@ func TestCreateDependencyTree(t *testing.T) {
 	index = strings.Index(lines[expectedLineNumber], version)
 	assert.Equal(t, index, node.StartChar)
 	assert.Equal(t, index+len(version), node.EndChar)
+}
+
+func TestParse_PopulatesProperties(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	content := `<?xml version="1.0" encoding="UTF-8"?>
+<project>
+    <properties>
+        <maven.compiler.source>11</maven.compiler.source>
+
+        <!-- a comment between properties should not break parsing -->
+        <lib.cyclonedx-core-java.version>9.0.5</lib.cyclonedx-core-java.version>
+    </properties>
+</project>
+`
+	parser := Parser{logger: engine.GetLogger()}
+	tree := parser.Parse(content, types.FilePath("pom.xml"))
+
+	require.NotNil(t, tree.Properties)
+
+	node, ok := tree.Properties["lib.cyclonedx-core-java.version"]
+	require.True(t, ok, "expected the property to be parsed into the tree")
+	assert.Equal(t, "9.0.5", node.Value)
+
+	lines := strings.Split(content, "\n")
+	expectedLine := -1
+	for i, l := range lines {
+		if strings.Contains(l, "<lib.cyclonedx-core-java.version>") {
+			expectedLine = i
+		}
+	}
+	require.GreaterOrEqual(t, expectedLine, 0)
+
+	startChar := strings.Index(lines[expectedLine], "9.0.5")
+	assert.Equal(t, expectedLine, node.Line)
+	assert.Equal(t, startChar, node.StartChar)
+	assert.Equal(t, startChar+len("9.0.5"), node.EndChar)
+
+	// a simple property is parsed too
+	compiler, ok := tree.Properties["maven.compiler.source"]
+	require.True(t, ok)
+	assert.Equal(t, "11", compiler.Value)
 }
 
 func TestCreateHierarchicalDependencyTree(t *testing.T) {
