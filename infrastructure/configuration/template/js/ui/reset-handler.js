@@ -65,12 +65,8 @@
 			return;
 		}
 
-		if (!confirm("Reset " + formatSectionName(section) + " to defaults?")) {
-			return;
-		}
-
 		var defaults = sectionDefaults[section];
-		applyDefaults(defaults, section);
+		applyDefaults(defaults);
 
 		// Trigger dirty tracking update
 		if (window.dirtyTracker) {
@@ -99,10 +95,6 @@
 			return;
 		}
 
-		if (!confirm("Reset all overrides for this folder — your custom overrides will be removed")) {
-			return;
-		}
-
 		resetFolderOverrides(folderPath);
 
 		// Keep dirty state in sync (a reset changes no DOM input, so no change/blur event fires).
@@ -120,7 +112,7 @@
 	}
 
 	// Apply default values to form fields
-	function applyDefaults(defaults, section) {
+	function applyDefaults(defaults) {
 		for (var fieldName in defaults) {
 			if (!defaults.hasOwnProperty(fieldName)) continue;
 
@@ -168,18 +160,6 @@
 		if (window.ConfigApp.formHandler && window.ConfigApp.formHandler.markFolderForReset) {
 			window.ConfigApp.formHandler.markFolderForReset(folderPath);
 		}
-	}
-
-	// Format section name for display
-	function formatSectionName(section) {
-		var names = {
-			scanConfiguration: "Scan configuration",
-			filteringDisplay: "Filters and views",
-			authentication: "Authentication",
-			cliConfiguration: "CLI configuration",
-			permissions: "Trust settings"
-		};
-		return names[section] || section;
 	}
 
 	// Trigger change event on element

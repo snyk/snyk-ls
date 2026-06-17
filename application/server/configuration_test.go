@@ -744,9 +744,14 @@ func Test_updateFolderConfig_ResetClearsUserOverrides_EndToEnd(t *testing.T) {
 	seed := []types.LspFolderConfig{{
 		FolderPath: folderPath,
 		Settings: map[string]*types.ConfigSetting{
-			types.SettingSnykCodeEnabled: {Value: true, Changed: true},
-			types.SettingScanAutomatic:   {Value: true, Changed: true},
-			types.SettingPreferredOrg:    {Value: "my-folder-org", Changed: true},
+			types.SettingSnykCodeEnabled:       {Value: true, Changed: true},
+			types.SettingScanAutomatic:         {Value: true, Changed: true},
+			types.SettingPreferredOrg:          {Value: "my-folder-org", Changed: true},
+			types.SettingAdditionalParameters:  {Value: []string{"--all-projects"}, Changed: true},
+			types.SettingAdditionalEnvironment: {Value: "FOO=bar", Changed: true},
+			types.SettingScanCommandConfig: {Value: map[product.Product]types.ScanCommandConfig{
+				product.ProductOpenSource: {PreScanCommand: "echo pre"},
+			}, Changed: true},
 		},
 	}}
 	UpdateSettings(ctx, conf, engine, logger, map[string]*types.ConfigSetting{}, seed, analytics.TriggerSourceTest, resolver)
@@ -755,6 +760,9 @@ func Test_updateFolderConfig_ResetClearsUserOverrides_EndToEnd(t *testing.T) {
 	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingScanAutomatic), "scan_automatic override seeded")
 	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingPreferredOrg), "preferred_org override seeded")
 	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingOrgSetByUser), "org_set_by_user set alongside preferred_org")
+	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingAdditionalParameters), "additional_parameters override seeded")
+	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingAdditionalEnvironment), "additional_environment override seeded")
+	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingScanCommandConfig), "scan_command_config override seeded")
 
 	seededFC := config.GetFolderConfigFromEngine(engine, resolver, folderPath, logger)
 	require.Equal(t, "my-folder-org", seededFC.PreferredOrg(), "seeded preferred_org is effective")
@@ -763,9 +771,12 @@ func Test_updateFolderConfig_ResetClearsUserOverrides_EndToEnd(t *testing.T) {
 	reset := []types.LspFolderConfig{{
 		FolderPath: folderPath,
 		Settings: map[string]*types.ConfigSetting{
-			types.SettingSnykCodeEnabled: {Value: nil, Changed: true},
-			types.SettingScanAutomatic:   {Value: nil, Changed: true},
-			types.SettingPreferredOrg:    {Value: nil, Changed: true},
+			types.SettingSnykCodeEnabled:       {Value: nil, Changed: true},
+			types.SettingScanAutomatic:         {Value: nil, Changed: true},
+			types.SettingPreferredOrg:          {Value: nil, Changed: true},
+			types.SettingAdditionalParameters:  {Value: nil, Changed: true},
+			types.SettingAdditionalEnvironment: {Value: nil, Changed: true},
+			types.SettingScanCommandConfig:     {Value: nil, Changed: true},
 		},
 	}}
 	UpdateSettings(ctx, conf, engine, logger, map[string]*types.ConfigSetting{}, reset, analytics.TriggerSourceTest, resolver)
@@ -775,6 +786,9 @@ func Test_updateFolderConfig_ResetClearsUserOverrides_EndToEnd(t *testing.T) {
 	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingScanAutomatic), "scan_automatic override cleared")
 	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingPreferredOrg), "preferred_org override cleared")
 	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingOrgSetByUser), "org_set_by_user cleared by org reset")
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingAdditionalParameters), "additional_parameters override cleared")
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingAdditionalEnvironment), "additional_environment override cleared")
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingScanCommandConfig), "scan_command_config override cleared")
 
 	// After Unset the key no longer holds an active *LocalConfigField override (Unset writes a
 	// tombstone, so conf.IsSet may still report true — HasUserOverride is the real contract).

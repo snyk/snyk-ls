@@ -152,7 +152,6 @@ test("applyFolderResets clears window.ConfigApp.folderResets after applying", as
 test("DOM-driven: clicking .reset-overrides-btn produces 14 nulls for that folderPath in the save payload", async () => {
 	const win = await buildDom();
 	const doc = win.document;
-	win.confirm = () => true;
 	const calls = spySave(win);
 
 	// Click the reset button for folder index 1 (PATH_B). The click both marks the folder and
@@ -171,7 +170,6 @@ test("DOM-driven: clicking .reset-overrides-btn produces 14 nulls for that folde
 test("DOM-driven: reset button click does not require the folder to have other edits", async () => {
 	const win = await buildDom();
 	const doc = win.document;
-	win.confirm = () => true;
 	const calls = spySave(win);
 
 	// Folder index 0 (PATH_A), no edits made — reset-only.
@@ -189,7 +187,6 @@ test("DOM-driven: reset button click does not require the folder to have other e
 test("clicking reset triggers a save even with no other edits", async () => {
 	const win = await buildDom();
 	const doc = win.document;
-	win.confirm = () => true;
 	const calls = spySave(win);
 
 	// A folder reset changes no DOM input, so without an explicit save trigger it would never

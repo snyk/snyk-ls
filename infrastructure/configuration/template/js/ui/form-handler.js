@@ -206,11 +206,13 @@
 		}
 	}
 
-	// Org-scope folder override fields cleared by a folder reset. Emitting flat null
-	// for each tells the IDE plugin to send {value:null, changed:true}, which makes
-	// snyk-ls Unset the user:folder: override so the value falls back to org/LDX/default.
+	// Folder override fields cleared by a folder reset. Emitting flat null for each
+	// tells the IDE plugin to send {value:null, changed:true}, which makes snyk-ls
+	// Unset the user:folder: override so the value falls back to org/LDX/default.
 	// preferred_org is included: snyk-ls special-cases its null-reset to also unset
 	// org_set_by_user, reverting the folder to its auto-determined / global org.
+	// additional_parameters / additional_environment / scan_command_config are
+	// non-scalar overrides; snyk-ls's basic folder-field handlers honor the null reset.
 	var FOLDER_RESET_FIELDS = [
 		"scan_automatic",
 		"scan_net_new",
@@ -226,6 +228,9 @@
 		"issue_view_ignored_issues",
 		"risk_score_threshold",
 		"preferred_org",
+		"additional_parameters",
+		"additional_environment",
+		"scan_command_config",
 	];
 
 	// Mark a folder for complete reset (all org-scope overrides will be set to null).
