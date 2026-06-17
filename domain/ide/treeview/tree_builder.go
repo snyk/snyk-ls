@@ -62,7 +62,6 @@ type TreeBuilder struct {
 	productScanStates map[types.FilePath]map[product.Product]bool
 	productScanErrors map[types.FilePath]map[product.Product]string
 	pendingAutoExpand map[string]bool // deferred auto-expand writes applied after build
-	issueViewOptions  types.IssueViewOptions
 }
 
 // NewTreeBuilder creates a new TreeBuilder with the given expand state.
@@ -85,11 +84,6 @@ func (b *TreeBuilder) SetProductScanErrors(errors map[types.FilePath]map[product
 	b.productScanErrors = errors
 }
 
-// SetIssueViewOptions sets the current issue view options for building info nodes.
-func (b *TreeBuilder) SetIssueViewOptions(opts types.IssueViewOptions) {
-	b.issueViewOptions = opts
-}
-
 // BuildTree constructs tree view data from a workspace.
 func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 	folders := workspace.Folders()
@@ -103,7 +97,11 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 		if !ok {
 			continue
 		}
-		supportedTypes := f.DisplayableIssueTypes()
+		// Fetch FolderConfig once; all derived values are computed from this single call
+		// to avoid repeated storage reads inside DisplayableIssueTypes, IsDeltaFindingsEnabled,
+		// and IssueViewOptions (each would otherwise invoke FolderConfigReadOnly separately).
+		cfg := f.FolderConfigReadOnly()
+		supportedTypes := f.DisplayableIssueTypesFromConfig(cfg)
 		allIssues := fip.Issues()
 		filtered := fip.FilterIssues(allIssues, supportedTypes)
 
@@ -113,10 +111,10 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 			SupportedIssueTypes: supportedTypes,
 			AllIssues:           allIssues,
 			FilteredIssues:      filtered,
-			DeltaEnabled:        f.IsDeltaFindingsEnabled(),
-			IssueViewOptions:    b.issueViewOptions,
+			DeltaEnabled:        f.IsDeltaFindingsEnabledFromConfig(cfg),
+			IssueViewOptions:    f.IssueViewOptionsFromConfig(cfg),
 		}
-		if cfg := f.FolderConfigReadOnly(); cfg != nil {
+		if cfg != nil {
 			fd.ConsistentIgnoresEnabled = cfg.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores)
 			if fd.DeltaEnabled {
 				conf := cfg.Conf()

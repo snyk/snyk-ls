@@ -54,7 +54,7 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 		types.SettingAuthenticationMethod: "oauth",
 	}
 	folderConfigs := []types.FolderConfig{
-		{FolderPath: folderPath},
+		{FolderPath: folderPath, ConfigResolver: testutil.DefaultConfigResolver(engine)},
 	}
 
 	html := renderer.GetConfigHtml(settings, folderConfigs)
@@ -137,7 +137,8 @@ func TestConfigHtmlRenderer_LdxSyncConfigAlwaysRendered(t *testing.T) {
 	settings := map[string]any{}
 	folderConfigs := []types.FolderConfig{
 		{
-			FolderPath: folderPath,
+			FolderPath:     folderPath,
+			ConfigResolver: testutil.DefaultConfigResolver(engine),
 			EffectiveConfig: map[string]types.EffectiveValue{
 				"scan_automatic": {Value: "auto", Source: "global"},
 			},
@@ -297,7 +298,7 @@ func TestConfigHtmlRenderer_SingleFolderShowsDirectTab(t *testing.T) {
 		types.SettingApiEndpoint: "https://test.snyk.io",
 	}
 	folderConfigs := []types.FolderConfig{
-		{FolderPath: folderPath},
+		{FolderPath: folderPath, ConfigResolver: testutil.DefaultConfigResolver(engine)},
 	}
 
 	html := renderer.GetConfigHtml(settings, folderConfigs)
@@ -335,7 +336,7 @@ func TestConfigHtmlRenderer_FolderNameDiffersFromBasename(t *testing.T) {
 
 	settings := map[string]any{}
 	folderConfigs := []types.FolderConfig{
-		{FolderPath: folderPath},
+		{FolderPath: folderPath, ConfigResolver: testutil.DefaultConfigResolver(engine)},
 	}
 
 	html := renderer.GetConfigHtml(settings, folderConfigs)
@@ -367,7 +368,7 @@ func TestConfigHtmlRenderer_EmptyNameFallsBackToBasename(t *testing.T) {
 
 	settings := map[string]any{}
 	folderConfigs := []types.FolderConfig{
-		{FolderPath: folderPath},
+		{FolderPath: folderPath, ConfigResolver: testutil.DefaultConfigResolver(engine)},
 	}
 
 	html := renderer.GetConfigHtml(settings, folderConfigs)
@@ -406,8 +407,8 @@ func TestConfigHtmlRenderer_MultiFolderShowsDropdown(t *testing.T) {
 		types.SettingApiEndpoint: "https://test.snyk.io",
 	}
 	folderConfigs := []types.FolderConfig{
-		{FolderPath: folderPath1},
-		{FolderPath: folderPath2},
+		{FolderPath: folderPath1, ConfigResolver: testutil.DefaultConfigResolver(engine)},
+		{FolderPath: folderPath2, ConfigResolver: testutil.DefaultConfigResolver(engine)},
 	}
 
 	html := renderer.GetConfigHtml(settings, folderConfigs)
@@ -462,8 +463,8 @@ func TestConfigHtmlRenderer_FolderNamesAlignWithStoredFolderConfigs(t *testing.T
 	// folderConfigs in REVERSED order: beta first, alpha second
 	settings := map[string]any{}
 	folderConfigs := []types.FolderConfig{
-		{FolderPath: betaPath},
-		{FolderPath: alphaPath},
+		{FolderPath: betaPath, ConfigResolver: testutil.DefaultConfigResolver(engine)},
+		{FolderPath: alphaPath, ConfigResolver: testutil.DefaultConfigResolver(engine)},
 	}
 
 	html := renderer.GetConfigHtml(settings, folderConfigs)
@@ -509,7 +510,7 @@ func TestConfigHtmlRenderer_EclipseShowsProjectSettings(t *testing.T) {
 		types.SettingSnykCodeEnabled: true,
 	}
 	folderConfigs := []types.FolderConfig{
-		{FolderPath: folderPath},
+		{FolderPath: folderPath, ConfigResolver: testutil.DefaultConfigResolver(engine)},
 	}
 
 	html := renderer.GetConfigHtml(settings, folderConfigs)
@@ -664,7 +665,8 @@ func TestConfigHtmlRenderer_SourceIndicatorsInOutput(t *testing.T) {
 	settings := map[string]any{}
 	folderConfigs := []types.FolderConfig{
 		{
-			FolderPath: folderPath,
+			FolderPath:     folderPath,
+			ConfigResolver: testutil.DefaultConfigResolver(engine),
 			EffectiveConfig: map[string]types.EffectiveValue{
 				"snyk_oss_enabled":     {Value: true, Source: "ldx-sync-locked"},
 				"snyk_code_enabled":    {Value: true, Source: "ldx-sync"},
@@ -778,7 +780,8 @@ func TestConfigHtml_FormFieldNamesMatchRegisteredSettings(t *testing.T) {
 	}
 	folderConfigs := []types.FolderConfig{
 		{
-			FolderPath: "/path/to/folder",
+			FolderPath:     "/path/to/folder",
+			ConfigResolver: testutil.DefaultConfigResolver(engine),
 			EffectiveConfig: map[string]types.EffectiveValue{
 				types.SettingScanAutomatic:          {Value: true, Source: "global"},
 				types.SettingScanNetNew:             {Value: false, Source: "global"},
