@@ -61,6 +61,7 @@ linters:
     govet:
       disable:
         - fieldalignment
+        - inline
       enable-all: true
     lll:
       line-length: 160

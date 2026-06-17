@@ -171,6 +171,7 @@ func Test_Scan_EmptyCliOutput_ReturnsNoIssues(t *testing.T) {
 	issues, err := scanner.Scan(ctx, types.FilePath(dir))
 
 	assert.NoError(t, err)
+	assert.NotNil(t, issues)
 	assert.Empty(t, issues)
 	assert.True(t, cliMock.WasExecuted(), "CLI should be invoked before the empty-output guard fires")
 }

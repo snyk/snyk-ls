@@ -196,6 +196,10 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 		return nil, pkgerrors.Wrap(err, "unable to retrieve IaC issues")
 	}
 
+	if issues == nil {
+		issues = []types.Issue{}
+	}
+
 	return issues, nil
 }
 
@@ -273,7 +277,7 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, w
 		// CLI exited 0 with no output (most commonly: no IaC files in the directory).
 		// Return empty results rather than a misleading unmarshal error.
 		iac.logger.Debug().Str("method", method).Msg("CLI exited 0 with empty stdout; returning empty results")
-		return scanResults, nil
+		return []iacScanResult{}, nil
 	}
 
 	return iac.unmarshal(res)
