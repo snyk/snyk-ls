@@ -2988,9 +2988,11 @@ if (window.cssVars) {
 			return true; // Empty is valid
 		}
 
-		// Pattern: KEY=VALUE where KEY is valid env var name [A-Za-z_][A-Za-z0-9_]*
-		// VALUE cannot contain ; or = characters (exactly one = per segment)
-		var envVarPattern = /^\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*[^;=]*\s*$/;
+		// Pattern: KEY=VALUE where KEY is a valid env var name [A-Za-z_][A-Za-z0-9_]*
+		// VALUE may contain '=' (matches the Go backend's strings.Cut on the first '=',
+		// see infrastructure/oss/cli_scanner.go) but not ';' (the segment separator).
+		// This allows base64-padded values, JWTs, query strings, etc.
+		var envVarPattern = /^\s*[A-Za-z_][A-Za-z0-9_]*\s*=[^;]*$/;
 
 		return value.split(";")
 			.filter(function(segment) { return segment.trim() !== ""; })
