@@ -22,16 +22,17 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
-	"github.com/spf13/pflag"
-
 	mcpconfig "github.com/snyk/studio-mcp/pkg/mcp"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -302,6 +303,36 @@ func Test_BuildLspConfiguration_MachineScopeSettings(t *testing.T) {
 	require.NotNil(t, lspConfig.Settings)
 	require.NotNil(t, lspConfig.Settings[types.SettingApiEndpoint])
 	assert.Equal(t, "https://custom.api", lspConfig.Settings[types.SettingApiEndpoint].Value)
+}
+
+// Verifies populateFolderFeatureFlagsAndSastSettings calls PopulateFolderConfig for each workspace folder.
+func Test_populateFolderFeatureFlagsAndSastSettings_SetsFlagsForEachFolder(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	folderPaths := []types.FilePath{
+		types.FilePath(t.TempDir()),
+		types.FilePath(t.TempDir()),
+	}
+	_, _ = workspaceutil.SetupWorkspace(t, engine, folderPaths...)
+
+	fakeFF := featureflag.NewFakeService()
+	fakeFF.Flags[featureflag.SnykCodeConsistentIgnores] = true
+	fakeFF.Conf = engine.GetConfiguration()
+	fakeFF.SastSettings = &sast_contract.SastResponse{SastEnabled: true}
+
+	configResolver := newConfigResolverForTest(engine)
+	populateFolderFeatureFlagsAndSastSettings(engine.GetConfiguration(), engine, engine.GetLogger(), fakeFF, configResolver)
+
+	assert.Equal(t, len(folderPaths), fakeFF.PopulateFolderConfigCallCount)
+
+	for _, p := range folderPaths {
+		fc := config.GetFolderConfigFromEngine(engine, configResolver, p, engine.GetLogger())
+		require.NotNil(t, fc)
+		assert.True(t, fc.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores))
+		sastSettings := types.GetSastSettings(fc.Conf(), p)
+		require.NotNil(t, sastSettings)
+		assert.True(t, sastSettings.SastEnabled)
+	}
 }
 
 func Test_BuildLspConfiguration_SkipsWriteOnlySettings(t *testing.T) {

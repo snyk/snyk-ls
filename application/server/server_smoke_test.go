@@ -1773,8 +1773,8 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			_ = os.Remove(s)
 		})
 
-		initialOrg := "user-chosen-org"
-		globalOrg := "00000000-0000-0000-0000-000000000002" // Must be UUID to prevent resolution
+		initialOrg := "00000000-0000-0000-0000-000000000003" // Must be UUID to prevent resolution
+		globalOrg := "00000000-0000-0000-0000-000000000002"  // Must be UUID to prevent resolution
 
 		// Use LspFolderConfig to transmit folder configuration via LSP
 		if initParams.InitializationOptions.Settings == nil {
@@ -1900,8 +1900,8 @@ func Test_SmokeOrgSelection(t *testing.T) {
 			_ = os.Remove(s)
 		})
 
-		initialOrg := "user-chosen-org"
-		globalOrg := "00000000-0000-0000-0000-000000000002" // Must be UUID to prevent resolution
+		initialOrg := "00000000-0000-0000-0000-000000000004" // Must be UUID to prevent resolution
+		globalOrg := "00000000-0000-0000-0000-000000000002"  // Must be UUID to prevent resolution
 
 		// Use LspFolderConfig to transmit folder configuration via LSP
 		if initParams.InitializationOptions.Settings == nil {
