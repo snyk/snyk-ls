@@ -589,11 +589,25 @@ func TestTmplSourceIndicator(t *testing.T) {
 				"test_setting": {Value: "true", Source: "user-override"},
 			},
 			settingName:  "test_setting",
-			expectedHTML: `<span class="source-indicator" data-toggle="tooltip" title="Overridden at project level">👤</span>`,
+			expectedHTML: `<span class="source-indicator" data-toggle="tooltip" title="Set by you at project level">👤</span>`,
 			shouldContain: []string{
 				`class="source-indicator"`,
 				`data-toggle="tooltip"`,
-				`title="Overridden at project level"`,
+				`title="Set by you at project level"`,
+				"👤",
+			},
+		},
+		{
+			name: "user-override-defaults returns project-defaults indicator",
+			effectiveConfig: map[string]types.EffectiveValue{
+				"test_setting": {Value: "true", Source: "user-override-defaults"},
+			},
+			settingName:  "test_setting",
+			expectedHTML: `<span class="source-indicator" data-toggle="tooltip" title="Set by you at project defaults level">👤</span>`,
+			shouldContain: []string{
+				`class="source-indicator"`,
+				`data-toggle="tooltip"`,
+				`title="Set by you at project defaults level"`,
 				"👤",
 			},
 		},
@@ -694,7 +708,7 @@ func TestConfigHtmlRenderer_SourceIndicatorsInOutput(t *testing.T) {
 
 	// Verify per-project override indicator (👤) appears for user-override
 	assert.Contains(t, html, "👤")
-	assert.Contains(t, html, `title="Overridden at project level"`)
+	assert.Contains(t, html, `title="Set by you at project level"`)
 
 	// Verify HTML is not empty (basic sanity check)
 	assert.NotEmpty(t, html, "HTML output should not be empty")

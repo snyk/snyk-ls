@@ -165,7 +165,7 @@ func sourceToClass(source string) string {
 		return "source-org-locked"
 	case "ldx-sync":
 		return "source-org"
-	case "user-override":
+	case "user-override", "user-override-defaults":
 		return "source-user-override"
 	default:
 		return ""
@@ -177,7 +177,8 @@ func tmplIsSecretsFeatureEnabled(fc types.FolderConfig) bool {
 }
 
 // tmplSourceIndicator returns HTML for source indicators (icons with tooltips).
-// Returns: "🏢🔒" for locked, "🏢" for organization, "👤" for per-project user override, empty for global/default.
+// Returns: "🏢🔒" for locked, "🏢" for organization, "👤" for user override (with
+// per-project vs project-defaults tooltip variants), empty for global/default.
 func tmplSourceIndicator(effectiveConfig map[string]types.EffectiveValue, settingName string) template.HTML {
 	if effectiveConfig == nil {
 		return ""
@@ -193,7 +194,9 @@ func tmplSourceIndicator(effectiveConfig map[string]types.EffectiveValue, settin
 	case "ldx-sync":
 		return template.HTML(`<span class="source-indicator" data-toggle="tooltip" title="Set by your organization settings">🏢</span>`)
 	case "user-override":
-		return template.HTML(`<span class="source-indicator" data-toggle="tooltip" title="Overridden at project level">👤</span>`)
+		return template.HTML(`<span class="source-indicator" data-toggle="tooltip" title="Set by you at project level">👤</span>`)
+	case "user-override-defaults":
+		return template.HTML(`<span class="source-indicator" data-toggle="tooltip" title="Set by you at project defaults level">👤</span>`)
 	default:
 		return ""
 	}
@@ -227,7 +230,8 @@ func NewConfigHtmlRenderer(engine workflow.Engine, configResolver types.ConfigRe
 // computeProjectDefaultScopes computes effective values for all org-scope settings at the Project Defaults level.
 // Delegates to the ConfigResolver (with no folder context) so precedence matches the rest of the LS:
 // Locked LDX-Sync > User Override > LDX-Sync > Default. At this level a user-global value is itself a
-// user override of the org/built-in default, so "global" is remapped to "user-override" for indicator rendering.
+// user override of the org/built-in default, so "global" is remapped to "user-override-defaults" — a
+// defaults-scope variant of user-override that drives a different tooltip than per-project overrides.
 func computeProjectDefaultScopes(resolver types.ConfigResolverInterface) map[string]types.EffectiveValue {
 	scopes := make(map[string]types.EffectiveValue)
 	if resolver == nil {
@@ -254,7 +258,7 @@ func computeProjectDefaultScopes(resolver types.ConfigResolverInterface) map[str
 	for _, settingName := range orgScopeSettings {
 		ev := resolver.GetEffectiveValue(settingName, nil)
 		if ev.Source == "global" {
-			ev.Source = "user-override"
+			ev.Source = "user-override-defaults"
 		}
 		scopes[settingName] = ev
 	}
