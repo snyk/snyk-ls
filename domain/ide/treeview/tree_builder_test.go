@@ -647,6 +647,108 @@ func TestBuildTree_ProductNode_ZeroFixable_ShowsNoFixableMessage(t *testing.T) {
 	require.NotNil(t, noFixableNode, "should have 'no fixable' info node")
 }
 
+// codeIssue is a small helper for the Agent-Fix gating tests below.
+func codeIssue(t *testing.T, id string, hasAIFix bool) *snyk.Issue {
+	t.Helper()
+	issue := testutil.NewMockIssueWithSeverity(id, "/project/main.go", types.High)
+	issue.Product = product.ProductCode
+	issue.AdditionalData = snyk.CodeIssueData{Key: id, Title: "Hardcoded Secret", HasAIFix: hasAIFix}
+	return issue
+}
+
+func TestBuildTree_Code_AgentFixEnabled_ShowsFixableLine(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+	issue := codeIssue(t, "code-1", true)
+	issues := snyk.IssuesByFile{issue.AffectedFilePath: {issue}}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           issues, FilteredIssues: issues,
+		AgentFixEnabled: true,
+	}})
+
+	codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+	require.NotNil(t, codeNode)
+	infoNodes := filterChildrenByType(codeNode.Children, NodeTypeInfo)
+	fixableNode := findInfoNodeContaining(infoNodes, "fixable")
+	require.NotNil(t, fixableNode, "Code with Agent Fix enabled should show the fixable line")
+	assert.Contains(t, fixableNode.Label, "fixable automatically")
+}
+
+func TestBuildTree_Code_AgentFixDisabled_HidesFixableLine(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+	issue := codeIssue(t, "code-1", true) // fixable, but Agent Fix is off
+	issues := snyk.IssuesByFile{issue.AffectedFilePath: {issue}}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           issues, FilteredIssues: issues,
+		AgentFixEnabled: false,
+	}})
+
+	codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+	require.NotNil(t, codeNode)
+	infoNodes := filterChildrenByType(codeNode.Children, NodeTypeInfo)
+	assert.Nil(t, findInfoNodeContaining(infoNodes, "fixable"),
+		"Code with Agent Fix disabled must hide the fixable line entirely")
+	// The issue-count line must still be present so the product node isn't empty.
+	require.NotEmpty(t, infoNodes, "issue-count info node should still render")
+}
+
+func TestBuildTree_Code_AgentFixDisabled_NoFixableIssues_HidesNoFixableLine(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+	issue := codeIssue(t, "code-1", false) // not fixable
+	issues := snyk.IssuesByFile{issue.AffectedFilePath: {issue}}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           issues, FilteredIssues: issues,
+		AgentFixEnabled: false,
+	}})
+
+	codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+	require.NotNil(t, codeNode)
+	infoNodes := filterChildrenByType(codeNode.Children, NodeTypeInfo)
+	assert.Nil(t, findInfoNodeContaining(infoNodes, "automatically fixable"),
+		"Code with Agent Fix disabled must not show the 'no issues automatically fixable' line either")
+}
+
+func TestBuildTree_IaCAndSecrets_NeverShowFixableLine(t *testing.T) {
+	cases := []struct {
+		name       string
+		prod       product.Product
+		filterType product.FilterableIssueType
+		additional types.IssueAdditionalData
+	}{
+		{"IaC", product.ProductInfrastructureAsCode, product.FilterableIssueTypeInfrastructureAsCode, snyk.IaCIssueData{Key: "iac-1"}},
+		{"Secrets", product.ProductSecrets, product.FilterableIssueTypeSecrets, snyk.SecretsIssueData{Key: "sec-1"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			builder := newBuilderWithCompletedScans()
+			issue := testutil.NewMockIssueWithSeverity("issue-1", "/project/main.go", types.High)
+			issue.Product = tc.prod
+			issue.AdditionalData = tc.additional
+			issues := snyk.IssuesByFile{issue.AffectedFilePath: {issue}}
+
+			data := builder.BuildTreeFromFolderData([]FolderData{{
+				FolderPath: "/project", FolderName: "project",
+				SupportedIssueTypes: map[product.FilterableIssueType]bool{tc.filterType: true},
+				AllIssues:           issues, FilteredIssues: issues,
+			}})
+
+			node := findChildByProduct(data.Nodes, tc.prod)
+			require.NotNil(t, node)
+			infoNodes := filterChildrenByType(node.Children, NodeTypeInfo)
+			assert.Nil(t, findInfoNodeContaining(infoNodes, "fixable"),
+				"%s must never show a fixable line", tc.name)
+		})
+	}
+}
+
 func TestBuildTree_EmptyProduct_ShowsCongratsInfoChild(t *testing.T) {
 	builder := newBuilderWithCompletedScans()
 
