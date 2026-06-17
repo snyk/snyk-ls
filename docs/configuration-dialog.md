@@ -151,6 +151,32 @@ On save (or auto-save), `features/auto-save.js` calls `form-handler.collectData(
 
 See [Saving Configuration Flow](#saving-configuration-flow) for the sequence diagram.
 
+### 4a. Resetting folder overrides
+
+The per-folder **"Reset overrides"** button (one per folder tab, top-right in the disclaimer banner) clears all of that folder's user overrides so the effective values fall back to org / LDX-sync / default.
+
+**JS side (snyk-ls, already implemented):** clicking the button marks the folder *by its `folderPath`* (read from the hidden `folder_<index>_folderPath` input — not the index, which is compacted away during diffing). On save, `form-handler.applyFolderResets()` emits **flat `null`** for each of these 14 folder fields on that folder's entry in `folderConfigs`:
+
+```
+scan_automatic, scan_net_new,
+severity_filter_critical, severity_filter_high, severity_filter_medium, severity_filter_low,
+snyk_oss_enabled, snyk_code_enabled, snyk_iac_enabled, snyk_secrets_enabled,
+issue_view_open_issues, issue_view_ignored_issues, risk_score_threshold,
+preferred_org
+```
+
+A reset is emitted **even if the folder has no other edits** — a reset-only folder still appears in the outbound `folderConfigs` keyed by `folderPath`. The JS deliberately emits **flat snake_case `null`**, not a `ConfigSetting` envelope; building the envelope is the IDE plugin's job (next paragraph).
+
+**The IDE plugin MUST map a flat `null` folder field → `{value: null, changed: true}`** for that folder key when building `workspace/didChangeConfiguration`. This is the cross-IDE reset contract:
+
+| Saved JSON folder field | IDE maps to `ConfigSetting` | LS effect |
+|---|---|---|
+| absent | omit from the map | no-op |
+| present, non-null value | `{value: X, changed: true}` | set `user:folder:<path>:<key>` |
+| **present, `null`** | `{value: null, changed: true}` | **Unset** the `user:folder:` override → fall back |
+
+A plugin that treats a flat `null` as "absent" (e.g. nullable-type `?.let{}`, `node.isNull() → continue`, `.HasValue == false`) will silently drop the reset and the button will appear to do nothing. The null must survive deserialization (parse the raw JSON tree to distinguish present-with-null from absent when the data model can't) and reach the LS as `{value: null, changed: true}`. See the reset contract in [configuration.md](configuration.md#resetting-a-folder-override).
+
 ### 5. Authentication Flow
 
 When the user clicks **Authenticate**, `features/authentication.js` calls `ConfigApp.ideBridge.login(authMethod, endpoint, insecure)`, which invokes **`window.__ideExecuteCommand__('snyk.login', [authMethod, endpoint, insecure])`**.

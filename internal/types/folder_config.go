@@ -571,6 +571,24 @@ func (fc *FolderConfig) applyPreferredOrg(update *LspFolderConfig, handled map[s
 		return false
 	}
 
+	// Reset: a {Changed:true, Value:nil} on preferred_org clears the folder org override.
+	// getSettingValue below treats a nil value as "not present", so the reset must be
+	// handled explicitly first. Unset both preferred_org and org_set_by_user so the folder
+	// reverts to its auto-determined (LDX) / global org. Mirrors the generic reset path in
+	// applyGenericFolderOverrides.
+	if cs := update.Settings[SettingPreferredOrg]; cs != nil && cs.Changed && cs.Value == nil {
+		changed := false
+		if HasUserOverride(conf, fc.FolderPath, SettingPreferredOrg) {
+			conf.Unset(configresolver.UserFolderKey(fp, SettingPreferredOrg))
+			changed = true
+		}
+		if HasUserOverride(conf, fc.FolderPath, SettingOrgSetByUser) {
+			conf.Unset(configresolver.UserFolderKey(fp, SettingOrgSetByUser))
+			changed = true
+		}
+		return changed
+	}
+
 	preferredOrg, ok := getSettingValue[string](update.Settings, SettingPreferredOrg)
 	if !ok {
 		return false
