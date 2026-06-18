@@ -227,35 +227,7 @@ func (p *Parser) addPropertyNodes(tree *ast.Tree, content string, baseOffset int
 			continue
 		}
 
-		// The value spans from just after this start tag up to its end tag. Track
-		// nesting depth so a property value that itself contains elements (e.g.
-		// <v><x>1</x></v>) does not terminate the loop early at the first inner end
-		// tag — only the property element's own closing tag (depth back to 0) ends
-		// it. This also keeps the decoder positioned past the whole subtree so the
-		// outer loop does not mistake a nested element for a top-level property.
-		valueStartInInner := int(dec.InputOffset())
-		valueEndInInner := valueStartInInner
-		depth := 0
-	valueLoop:
-		for {
-			inner, innerErr := dec.Token()
-			if inner == nil || innerErr != nil {
-				break
-			}
-			switch inner.(type) {
-			case xml.StartElement:
-				depth++
-			case xml.EndElement:
-				if depth == 0 {
-					break valueLoop
-				}
-				depth--
-			case xml.CharData:
-				if depth == 0 {
-					valueEndInInner = int(dec.InputOffset())
-				}
-			}
-		}
+		valueStartInInner, valueEndInInner := scanPropertyValueSpan(dec)
 
 		valueStartOffset := baseOffset + valueStartInInner
 		valueEndOffset := baseOffset + valueEndInInner
@@ -273,6 +245,38 @@ func (p *Parser) addPropertyNodes(tree *ast.Tree, content string, baseOffset int
 		valueEndOffset = valueStartOffset + len(trimmedValue)
 
 		tree.Properties[start.Name.Local] = newValueNode(tree, content, valueStartOffset, valueEndOffset, start.Name.Local, trimmedValue)
+	}
+}
+
+// scanPropertyValueSpan consumes the children of the current property element
+// from dec and returns the [start, end) offsets (within the inner string) of the
+// property's direct text value. Nesting depth is tracked so a value that itself
+// contains elements (e.g. <v><x>1</x></v>) does not terminate the scan early at
+// the first inner end tag — only the property element's own closing tag (depth
+// back to 0) ends it. This also leaves the decoder positioned past the whole
+// subtree so the caller does not mistake a nested element for a top-level property.
+func scanPropertyValueSpan(dec *xml.Decoder) (start, end int) {
+	start = int(dec.InputOffset())
+	end = start
+	depth := 0
+	for {
+		token, err := dec.Token()
+		if token == nil || err != nil {
+			return start, end
+		}
+		switch token.(type) {
+		case xml.StartElement:
+			depth++
+		case xml.EndElement:
+			if depth == 0 {
+				return start, end
+			}
+			depth--
+		case xml.CharData:
+			if depth == 0 {
+				end = int(dec.InputOffset())
+			}
+		}
 	}
 }
 

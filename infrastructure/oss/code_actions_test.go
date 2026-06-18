@@ -55,29 +55,7 @@ const propertyManagedPom = `<?xml version="1.0" encoding="UTF-8"?>
 // the quickfix must edit the matching <properties> entry, not hardcode the
 // version into the dependency block.
 func Test_GetCodeActions_MavenPropertyVersion_RedirectsToProperty(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingEnableSnykOssQuickFixActions), true)
-
-	dir := t.TempDir()
-	pomPath := filepath.Join(dir, "pom.xml")
-	require.NoError(t, os.WriteFile(pomPath, []byte(propertyManagedPom), 0600))
-
-	from := []string{"root@1.0.0", "org.cyclonedx:cyclonedx-core-java@9.0.5"}
-	depNode := getDependencyNode(engine.GetLogger(), types.FilePath(pomPath), "maven", from, []byte(propertyManagedPom))
-	require.NotNil(t, depNode)
-	require.Equal(t, "${lib.cyclonedx-core-java.version}", depNode.Value)
-
-	issue := mavenTestIssue()
-	issue.From = from
-	issue.UpgradePath = []any{"false", "org.cyclonedx:cyclonedx-core-java@11.0.1"}
-
-	snykIssue := toIssue(engine, defaultResolver(t, engine), types.FilePath(dir), types.FilePath(pomPath), issue,
-		&scanResult{}, nil, depNode, getLearnMock(t), error_reporting.NewTestErrorReporter(engine), "", nil)
-
-	quickFix := findUpgradeAction(t, snykIssue.CodeActions)
-	edit := (*quickFix.GetDeferredEdit())()
-
-	edits := edit.Changes[pomPath]
+	edits := applyMavenUpgradeQuickfix(t, propertyManagedPom)
 	require.Len(t, edits, 1)
 	assert.Equal(t, "11.0.1", edits[0].NewText)
 
@@ -175,28 +153,7 @@ const indirectPropertyPom = `<?xml version="1.0" encoding="UTF-8"?>
 // -> 9.0.5), the quickfix must follow the indirection and edit the property that
 // holds the concrete value (b.version), not overwrite the intermediate reference.
 func Test_GetCodeActions_MavenPropertyIndirection_FollowsChainToConcreteValue(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingEnableSnykOssQuickFixActions), true)
-
-	dir := t.TempDir()
-	pomPath := filepath.Join(dir, "pom.xml")
-	require.NoError(t, os.WriteFile(pomPath, []byte(indirectPropertyPom), 0600))
-
-	from := []string{"root@1.0.0", "org.cyclonedx:cyclonedx-core-java@9.0.5"}
-	depNode := getDependencyNode(engine.GetLogger(), types.FilePath(pomPath), "maven", from, []byte(indirectPropertyPom))
-	require.NotNil(t, depNode)
-
-	issue := mavenTestIssue()
-	issue.From = from
-	issue.UpgradePath = []any{"false", "org.cyclonedx:cyclonedx-core-java@11.0.1"}
-
-	snykIssue := toIssue(engine, defaultResolver(t, engine), types.FilePath(dir), types.FilePath(pomPath), issue,
-		&scanResult{}, nil, depNode, getLearnMock(t), error_reporting.NewTestErrorReporter(engine), "", nil)
-
-	quickFix := findUpgradeAction(t, snykIssue.CodeActions)
-	edit := (*quickFix.GetDeferredEdit())()
-
-	edits := edit.Changes[pomPath]
+	edits := applyMavenUpgradeQuickfix(t, indirectPropertyPom)
 	require.Len(t, edits, 1)
 	assert.Equal(t, "11.0.1", edits[0].NewText)
 
@@ -224,29 +181,7 @@ const unresolvedPropertyPom = `<?xml version="1.0" encoding="UTF-8"?>
 // nil and the quickfix must fall back to editing the dependency <version> block
 // itself — producing a sensible edit rather than panicking or targeting nothing.
 func Test_GetCodeActions_MavenUnresolvedProperty_FallsBackToDependencyVersion(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingEnableSnykOssQuickFixActions), true)
-
-	dir := t.TempDir()
-	pomPath := filepath.Join(dir, "pom.xml")
-	require.NoError(t, os.WriteFile(pomPath, []byte(unresolvedPropertyPom), 0600))
-
-	from := []string{"root@1.0.0", "org.cyclonedx:cyclonedx-core-java@9.0.5"}
-	depNode := getDependencyNode(engine.GetLogger(), types.FilePath(pomPath), "maven", from, []byte(unresolvedPropertyPom))
-	require.NotNil(t, depNode)
-	require.Equal(t, "${missing.version}", depNode.Value)
-
-	issue := mavenTestIssue()
-	issue.From = from
-	issue.UpgradePath = []any{"false", "org.cyclonedx:cyclonedx-core-java@11.0.1"}
-
-	snykIssue := toIssue(engine, defaultResolver(t, engine), types.FilePath(dir), types.FilePath(pomPath), issue,
-		&scanResult{}, nil, depNode, getLearnMock(t), error_reporting.NewTestErrorReporter(engine), "", nil)
-
-	quickFix := findUpgradeAction(t, snykIssue.CodeActions)
-	edit := (*quickFix.GetDeferredEdit())()
-
-	edits := edit.Changes[pomPath]
+	edits := applyMavenUpgradeQuickfix(t, unresolvedPropertyPom)
 	require.Len(t, edits, 1)
 	assert.Equal(t, "11.0.1", edits[0].NewText)
 
@@ -439,7 +374,7 @@ func Test_resolveMavenPropertyNode_CycleAndDepthBounds(t *testing.T) {
 	}
 
 	// Termination contract: a cyclic reference must not resolve. Note this is a
-	// behaviour contract, not an isolation of the `seen` cycle guard specifically —
+	// behavior contract, not an isolation of the `seen` cycle guard specifically —
 	// the maxPropertyIndirectionDepth backstop also bounds an a<->b bounce to nil,
 	// so the two guards are outcome-equivalent here. The test guards against a
 	// regression that removed all bounding (which would loop forever).
@@ -572,6 +507,33 @@ func Test_textAtRange_RefusesUnreadableRanges(t *testing.T) {
 			}
 		})
 	}
+}
+
+// applyMavenUpgradeQuickfix writes pom to a temp pom.xml, builds the maven upgrade
+// quickfix for org.cyclonedx:cyclonedx-core-java 9.0.5 -> 11.0.1, applies the
+// deferred edit and returns the resulting edits for that pom path.
+func applyMavenUpgradeQuickfix(t *testing.T, pom string) []types.TextEdit {
+	t.Helper()
+	engine := testutil.UnitTest(t)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingEnableSnykOssQuickFixActions), true)
+
+	dir := t.TempDir()
+	pomPath := filepath.Join(dir, "pom.xml")
+	require.NoError(t, os.WriteFile(pomPath, []byte(pom), 0600))
+
+	from := []string{"root@1.0.0", "org.cyclonedx:cyclonedx-core-java@9.0.5"}
+	depNode := getDependencyNode(engine.GetLogger(), types.FilePath(pomPath), "maven", from, []byte(pom))
+	require.NotNil(t, depNode)
+
+	issue := mavenTestIssue()
+	issue.From = from
+	issue.UpgradePath = []any{"false", "org.cyclonedx:cyclonedx-core-java@11.0.1"}
+
+	snykIssue := toIssue(engine, defaultResolver(t, engine), types.FilePath(dir), types.FilePath(pomPath), issue,
+		&scanResult{}, nil, depNode, getLearnMock(t), error_reporting.NewTestErrorReporter(engine), "", nil)
+	quickFix := findUpgradeAction(t, snykIssue.CodeActions)
+	edit := (*quickFix.GetDeferredEdit())()
+	return edit.Changes[pomPath]
 }
 
 func findUpgradeAction(t *testing.T, actions []types.CodeAction) types.CodeAction {
