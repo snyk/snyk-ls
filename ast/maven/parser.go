@@ -31,6 +31,15 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+// maxParentDepth caps how deep the parent-POM chain is followed, as a backstop
+// against pathological chains even when the visited-set has not yet caught a cycle.
+const maxParentDepth = 32
+
+// maxParentPOMSize bounds how many bytes we are willing to read for a single
+// parent POM, guarding against a <relativePath> pointing at an unexpectedly large
+// file. Real POMs are tiny; 16MiB is generous.
+const maxParentPOMSize = 16 << 20
+
 type Parser struct {
 	logger *zerolog.Logger
 }
@@ -57,8 +66,18 @@ func New(logger *zerolog.Logger) Parser {
 }
 
 func (p *Parser) Parse(content string, path types.FilePath) *ast.Tree {
+	return p.parse(content, path, map[string]bool{}, 0)
+}
+
+// parse is the recursive worker behind Parse. visited holds the absolute paths of
+// POMs already parsed in this parent chain (cycle detection) and depth bounds the
+// chain length (see maxParentDepth).
+func (p *Parser) parse(content string, path types.FilePath, visited map[string]bool, depth int) *ast.Tree {
 	content = strings.ReplaceAll(content, "\r", "")
 	tree := p.initTree(path, content)
+	if absPath, err := filepath.Abs(string(path)); err == nil {
+		visited[absPath] = true
+	}
 	d := xml.NewDecoder(strings.NewReader(content))
 	var offset int64
 	pomDir := filepath.Dir(string(path))
@@ -82,7 +101,7 @@ func (p *Parser) Parse(content string, path types.FilePath) *ast.Tree {
 		case "properties":
 			p.handleProperties(d, tree, content, &startElement, offset)
 		case "parent":
-			p.handleParent(d, tree, pomDir, &startElement)
+			p.handleParent(d, tree, pomDir, &startElement, visited, depth)
 		}
 	}
 	return tree
@@ -117,7 +136,7 @@ func (p *Parser) handleProperties(d *xml.Decoder, tree *ast.Tree, content string
 	p.addPropertyNodes(tree, content, int(offset), holder.Inner)
 }
 
-func (p *Parser) handleParent(d *xml.Decoder, tree *ast.Tree, pomDir string, element *xml.StartElement) {
+func (p *Parser) handleParent(d *xml.Decoder, tree *ast.Tree, pomDir string, element *xml.StartElement, visited map[string]bool, depth int) {
 	var parentPOM Parent
 	if err := d.DecodeElement(&parentPOM, element); err != nil {
 		p.logger.Err(err).Msg("Couldn't decode Parent")
@@ -133,12 +152,33 @@ func (p *Parser) handleParent(d *xml.Decoder, tree *ast.Tree, pomDir string, ele
 		p.logger.Err(err).Msg("Couldn't resolve Parent path")
 		return
 	}
+	if depth+1 > maxParentDepth {
+		p.logger.Warn().Str("path", parentAbsPath).Int("depth", depth).Msg("Maximum parent POM depth reached, skipping")
+		return
+	}
+	if visited[parentAbsPath] {
+		p.logger.Warn().Str("path", parentAbsPath).Msg("Cyclic parent POM reference detected, skipping")
+		return
+	}
+	fi, err := os.Stat(parentAbsPath)
+	if err != nil {
+		p.logger.Err(err).Msg("Couldn't stat Parent file")
+		return
+	}
+	if !fi.Mode().IsRegular() {
+		p.logger.Warn().Str("path", parentAbsPath).Msg("Parent path is not a regular file, skipping")
+		return
+	}
+	if fi.Size() > maxParentPOMSize {
+		p.logger.Warn().Str("path", parentAbsPath).Int64("size", fi.Size()).Msg("Parent POM exceeds size limit, skipping")
+		return
+	}
 	content, err := os.ReadFile(parentAbsPath)
 	if err != nil {
 		p.logger.Err(err).Msg("Couldn't read Parent file")
 		return
 	}
-	tree.ParentTree = p.Parse(string(content), types.FilePath(parentAbsPath))
+	tree.ParentTree = p.parse(string(content), types.FilePath(parentAbsPath), visited, depth+1)
 }
 
 func addDepsFromBOM(path types.FilePath, tree *ast.Tree, dep Dependency) {
@@ -187,25 +227,39 @@ func (p *Parser) addPropertyNodes(tree *ast.Tree, content string, baseOffset int
 			continue
 		}
 
-		// The value spans from just after this start tag up to its end tag.
+		// The value spans from just after this start tag up to its end tag. Track
+		// nesting depth so a property value that itself contains elements (e.g.
+		// <v><x>1</x></v>) does not terminate the loop early at the first inner end
+		// tag — only the property element's own closing tag (depth back to 0) ends
+		// it. This also keeps the decoder positioned past the whole subtree so the
+		// outer loop does not mistake a nested element for a top-level property.
 		valueStartInInner := int(dec.InputOffset())
 		valueEndInInner := valueStartInInner
+		depth := 0
+	valueLoop:
 		for {
 			inner, innerErr := dec.Token()
 			if inner == nil || innerErr != nil {
 				break
 			}
-			if _, isEnd := inner.(xml.EndElement); isEnd {
-				break
-			}
-			if _, isCharData := inner.(xml.CharData); isCharData {
-				valueEndInInner = int(dec.InputOffset())
+			switch inner.(type) {
+			case xml.StartElement:
+				depth++
+			case xml.EndElement:
+				if depth == 0 {
+					break valueLoop
+				}
+				depth--
+			case xml.CharData:
+				if depth == 0 {
+					valueEndInInner = int(dec.InputOffset())
+				}
 			}
 		}
 
 		valueStartOffset := baseOffset + valueStartInInner
 		valueEndOffset := baseOffset + valueEndInInner
-		if valueStartOffset > valueEndOffset || valueEndOffset > len(content) {
+		if valueStartOffset < 0 || valueStartOffset > valueEndOffset || valueEndOffset > len(content) {
 			continue
 		}
 

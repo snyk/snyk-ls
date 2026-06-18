@@ -92,10 +92,151 @@ func TestParse_PopulatesProperties(t *testing.T) {
 	assert.Equal(t, startChar, node.StartChar)
 	assert.Equal(t, startChar+len("9.0.5"), node.EndChar)
 
-	// a simple property is parsed too
+	// a simple property is parsed too, and its position must be correct (guards
+	// off-by-one regressions in newValueNode on the no-comment case).
 	compiler, ok := tree.Properties["maven.compiler.source"]
 	require.True(t, ok)
 	assert.Equal(t, "11", compiler.Value)
+
+	compilerLine := -1
+	for i, l := range lines {
+		if strings.Contains(l, "<maven.compiler.source>") {
+			compilerLine = i
+		}
+	}
+	require.GreaterOrEqual(t, compilerLine, 0)
+	compilerStart := strings.Index(lines[compilerLine], "11")
+	assert.Equal(t, compilerLine, compiler.Line)
+	assert.Equal(t, compilerStart, compiler.StartChar)
+	assert.Equal(t, compilerStart+len("11"), compiler.EndChar)
+}
+
+func TestParse_PropertiesEdgeCases(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	parser := Parser{logger: engine.GetLogger()}
+
+	tests := []struct {
+		name    string
+		content string
+		// absentKey, when set, must NOT be present in tree.Properties.
+		absentKey string
+	}{
+		{
+			name: "empty properties block",
+			content: `<?xml version="1.0" encoding="UTF-8"?>
+<project>
+    <properties></properties>
+</project>
+`,
+		},
+		{
+			name: "no properties block",
+			content: `<?xml version="1.0" encoding="UTF-8"?>
+<project>
+</project>
+`,
+		},
+		{
+			name: "whitespace-only value is skipped",
+			content: `<?xml version="1.0" encoding="UTF-8"?>
+<project>
+    <properties>
+        <foo>   </foo>
+    </properties>
+</project>
+`,
+			absentKey: "foo",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tree := parser.Parse(tc.content, types.FilePath("pom.xml"))
+			// resolveMavenPropertyNode does a tree.Properties[name] lookup, so the
+			// map must always be non-nil even when there are no properties.
+			require.NotNil(t, tree.Properties, "Properties map must be non-nil")
+			if tc.absentKey != "" {
+				_, ok := tree.Properties[tc.absentKey]
+				assert.False(t, ok, "whitespace-only property must not be registered")
+			} else {
+				assert.Empty(t, tree.Properties, "no properties should be registered")
+			}
+		})
+	}
+}
+
+func TestParse_PropertyWithNestedElement_DoesNotMisregisterSiblings(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	content := `<?xml version="1.0" encoding="UTF-8"?>
+<project>
+    <properties>
+        <nested><inner>1</inner></nested>
+        <plain.version>9.0.5</plain.version>
+    </properties>
+</project>
+`
+	parser := Parser{logger: engine.GetLogger()}
+	tree := parser.Parse(content, types.FilePath("pom.xml"))
+
+	require.NotNil(t, tree.Properties)
+
+	// The sibling property after the nested one must still be parsed correctly,
+	// and the nested child (<inner>) must NOT be registered as a top-level property.
+	_, innerRegistered := tree.Properties["inner"]
+	assert.False(t, innerRegistered, "nested child element must not be registered as a property")
+
+	plain, ok := tree.Properties["plain.version"]
+	require.True(t, ok, "sibling property after a nested-value property must still be parsed")
+	assert.Equal(t, "9.0.5", plain.Value)
+
+	lines := strings.Split(content, "\n")
+	expectedLine := -1
+	for i, l := range lines {
+		if strings.Contains(l, "<plain.version>") {
+			expectedLine = i
+		}
+	}
+	require.GreaterOrEqual(t, expectedLine, 0)
+	startChar := strings.Index(lines[expectedLine], "9.0.5")
+	assert.Equal(t, expectedLine, plain.Line)
+	assert.Equal(t, startChar, plain.StartChar)
+	assert.Equal(t, startChar+len("9.0.5"), plain.EndChar)
+}
+
+func TestParse_CyclicParentReference_DoesNotRecurseInfinitely(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	dir := t.TempDir()
+
+	// Two POMs that name each other as parent.
+	pomA := filepath.Join(dir, "a", "pom.xml")
+	pomB := filepath.Join(dir, "b", "pom.xml")
+	require.NoError(t, os.MkdirAll(filepath.Dir(pomA), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Dir(pomB), 0755))
+
+	contentA := `<?xml version="1.0" encoding="UTF-8"?>
+<project>
+    <parent>
+        <relativePath>../b/pom.xml</relativePath>
+    </parent>
+</project>
+`
+	contentB := `<?xml version="1.0" encoding="UTF-8"?>
+<project>
+    <parent>
+        <relativePath>../a/pom.xml</relativePath>
+    </parent>
+</project>
+`
+	require.NoError(t, os.WriteFile(pomA, []byte(contentA), 0600))
+	require.NoError(t, os.WriteFile(pomB, []byte(contentB), 0600))
+
+	parser := Parser{logger: engine.GetLogger()}
+	// Must terminate; the cycle is broken by the visited-set rather than overflowing the stack.
+	tree := parser.Parse(contentA, types.FilePath(pomA))
+
+	require.NotNil(t, tree.ParentTree, "A's parent (B) should be parsed once")
+	// B points back to A, but A is already in the visited set, so the chain stops here.
+	assert.Nil(t, tree.ParentTree.ParentTree, "cycle back to A should be refused")
 }
 
 func TestCreateHierarchicalDependencyTree(t *testing.T) {

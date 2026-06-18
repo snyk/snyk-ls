@@ -51,7 +51,7 @@ func GetCodeActions(engine workflow.Engine, configResolver types.ConfigResolverI
 	if issueDepNode.Tree != nil && issueDepNode.Value == "" {
 		fixNode := issueDepNode.LinkedParentDependencyNode
 		if fixNode != nil {
-			quickFixAction = AddQuickFixAction(
+			quickFixAction = addQuickFixAction(
 				engine,
 				configResolver,
 				types.FilePath(fixNode.Tree.Document),
@@ -87,7 +87,7 @@ func GetCodeActions(engine workflow.Engine, configResolver types.ConfigResolverI
 			}
 		}
 
-		quickFixAction = AddQuickFixAction(
+		quickFixAction = addQuickFixAction(
 			engine,
 			configResolver,
 			fixFilePath,
@@ -179,13 +179,13 @@ func AddSnykLearnAction(
 	return action
 }
 
-// AddQuickFixAction builds a deferred "upgrade" code action. fileContent, when
+// addQuickFixAction builds a deferred "upgrade" code action. fileContent, when
 // non-nil, is the document content used at apply time (otherwise the file is
 // read from disk on apply). originalContent is a snapshot of the document at
 // action-creation time; it is used to capture the exact text the edit expects
 // to replace so a stale edit can be refused at apply time.
-func AddQuickFixAction(engine workflow.Engine, configResolver types.ConfigResolverInterface, affectedFilePath types.FilePath, issueRange types.Range, fileContent []byte, originalContent []byte, addFileNameToFixTitle bool, packageManager string, dependencyPath []string, upgradePath []any, folderConfig *types.FolderConfig) types.CodeAction {
-	logger := engine.GetLogger().With().Str("method", "oss.AddQuickFixAction").Logger()
+func addQuickFixAction(engine workflow.Engine, configResolver types.ConfigResolverInterface, affectedFilePath types.FilePath, issueRange types.Range, fileContent []byte, originalContent []byte, addFileNameToFixTitle bool, packageManager string, dependencyPath []string, upgradePath []any, folderConfig *types.FolderConfig) types.CodeAction {
+	logger := engine.GetLogger().With().Str("method", "oss.addQuickFixAction").Logger()
 	if !configResolver.GetBool(types.SettingEnableSnykOssQuickFixActions, folderConfig) {
 		return nil
 	}
@@ -209,9 +209,31 @@ func AddQuickFixAction(engine workflow.Engine, configResolver types.ConfigResolv
 		snapshot = fileContent
 	}
 	expectedText, haveExpectedText := textAtRange(snapshot, issueRange)
+	// A snapshot was provided but we could not read the text at the fix range
+	// (multi-line range, out-of-bounds, etc.). The snapshot is unreliable for
+	// guarding this edit, so rather than silently creating an unguarded action,
+	// drop it. (When no snapshot is provided at all there is nothing to guard and
+	// legacy callers keep working.)
+	if snapshot != nil && !haveExpectedText {
+		logger.Warn().
+			Str("file", filePathString).
+			Msg("snapshot provided but text at fix range could not be read; refusing to create an unguarded quickfix")
+		return nil
+	}
 
+	// applied latches once this action has produced its edit. The disk-based guard
+	// below only sees on-disk content; when the client applies the edit in-memory
+	// without flushing (the IDE-2139 re-apply scenario), the disk is unchanged and
+	// the guard would pass, letting a second apply over the now-shifted buffer
+	// corrupt the value. The latch makes the deferred action single-shot, which the
+	// disk guard cannot guarantee.
+	var applied bool
 	autofixEditCallback := func() *types.WorkspaceEdit {
 		edit := &types.WorkspaceEdit{}
+		if applied {
+			logger.Warn().Str("file", filePathString).Msg("quickfix already applied; refusing to re-apply")
+			return edit
+		}
 		content := fileContent
 		if content == nil {
 			var err error
@@ -240,6 +262,7 @@ func AddQuickFixAction(engine workflow.Engine, configResolver types.ConfigResolv
 		}
 		edit.Changes = make(map[string][]types.TextEdit)
 		edit.Changes[filePathString] = []types.TextEdit{singleTextEdit}
+		applied = true
 		return edit
 	}
 
@@ -304,11 +327,18 @@ func getQuickfixEdit(engine workflow.Engine, affectedFilePath types.FilePath, up
 
 var mavenPropertyRefRegexp = regexp.MustCompile(`^\s*\$\{([^}]+)\}\s*$`)
 
-// resolveMavenPropertyNode returns the <properties> node a dependency version
-// refers to when the version is a property reference (e.g. ${foo.version}),
-// searching the current pom and walking up the parent pom hierarchy. It returns
-// nil when the version is not a property reference or the property cannot be
-// found.
+// maxPropertyIndirectionDepth bounds how many property-to-property references are
+// followed when resolving a Maven version, guarding against reference cycles.
+const maxPropertyIndirectionDepth = 16
+
+// resolveMavenPropertyNode returns the <properties> node holding the concrete
+// version a dependency refers to when the version is a property reference (e.g.
+// ${foo.version}), searching the current pom and walking up the parent pom
+// hierarchy. A property whose value is itself a ${other} reference is followed
+// (bounded by maxPropertyIndirectionDepth, with cycle detection) so the edit
+// targets the property that actually holds the version string. It returns nil
+// when the version is not a property reference, the chain cannot be fully
+// resolved to a concrete value, or a cycle/depth limit is hit.
 func resolveMavenPropertyNode(depNode *ast.Node) *ast.Node {
 	if depNode == nil {
 		return nil
@@ -317,9 +347,38 @@ func resolveMavenPropertyNode(depNode *ast.Node) *ast.Node {
 	if matches == nil {
 		return nil
 	}
-	propertyName := matches[1]
-	for tree := depNode.Tree; tree != nil; tree = tree.ParentTree {
-		if node, ok := tree.Properties[propertyName]; ok && node != nil && node.Tree != nil {
+	// The capture group is everything between ${ and }; trim so a reference
+	// written with padding (e.g. ${ foo.version }) still matches the property key.
+	propertyName := strings.TrimSpace(matches[1])
+
+	seen := map[string]bool{}
+	for range maxPropertyIndirectionDepth {
+		if seen[propertyName] {
+			// reference cycle, e.g. a -> b -> a
+			return nil
+		}
+		seen[propertyName] = true
+
+		node := lookupMavenProperty(depNode.Tree, propertyName)
+		if node == nil {
+			return nil
+		}
+
+		next := mavenPropertyRefRegexp.FindStringSubmatch(node.Value)
+		if next == nil {
+			// concrete (non-reference) value reached
+			return node
+		}
+		propertyName = strings.TrimSpace(next[1])
+	}
+	return nil
+}
+
+// lookupMavenProperty finds a property by name in start's pom and any parent pom
+// in the hierarchy, returning nil when it is not defined.
+func lookupMavenProperty(start *ast.Tree, name string) *ast.Node {
+	for tree := start; tree != nil; tree = tree.ParentTree {
+		if node, ok := tree.Properties[name]; ok && node != nil && node.Tree != nil {
 			return node
 		}
 	}
