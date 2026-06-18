@@ -17,11 +17,14 @@
 package maven
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -201,6 +204,99 @@ func TestParse_PropertyWithNestedElement_DoesNotMisregisterSiblings(t *testing.T
 	assert.Equal(t, expectedLine, plain.Line)
 	assert.Equal(t, startChar, plain.StartChar)
 	assert.Equal(t, startChar+len("9.0.5"), plain.EndChar)
+}
+
+func TestParse_ParentChainDepthCap_StopsAtLimit(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	dir := t.TempDir()
+
+	// Chain of distinct POMs p0 -> p1 -> ... each naming the next as parent, longer
+	// than maxParentDepth. Distinct paths mean the visited-set never fires, so only
+	// the depth cap can stop the walk — which is what we are testing.
+	total := maxParentDepth + 5
+	pomPath := func(i int) string { return filepath.Join(dir, fmt.Sprintf("p%d", i), "pom.xml") }
+	for i := 0; i <= total; i++ {
+		require.NoError(t, os.MkdirAll(filepath.Dir(pomPath(i)), 0755))
+		content := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<project>\n</project>\n"
+		if i < total {
+			content = fmt.Sprintf("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<project>\n    <parent>\n        <relativePath>../p%d/pom.xml</relativePath>\n    </parent>\n</project>\n", i+1)
+		}
+		require.NoError(t, os.WriteFile(pomPath(i), []byte(content), 0600))
+	}
+
+	p0, err := os.ReadFile(pomPath(0))
+	require.NoError(t, err)
+	parser := Parser{logger: engine.GetLogger()}
+	tree := parser.Parse(string(p0), types.FilePath(pomPath(0)))
+
+	// Walk the ParentTree chain; it must stop at exactly maxParentDepth parents even
+	// though more parent POMs exist on disk.
+	links := 0
+	for tr := tree; tr.ParentTree != nil; tr = tr.ParentTree {
+		links++
+	}
+	assert.Equal(t, maxParentDepth, links, "parent chain must stop at maxParentDepth")
+}
+
+func TestParse_ParentRelativePathIsDirectory_Skipped(t *testing.T) {
+	testutil.UnitTest(t)
+	dir := t.TempDir()
+	childDir := filepath.Join(dir, "child")
+	require.NoError(t, os.MkdirAll(childDir, 0755))
+	// relativePath resolves to a directory, not a regular file.
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "parent"), 0755))
+
+	childPath := filepath.Join(childDir, "pom.xml")
+	content := `<?xml version="1.0" encoding="UTF-8"?>
+<project>
+    <parent>
+        <relativePath>../parent</relativePath>
+    </parent>
+</project>
+`
+	require.NoError(t, os.WriteFile(childPath, []byte(content), 0600))
+
+	// Capture logs and assert the IsRegular guard is specifically what skipped the
+	// directory. Asserting only a nil ParentTree would be vacuous: with the guard
+	// removed, the downstream os.ReadFile(dir) also errors and bails, yielding the
+	// same nil result. The distinct log message ("not a regular file" vs the
+	// ReadFile error's "Couldn't read Parent file") isolates the intended branch.
+	var buf bytes.Buffer
+	logger := zerolog.New(&buf)
+	parser := Parser{logger: &logger}
+	tree := parser.Parse(content, types.FilePath(childPath))
+
+	assert.Nil(t, tree.ParentTree, "a non-regular parent path (directory) must be skipped")
+	assert.Contains(t, buf.String(), "not a regular file",
+		"the IsRegular guard must be what skips the directory, not the ReadFile error path")
+}
+
+func TestParse_ParentExceedsSizeCap_Skipped(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	dir := t.TempDir()
+	childDir := filepath.Join(dir, "child")
+	parentDir := filepath.Join(dir, "parent")
+	require.NoError(t, os.MkdirAll(childDir, 0755))
+	require.NoError(t, os.MkdirAll(parentDir, 0755))
+
+	// A parent POM just over the size cap. The size check happens before the file is
+	// read or parsed, so the content does not need to be valid XML.
+	parentPath := filepath.Join(parentDir, "pom.xml")
+	require.NoError(t, os.WriteFile(parentPath, make([]byte, maxParentPOMSize+1), 0600))
+
+	childPath := filepath.Join(childDir, "pom.xml")
+	content := `<?xml version="1.0" encoding="UTF-8"?>
+<project>
+    <parent>
+        <relativePath>../parent/pom.xml</relativePath>
+    </parent>
+</project>
+`
+	require.NoError(t, os.WriteFile(childPath, []byte(content), 0600))
+
+	parser := Parser{logger: engine.GetLogger()}
+	tree := parser.Parse(content, types.FilePath(childPath))
+	assert.Nil(t, tree.ParentTree, "a parent POM over the size cap must be skipped")
 }
 
 func TestParse_CyclicParentReference_DoesNotRecurseInfinitely(t *testing.T) {

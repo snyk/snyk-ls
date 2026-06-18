@@ -19,6 +19,7 @@ package oss
 import (
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -29,6 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -414,6 +416,71 @@ func xmlIsWellFormed(content string) bool {
 			return false
 		}
 	}
+}
+
+// resolveMavenPropertyNode must terminate and fall back (return nil) rather than
+// loop forever or mis-resolve when a property chain cycles or exceeds the depth
+// limit, and must still resolve a chain right up to the limit. A nil result makes
+// the quickfix fall back to editing the dependency <version>.
+func Test_resolveMavenPropertyNode_CycleAndDepthBounds(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	from := []string{"root@1.0.0", "org.cyclonedx:cyclonedx-core-java@9.0.5"}
+	depFor := func(content string) *ast.Node {
+		return getDependencyNode(engine.GetLogger(), types.FilePath("pom.xml"), "maven", from, []byte(content))
+	}
+	wrap := func(properties, versionRef string) string {
+		return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<project>\n    <properties>\n" +
+			properties +
+			"    </properties>\n    <dependencies>\n        <dependency>\n" +
+			"            <groupId>org.cyclonedx</groupId>\n" +
+			"            <artifactId>cyclonedx-core-java</artifactId>\n" +
+			"            <version>" + versionRef + "</version>\n" +
+			"        </dependency>\n    </dependencies>\n</project>\n"
+	}
+
+	// Termination contract: a cyclic reference must not resolve. Note this is a
+	// behaviour contract, not an isolation of the `seen` cycle guard specifically —
+	// the maxPropertyIndirectionDepth backstop also bounds an a<->b bounce to nil,
+	// so the two guards are outcome-equivalent here. The test guards against a
+	// regression that removed all bounding (which would loop forever).
+	t.Run("reference cycle terminates and does not resolve", func(t *testing.T) {
+		props := "        <a.version>${b.version}</a.version>\n        <b.version>${a.version}</b.version>\n"
+		depNode := depFor(wrap(props, "${a.version}"))
+		require.NotNil(t, depNode)
+		assert.Nil(t, resolveMavenPropertyNode(depNode), "an a<->b reference cycle must not resolve")
+	})
+
+	t.Run("indirection deeper than the limit returns nil", func(t *testing.T) {
+		// p0 -> p1 -> ... with the chain longer than maxPropertyIndirectionDepth;
+		// only the last is concrete, so the limit is hit before reaching it.
+		chain := maxPropertyIndirectionDepth + 4
+		var props strings.Builder
+		for i := range chain {
+			fmt.Fprintf(&props, "        <p%d>${p%d}</p%d>\n", i, i+1, i)
+		}
+		fmt.Fprintf(&props, "        <p%d>9.0.5</p%d>\n", chain, chain)
+		depNode := depFor(wrap(props.String(), "${p0}"))
+		require.NotNil(t, depNode)
+		assert.Nil(t, resolveMavenPropertyNode(depNode), "a chain deeper than the limit must not resolve")
+	})
+
+	t.Run("chain of exactly the depth limit still resolves", func(t *testing.T) {
+		// p0..pLast where pLast is concrete. The concrete value is looked up on the
+		// final (maxPropertyIndirectionDepth-th) iteration, so it resolves only if
+		// the bound is not off-by-one in the too-aggressive direction (which would
+		// drop a valid resolution and silently corrupt the dependency instead).
+		last := maxPropertyIndirectionDepth - 1
+		var props strings.Builder
+		for i := 0; i < last; i++ {
+			fmt.Fprintf(&props, "        <p%d>${p%d}</p%d>\n", i, i+1, i)
+		}
+		fmt.Fprintf(&props, "        <p%d>9.0.5</p%d>\n", last, last)
+		depNode := depFor(wrap(props.String(), "${p0}"))
+		require.NotNil(t, depNode)
+		resolved := resolveMavenPropertyNode(depNode)
+		require.NotNil(t, resolved, "a chain of exactly the depth limit must still resolve")
+		assert.Equal(t, "9.0.5", resolved.Value)
+	})
 }
 
 // resolveMavenPropertyNode must handle the variety of property names and value
