@@ -121,6 +121,15 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 		}
 		if cfg != nil {
 			fd.ConsistentIgnoresEnabled = cfg.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores)
+			// Agent Fix is gated per-folder here (each folder's Code node reflects its
+			// own SAST settings). This intentionally differs from the summary panel,
+			// which is workspace-wide and uses any-folder enablement
+			// (scanstates.HtmlRenderer.isAutofixEnabledInAnyFolder); in a multi-root
+			// workspace with mixed settings the two surfaces can legitimately disagree.
+			// Absent/nil SAST settings deliberately fall through to AgentFixEnabled=false
+			// (unknown == hidden). This is safe: the fixable line only renders after a
+			// completed Code scan (see buildProductNodes' enabled/scanRegistered gate),
+			// which cannot succeed without SAST settings being populated first.
 			if sast := types.GetSastSettings(cfg.Conf(), cfg.FolderPath); sast != nil {
 				fd.AgentFixEnabled = sast.AutofixEnabled
 			}
@@ -427,6 +436,11 @@ func (b *TreeBuilder) buildInfoNodes(ctx infoNodeContext) []TreeNode {
 //   - IaC / Secrets: never — they have no automatic-fix concept (IsFixable is
 //     always false), so the line would only ever read "no issues automatically
 //     fixable", which is noise.
+//
+// This switch encodes per-product fixability knowledge. When a new product or fix
+// mechanism is added, update this switch — and keep it consistent with the
+// summary panel's Agent-Fix logic (scanstates/summary_html.go), which makes the
+// equivalent decision for the workspace-wide summary.
 func showFixableLine(ctx infoNodeContext) bool {
 	switch ctx.product {
 	case product.ProductCode:

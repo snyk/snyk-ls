@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -745,6 +746,92 @@ func TestBuildTree_IaCAndSecrets_NeverShowFixableLine(t *testing.T) {
 			infoNodes := filterChildrenByType(node.Children, NodeTypeInfo)
 			assert.Nil(t, findInfoNodeContaining(infoNodes, "fixable"),
 				"%s must never show a fixable line", tc.name)
+		})
+	}
+}
+
+// fakeFilteringFolder adapts a MockFolder (which satisfies types.Folder) to also implement
+// snyk.FilteringIssueProvider, returning a fixed set of issues. BuildTree requires a value that
+// is both, and the generated MockFolder does not expose the issue-provider methods.
+type fakeFilteringFolder struct {
+	*mock_types.MockFolder
+	issues snyk.IssuesByFile
+}
+
+func (f *fakeFilteringFolder) Issues() snyk.IssuesByFile { return f.issues }
+func (f *fakeFilteringFolder) FilterIssues(issues snyk.IssuesByFile, _ map[product.FilterableIssueType]bool) snyk.IssuesByFile {
+	return issues
+}
+func (f *fakeFilteringFolder) IssuesForFile(path types.FilePath) []types.Issue          { return f.issues[path] }
+func (f *fakeFilteringFolder) IssuesForRange(types.FilePath, types.Range) []types.Issue { return nil }
+func (f *fakeFilteringFolder) Issue(string) types.Issue                                 { return nil }
+
+// TestBuildTree_ReadsAgentFixEnabledFromSastSettings exercises the production wiring in
+// BuildTree (not BuildTreeFromFolderData): it seeds SAST settings into config exactly as
+// the settings fetch does, and asserts BuildTree reads AutofixEnabled through
+// GetSastSettings(cfg.Conf(), cfg.FolderPath) and gates the Code fixable line on it.
+func TestBuildTree_ReadsAgentFixEnabledFromSastSettings(t *testing.T) {
+	cases := []struct {
+		name           string
+		autofixEnabled bool
+		wantFixable    bool
+	}{
+		{"autofix enabled in SAST settings shows the Code fixable line", true, true},
+		{"autofix disabled in SAST settings hides the Code fixable line", false, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			conf := engine.GetConfiguration()
+			folderPath := types.FilePath("/project")
+
+			// Seed SAST settings the same way the settings fetch does, so BuildTree's
+			// GetSastSettings read returns them for this folder.
+			types.SetSastSettings(conf, folderPath, &sast_contract.SastResponse{
+				SastEnabled:    true,
+				AutofixEnabled: tc.autofixEnabled,
+			})
+			fc := &types.FolderConfig{
+				FolderPath:     folderPath,
+				ConfigResolver: types.NewMinimalConfigResolver(conf),
+				Engine:         engine,
+			}
+
+			// One fixable Code issue so the product node renders a fixable line.
+			issue := codeIssue(t, "code-1", true)
+			issues := snyk.IssuesByFile{issue.AffectedFilePath: {issue}}
+
+			ctrl := gomock.NewController(t)
+			folder := mock_types.NewMockFolder(ctrl)
+			folder.EXPECT().Path().Return(folderPath).AnyTimes()
+			folder.EXPECT().Name().Return("project").AnyTimes()
+			folder.EXPECT().FolderConfigReadOnly().Return(fc).AnyTimes()
+			folder.EXPECT().DisplayableIssueTypesFromConfig(gomock.Any()).
+				Return(map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true}).AnyTimes()
+			folder.EXPECT().IsDeltaFindingsEnabledFromConfig(gomock.Any()).Return(false).AnyTimes()
+			folder.EXPECT().IssueViewOptionsFromConfig(gomock.Any()).Return(types.IssueViewOptions{}).AnyTimes()
+
+			// MockFolder satisfies types.Folder but not snyk.FilteringIssueProvider (the
+			// real *workspace.Folder adds those methods); wrap it so BuildTree's
+			// f.(snyk.FilteringIssueProvider) assertion succeeds and returns our issues.
+			ff := &fakeFilteringFolder{MockFolder: folder, issues: issues}
+
+			ws := mock_types.NewMockWorkspace(ctrl)
+			ws.EXPECT().Folders().Return([]types.Folder{ff}).AnyTimes()
+
+			builder := newBuilderWithCompletedScans()
+			data := builder.BuildTree(ws)
+
+			codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+			require.NotNil(t, codeNode)
+			infoNodes := filterChildrenByType(codeNode.Children, NodeTypeInfo)
+			fixableNode := findInfoNodeContaining(infoNodes, "fixable")
+			if tc.wantFixable {
+				require.NotNil(t, fixableNode, "Code fixable line should show when SAST autofix is enabled")
+				assert.Contains(t, fixableNode.Label, "fixable automatically")
+			} else {
+				assert.Nil(t, fixableNode, "Code fixable line should be hidden when SAST autofix is disabled")
+			}
 		})
 	}
 }
