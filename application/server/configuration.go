@@ -204,7 +204,7 @@ func InitializeSettings(ctx context.Context, conf configuration.Configuration, e
 
 	processInitMetadata(conf, engine, logger, opts)
 	// global
-	globalOrgChanged, lockedMachineFields := processConfigSettings(ctx, conf, engine, logger, opts.Settings, analytics.TriggerSourceInitialize, resolver)
+	globalOrgChanged, _, lockedMachineFields := processConfigSettings(ctx, conf, engine, logger, opts.Settings, analytics.TriggerSourceInitialize, resolver)
 	// folder
 	lockedFolderFields := processFolderConfigs(ctx, conf, engine, logger, opts.FolderConfigs, analytics.TriggerSourceInitialize, resolver, globalOrgChanged)
 
@@ -228,11 +228,7 @@ func UpdateSettings(ctx context.Context, conf configuration.Configuration, engin
 		}
 	}
 
-	globalOrgChanged, lockedMachineFields := processConfigSettings(ctx, conf, engine, logger, settings, triggerSource, configResolver)
-
-	if globalOrgChanged {
-		mustNotifierFromContext(ctx).Send(types.RefreshHtmlSettingsParams{})
-	}
+	globalOrgChanged, tokenChanged, lockedMachineFields := processConfigSettings(ctx, conf, engine, logger, settings, triggerSource, configResolver)
 
 	// Flush stale cached errors (e.g. 401s from a previous token) before
 	// PopulateFolderConfig runs inside processFolderConfigs. Flushing here
@@ -242,6 +238,10 @@ func UpdateSettings(ctx context.Context, conf configuration.Configuration, engin
 	}
 
 	lockedFolderFields := processFolderConfigs(ctx, conf, engine, logger, folderConfigs, triggerSource, configResolver, globalOrgChanged)
+
+	if (globalOrgChanged || tokenChanged) && conf.GetBool(types.SettingIsLspInitialized) {
+		mustNotifierFromContext(ctx).Send(types.RefreshHtmlSettingsParams{})
+	}
 
 	var fm workflow.ConfigurationOptionsMetaData
 	if configResolver != nil {
@@ -380,11 +380,11 @@ func displayNameFor(fm workflow.ConfigurationOptionsMetaData, name string) strin
 // for being locked. The caller is responsible for emitting a single
 // deduplicated locked-fields notification for the triggering event (see
 // [IDE-1970]).
-func processConfigSettings(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) (bool, []string) {
+func processConfigSettings(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) (bool, bool, []string) {
 	conf.ClearCache()
 
 	if len(settings) == 0 {
-		return false, nil
+		return false, false, nil
 	}
 
 	subLogger := logger.With().Str("method", "processConfigSettings").Logger()
@@ -397,7 +397,7 @@ func processConfigSettings(ctx context.Context, conf configuration.Configuration
 	authService := mustAuthenticationServiceFromContext(ctx)
 	applyApiEndpoints(conf, engine, logger, settings, triggerSource, configResolver, authService)
 	applyAuthenticationMethod(conf, engine, logger, settings, triggerSource, configResolver, authService)
-	applyToken(settings, authService)
+	tokenChanged := applyToken(settings, authService, conf)
 	applyAutomaticAuthentication(conf, settings)
 	applyProductEnablement(conf, engine, logger, settings, triggerSource, configResolver)
 	applySeverityFilter(conf, engine, logger, settings, triggerSource, configResolver)
@@ -424,7 +424,7 @@ func processConfigSettings(ctx context.Context, conf configuration.Configuration
 	applyCodeEndpoint(conf, settings)
 	applyCliReleaseChannel(conf, settings)
 
-	return globalOrgChanged, lockedMachineFields
+	return globalOrgChanged, tokenChanged, lockedMachineFields
 }
 
 // hasFilterChangesInLspConfig detects if any filter settings are marked as Changed in the incoming LspFolderConfig.
@@ -628,14 +628,21 @@ func applyApiEndpoints(conf configuration.Configuration, engine workflow.Engine,
 	}
 }
 
-func applyToken(settings map[string]*types.ConfigSetting, authService authentication.AuthenticationService) {
+func applyToken(settings map[string]*types.ConfigSetting, authService authentication.AuthenticationService, conf configuration.Configuration) bool {
 	tokenFromIde, tokenExistsInMap := settings[types.SettingToken]
-	if tokenExistsInMap {
-		tokenAsString, parsable := tokenFromIde.Value.(string)
-		if parsable && authService != nil {
-			authService.UpdateCredentials(tokenAsString, false, false)
-		}
+	if !tokenExistsInMap || tokenFromIde == nil {
+		return false
 	}
+	tokenAsString, parsable := tokenFromIde.Value.(string)
+	if !parsable || authService == nil {
+		return false
+	}
+	oldToken := config.GetToken(conf)
+	authService.UpdateCredentials(tokenAsString, false, false)
+	if !tokenFromIde.Changed {
+		return false
+	}
+	return config.GetToken(conf) != oldToken
 }
 
 func applyAuthenticationMethod(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface, authService authentication.AuthenticationService) {

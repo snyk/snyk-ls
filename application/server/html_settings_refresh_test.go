@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -53,36 +54,6 @@ func Test_RefreshHtmlSettings_OnAuthentication(t *testing.T) {
 		htmlRefreshTimeout,
 		htmlRefreshTick,
 		"expected $/snyk.refreshHtmlSettings notification after authentication",
-	)
-}
-
-func Test_RefreshHtmlSettings_OnOrgChange(t *testing.T) {
-	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
-
-	_, err := loc.Client.Call(t.Context(), "initialize", nil)
-	require.NoError(t, err)
-	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
-
-	// Send didChangeConfiguration with a changed org
-	params := types.DidChangeConfigurationParams{
-		Settings: types.LspConfigurationParam{
-			Settings: map[string]*types.ConfigSetting{
-				types.SettingOrganization: {Value: "new-test-org", Changed: true},
-			},
-		},
-	}
-	_, err = loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", params)
-	require.NoError(t, err)
-
-	assert.Eventually(
-		t,
-		func() bool {
-			return len(jsonRPCRecorder.FindNotificationsByMethod(types.SnykRefreshHtmlSettings)) > 0
-		},
-		htmlRefreshTimeout,
-		htmlRefreshTick,
-		"expected $/snyk.refreshHtmlSettings notification after org change",
 	)
 }
 
@@ -150,6 +121,65 @@ func Test_RefreshHtmlSettings_OnFolderRemoved(t *testing.T) {
 	)
 }
 
+func Test_RefreshHtmlSettings_OnOrgChange_SentAfterFolderProcessing(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
+	require.NoError(t, err)
+	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
+
+	params := types.DidChangeConfigurationParams{
+		Settings: types.LspConfigurationParam{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingOrganization: {Value: "new-test-org", Changed: true},
+			},
+		},
+	}
+	_, err = loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", params)
+	require.NoError(t, err)
+
+	// Notification must be sent exactly once — not before folder processing, not twice.
+	assert.Eventually(
+		t,
+		func() bool {
+			return len(jsonRPCRecorder.FindNotificationsByMethod(types.SnykRefreshHtmlSettings)) == 1
+		},
+		htmlRefreshTimeout,
+		htmlRefreshTick,
+		"expected exactly one $/snyk.refreshHtmlSettings notification after org change",
+	)
+}
+
+func Test_RefreshHtmlSettings_OnTokenChange(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
+	require.NoError(t, err)
+	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
+
+	params := types.DidChangeConfigurationParams{
+		Settings: types.LspConfigurationParam{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingToken: {Value: "new-test-token", Changed: true},
+			},
+		},
+	}
+	_, err = loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", params)
+	require.NoError(t, err)
+
+	assert.Eventually(
+		t,
+		func() bool {
+			return len(jsonRPCRecorder.FindNotificationsByMethod(types.SnykRefreshHtmlSettings)) > 0
+		},
+		htmlRefreshTimeout,
+		htmlRefreshTick,
+		"expected $/snyk.refreshHtmlSettings notification after token change",
+	)
+}
+
 func Test_RefreshHtmlSettings_NotSentDuringInitialize(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
@@ -185,5 +215,160 @@ func Test_RefreshHtmlSettings_NotSentDuringInitialize(t *testing.T) {
 		300*time.Millisecond,
 		htmlRefreshTick,
 		"$/snyk.refreshHtmlSettings must not be sent before LSP is initialized",
+	)
+}
+
+func Test_RefreshHtmlSettings_ExactlyOneNotificationOnCombinedTokenAndOrgChange(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
+	require.NoError(t, err)
+	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
+
+	params := types.DidChangeConfigurationParams{
+		Settings: types.LspConfigurationParam{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingToken:        {Value: "combined-change-token", Changed: true},
+				types.SettingOrganization: {Value: "combined-org", Changed: true},
+			},
+		},
+	}
+	_, err = loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", params)
+	require.NoError(t, err)
+
+	// Wait for at least one notification to arrive.
+	assert.Eventually(
+		t,
+		func() bool {
+			return len(jsonRPCRecorder.FindNotificationsByMethod(types.SnykRefreshHtmlSettings)) >= 1
+		},
+		htmlRefreshTimeout,
+		htmlRefreshTick,
+		"expected at least one $/snyk.refreshHtmlSettings notification when token and org both change",
+	)
+
+	assert.Never(
+		t,
+		func() bool {
+			return len(jsonRPCRecorder.FindNotificationsByMethod(types.SnykRefreshHtmlSettings)) > 1
+		},
+		200*time.Millisecond,
+		htmlRefreshTick,
+		"expected exactly one $/snyk.refreshHtmlSettings notification when token and org both change",
+	)
+}
+
+func Test_RefreshHtmlSettings_NotSentOnUnchangedFlagToken(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
+	require.NoError(t, err)
+	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
+
+	// Send a token value with Changed=false.
+	// The credential must be written (reconnect recovery), but the notification must not fire.
+	params := types.DidChangeConfigurationParams{
+		Settings: types.LspConfigurationParam{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingToken: {Value: "different-value", Changed: false},
+			},
+		},
+	}
+	_, err = loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", params)
+	require.NoError(t, err)
+
+	assert.Never(
+		t,
+		func() bool {
+			return len(jsonRPCRecorder.FindNotificationsByMethod(types.SnykRefreshHtmlSettings)) > 0
+		},
+		300*time.Millisecond,
+		htmlRefreshTick,
+		"$/snyk.refreshHtmlSettings must not fire when Changed=false even if token value differs",
+	)
+}
+
+func Test_applyToken_WritesCredentialOnReconnect(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
+	require.NoError(t, err)
+	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
+
+	// Simulate a reconnect: IDE sends a full settings snapshot with Changed=false.
+	// The credential must be written even though Changed=false, because the LS may have
+	// restarted and lost the credential. The notification must not fire (Changed=false means
+	// the IDE is not signaling a user-initiated change, just recovering state).
+	params := types.DidChangeConfigurationParams{
+		Settings: types.LspConfigurationParam{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingToken: {Value: "reconnect-token", Changed: false},
+			},
+		},
+	}
+	_, err = loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", params)
+	require.NoError(t, err)
+
+	// Credential must be written even though Changed=false
+	assert.Eventually(
+		t,
+		func() bool {
+			return config.GetToken(engine.GetConfiguration()) == "reconnect-token"
+		},
+		htmlRefreshTimeout,
+		htmlRefreshTick,
+		"credential must be written even when Changed=false (reconnect recovery)",
+	)
+
+	// But no refresh notification must fire — Changed=false suppresses the notification
+	assert.Never(
+		t,
+		func() bool {
+			return len(jsonRPCRecorder.FindNotificationsByMethod(types.SnykRefreshHtmlSettings)) > 0
+		},
+		300*time.Millisecond,
+		htmlRefreshTick,
+		"$/snyk.refreshHtmlSettings must not fire when Changed=false",
+	)
+}
+
+func Test_RefreshHtmlSettings_NotSentOnUnchangedToken(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
+	require.NoError(t, err)
+	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
+
+	// Set the current token so we can send the same value
+	currentToken := "existing-token"
+	di.AuthenticationService().UpdateCredentials(currentToken, false, false)
+	jsonRPCRecorder.ClearNotifications()
+
+	// Confirm our token is now set
+	require.Equal(t, currentToken, config.GetToken(engine.GetConfiguration()))
+
+	// Send the SAME token value — should produce no refresh notification
+	params := types.DidChangeConfigurationParams{
+		Settings: types.LspConfigurationParam{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingToken: {Value: currentToken, Changed: true},
+			},
+		},
+	}
+	_, err = loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", params)
+	require.NoError(t, err)
+
+	assert.Never(
+		t,
+		func() bool {
+			return len(jsonRPCRecorder.FindNotificationsByMethod(types.SnykRefreshHtmlSettings)) > 0
+		},
+		300*time.Millisecond,
+		htmlRefreshTick,
+		"$/snyk.refreshHtmlSettings must not fire when token is unchanged",
 	)
 }

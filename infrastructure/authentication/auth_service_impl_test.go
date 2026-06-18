@@ -276,19 +276,26 @@ func Test_UpdateCredentials(t *testing.T) {
 		assert.Empty(t, mockNotifier.SentMessages())
 	})
 
-	t.Run("RefreshHtmlSettings not sent when LSP is not initialized", func(t *testing.T) {
+	t.Run("RefreshHtmlSettings is passed to notifier regardless of LSP init state", func(t *testing.T) {
+		// The guard for LSP initialisation lives in registerNotifier (the real listener),
+		// not in UpdateCredentials itself. UpdateCredentials must always call
+		// notifier.Send(RefreshHtmlSettingsParams{}) so that the real notifier can
+		// defer it until after init. MockNotifier has no deferral, so the message
+		// appears in SentMessages() immediately.
 		engine, ts := testutil.UnitTestWithEngine(t)
-		// SettingIsLspInitialized is false by default — do not set it to true
+		// SettingIsLspInitialized is false — do NOT set it to true before the call.
 		mockNotifier := notification.NewMockNotifier()
 		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
 
 		service.UpdateCredentials("test-token", true, false)
 
+		var found bool
 		for _, msg := range mockNotifier.SentMessages() {
 			if _, ok := msg.(types.RefreshHtmlSettingsParams); ok {
-				t.Error("RefreshHtmlSettingsParams must not be sent before LSP is initialized")
+				found = true
 			}
 		}
+		assert.True(t, found, "RefreshHtmlSettingsParams must be passed to the notifier so it can deliver it after init")
 	})
 
 	t.Run("Rejected stale OAuth token does not send notification", func(t *testing.T) {
