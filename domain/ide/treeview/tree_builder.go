@@ -43,6 +43,11 @@ type FolderData struct {
 	ReferenceFolderPath      string
 	IssueViewOptions         types.IssueViewOptions
 	ConsistentIgnoresEnabled bool
+	// AgentFixEnabled reports whether Snyk Agent Fix (Code autofix) is enabled for
+	// this folder's SAST settings. It gates the Snyk Code product's "fixable" info
+	// line: when Agent Fix is off we hide the line entirely rather than surface a
+	// fix the user cannot action.
+	AgentFixEnabled bool
 }
 
 // fileIconProvider is satisfied by issue data types that can supply a file-node icon
@@ -116,6 +121,18 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 		}
 		if cfg != nil {
 			fd.ConsistentIgnoresEnabled = cfg.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores)
+			// Agent Fix is gated per-folder here (each folder's Code node reflects its
+			// own SAST settings). This intentionally differs from the summary panel,
+			// which is workspace-wide and uses any-folder enablement
+			// (scanstates.HtmlRenderer.isAutofixEnabledInAnyFolder); in a multi-root
+			// workspace with mixed settings the two surfaces can legitimately disagree.
+			// Absent/nil SAST settings deliberately fall through to AgentFixEnabled=false
+			// (unknown == hidden). This is safe: the fixable line only renders after a
+			// completed Code scan (see buildProductNodes' enabled/scanRegistered gate),
+			// which cannot succeed without SAST settings being populated first.
+			if sast := types.GetSastSettings(cfg.Conf(), cfg.FolderPath); sast != nil {
+				fd.AgentFixEnabled = sast.AutofixEnabled
+			}
 			if fd.DeltaEnabled {
 				conf := cfg.Conf()
 				if conf != nil {
@@ -304,12 +321,14 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 		var children []TreeNode
 		if enabled && scanRegistered && !scanning && scanError == "" {
 			children = append(children, b.buildInfoNodes(infoNodeContext{
+				product:                  p,
 				parentKey:                productKey,
 				totalIssues:              totalIssues,
 				fixableCount:             stats.fixableCount,
 				ignoredCount:             stats.ignoredCount,
 				issueViewOptions:         fd.IssueViewOptions,
 				consistentIgnoresEnabled: fd.ConsistentIgnoresEnabled,
+				agentFixEnabled:          fd.AgentFixEnabled,
 				hiddenByFilter:           hiddenByFilter,
 			})...)
 
@@ -356,12 +375,16 @@ func isProductEnabled(p product.Product, supportedTypes map[product.FilterableIs
 
 // infoNodeContext carries the data needed to build info child nodes for a product.
 type infoNodeContext struct {
+	product                  product.Product
 	parentKey                string
 	totalIssues              int
 	fixableCount             int
 	ignoredCount             int
 	issueViewOptions         types.IssueViewOptions
 	consistentIgnoresEnabled bool
+	// agentFixEnabled reflects FolderData.AgentFixEnabled; only consulted for the
+	// Snyk Code product (see showFixableLine).
+	agentFixEnabled bool
 	// hiddenByFilter is true when the scanner has issues but the active filters
 	// hide all of them, so the empty-state text reads "...with these filters".
 	hiddenByFilter bool
@@ -382,22 +405,51 @@ func (b *TreeBuilder) buildInfoNodes(ctx infoNodeContext) []TreeNode {
 		infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, b.issueCountText(ctx),
 			WithID(fmt.Sprintf("info:%s:count", ctx.parentKey))))
 
-		// Fixable line
-		if ctx.fixableCount > 0 {
-			fixWord := "issues are"
-			if ctx.fixableCount == 1 {
-				fixWord = "issue is"
+		// Fixable line — only shown for scanners where automatic fixing is something
+		// the user can action (see showFixableLine).
+		if showFixableLine(ctx) {
+			if ctx.fixableCount > 0 {
+				fixWord := "issues are"
+				if ctx.fixableCount == 1 {
+					fixWord = "issue is"
+				}
+				infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo,
+					fmt.Sprintf("⚡ %d %s fixable automatically.", ctx.fixableCount, fixWord),
+					WithID(fmt.Sprintf("info:%s:fixable", ctx.parentKey))))
+			} else {
+				infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, "There are no issues automatically fixable.",
+					WithID(fmt.Sprintf("info:%s:fixable", ctx.parentKey))))
 			}
-			infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo,
-				fmt.Sprintf("⚡ %d %s fixable automatically.", ctx.fixableCount, fixWord),
-				WithID(fmt.Sprintf("info:%s:fixable", ctx.parentKey))))
-		} else {
-			infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, "There are no issues automatically fixable.",
-				WithID(fmt.Sprintf("info:%s:fixable", ctx.parentKey))))
 		}
 	}
 
 	return infoNodes
+}
+
+// showFixableLine decides whether a scanner's "fixable" info line is shown. We
+// only surface it where automatic fixing is something the user can act on:
+//   - Snyk Code: only when Agent Fix (autofix) is enabled for the folder. When it
+//     is disabled the line is hidden entirely, since the "fixable automatically"
+//     count is not actionable.
+//   - Open Source: always — upgrade-based fixability is available whenever OSS
+//     scanning runs, independent of Agent Fix.
+//   - IaC / Secrets: never — they have no automatic-fix concept (IsFixable is
+//     always false), so the line would only ever read "no issues automatically
+//     fixable", which is noise.
+//
+// This switch encodes per-product fixability knowledge. When a new product or fix
+// mechanism is added, update this switch — and keep it consistent with the
+// summary panel's Agent-Fix logic (scanstates/summary_html.go), which makes the
+// equivalent decision for the workspace-wide summary.
+func showFixableLine(ctx infoNodeContext) bool {
+	switch ctx.product {
+	case product.ProductCode:
+		return ctx.agentFixEnabled
+	case product.ProductOpenSource:
+		return true
+	default:
+		return false
+	}
 }
 
 // zeroIssuesText is the label for the child info node shown under a scanner with
