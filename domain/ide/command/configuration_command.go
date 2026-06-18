@@ -48,7 +48,7 @@ func (cmd *configurationCommand) Execute(ctx context.Context) (any, error) {
 
 	settings, folderConfigs := ConstructSettingsFromConfig(cmd.engine, cmd.configResolver)
 
-	renderer, err := infraconfig.NewConfigHtmlRenderer(cmd.engine)
+	renderer, err := infraconfig.NewConfigHtmlRenderer(cmd.engine, cmd.configResolver)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create config renderer: %w", err)
 	}
