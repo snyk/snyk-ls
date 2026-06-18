@@ -320,7 +320,7 @@ func TestTreeHtmlRenderer_FilterToolbar_ExpandCollapseButtons_NotRendered(t *tes
 	html := renderer.RenderTreeView(TreeViewData{})
 
 	// IDE-1863: Expand/Collapse All buttons were removed from the toolbar in
-	// favour of per-scanner chevrons.
+	// favor of per-scanner chevrons.
 	assert.NotContains(t, html, `id="expandAllBtn"`)
 	assert.NotContains(t, html, `id="collapseAllBtn"`)
 }
