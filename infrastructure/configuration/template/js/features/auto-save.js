@@ -66,6 +66,12 @@
 				if (window.ConfigApp.authFieldMonitor && window.ConfigApp.authFieldMonitor.resetSavedState) {
 					window.ConfigApp.authFieldMonitor.resetSavedState();
 				}
+				// Propagate changed Project Default values into folder panes that were
+				// inheriting from PD (i.e. not user-overridden). Must run BEFORE reset()
+				// so the propagated folder values become the new baseline (not dirty).
+				if (window.ConfigApp.projectDefaultPropagator && window.dirtyTracker) {
+					window.ConfigApp.projectDefaultPropagator.propagate(data, window.dirtyTracker.originalData);
+				}
 				// Reset dirty state after successful save (baseline must be the full form state)
 				if (window.dirtyTracker) {
 					window.dirtyTracker.reset();

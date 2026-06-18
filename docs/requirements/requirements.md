@@ -11,3 +11,10 @@ IDE-2078: The tree-view hover style shall set both background and foreground usi
 IDE-2078: The tree-view hover style shall fall back to the list-active-selection variables when no IDE-supplied list-hover-foreground variable is provided.
 IDE-2078: The tree-view CSS shall not hard-code colour values for the hover state; all colours shall come from CSS custom properties bound to `--vscode-*` variables (with sensible neutral fallbacks).
 IDE-2078: Hover styling shall remain correct when the IDE injects its own theme CSS via the `${ideStyle}` placeholder.
+IDE-2111: When a Project Default value changes and is saved successfully, the corresponding folder pane input fields shall update to the new value if they were previously inheriting from the Project Default.
+IDE-2111: Folder fields whose source indicator wrapper carries `source-org` or `source-org-locked` shall not be overwritten by Project Default propagation.
+IDE-2111: Folder fields whose current value differs from the previous Project Default value (user-overridden) shall not be overwritten by Project Default propagation.
+IDE-2111: After Project Default propagation, the form's dirty state shall remain clean — propagated DOM changes shall not be reported as unsaved user edits.
+IDE-2111: Project Default propagation shall identify folder inputs by the `data-setting` attribute, not by parsing the field `name` for a `folder_N_` prefix.
+IDE-2111: Project Default propagation shall ignore changed-field keys whose corresponding Project Defaults input does not exist in `#fallbacks-pane`.
+IDE-2111: Project Default propagation shall correctly read and write checkbox, select, text, and number input types.
