@@ -656,6 +656,10 @@ type AuthenticationParams struct {
 	ApiUrl string `json:"apiUrl,omitempty"`
 }
 
+const SnykRefreshHtmlSettings = "$/snyk.refreshHtmlSettings"
+
+type RefreshHtmlSettingsParams struct{}
+
 type SnykIsAvailableCli struct {
 	CliPath string `json:"cliPath"`
 }

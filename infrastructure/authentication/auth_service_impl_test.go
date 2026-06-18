@@ -276,6 +276,21 @@ func Test_UpdateCredentials(t *testing.T) {
 		assert.Empty(t, mockNotifier.SentMessages())
 	})
 
+	t.Run("RefreshHtmlSettings not sent when LSP is not initialized", func(t *testing.T) {
+		engine, ts := testutil.UnitTestWithEngine(t)
+		// SettingIsLspInitialized is false by default — do not set it to true
+		mockNotifier := notification.NewMockNotifier()
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+		service.UpdateCredentials("test-token", true, false)
+
+		for _, msg := range mockNotifier.SentMessages() {
+			if _, ok := msg.(types.RefreshHtmlSettingsParams); ok {
+				t.Error("RefreshHtmlSettingsParams must not be sent before LSP is initialized")
+			}
+		}
+	})
+
 	t.Run("Rejected stale OAuth token does not send notification", func(t *testing.T) {
 		engine, ts := testutil.UnitTestWithEngine(t)
 		conf := engine.GetConfiguration()

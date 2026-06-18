@@ -157,6 +157,9 @@ func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, 
 		case types.SnykRegisterMcpParams:
 			notifyClient(logger, srv, "$/snyk.registerMcp", params)
 			l.Debug().Interface("mcpConfig", params).Msg("sending MCP config to client")
+		case types.RefreshHtmlSettingsParams:
+			notifyClient(logger, srv, types.SnykRefreshHtmlSettings, params)
+			l.Debug().Msg("sending html settings refresh to client")
 		default:
 			l.Warn().
 				Interface("params", params).

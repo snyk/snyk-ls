@@ -230,6 +230,10 @@ func UpdateSettings(ctx context.Context, conf configuration.Configuration, engin
 
 	globalOrgChanged, lockedMachineFields := processConfigSettings(ctx, conf, engine, logger, settings, triggerSource, configResolver)
 
+	if globalOrgChanged {
+		mustNotifierFromContext(ctx).Send(types.RefreshHtmlSettingsParams{})
+	}
+
 	// Flush stale cached errors (e.g. 401s from a previous token) before
 	// PopulateFolderConfig runs inside processFolderConfigs. Flushing here
 	// ensures every folder sees fresh results with the new token.

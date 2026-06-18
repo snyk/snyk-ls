@@ -315,6 +315,28 @@ func TestShowMessageRequest(t *testing.T) {
 	})
 }
 
+func Test_registerNotifier_RefreshHtmlSettings(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
+
+	di.Notifier().Send(types.RefreshHtmlSettingsParams{})
+
+	assert.Eventually(
+		t,
+		func() bool {
+			return len(jsonRPCRecorder.FindNotificationsByMethod(types.SnykRefreshHtmlSettings)) > 0
+		},
+		2*time.Second,
+		time.Millisecond,
+	)
+}
+
 func Test_NotifierWaitsForLspInitializedChannel(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)

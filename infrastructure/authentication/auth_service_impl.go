@@ -581,6 +581,9 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 			Str("authentication_method", string(config.GetAuthenticationMethodFromConfig(conf))).
 			Msg("sending auth credentials notification")
 		a.notifier.Send(types.AuthenticationParams{Token: newToken, ApiUrl: apiUrl})
+		if a.engine.GetConfiguration().GetBool(types.SettingIsLspInitialized) {
+			a.notifier.Send(types.RefreshHtmlSettingsParams{})
+		}
 	}
 }
 
