@@ -140,7 +140,7 @@ func TestConfigHtmlRenderer_ProjectDefaultsAdvancedFieldsRenderValues(t *testing
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	require.NoError(t, err)
 
 	settings := map[string]any{
