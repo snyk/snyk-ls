@@ -77,7 +77,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndScanAfterConfirmati
 		}, nil
 	}))
 	conf := engine.GetConfiguration()
-	registerNotifier(conf, engine.GetLogger(), loc.Server, deps.Notifier)
+	registerNotifier(conf, engine, testutil.DefaultConfigResolver(engine), engine.GetLogger(), loc.Server, deps.Notifier)
 
 	w := config.GetWorkspace(engine.GetConfiguration())
 	sc := &scanner.TestScanner{}
@@ -100,7 +100,7 @@ func Test_handleUntrustedFolders_shouldTriggerTrustRequestAndNotScanAfterNegativ
 			Title: command.DontTrust,
 		}, nil
 	}))
-	registerNotifier(engine.GetConfiguration(), engine.GetLogger(), loc.Server, deps.Notifier)
+	registerNotifier(engine.GetConfiguration(), engine, testutil.DefaultConfigResolver(engine), engine.GetLogger(), loc.Server, deps.Notifier)
 	w := config.GetWorkspace(engine.GetConfiguration())
 	sc := &scanner.TestScanner{}
 	w.AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("/trusted/dummy"), "dummy", sc, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(), testutil.DefaultConfigResolver(engine), engine))
