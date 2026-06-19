@@ -152,11 +152,8 @@
       <div class="tree-node-row tree-node-row-info untrusted-folder-list-row">
         <span class="untrusted-folder-list-heading">Untrusted Folders:</span>
         <ul class="untrusted-folder-paths">
-          {{range .FolderPaths}}<li class="untrusted-folder-path" title="{{.}}"><span class="tree-label" data-truncate-middle="1" data-full-label="{{.}}">{{.}}</span></li>{{end}}
+          {{range .FolderPaths}}<li class="untrusted-folder-path" title="{{.}}"><span class="tree-label" data-truncate-middle="1" data-full-label="{{.}}">{{.}}</span><button type="button" class="untrusted-trust-btn" data-action="trust-folder" data-folder-path="{{.}}">Trust folder</button></li>{{end}}
         </ul>
-      </div>
-      <div class="tree-node-row tree-node-row-info untrusted-action-row">
-        <button type="button" class="untrusted-trust-btn" data-action="trust-folder">Trust folders and continue</button>
       </div>
     </div>
     {{else}}

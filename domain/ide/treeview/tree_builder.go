@@ -96,8 +96,22 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 		return TreeViewData{}
 	}
 
+	// Untrusted folders are represented only by the workspace-trust banner at the
+	// top of the tree (IDE-1882); they are not scanned, so we exclude them from
+	// the tree body. GetFolderTrust already accounts for trust_enabled (every
+	// folder is trusted when the feature is off), so this is a no-op banner-wise
+	// when trust is disabled.
+	_, untrusted := workspace.GetFolderTrust()
+	untrustedSet := make(map[types.FilePath]bool, len(untrusted))
+	for _, f := range untrusted {
+		untrustedSet[f.Path()] = true
+	}
+
 	var folderDataList []FolderData
 	for _, f := range folders {
+		if untrustedSet[f.Path()] {
+			continue
+		}
 		fip, ok := f.(snyk.FilteringIssueProvider)
 		if !ok {
 			continue
@@ -146,13 +160,58 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 		folderDataList = append(folderDataList, fd)
 	}
 
-	return b.BuildTreeFromFolderData(folderDataList)
+	// Force folder root nodes when the workspace has more than one folder, counting
+	// untrusted folders too. Otherwise excluding an untrusted folder could drop the
+	// trusted-folder count to one and collapse its root node (single-folder mode),
+	// hiding which projects are open while the trust banner is shown. (IDE-1882)
+	forceFolderNodes := len(folders) > 1
+	data := b.buildTreeBody(folderDataList, forceFolderNodes)
+
+	// Prepend the untrusted-folder banner so the user can review and trust the
+	// folders. Each folder gets its own Trust button (handled client-side via
+	// the snyk.trustWorkspaceFolders command). (IDE-1882)
+	if len(untrusted) > 0 {
+		data.Nodes = append([]TreeNode{buildUntrustedFolderBanner(untrusted)}, data.Nodes...)
+	}
+
+	return data
+}
+
+// untrustedFolderRationale is the banner copy explaining why a folder must be
+// trusted before it is scanned. It mirrors the message of the legacy
+// window/showMessageRequest trust dialog (command.GetTrustMessage) so the
+// in-tree banner and the modal stay consistent. (IDE-1882)
+const untrustedFolderRationale = "When scanning for issues, Snyk may automatically execute code such as " +
+	"invoking the package manager to get dependency information. You should only scan folders you trust."
+
+// buildUntrustedFolderBanner builds the workspace-trust info banner node listing
+// the untrusted folder paths. The template renders the rationale, a Learn-more
+// link, and a per-folder Trust button keyed off FolderPaths. (IDE-1882)
+func buildUntrustedFolderBanner(untrusted []types.Folder) TreeNode {
+	paths := make([]string, 0, len(untrusted))
+	for _, f := range untrusted {
+		paths = append(paths, string(f.Path()))
+	}
+	return NewTreeNode(NodeTypeInfo, untrustedFolderRationale,
+		WithID("info:untrusted-folder"),
+		WithInfoVariant("untrusted-folder"),
+		WithFolderPaths(paths),
+	)
 }
 
 // BuildTreeFromFolderData builds the tree from pre-fetched folder data.
 func (b *TreeBuilder) BuildTreeFromFolderData(folders []FolderData) TreeViewData {
+	return b.buildTreeBody(folders, false)
+}
+
+// buildTreeBody builds the folder/product node hierarchy. forceFolderNodes makes
+// every folder render with its own root node even in single-folder mode; BuildTree
+// sets it when the workspace has more than one folder so excluding untrusted
+// folders (shown only in the banner) doesn't collapse the remaining trusted
+// folder's root node. (IDE-1882)
+func (b *TreeBuilder) buildTreeBody(folders []FolderData, forceFolderNodes bool) TreeViewData {
 	b.pendingAutoExpand = nil
-	multiRoot := len(folders) > 1
+	multiRoot := len(folders) > 1 || forceFolderNodes
 	data := TreeViewData{
 		MultiRoot: multiRoot,
 	}

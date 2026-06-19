@@ -818,6 +818,7 @@ func TestBuildTree_ReadsAgentFixEnabledFromSastSettings(t *testing.T) {
 
 			ws := mock_types.NewMockWorkspace(ctrl)
 			ws.EXPECT().Folders().Return([]types.Folder{ff}).AnyTimes()
+			ws.EXPECT().GetFolderTrust().Return([]types.Folder{ff}, nil).AnyTimes()
 
 			builder := newBuilderWithCompletedScans()
 			data := builder.BuildTree(ws)
@@ -834,6 +835,68 @@ func TestBuildTree_ReadsAgentFixEnabledFromSastSettings(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBuildTree_AllUntrusted_ShowsOnlyBanner(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	untrusted := mock_types.NewMockFolder(ctrl)
+	untrusted.EXPECT().Path().Return(types.FilePath("/untrusted")).AnyTimes()
+
+	ws := mock_types.NewMockWorkspace(ctrl)
+	ws.EXPECT().Folders().Return([]types.Folder{untrusted}).AnyTimes()
+	ws.EXPECT().GetFolderTrust().Return(nil, []types.Folder{untrusted}).AnyTimes()
+
+	data := newBuilderWithCompletedScans().BuildTree(ws)
+
+	require.Len(t, data.Nodes, 1, "an all-untrusted workspace should render only the trust banner")
+	banner := data.Nodes[0]
+	assert.Equal(t, NodeTypeInfo, banner.Type)
+	assert.Equal(t, "untrusted-folder", banner.InfoVariant)
+	assert.Equal(t, []string{"/untrusted"}, banner.FolderPaths)
+	assert.Contains(t, banner.Label, "You should only scan folders you trust")
+}
+
+// TestBuildTree_MixedTrust_BannerPlusTrustedBody verifies the banner is prepended,
+// lists only the untrusted folder, and that the untrusted folder is excluded from
+// the scanned tree body while the trusted folder's products still render.
+func TestBuildTree_MixedTrust_BannerPlusTrustedBody(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	trustedIssue := testutil.NewMockIssueWithSeverity("oss-1", "/trusted/go.mod", types.High)
+	trustedIssue.Product = product.ProductOpenSource
+	trusted := mock_types.NewMockFolder(ctrl)
+	trusted.EXPECT().Path().Return(types.FilePath("/trusted")).AnyTimes()
+	trusted.EXPECT().Name().Return("trusted").AnyTimes()
+	trusted.EXPECT().FolderConfigReadOnly().Return(nil).AnyTimes()
+	trusted.EXPECT().DisplayableIssueTypesFromConfig(gomock.Any()).
+		Return(map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true}).AnyTimes()
+	trusted.EXPECT().IsDeltaFindingsEnabledFromConfig(gomock.Any()).Return(false).AnyTimes()
+	trusted.EXPECT().IssueViewOptionsFromConfig(gomock.Any()).Return(types.IssueViewOptions{}).AnyTimes()
+	trustedFF := &fakeFilteringFolder{MockFolder: trusted, issues: snyk.IssuesByFile{"/trusted/go.mod": {trustedIssue}}}
+
+	untrusted := mock_types.NewMockFolder(ctrl)
+	untrusted.EXPECT().Path().Return(types.FilePath("/untrusted")).AnyTimes()
+
+	ws := mock_types.NewMockWorkspace(ctrl)
+	ws.EXPECT().Folders().Return([]types.Folder{trustedFF, untrusted}).AnyTimes()
+	ws.EXPECT().GetFolderTrust().Return([]types.Folder{trustedFF}, []types.Folder{untrusted}).AnyTimes()
+
+	data := newBuilderWithCompletedScans().BuildTree(ws)
+
+	require.NotEmpty(t, data.Nodes)
+	banner := data.Nodes[0]
+	assert.Equal(t, "untrusted-folder", banner.InfoVariant, "banner must come first")
+	assert.Equal(t, []string{"/untrusted"}, banner.FolderPaths, "banner lists only untrusted folders")
+
+	// Regression (IDE-1882): excluding the untrusted folder must not collapse the
+	// remaining trusted folder into single-folder mode — its root node must stay
+	// visible so the user can still see which projects are open.
+	require.Len(t, data.Nodes, 2, "banner + the trusted folder's root node")
+	trustedNode := data.Nodes[1]
+	assert.Equal(t, NodeTypeFolder, trustedNode.Type, "trusted folder must keep its root node")
+	assert.Equal(t, "trusted", trustedNode.Label)
+	ossNode := findChildByProduct(trustedNode.Children, product.ProductOpenSource)
+	require.NotNil(t, ossNode, "trusted folder's products should render under its root node")
 }
 
 func TestBuildTree_EmptyProduct_ShowsCongratsInfoChild(t *testing.T) {

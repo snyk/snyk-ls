@@ -106,6 +106,28 @@ func TestTreeHtmlRenderer_FileNode_HasDataAttributes(t *testing.T) {
 	assert.Contains(t, html, `data-product="code"`)
 }
 
+func TestTreeHtmlRenderer_UntrustedFolderBanner_HasPerFolderTrustButtons(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	banner := NewTreeNode(NodeTypeInfo, untrustedFolderRationale,
+		WithID("info:untrusted-folder"),
+		WithInfoVariant("untrusted-folder"),
+		WithFolderPaths([]string{"/repo/a", "/repo/b"}),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{Nodes: []TreeNode{banner}})
+
+	assert.Contains(t, html, "tree-node-info--untrusted-folder")
+	assert.Contains(t, html, "You should only scan folders you trust")
+	// One Trust button per folder, each carrying its own folder path so the JS
+	// handler can scope snyk.trustWorkspaceFolders to that folder.
+	assert.Contains(t, html, `data-action="trust-folder" data-folder-path="/repo/a"`)
+	assert.Contains(t, html, `data-action="trust-folder" data-folder-path="/repo/b"`)
+	assert.Equal(t, 2, strings.Count(html, `data-action="trust-folder"`), "expected one Trust button per untrusted folder")
+}
+
 func TestTreeHtmlRenderer_ContainsIE11CompatMeta(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())

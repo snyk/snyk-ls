@@ -497,10 +497,10 @@ body {
 
 /* IDE-1882: untrusted-folder info node. Sits on the existing .tree-node-info
    foundation (no banner chrome) so it visually belongs in the same family as
-   the other inline info rows ("✅ No issues found", "⚡ N fixable…"). The action row
-   is stacked under the message so the Trust button is always visible at the
-   sidebar's natural width. Button styling reuses --vscode-button-* tokens,
-   matching the IDE's primary-button look. */
+   the other inline info rows ("✅ No issues found", "⚡ N fixable…"). Each
+   untrusted folder is listed with its own Trust button on the same row, so the
+   user can trust folders individually. Button styling reuses --vscode-button-*
+   tokens, matching the IDE's primary-button look. */
 .tree-node-info--untrusted-folder .tree-label {
   color: var(--text-color);
   font-weight: normal;
@@ -557,6 +557,8 @@ body {
   display: flex;
   align-items: center;
   min-width: 0;
+  gap: 8px;
+  padding: 2px 0;
 }
 .tree-node-info--untrusted-folder .untrusted-folder-path > .tree-label {
   flex: 1 1 auto;
@@ -568,10 +570,8 @@ body {
   font-size: 12px;
   opacity: 0.85;
 }
-.tree-node-info--untrusted-folder .untrusted-action-row {
-  padding-top: 4px;
-}
 .tree-node-info--untrusted-folder .untrusted-trust-btn {
+  flex: 0 0 auto;
   background-color: var(--button-background-color);
   color: var(--button-text-color);
   border: none;

@@ -425,6 +425,25 @@
   }
 
   container.addEventListener('click', function(e) {
+    // Trust button on the untrusted-folder banner (IDE-1882). Handle this before
+    // the row logic below so trusting a folder doesn't also toggle expand/collapse.
+    // Walk up from the click target since the button has no child elements but the
+    // click may originate on text inside it.
+    var trustBtn = e.target;
+    while (trustBtn && trustBtn !== container) {
+      if (trustBtn.getAttribute && trustBtn.getAttribute('data-action') === 'trust-folder') break;
+      trustBtn = trustBtn.parentElement;
+    }
+    if (trustBtn && trustBtn !== container && trustBtn.getAttribute &&
+        trustBtn.getAttribute('data-action') === 'trust-folder') {
+      e.stopPropagation();
+      var folderPath = trustBtn.getAttribute('data-folder-path');
+      if (folderPath) {
+        executeCommand('snyk.trustWorkspaceFolders', [folderPath]);
+      }
+      return;
+    }
+
     var row = null;
     var el = e.target;
     // Walk up to find the tree-node-row (use hasClass for SVG compatibility)
