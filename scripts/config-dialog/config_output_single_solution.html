@@ -750,6 +750,24 @@ button.secondary[disabled] {
     border-color: var(--error-background);
 }
 
+.reset-global-overrides-btn {
+    float: right;
+    padding: 4px 12px;
+    font-size: var(--tiny-font-size);
+    background-color: var(--error-background);
+    border: 1px solid var(--error-background);
+    color: var(--input-foreground);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.reset-global-overrides-btn:hover {
+    color: var(--editor-foreground);
+    background-color: var(--error-background);
+    border-color: var(--error-background);
+}
+
 /* - - - Settings Tabs - - - */
 .settings-tabs {
     border-bottom: 1px solid var(--border-color);
@@ -1028,6 +1046,7 @@ button.secondary[disabled] {
             <div class="tab-pane" id="fallbacks-pane" role="tabpanel" aria-labelledby="fallbacks-tab">
                 <div class="info-box">
                     <p>These settings apply to all solutions unless overridden.</p>
+                    <button type="button" class="reset-global-overrides-btn" title="Reset all Project Defaults overrides">Reset overrides</button>
                 </div>
                 <div class="row">
                     <div class="col-md-6">
@@ -2643,6 +2662,49 @@ if (window.cssVars) {
 		window.ConfigApp.folderResets = {};
 	};
 
+	// Org-scope global ("Project Defaults") fields cleared by a global reset.
+	// Mirrors the folder reset list, minus preferred_org (folder-only) plus
+	// organization (global-only). Kept in sync with the Go list
+	// types.GlobalResettableSettings.
+	var GLOBAL_RESET_FIELDS = [
+		"snyk_oss_enabled",
+		"snyk_code_enabled",
+		"snyk_iac_enabled",
+		"snyk_secrets_enabled",
+		"scan_automatic",
+		"scan_net_new",
+		"severity_filter_critical",
+		"severity_filter_high",
+		"severity_filter_medium",
+		"severity_filter_low",
+		"issue_view_open_issues",
+		"issue_view_ignored_issues",
+		"risk_score_threshold",
+		"organization",
+	];
+
+	// Mark the global (Project Defaults) scope for reset — on save,
+	// applyGlobalResets() sets every GLOBAL_RESET_FIELDS to null at the top level.
+	formHandler.markGlobalForReset = function () {
+		window.ConfigApp.globalReset = true;
+	};
+
+	formHandler.isGlobalMarkedForReset = function () {
+		return !!window.ConfigApp.globalReset;
+	};
+
+	// Apply reset: set all org-scope global fields to null at the top level of the
+	// payload (NOT inside folderConfigs). The hosting IDE converts each
+	// top-level key:null into a {changed:true, value:null} ConfigSetting reaching
+	// the LS, which Unsets the user override.
+	formHandler.applyGlobalResets = function (data) {
+		if (!window.ConfigApp.globalReset) return;
+		for (var i = 0; i < GLOBAL_RESET_FIELDS.length; i++) {
+			data[GLOBAL_RESET_FIELDS[i]] = null;
+		}
+		window.ConfigApp.globalReset = false;
+	};
+
 	window.ConfigApp.formHandler = formHandler;
 })();
 
@@ -2730,6 +2792,12 @@ if (window.cssVars) {
 		for (var j = 0; j < overrideResetButtons.length; j++) {
 			overrideResetButtons[j].addEventListener("click", handleFolderOverrideReset);
 		}
+
+		// Attach click handler to the global (Project Defaults) override reset button
+		var globalResetButtons = document.querySelectorAll(".reset-global-overrides-btn");
+		for (var k = 0; k < globalResetButtons.length; k++) {
+			globalResetButtons[k].addEventListener("click", handleGlobalOverrideReset);
+		}
 	};
 
 	// Handle section reset button click
@@ -2767,6 +2835,25 @@ if (window.cssVars) {
 		}
 
 		resetFolderOverrides(parseInt(folderIndex));
+
+		// Trigger dirty tracking update
+		if (window.dirtyTracker) {
+			window.dirtyTracker.runChangeListeners();
+			window.dirtyTracker.checkDirty();
+		}
+	}
+
+	// Handle global (Project Defaults) override reset button click
+	function handleGlobalOverrideReset() {
+		if (!confirm("Reset all Project Defaults overrides? Your custom overrides will be removed.")) {
+			return;
+		}
+
+		// Mark the global scope for reset — on save, formHandler.applyGlobalResets()
+		// sets all org-scope global fields to null (clear overrides).
+		if (window.ConfigApp.formHandler && window.ConfigApp.formHandler.markGlobalForReset) {
+			window.ConfigApp.formHandler.markGlobalForReset();
+		}
 
 		// Trigger dirty tracking update
 		if (window.dirtyTracker) {
@@ -3586,6 +3673,11 @@ if (window.cssVars) {
 			// Apply folder resets (sets all org-scope fields to null for reset-marked folders)
 			if (window.ConfigApp.formHandler.applyFolderResets) {
 				window.ConfigApp.formHandler.applyFolderResets(data);
+			}
+
+			// Apply global reset (sets all org-scope global fields to null at top level)
+			if (window.ConfigApp.formHandler.applyGlobalResets) {
+				window.ConfigApp.formHandler.applyGlobalResets(data);
 			}
 
 			var jsonString = JSON.stringify(data);

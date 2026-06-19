@@ -390,6 +390,14 @@ func processConfigSettings(ctx context.Context, conf configuration.Configuration
 	}
 	lockedMachineFields := validateLockedMachineFields(settings, configResolver, fm, &subLogger)
 
+	// Global "Project Defaults" reset: honor {changed:true, value:null} for the
+	// org-scope global settings by Unsetting the user override so the resolver
+	// falls back to LDX-Sync / flagset default. Runs BEFORE the typed appliers and
+	// deletes handled keys from settings, so a reset never double-applies (the
+	// typed appliers' read helpers skip a nil value anyway, but deleting keeps the
+	// intent explicit and avoids spurious analytics).
+	globalResetOrgChanged := applyGlobalResets(ctx, conf, engine, logger, settings, triggerSource, configResolver)
+
 	authService := mustAuthenticationServiceFromContext(ctx)
 	applyApiEndpoints(conf, engine, logger, settings, triggerSource, configResolver, authService)
 	applyAuthenticationMethod(conf, engine, logger, settings, triggerSource, configResolver, authService)
@@ -401,7 +409,7 @@ func processConfigSettings(ctx context.Context, conf configuration.Configuration
 	applyIssueViewOptions(conf, engine, logger, settings, triggerSource, configResolver)
 	applyDeltaFindings(conf, engine, logger, settings, triggerSource, configResolver)
 	applyAutoScan(conf, settings)
-	globalOrgChanged := applyOrganization(ctx, conf, engine, logger, settings, triggerSource, configResolver)
+	globalOrgChanged := applyOrganization(ctx, conf, engine, logger, settings, triggerSource, configResolver) || globalResetOrgChanged
 	applyCliConfig(conf, settings)
 	applyUserSettingsPath(conf, settings)
 	applyEnvironment(conf, logger, settings)
@@ -850,6 +858,74 @@ func applyAutoScan(conf configuration.Configuration, settings map[string]*types.
 // Returns true when the global org actually changed and the LSP is initialized
 // so the caller (processConfigSettings → processFolderConfigs) can union the
 // affected workspace folders into the single resetSummaryPanelForOrgChange call.
+// isReset reports whether an incoming ConfigSetting is a reset marker:
+// {changed:true, value:null}. This is the global-scope analog of
+// folder_config.go::isFolderReset.
+func isReset(cs *types.ConfigSetting) bool {
+	return cs != nil && cs.Changed && cs.Value == nil
+}
+
+// globalResetFilterKeys is the subset of GlobalResettableSettings whose reset
+// must trigger a diagnostics refresh (severity filters, issue-view options, risk
+// score threshold), mirroring applySeverityFilter / applyIssueViewOptions.
+var globalResetFilterKeys = map[string]bool{
+	types.SettingSeverityFilterCritical: true,
+	types.SettingSeverityFilterHigh:     true,
+	types.SettingSeverityFilterMedium:   true,
+	types.SettingSeverityFilterLow:      true,
+	types.SettingIssueViewOpenIssues:    true,
+	types.SettingIssueViewIgnoredIssues: true,
+	types.SettingRiskScoreThreshold:     true,
+}
+
+// applyGlobalResets clears user overrides for org-scope global ("Project Defaults")
+// settings sent as {changed:true, value:null}. For each handled key it Unsets the
+// user override (so the resolver falls back to LDX-Sync / flagset default) and
+// deletes the entry from settings so the downstream typed appliers do not also act
+// on it. organization is handled specially via config.ResetOrganization because it
+// is not stored at UserGlobalKey. Returns true if the effective global org changed,
+// so the caller can fold the summary-panel reset into the single org-change path.
+//
+// Locked fields: validateLockedMachineFields runs first and strips locked
+// machine-scope entries (incl. a locked organization), so they never reach here.
+// For locked folder-scope LDX-Sync values, the user override is still cleared but
+// GetGlobal* phase-1 keeps the locked remote value winning — correct.
+func applyGlobalResets(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) bool {
+	orgChanged := false
+	filterReset := false
+	for _, name := range types.GlobalResettableSettings {
+		cs, ok := settings[name]
+		if !ok || !isReset(cs) {
+			continue
+		}
+
+		if name == types.SettingOrganization {
+			oldOrgId := types.GetGlobalOrganization(conf)
+			config.ResetOrganization(conf)
+			newOrgId := types.GetGlobalOrganization(conf)
+			if oldOrgId != newOrgId && conf.GetBool(types.SettingIsLspInitialized) {
+				analytics.SendConfigChangedAnalytics(conf, engine, logger, configOrganization, oldOrgId, newOrgId, triggerSource, configResolver)
+				refreshFoldersForGlobalOrgChange(ctx, conf, engine, logger, oldOrgId, newOrgId)
+				orgChanged = true
+			}
+		} else if types.HasGlobalUserOverride(conf, name) {
+			types.UnsetGlobalUser(conf, name)
+			if globalResetFilterKeys[name] {
+				filterReset = true
+			}
+		}
+
+		// Remove the handled reset so the typed appliers below skip it.
+		delete(settings, name)
+	}
+
+	if filterReset && conf.GetBool(types.SettingIsLspInitialized) {
+		sendDiagnosticsForNewSettings(conf, logger)
+	}
+
+	return orgChanged
+}
+
 func applyOrganization(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) bool {
 	v, ok := settingStr(settings, types.SettingOrganization)
 	if !ok {
@@ -863,24 +939,33 @@ func applyOrganization(ctx context.Context, conf configuration.Configuration, en
 		return false
 	}
 	analytics.SendConfigChangedAnalytics(conf, engine, logger, configOrganization, oldOrgId, newOrgId, triggerSource, configResolver)
-
-	// Trigger LDX-Sync refresh for folders that depend on global org fallback
-	ws := config.GetWorkspace(conf)
-	if ws != nil {
-		foldersNeedingRefresh := findFoldersUsingGlobalOrgFallback(conf, ws.Folders())
-		if len(foldersNeedingRefresh) > 0 {
-			logger.Info().
-				Int("folderCount", len(foldersNeedingRefresh)).
-				Str("oldOrg", oldOrgId).
-				Str("newOrg", newOrgId).
-				Msg("global org changed, refreshing LDX-Sync for folders using global org fallback")
-			ldxSyncService := mustLdxSyncServiceFromContext(ctx)
-			notifier := mustNotifierFromContext(ctx)
-			ldxSyncService.RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, foldersNeedingRefresh, notifier)
-		}
-	}
+	refreshFoldersForGlobalOrgChange(ctx, conf, engine, logger, oldOrgId, newOrgId)
 
 	return true
+}
+
+// refreshFoldersForGlobalOrgChange triggers an LDX-Sync refresh for folders that
+// depend on the global org fallback (OrgSetByUser && PreferredOrg==""). Shared by
+// applyOrganization (org explicitly set) and applyGlobalResets (org reset to
+// fallback) so both go through the same, scoped refresh — never a full-workspace
+// rescan.
+func refreshFoldersForGlobalOrgChange(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, oldOrgId, newOrgId string) {
+	ws := config.GetWorkspace(conf)
+	if ws == nil {
+		return
+	}
+	foldersNeedingRefresh := findFoldersUsingGlobalOrgFallback(conf, ws.Folders())
+	if len(foldersNeedingRefresh) == 0 {
+		return
+	}
+	logger.Info().
+		Int("folderCount", len(foldersNeedingRefresh)).
+		Str("oldOrg", oldOrgId).
+		Str("newOrg", newOrgId).
+		Msg("global org changed, refreshing LDX-Sync for folders using global org fallback")
+	ldxSyncService := mustLdxSyncServiceFromContext(ctx)
+	notifier := mustNotifierFromContext(ctx)
+	ldxSyncService.RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, foldersNeedingRefresh, notifier)
 }
 
 // findFoldersUsingGlobalOrgFallback identifies folders that use the global org fallback.

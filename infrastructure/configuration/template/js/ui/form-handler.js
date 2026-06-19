@@ -244,5 +244,48 @@
 		window.ConfigApp.folderResets = {};
 	};
 
+	// Org-scope global ("Project Defaults") fields cleared by a global reset.
+	// Mirrors the folder reset list, minus preferred_org (folder-only) plus
+	// organization (global-only). Kept in sync with the Go list
+	// types.GlobalResettableSettings.
+	var GLOBAL_RESET_FIELDS = [
+		"snyk_oss_enabled",
+		"snyk_code_enabled",
+		"snyk_iac_enabled",
+		"snyk_secrets_enabled",
+		"scan_automatic",
+		"scan_net_new",
+		"severity_filter_critical",
+		"severity_filter_high",
+		"severity_filter_medium",
+		"severity_filter_low",
+		"issue_view_open_issues",
+		"issue_view_ignored_issues",
+		"risk_score_threshold",
+		"organization",
+	];
+
+	// Mark the global (Project Defaults) scope for reset — on save,
+	// applyGlobalResets() sets every GLOBAL_RESET_FIELDS to null at the top level.
+	formHandler.markGlobalForReset = function () {
+		window.ConfigApp.globalReset = true;
+	};
+
+	formHandler.isGlobalMarkedForReset = function () {
+		return !!window.ConfigApp.globalReset;
+	};
+
+	// Apply reset: set all org-scope global fields to null at the top level of the
+	// payload (NOT inside folderConfigs). The hosting IDE converts each
+	// top-level key:null into a {changed:true, value:null} ConfigSetting reaching
+	// the LS, which Unsets the user override.
+	formHandler.applyGlobalResets = function (data) {
+		if (!window.ConfigApp.globalReset) return;
+		for (var i = 0; i < GLOBAL_RESET_FIELDS.length; i++) {
+			data[GLOBAL_RESET_FIELDS[i]] = null;
+		}
+		window.ConfigApp.globalReset = false;
+	};
+
 	window.ConfigApp.formHandler = formHandler;
 })();

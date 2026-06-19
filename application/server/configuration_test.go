@@ -3002,3 +3002,95 @@ func TestApplyEnvironment_ValuePreservesEquals(t *testing.T) {
 
 	assert.Equal(t, "Zm9v==", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_B64"))
 }
+
+// Test_ProcessConfigSettings_GlobalReset verifies the global "Project Defaults"
+// reset path: a {changed:true, value:null} payload for an org-scope global setting
+// Unsets the user override (effective value reverts to the flagset default) and
+// the entry is removed from the settings map so the typed appliers do not re-apply
+// it. Mirrors the per-folder reset coverage in TestFolderConfig_ApplyLspUpdate.
+func Test_ProcessConfigSettings_GlobalReset(t *testing.T) {
+	t.Run("reset clears bool + filter overrides and reverts to defaults", func(t *testing.T) {
+		engine, tokenService := testutil.UnitTestWithEngine(t)
+		conf := engine.GetConfiguration()
+		ctx := testCtx(t, t.Context(), engine, tokenService)
+		cr := testutil.DefaultConfigResolver(engine)
+
+		// Seed user overrides that differ from the flagset defaults.
+		types.SetGlobalUser(conf, types.SettingSnykOssEnabled, false) // default true
+		types.SetGlobalUser(conf, types.SettingSeverityFilterLow, false)
+		require.True(t, types.HasGlobalUserOverride(conf, types.SettingSnykOssEnabled))
+		require.True(t, types.HasGlobalUserOverride(conf, types.SettingSeverityFilterLow))
+
+		settings := map[string]*types.ConfigSetting{
+			types.SettingSnykOssEnabled:    {Value: nil, Changed: true},
+			types.SettingSeverityFilterLow: {Value: nil, Changed: true},
+		}
+		processConfigSettings(ctx, conf, engine, engine.GetLogger(), settings, analytics.TriggerSourceTest, cr)
+
+		assert.False(t, types.HasGlobalUserOverride(conf, types.SettingSnykOssEnabled),
+			"oss override cleared")
+		assert.True(t, types.GetGlobalBool(conf, types.SettingSnykOssEnabled),
+			"oss reverts to flagset default true")
+		assert.False(t, types.HasGlobalUserOverride(conf, types.SettingSeverityFilterLow),
+			"severity-low override cleared")
+
+		_, ossStillPresent := settings[types.SettingSnykOssEnabled]
+		_, sevStillPresent := settings[types.SettingSeverityFilterLow]
+		assert.False(t, ossStillPresent, "handled reset removed from settings map")
+		assert.False(t, sevStillPresent, "handled reset removed from settings map")
+	})
+
+	t.Run("reset and set in the same payload are independent", func(t *testing.T) {
+		engine, tokenService := testutil.UnitTestWithEngine(t)
+		conf := engine.GetConfiguration()
+		ctx := testCtx(t, t.Context(), engine, tokenService)
+		cr := testutil.DefaultConfigResolver(engine)
+
+		types.SetGlobalUser(conf, types.SettingSnykOssEnabled, false)
+
+		settings := map[string]*types.ConfigSetting{
+			types.SettingSnykOssEnabled:  {Value: nil, Changed: true},  // reset
+			types.SettingSnykCodeEnabled: {Value: true, Changed: true}, // set
+		}
+		processConfigSettings(ctx, conf, engine, engine.GetLogger(), settings, analytics.TriggerSourceTest, cr)
+
+		assert.False(t, types.HasGlobalUserOverride(conf, types.SettingSnykOssEnabled), "oss reset")
+		assert.True(t, types.GetGlobalBool(conf, types.SettingSnykOssEnabled), "oss back to default true")
+		assert.True(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), "code set to true")
+	})
+
+	t.Run("reset of organization reverts to fallback", func(t *testing.T) {
+		engine, tokenService := testutil.UnitTestWithEngine(t)
+		conf := engine.GetConfiguration()
+		ctx := testCtx(t, t.Context(), engine, tokenService)
+		cr := testutil.DefaultConfigResolver(engine)
+
+		config.SetOrganization(conf, "my-custom-org")
+		require.Equal(t, "my-custom-org", types.GetGlobalString(conf, types.SettingLastSetOrganization))
+
+		settings := map[string]*types.ConfigSetting{
+			types.SettingOrganization: {Value: nil, Changed: true},
+		}
+		processConfigSettings(ctx, conf, engine, engine.GetLogger(), settings, analytics.TriggerSourceTest, cr)
+
+		assert.Empty(t, types.GetGlobalString(conf, types.SettingLastSetOrganization),
+			"last_set_organization cleared so a later set is not a no-op")
+		_, present := settings[types.SettingOrganization]
+		assert.False(t, present, "handled org reset removed from settings map")
+	})
+
+	t.Run("no-op when no override exists", func(t *testing.T) {
+		engine, tokenService := testutil.UnitTestWithEngine(t)
+		conf := engine.GetConfiguration()
+		ctx := testCtx(t, t.Context(), engine, tokenService)
+		cr := testutil.DefaultConfigResolver(engine)
+
+		settings := map[string]*types.ConfigSetting{
+			types.SettingSnykOssEnabled: {Value: nil, Changed: true},
+		}
+		processConfigSettings(ctx, conf, engine, engine.GetLogger(), settings, analytics.TriggerSourceTest, cr)
+
+		assert.False(t, types.HasGlobalUserOverride(conf, types.SettingSnykOssEnabled))
+		assert.True(t, types.GetGlobalBool(conf, types.SettingSnykOssEnabled), "still default true")
+	})
+}

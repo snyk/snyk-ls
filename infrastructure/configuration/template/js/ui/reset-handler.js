@@ -55,6 +55,12 @@
 		for (var j = 0; j < overrideResetButtons.length; j++) {
 			overrideResetButtons[j].addEventListener("click", handleFolderOverrideReset);
 		}
+
+		// Attach click handler to the global (Project Defaults) override reset button
+		var globalResetButtons = document.querySelectorAll(".reset-global-overrides-btn");
+		for (var k = 0; k < globalResetButtons.length; k++) {
+			globalResetButtons[k].addEventListener("click", handleGlobalOverrideReset);
+		}
 	};
 
 	// Handle section reset button click
@@ -92,6 +98,25 @@
 		}
 
 		resetFolderOverrides(parseInt(folderIndex));
+
+		// Trigger dirty tracking update
+		if (window.dirtyTracker) {
+			window.dirtyTracker.runChangeListeners();
+			window.dirtyTracker.checkDirty();
+		}
+	}
+
+	// Handle global (Project Defaults) override reset button click
+	function handleGlobalOverrideReset() {
+		if (!confirm("Reset all Project Defaults overrides? Your custom overrides will be removed.")) {
+			return;
+		}
+
+		// Mark the global scope for reset — on save, formHandler.applyGlobalResets()
+		// sets all org-scope global fields to null (clear overrides).
+		if (window.ConfigApp.formHandler && window.ConfigApp.formHandler.markGlobalForReset) {
+			window.ConfigApp.formHandler.markGlobalForReset();
+		}
 
 		// Trigger dirty tracking update
 		if (window.dirtyTracker) {

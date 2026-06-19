@@ -456,6 +456,17 @@ The `Changed` field on `ConfigSetting` controls whether the LS processes a setti
 
 This applies uniformly to both initialization (`InitializeSettings`) and runtime updates (`UpdateSettings`). The IDE is responsible for setting `Changed: true` only on settings the user explicitly configured.
 
+### Global Reset (`{changed: true, value: null}`)
+
+A top-level (machine-scope / Project Defaults) setting sent as `{changed: true, value: null}` is a **global reset**: it clears the `user:global` override for that key and reverts the effective value to the next layer in the precedence chain — LDX-Sync (remote), the org-level value, or the GAF flagset default. The LS handles this in an `applyGlobalResets` pre-pass inside `processConfigSettings` (`application/server/configuration.go`), which runs **before** the typed appliers and removes the reset keys from the incoming settings map so they are not re-set:
+
+- For most keys the LS calls `UnsetGlobalUser(name)` (`internal/types/config_writers.go`), deleting the `user:global:<name>` prefix key. `userGlobalValue` (`internal/types/config_readers.go`) treats GAF's `keyDeleted` sentinel (`configuration.IsKeyDeleted`) as absent so the reset value reads through to the underlying default.
+- `organization` is reset via `config.ResetOrganization` (`application/config/config.go`), which `Unset`s `ORGANIZATION` and clears the `LastSetOrganization` global. The effective org then reverts to the web account's **preferred org** (the GAF default).
+
+The set of keys cleared by a global reset is `types.GlobalResettableSettings` — the 14 org-scope keys (`snyk_*_enabled`, `scan_automatic`, `scan_net_new`, the four `severity_filter_*`, `issue_view_open_issues`, `issue_view_ignored_issues`, `risk_score_threshold`, and `organization`). `preferred_org` is **excluded** (it is folder-scope only). A reset of any severity/view filter key triggers `sendDiagnosticsForNewSettings`; a reset of `organization` is folded into `globalOrgChanged`, which refreshes all folders. A global reset and a normal `{changed: true, value: x}` set for different keys in the same payload are applied independently.
+
+This differs from a folder reset (`folderConfigs[i]` keys sent as `null`), which clears `user:folder:<path>:` overrides for one folder rather than the machine-wide `user:global` layer.
+
 ### IDE → LS Flow (didChangeConfiguration)
 
 ```mermaid

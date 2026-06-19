@@ -726,6 +726,24 @@ button.secondary[disabled] {
     border-color: var(--error-background);
 }
 
+.reset-global-overrides-btn {
+    float: right;
+    padding: 4px 12px;
+    font-size: var(--tiny-font-size);
+    background-color: var(--error-background);
+    border: 1px solid var(--error-background);
+    color: var(--input-foreground);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.reset-global-overrides-btn:hover {
+    color: var(--editor-foreground);
+    background-color: var(--error-background);
+    border-color: var(--error-background);
+}
+
 /* - - - Settings Tabs - - - */
 .settings-tabs {
     border-bottom: 1px solid var(--border-color);

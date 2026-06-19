@@ -41,6 +41,12 @@ func userGlobalValue(conf configuration.Configuration, key string) (any, bool) {
 	if v == nil {
 		return nil, false
 	}
+	// Unset (UnsetGlobalUser) marks the key with GAF's deletion sentinel rather
+	// than removing it, so a reset key reads back non-nil. Treat it as absent so
+	// the resolver chain falls through to LDX-Sync / flagset default.
+	if configuration.IsKeyDeleted(v) {
+		return nil, false
+	}
 	if lf, ok := v.(*configresolver.LocalConfigField); ok {
 		if lf == nil || !lf.Changed {
 			return nil, false

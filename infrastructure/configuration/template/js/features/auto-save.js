@@ -51,6 +51,11 @@
 				window.ConfigApp.formHandler.applyFolderResets(data);
 			}
 
+			// Apply global reset (sets all org-scope global fields to null at top level)
+			if (window.ConfigApp.formHandler.applyGlobalResets) {
+				window.ConfigApp.formHandler.applyGlobalResets(data);
+			}
+
 			var jsonString = JSON.stringify(data);
 
 			// Save using IDE bridge
