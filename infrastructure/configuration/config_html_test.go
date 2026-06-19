@@ -40,7 +40,7 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 	assert.NotNil(t, renderer)
 
@@ -112,6 +112,52 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	assert.Contains(t, html, `class="info-box"`)   // Info boxes present
 	assert.Contains(t, html, "These settings apply to all projects unless overridden.")
 	assert.Contains(t, html, "These settings override the project defaults for this specific project.")
+
+	// Project Defaults Advanced section: both fields must appear as global (no folder_ prefix) inputs
+	assert.Contains(t, html, `name="additional_parameters"`)
+	assert.Contains(t, html, `name="additional_environment"`)
+	assert.Contains(t, html, `id="additional_environment-error"`)
+	assert.Contains(t, html, "Additional CLI parameters")
+	assert.Contains(t, html, "Additional environment variables")
+	// Combine message
+	assert.Contains(t, html, "combine with any per-")
+}
+
+func TestConfigHtmlRenderer_ProjectDefaultsAdvancedFieldsRenderValues(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+	mockFolder := mock_types.NewMockFolder(ctrl)
+
+	folderPath := types.FilePath("/path/to/a_folder")
+	mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
+	mockFolder.EXPECT().Name().Return("a_folder").AnyTimes()
+	mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
+	mockWorkspace.EXPECT().GetFolderContaining(folderPath).Return(mockFolder).AnyTimes()
+
+	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
+
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
+	require.NoError(t, err)
+
+	settings := map[string]any{
+		types.SettingAdditionalParameters:  "--debug --all-projects",
+		types.SettingAdditionalEnvironment: "MY_VAR=hello;ANOTHER=world",
+	}
+	folderConfigs := []types.FolderConfig{
+		{FolderPath: folderPath, ConfigResolver: testutil.DefaultConfigResolver(engine)},
+	}
+
+	html := renderer.GetConfigHtml(settings, folderConfigs)
+
+	// Seeded values must appear in the global input fields
+	assert.Contains(t, html, `name="additional_parameters"`)
+	assert.Contains(t, html, `value="--debug --all-projects"`)
+	assert.Contains(t, html, `name="additional_environment"`)
+	assert.Contains(t, html, `value="MY_VAR=hello;ANOTHER=world"`)
 }
 
 func TestConfigHtmlRenderer_LdxSyncConfigAlwaysRendered(t *testing.T) {
@@ -131,7 +177,7 @@ func TestConfigHtmlRenderer_LdxSyncConfigAlwaysRendered(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
 	settings := map[string]any{}
@@ -179,7 +225,7 @@ func TestConfigHtmlRenderer_SecretsHiddenWhenFeatureFlagOff(t *testing.T) {
 		},
 	}
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
 	settings := map[string]any{
@@ -225,7 +271,7 @@ func TestConfigHtmlRenderer_SecretsShownWhenFeatureFlagOn(t *testing.T) {
 	ffKey := configresolver.FolderMetadataKey(string(types.PathKey(folderPath)), types.FeatureFlagPrefix+featureflag.SnykSecretsEnabled)
 	engine.GetConfiguration().Set(ffKey, true)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
 	settings := map[string]any{
@@ -252,7 +298,7 @@ func TestConfigHtmlRenderer_NoFoldersShowsDisabledTab(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
 	settings := map[string]any{
@@ -290,7 +336,7 @@ func TestConfigHtmlRenderer_SingleFolderShowsDirectTab(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
 	settings := map[string]any{
@@ -331,7 +377,7 @@ func TestConfigHtmlRenderer_FolderNameDiffersFromBasename(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
 	settings := map[string]any{}
@@ -363,7 +409,7 @@ func TestConfigHtmlRenderer_EmptyNameFallsBackToBasename(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
 	settings := map[string]any{}
@@ -399,7 +445,7 @@ func TestConfigHtmlRenderer_MultiFolderShowsDropdown(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
 	settings := map[string]any{
@@ -457,7 +503,7 @@ func TestConfigHtmlRenderer_FolderNamesAlignWithStoredFolderConfigs(t *testing.T
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
 	// folderConfigs in REVERSED order: beta first, alpha second
@@ -500,7 +546,7 @@ func TestConfigHtmlRenderer_EclipseShowsProjectSettings(t *testing.T) {
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 	engine.GetConfiguration().Set(gafconfiguration.INTEGRATION_ENVIRONMENT, "ECLIPSE")
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 	assert.NotNil(t, renderer)
 
@@ -525,7 +571,7 @@ func TestConfigHtmlRenderer_EclipsePathField(t *testing.T) {
 		t.Helper()
 		engine := testutil.UnitTest(t)
 		engine.GetConfiguration().Set(gafconfiguration.INTEGRATION_NAME, integrationName)
-		renderer, err := NewConfigHtmlRenderer(engine)
+		renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 		require.NoError(t, err)
 		settings := map[string]any{
 			types.SettingUserSettingsPath: "/usr/local/bin",
@@ -584,13 +630,32 @@ func TestTmplSourceIndicator(t *testing.T) {
 			},
 		},
 		{
-			name: "user-override returns empty (indicated by CSS border)",
+			name: "user-override returns per-project indicator",
 			effectiveConfig: map[string]types.EffectiveValue{
 				"test_setting": {Value: "true", Source: "user-override"},
 			},
-			settingName:   "test_setting",
-			expectedHTML:  "",
-			shouldContain: []string{},
+			settingName:  "test_setting",
+			expectedHTML: `<span class="source-indicator" data-toggle="tooltip" title="Set by you at project level">👤</span>`,
+			shouldContain: []string{
+				`class="source-indicator"`,
+				`data-toggle="tooltip"`,
+				`title="Set by you at project level"`,
+				"👤",
+			},
+		},
+		{
+			name: "user-override-defaults returns project-defaults indicator",
+			effectiveConfig: map[string]types.EffectiveValue{
+				"test_setting": {Value: "true", Source: "user-override-defaults"},
+			},
+			settingName:  "test_setting",
+			expectedHTML: `<span class="source-indicator" data-toggle="tooltip" title="Set by you at project defaults level">👤</span>`,
+			shouldContain: []string{
+				`class="source-indicator"`,
+				`data-toggle="tooltip"`,
+				`title="Set by you at project defaults level"`,
+				"👤",
+			},
 		},
 		{
 			name: "global source returns empty",
@@ -659,7 +724,7 @@ func TestConfigHtmlRenderer_SourceIndicatorsInOutput(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
 	settings := map[string]any{}
@@ -687,6 +752,10 @@ func TestConfigHtmlRenderer_SourceIndicatorsInOutput(t *testing.T) {
 	orgIndicatorCount := strings.Count(html, `title="Set by your organization settings"`)
 	assert.Greater(t, orgIndicatorCount, 0, "Organization indicator should appear in HTML")
 
+	// Verify per-project override indicator (👤) appears for user-override
+	assert.Contains(t, html, "👤")
+	assert.Contains(t, html, `title="Set by you at project level"`)
+
 	// Verify HTML is not empty (basic sanity check)
 	assert.NotEmpty(t, html, "HTML output should not be empty")
 }
@@ -694,7 +763,7 @@ func TestConfigHtmlRenderer_SourceIndicatorsInOutput(t *testing.T) {
 func TestComputeProjectDefaultScopes(t *testing.T) {
 	engine := testutil.UnitTest(t)
 
-	result := computeProjectDefaultScopes(engine)
+	result := computeProjectDefaultScopes(testutil.DefaultConfigResolver(engine))
 
 	// Should return a map with entries for all org-scope settings
 	assert.Equal(t, 14, len(result), "Should have entries for all 14 org-scope settings")
@@ -750,7 +819,7 @@ func TestConfigHtml_FormFieldNamesMatchRegisteredSettings(t *testing.T) {
 	mockWorkspace.EXPECT().GetFolderContaining(types.FilePath("/path/to/folder")).Return(mockFolder).AnyTimes()
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	require.NoError(t, err)
 
 	settings := map[string]any{
