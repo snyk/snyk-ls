@@ -157,6 +157,12 @@ func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, 
 		case types.SnykRegisterMcpParams:
 			notifyClient(logger, srv, "$/snyk.registerMcp", params)
 			l.Debug().Interface("mcpConfig", params).Msg("sending MCP config to client")
+		// RefreshHtmlSettingsParams delivery contract depends on the call site.
+		// auth_service_impl path: no call-site guard; notifier defers until
+		// WaitForLspInitialized, then delivers (same as AuthenticationParams).
+		// UpdateSettings and ChangeWorkspaceFolders paths: call site guards on
+		// GetBool(SettingIsLspInitialized) at the call site — pre-init events
+		// never reach this switch arm (the IDE re-sends full settings on reconnect).
 		case types.RefreshHtmlSettingsParams:
 			notifyClient(logger, srv, types.SnykRefreshHtmlSettings, params)
 			l.Debug().Msg("sending html settings refresh to client")

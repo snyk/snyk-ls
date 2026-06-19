@@ -183,7 +183,10 @@ func Test_RefreshHtmlSettings_OnTokenChange(t *testing.T) {
 func Test_RefreshHtmlSettings_NotSentDuringInitialize(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
-	t.Cleanup(func() { types.SignalLspInitialized(engine.GetConfiguration()) })
+	t.Cleanup(func() {
+		engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
+		types.SignalLspInitialized(engine.GetConfiguration())
+	})
 
 	// Do NOT set SettingIsLspInitialized — it starts false
 	params := types.DidChangeConfigurationParams{
@@ -370,5 +373,51 @@ func Test_RefreshHtmlSettings_NotSentOnUnchangedToken(t *testing.T) {
 		300*time.Millisecond,
 		htmlRefreshTick,
 		"$/snyk.refreshHtmlSettings must not fire when token is unchanged",
+	)
+}
+
+func Test_RefreshHtmlSettings_DeferredAfterInit_OnAuthentication(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
+	require.NoError(t, err)
+	// Do NOT set SettingIsLspInitialized — LSP is not yet initialized
+
+	// Clean up: signal init so the deferred goroutine in the notifier can unblock
+	t.Cleanup(func() {
+		engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
+		types.SignalLspInitialized(engine.GetConfiguration())
+	})
+
+	// Fire UpdateCredentials while LSP is not yet initialized.
+	// The auth_service_impl path has no call-site guard, so it sends
+	// RefreshHtmlSettingsParams directly to the notifier, which defers
+	// delivery until WaitForLspInitialized returns.
+	di.AuthenticationService().UpdateCredentials("integ-test-token", true, false)
+
+	// Notification must NOT arrive while uninitialized.
+	assert.Never(
+		t,
+		func() bool {
+			return len(jsonRPCRecorder.FindNotificationsByMethod(types.SnykRefreshHtmlSettings)) > 0
+		},
+		100*time.Millisecond,
+		htmlRefreshTick,
+		"$/snyk.refreshHtmlSettings must not arrive before LSP is initialized",
+	)
+
+	// Now signal LSP init — the deferred notification must be delivered.
+	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
+	types.SignalLspInitialized(engine.GetConfiguration())
+
+	assert.Eventually(
+		t,
+		func() bool {
+			return len(jsonRPCRecorder.FindNotificationsByMethod(types.SnykRefreshHtmlSettings)) > 0
+		},
+		htmlRefreshTimeout,
+		htmlRefreshTick,
+		"$/snyk.refreshHtmlSettings must arrive after LSP is initialized (deferred delivery)",
 	)
 }
