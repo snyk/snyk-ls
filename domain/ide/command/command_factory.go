@@ -67,9 +67,9 @@ func CreateFromCommandData(
 			featureFlagService: featureFlagService,
 		}, nil
 	case types.WorkspaceScanCommand:
-		return &workspaceScanCommand{command: commandData, srv: srv, engine: engine}, nil
+		return &workspaceScanCommand{command: commandData, engine: engine}, nil
 	case types.WorkspaceFolderScanCommand:
-		return &workspaceFolderScanCommand{command: commandData, srv: srv, engine: engine}, nil
+		return &workspaceFolderScanCommand{command: commandData, engine: engine}, nil
 	case types.OpenBrowserCommand:
 		return &openBrowserCommand{command: commandData, logger: logger}, nil
 	case types.LoginCommand:

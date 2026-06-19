@@ -17,11 +17,8 @@
 package command
 
 import (
-	"context"
-	"fmt"
 	"strings"
 
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
@@ -38,18 +35,15 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-const (
-	DoTrust   = "Trust folders and continue"
-	DontTrust = "Don't trust folders"
-)
-
-func HandleFolders(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, ctx context.Context, srv types.Server, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
+func HandleFolders(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, notifier noti.Notifier, persister persistence.ScanSnapshotPersister, agg scanstates.Aggregator, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
 	initScanStateAggregator(conf, agg)
 	initScanPersister(conf, logger, persister)
 	populateFolderFeatureFlagsAndSastSettings(conf, engine, logger, featureFlagService, configResolver)
 	sendFolderConfigs(conf, engine, logger, notifier, featureFlagService, configResolver)
 
-	HandleUntrustedFolders(ctx, conf, logger, srv)
+	// Untrusted folders are surfaced by the tree-view trust banner (IDE-1882), which
+	// the client renders/pulls via snyk.getTreeView — there is no longer a modal
+	// window/showMessageRequest trust dialog here.
 	mcpWorkflow.CallMcpConfigWorkflow(conf, configResolver, engine, logger, notifier, false, true)
 }
 
@@ -194,62 +188,4 @@ func initScanPersister(conf configuration.Configuration, logger *zerolog.Logger,
 	if err != nil {
 		log.Error().Err(err).Msg("could not initialize scan persister")
 	}
-}
-
-func HandleUntrustedFolders(ctx context.Context, conf configuration.Configuration, logger *zerolog.Logger, srv types.Server) {
-	w := config.GetWorkspace(conf)
-	if w == nil {
-		return
-	}
-	// debounce requests from overzealous clients (Eclipse, I'm looking at you)
-	if w.IsTrustRequestOngoing() {
-		return
-	}
-	_, untrusted := w.GetFolderTrust()
-	if len(untrusted) > 0 {
-		go func() {
-			w.StartRequestTrustCommunication()
-			defer w.EndRequestTrustCommunication()
-			decision, err := showTrustDialog(logger, srv, untrusted, DoTrust, DontTrust)
-			if err != nil {
-				return
-			}
-			if decision.Title == DoTrust {
-				w.TrustFoldersAndScan(ctx, untrusted)
-			}
-		}()
-	}
-}
-
-func showTrustDialog(logger *zerolog.Logger, srv types.Server, untrusted []types.Folder, dontTrust string, doTrust string) (types.MessageActionItem, error) {
-	method := "showTrustDialog"
-	result, err := srv.Callback(context.Background(), "window/showMessageRequest", types.ShowMessageRequestParams{
-		Type:    types.Warning,
-		Message: GetTrustMessage(untrusted),
-		Actions: []types.MessageActionItem{{Title: dontTrust}, {Title: doTrust}},
-	})
-	if err != nil {
-		logger.Err(errors.Wrap(err, "couldn't show trust message")).Str("method", method).Send()
-		return types.MessageActionItem{Title: dontTrust}, err
-	}
-
-	var trust types.MessageActionItem
-	if result != nil {
-		err = result.UnmarshalResult(&trust)
-		if err != nil {
-			logger.Err(errors.Wrap(err, "couldn't unmarshal trust message")).Str("method", method).Send()
-			return types.MessageActionItem{Title: dontTrust}, err
-		}
-	}
-	return trust, err
-}
-
-func GetTrustMessage(untrusted []types.Folder) string {
-	var untrustedFolderString types.FilePath
-	for _, folder := range untrusted {
-		untrustedFolderString += folder.Path() + "\n"
-	}
-	return fmt.Sprintf("When scanning for issues, Snyk may automatically execute code such as invoking "+
-		"the package manager to get dependency information. You should only scan folders you trust."+
-		"\n\nUntrusted Folders: \n%s\n\n", untrustedFolderString)
 }

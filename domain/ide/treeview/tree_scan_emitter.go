@@ -124,22 +124,25 @@ func (e *TreeScanStateEmitter) renderPending() {
 	if ws != nil {
 		data = e.builder.BuildTree(ws)
 	}
-	data.FilterState = e.filterState(ws)
+	data.FilterState = ResolveFilterState(e.conf, ws)
 
 	html := e.renderer.RenderTreeView(data)
 	e.notifier.Send(types.TreeView{TreeViewHtml: html, TotalIssues: data.TotalIssues})
 }
 
-// filterState resolves the toolbar's severity + issue-view state. The tree's
+// ResolveFilterState resolves the toolbar's severity + issue-view state. The tree's
 // filter toolbar is workspace-wide but the tree shows every open folder, each
 // filtered by its own per-folder config (UserFolderKey > remote > user-global >
 // default) — the same source the issue filtering uses. So the toolbar reflects
 // the aggregate across all open folders: a severity is shown/hidden when every
 // folder agrees, or marked "mixed" when they disagree. Falls back to the global
 // value when there is no folder or resolver. (IDE-1866 / IDE-1996)
-func (e *TreeScanStateEmitter) filterState(ws types.Workspace) TreeViewFilterState {
-	severity := config.GetFilterSeverity(e.conf)
-	issueView := config.GetIssueViewOptions(e.conf)
+//
+// Shared by the push path (TreeScanStateEmitter) and the pull path
+// (snyk.getTreeView) so a tree fetched on panel-open matches one pushed on a scan.
+func ResolveFilterState(conf configuration.Configuration, ws types.Workspace) TreeViewFilterState {
+	severity := config.GetFilterSeverity(conf)
+	issueView := config.GetIssueViewOptions(conf)
 	var mixed MixedSeverity
 
 	if ws != nil {

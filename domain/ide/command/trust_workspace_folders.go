@@ -65,9 +65,9 @@ func (cmd *trustWorkspaceFoldersCommand) Execute(ctx context.Context) (any, erro
 	}
 
 	// TrustFoldersAndScan persists the trusted folders, sends the SnykTrustedFolders
-	// notification, and triggers a scan of each newly trusted folder. The banner
-	// replaces the modal trust dialog, so trusting must also scan (the modal's
-	// HandleUntrustedFolders path did the same via TrustFoldersAndScan). (IDE-1882)
+	// notification, and triggers a scan of each newly trusted folder. The tree-view
+	// banner is now the sole trust prompt (the modal window/showMessageRequest dialog
+	// was removed), so trusting from it must also scan. (IDE-1882)
 	//
 	// Detach from the command's context: the command executor cancels ctx when
 	// Execute returns, which would kill the un-awaited scan goroutine that

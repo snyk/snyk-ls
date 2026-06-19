@@ -69,6 +69,47 @@ func TestTreeScanStateEmitter_Emit_SendsTreeViewNotification(t *testing.T) {
 	assert.Contains(t, treeView.TreeViewHtml, "<!DOCTYPE html>")
 }
 
+// TestTreeScanStateEmitter_Emit_UntrustedFolder_ShowsBannerWithoutScan verifies the
+// banner renders on a non-scan emit (the empty snapshot agg.Init sends at startup),
+// not just after a scan — i.e. snyk-ls does emit the trust banner at init time.
+func TestTreeScanStateEmitter_Emit_UntrustedFolder_ShowsBannerWithoutScan(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	// Trust enabled + folder not in trusted_folders -> the folder is untrusted.
+	conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
+	workspaceutil.SetupWorkspace(t, engine, types.FilePath("/untrusted-project"))
+
+	notif := notification.NewNotifier()
+	var mu sync.Mutex
+	var receivedPayload any
+	notif.CreateListener(func(params any) {
+		mu.Lock()
+		defer mu.Unlock()
+		receivedPayload = params
+	})
+	t.Cleanup(func() { notif.DisposeListener() })
+
+	emitter, err := NewTreeScanStateEmitter(conf, engine.GetLogger(), notif)
+	require.NoError(t, err)
+	t.Cleanup(emitter.Dispose)
+
+	// Empty snapshot: no scan in progress, no product scan states — exactly what
+	// ScanStateAggregator.Init emits once at startup before any scan runs.
+	emitter.Emit(scanstates.StateSnapshot{})
+
+	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return receivedPayload != nil
+	}, 2*time.Second, 50*time.Millisecond)
+
+	mu.Lock()
+	treeView := receivedPayload.(types.TreeView)
+	mu.Unlock()
+	assert.Contains(t, treeView.TreeViewHtml, "tree-node-info--untrusted-folder",
+		"trust banner must render on the startup (non-scan) emit, not only after a scan")
+}
+
 func TestTreeScanStateEmitter_Emit_ScanInProgress_HasScanningInProductNode(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()
