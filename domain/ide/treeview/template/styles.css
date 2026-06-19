@@ -585,6 +585,13 @@ body {
   background-color: var(--button-hover-background);
 }
 
+/* IDE-1882: an untrusted folder is shown as a dimmed, non-expandable root node
+   (no children -> no chevron via .tree-node-has-children) so the user can see
+   every open project. Trusting happens via the banner above, not this node. */
+.tree-node-untrusted > .tree-node-row {
+  opacity: 0.5;
+}
+
 /* Native-IDE scrollbars. Maps to VS Code's --vscode-scrollbarSlider-* webview
    theme tokens. */
 ::-webkit-scrollbar {

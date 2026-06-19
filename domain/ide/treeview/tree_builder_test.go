@@ -837,10 +837,11 @@ func TestBuildTree_ReadsAgentFixEnabledFromSastSettings(t *testing.T) {
 	}
 }
 
-func TestBuildTree_AllUntrusted_ShowsOnlyBanner(t *testing.T) {
+func TestBuildTree_AllUntrusted_ShowsBannerAndDimmedFolderNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	untrusted := mock_types.NewMockFolder(ctrl)
 	untrusted.EXPECT().Path().Return(types.FilePath("/untrusted")).AnyTimes()
+	untrusted.EXPECT().Name().Return("untrusted").AnyTimes()
 
 	ws := mock_types.NewMockWorkspace(ctrl)
 	ws.EXPECT().Folders().Return([]types.Folder{untrusted}).AnyTimes()
@@ -848,12 +849,20 @@ func TestBuildTree_AllUntrusted_ShowsOnlyBanner(t *testing.T) {
 
 	data := newBuilderWithCompletedScans().BuildTree(ws)
 
-	require.Len(t, data.Nodes, 1, "an all-untrusted workspace should render only the trust banner")
+	require.Len(t, data.Nodes, 2, "banner + the untrusted folder's dimmed node")
 	banner := data.Nodes[0]
 	assert.Equal(t, NodeTypeInfo, banner.Type)
 	assert.Equal(t, "untrusted-folder", banner.InfoVariant)
 	assert.Equal(t, []string{"/untrusted"}, banner.FolderPaths)
 	assert.Contains(t, banner.Label, "You should only scan folders you trust")
+
+	// Untrusted folder renders as a dimmed, non-expandable node: no children means
+	// the template draws no chevron.
+	node := data.Nodes[1]
+	assert.Equal(t, NodeTypeFolder, node.Type)
+	assert.Equal(t, "untrusted", node.Label)
+	assert.True(t, node.Untrusted, "node must be flagged untrusted for dimming")
+	assert.Empty(t, node.Children, "untrusted folder must have no children (no chevron)")
 }
 
 // TestBuildTree_MixedTrust_BannerPlusTrustedBody verifies the banner is prepended,
@@ -876,6 +885,7 @@ func TestBuildTree_MixedTrust_BannerPlusTrustedBody(t *testing.T) {
 
 	untrusted := mock_types.NewMockFolder(ctrl)
 	untrusted.EXPECT().Path().Return(types.FilePath("/untrusted")).AnyTimes()
+	untrusted.EXPECT().Name().Return("untrusted").AnyTimes()
 
 	ws := mock_types.NewMockWorkspace(ctrl)
 	ws.EXPECT().Folders().Return([]types.Folder{trustedFF, untrusted}).AnyTimes()
@@ -883,20 +893,29 @@ func TestBuildTree_MixedTrust_BannerPlusTrustedBody(t *testing.T) {
 
 	data := newBuilderWithCompletedScans().BuildTree(ws)
 
-	require.NotEmpty(t, data.Nodes)
+	// Layout: banner, then the trusted folder's (expandable) root node, then the
+	// untrusted folder's dimmed, non-expandable node.
+	require.Len(t, data.Nodes, 3, "banner + trusted folder node + untrusted folder node")
+
 	banner := data.Nodes[0]
 	assert.Equal(t, "untrusted-folder", banner.InfoVariant, "banner must come first")
 	assert.Equal(t, []string{"/untrusted"}, banner.FolderPaths, "banner lists only untrusted folders")
 
-	// Regression (IDE-1882): excluding the untrusted folder must not collapse the
-	// remaining trusted folder into single-folder mode — its root node must stay
-	// visible so the user can still see which projects are open.
-	require.Len(t, data.Nodes, 2, "banner + the trusted folder's root node")
+	// Regression (IDE-1882): the trusted folder must keep its own root node so the
+	// user can tell projects apart.
 	trustedNode := data.Nodes[1]
 	assert.Equal(t, NodeTypeFolder, trustedNode.Type, "trusted folder must keep its root node")
 	assert.Equal(t, "trusted", trustedNode.Label)
+	assert.False(t, trustedNode.Untrusted)
 	ossNode := findChildByProduct(trustedNode.Children, product.ProductOpenSource)
 	require.NotNil(t, ossNode, "trusted folder's products should render under its root node")
+
+	// The untrusted folder is shown dimmed and non-expandable (no children).
+	untrustedNode := data.Nodes[2]
+	assert.Equal(t, NodeTypeFolder, untrustedNode.Type)
+	assert.Equal(t, "untrusted", untrustedNode.Label)
+	assert.True(t, untrustedNode.Untrusted)
+	assert.Empty(t, untrustedNode.Children, "untrusted folder must have no children (no chevron)")
 }
 
 func TestBuildTree_EmptyProduct_ShowsCongratsInfoChild(t *testing.T) {

@@ -54,7 +54,7 @@ func (cmd *trustWorkspaceFoldersCommand) Execute(ctx context.Context) (any, erro
 
 	// An optional folder-path argument scopes the action to a single folder, so the
 	// tree-view banner's per-folder Trust button trusts just that folder (IDE-1882).
-	// With no argument we trust every untrusted folder (the original behaviour, used
+	// With no argument we trust every untrusted folder (the original behavior, used
 	// by the "trust all" flows).
 	toTrust := untrusted
 	if path, ok := folderPathArg(cmd.command.Arguments); ok {

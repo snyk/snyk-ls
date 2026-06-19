@@ -128,6 +128,26 @@ func TestTreeHtmlRenderer_UntrustedFolderBanner_HasPerFolderTrustButtons(t *test
 	assert.Equal(t, 2, strings.Count(html, `data-action="trust-folder"`), "expected one Trust button per untrusted folder")
 }
 
+func TestTreeHtmlRenderer_UntrustedFolderNode_DimmedAndNoChevron(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	node := NewTreeNode(NodeTypeFolder, "my-project",
+		WithID("folder:/repo/my-project"),
+		WithFilePath("/repo/my-project"),
+		WithUntrusted(true),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{Nodes: []TreeNode{node}})
+
+	// The node's class list must be exactly "tree-node tree-node-untrusted" — dimmed
+	// (untrusted) and crucially WITHOUT tree-node-has-children, which is what drives
+	// the chevron in CSS. (A bare NotContains can't be used: the embedded stylesheet
+	// itself references the .tree-node-has-children selector.)
+	assert.Contains(t, html, `class="tree-node tree-node-untrusted"`)
+}
+
 func TestTreeHtmlRenderer_ContainsIE11CompatMeta(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())

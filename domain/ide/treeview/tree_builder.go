@@ -167,10 +167,12 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 	forceFolderNodes := len(folders) > 1
 	data := b.buildTreeBody(folderDataList, forceFolderNodes)
 
-	// Prepend the untrusted-folder banner so the user can review and trust the
-	// folders. Each folder gets its own Trust button (handled client-side via
-	// the snyk.trustWorkspaceFolders command). (IDE-1882)
 	if len(untrusted) > 0 {
+		// Untrusted folders appear as dimmed, non-expandable folder nodes (no
+		// children -> no chevron) so the user can see every open project. The trust
+		// action lives in the banner, which is prepended above all folder nodes.
+		// (IDE-1882)
+		data.Nodes = append(data.Nodes, buildUntrustedFolderNodes(untrusted)...)
 		data.Nodes = append([]TreeNode{buildUntrustedFolderBanner(untrusted)}, data.Nodes...)
 	}
 
@@ -197,6 +199,23 @@ func buildUntrustedFolderBanner(untrusted []types.Folder) TreeNode {
 		WithInfoVariant("untrusted-folder"),
 		WithFolderPaths(paths),
 	)
+}
+
+// buildUntrustedFolderNodes builds a dimmed, non-expandable folder node per
+// untrusted folder. They carry no children, so the template renders no chevron
+// and they cannot be expanded; the banner remains the place to trust them. The
+// node IDs match the trusted folder convention so expand/selection state stays
+// consistent if a folder is later trusted. (IDE-1882)
+func buildUntrustedFolderNodes(untrusted []types.Folder) []TreeNode {
+	nodes := make([]TreeNode, 0, len(untrusted))
+	for _, f := range untrusted {
+		nodes = append(nodes, NewTreeNode(NodeTypeFolder, f.Name(),
+			WithID(fmt.Sprintf("folder:%s", f.Path())),
+			WithFilePath(f.Path()),
+			WithUntrusted(true),
+		))
+	}
+	return nodes
 }
 
 // BuildTreeFromFolderData builds the tree from pre-fetched folder data.
