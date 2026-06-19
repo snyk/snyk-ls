@@ -138,9 +138,11 @@
 			return true; // Empty is valid
 		}
 
-		// Pattern: KEY=VALUE where KEY is valid env var name [A-Za-z_][A-Za-z0-9_]*
-		// VALUE cannot contain ; or = characters (exactly one = per segment)
-		var envVarPattern = /^\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*[^;=]*\s*$/;
+		// Pattern: KEY=VALUE where KEY is a valid env var name [A-Za-z_][A-Za-z0-9_]*
+		// VALUE may contain '=' (matches the Go backend's strings.Cut on the first '=',
+		// see infrastructure/oss/cli_scanner.go) but not ';' (the segment separator).
+		// This allows base64-padded values, JWTs, query strings, etc.
+		var envVarPattern = /^\s*[A-Za-z_][A-Za-z0-9_]*\s*=[^;]*$/;
 
 		return value.split(";")
 			.filter(function(segment) { return segment.trim() !== ""; })
@@ -275,6 +277,20 @@
 		}
 	};
 
+	// Validate global (Project Defaults) additional environment variables on input
+	validation.validateGlobalAdditionalEnvOnInput = function() {
+		validation.validateAndShowError("additional_environment", "additional_environment-error", validation.validateAdditionalEnv);
+	};
+
+	// Initialize validation event listener for the global additional environment field
+	validation.initializeGlobalAdditionalEnvValidation = function() {
+		var dom = window.ConfigApp.dom;
+		var input = dom.get("additional_environment");
+		if (input) {
+			dom.addEvent(input, "input", validation.validateGlobalAdditionalEnvOnInput);
+		}
+	};
+
 	// Initialize all validation event listeners
 	validation.initializeAllValidation = function() {
 		var dom = window.ConfigApp.dom;
@@ -308,6 +324,9 @@
 		if (cliVersionInput) {
 			dom.addEvent(cliVersionInput, "input", validation.validateCliVersionOnInput);
 		}
+
+		// Global (Project Defaults) additional env validation
+		validation.initializeGlobalAdditionalEnvValidation();
 
 		// Per-folder additional env validation
 		validation.initializeFolderAdditionalEnvValidation();

@@ -1104,20 +1104,63 @@ func applyProxyConfig(conf configuration.Configuration, settings map[string]*typ
 
 func applyEnvironment(conf configuration.Configuration, logger *zerolog.Logger, settings map[string]*types.ConfigSetting) {
 	v, ok := settingStr(settings, types.SettingAdditionalEnvironment)
-	if !ok || v == "" {
+	if !ok {
+		// Field absent or unchanged: leave both the process env and the persisted value alone.
+		// An empty-but-changed value (user cleared the field) has ok==true and falls through,
+		// so the clear path below runs.
 		return
 	}
-	envVars := strings.Split(v, ";")
-	for _, envVar := range envVars {
+
+	// Diff against the previously-persisted value so keys the user removed get unset from the
+	// process env. os.Setenv is one-way; without this, a re-save that drops a key would leave it
+	// live in os.Environ() and leak into every subsequent CLI subprocess (updateSDKs seeds the
+	// scan env from the process environment).
+	oldKeys := parseEnvKeys(types.GetGlobalString(conf, types.SettingAdditionalEnvironment))
+	newKeys := make(map[string]bool)
+
+	for _, envVar := range strings.Split(v, ";") {
 		parts := strings.SplitN(envVar, "=", 2)
 		if len(parts) != 2 {
 			continue
 		}
-		err := os.Setenv(parts[0], parts[1])
-		if err != nil {
+		key := parts[0]
+		newKeys[key] = true
+		if err := os.Setenv(key, parts[1]); err != nil {
 			logger.Err(err).Msgf("couldn't set env variable %s", envVar)
 		}
 	}
+
+	// Unset keys that were applied previously but are absent from the new value.
+	for key := range oldKeys {
+		if !newKeys[key] {
+			if err := os.Unsetenv(key); err != nil {
+				logger.Err(err).Msgf("couldn't unset env variable %s", key)
+			}
+		}
+	}
+
+	// Persist the raw string so the settings dialog can repopulate this field on reopen.
+	// On an empty value this writes "", clearing the persisted state so the field comes back blank.
+	// os.Setenv alone is not readable back from config; SetGlobalUser writes to UserGlobalKey
+	// which r.GetString(SettingAdditionalEnvironment, nil) resolves via the folder-scope chain.
+	types.SetGlobalUser(conf, types.SettingAdditionalEnvironment, v)
+}
+
+// parseEnvKeys extracts the set of variable names from a "KEY=VAL;KEY2=VAL2" string.
+// Malformed segments (no "=") are skipped, matching applyEnvironment's apply loop.
+func parseEnvKeys(raw string) map[string]bool {
+	keys := make(map[string]bool)
+	if raw == "" {
+		return keys
+	}
+	for _, envVar := range strings.Split(raw, ";") {
+		parts := strings.SplitN(envVar, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		keys[parts[0]] = true
+	}
+	return keys
 }
 
 func applyCodeEndpoint(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {

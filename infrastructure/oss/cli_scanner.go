@@ -342,6 +342,20 @@ func (cliScanner *CLIScanner) updateArgs(workDir types.FilePath, commandLineArgs
 
 	// this asks the client for the current SDK and blocks on it
 	additionalParameters, env := cliScanner.updateSDKs(folderConfig.FolderPath)
+	// Global (Project Defaults) additional_environment is NOT read here. It reaches `env` via
+	// applyEnvironment -> os.Setenv -> os.Environ() -> updateSDKs(env). The folder-level value
+	// below is merged on top, so the precedence is global < folder (folder wins on key conflict).
+	// If updateSDKs ever stops seeding from the process environment, the global tier silently
+	// drops out — keep that contract intact, or read GetGlobalString(SettingAdditionalEnvironment)
+	// here explicitly.
+	// merge folder-level additional_environment into env map (additive: folder wins on key conflict)
+	if ae := folderConfig.AdditionalEnv(); ae != "" {
+		for _, pair := range strings.Split(ae, ";") {
+			if k, v, ok := strings.Cut(pair, "="); ok && k != "" {
+				env[k] = v
+			}
+		}
+	}
 	// process folder config additional env
 	if len(folderConfigArgs) > 0 {
 		additionalParameters = append(additionalParameters, folderConfigArgs...)

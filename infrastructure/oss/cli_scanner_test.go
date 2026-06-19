@@ -551,3 +551,91 @@ func Test_shouldUseLegacyScan(t *testing.T) {
 		assert.True(t, useLegacy)
 	})
 }
+
+func TestCLIScanner_updateArgs_folderAdditionalEnv(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	notifier := notification.NewMockNotifier()
+	cliScanner := &CLIScanner{
+		engine:            engine,
+		cli:               cli.NewTestExecutorWithResponse(engine, "{}"),
+		instrumentor:      performance.NewInstrumentor(),
+		errorReporter:     error_reporting.NewTestErrorReporter(engine),
+		notifier:          notifier,
+		configResolver:    defaultResolver(t, engine),
+		mutex:             &sync.RWMutex{},
+		inlineValueMutex:  &sync.RWMutex{},
+		packageScanMutex:  &sync.Mutex{},
+		runningScans:      make(map[types.FilePath]*scans.ScanProgress),
+		supportedFiles:    make(map[string]bool),
+		packageIssueCache: make(map[string][]types.Issue),
+	}
+
+	folderPath := types.FilePath("/test")
+
+	setFolderEnv := func(fc *types.FolderConfig, val string) {
+		key := configresolver.UserFolderKey(string(types.PathKey(folderPath)), types.SettingAdditionalEnvironment)
+		engine.GetConfiguration().Set(key, &configresolver.LocalConfigField{Value: val, Changed: true})
+	}
+
+	newFC := func() *types.FolderConfig {
+		return &types.FolderConfig{FolderPath: folderPath, ConfigResolver: defaultResolver(t, engine)}
+	}
+
+	t.Run("folder env keys added to env map", func(t *testing.T) {
+		fc := newFC()
+		setFolderEnv(fc, "MY_VAR=hello;ANOTHER=world")
+
+		_, env := cliScanner.updateArgs(folderPath, nil, fc)
+
+		assert.Equal(t, "hello", env["MY_VAR"])
+		assert.Equal(t, "world", env["ANOTHER"])
+	})
+
+	t.Run("existing env keys not removed when folder env set", func(t *testing.T) {
+		fc := newFC()
+		setFolderEnv(fc, "NEW_VAR=new")
+
+		_, env := cliScanner.updateArgs(folderPath, nil, fc)
+
+		assert.NotEmpty(t, env["PATH"])
+		assert.Equal(t, "new", env["NEW_VAR"])
+	})
+
+	t.Run("folder env overrides global env for same key", func(t *testing.T) {
+		t.Setenv("CONFLICT_KEY", "global_value")
+		fc := newFC()
+		setFolderEnv(fc, "CONFLICT_KEY=folder_value")
+
+		_, env := cliScanner.updateArgs(folderPath, nil, fc)
+
+		assert.Equal(t, "folder_value", env["CONFLICT_KEY"])
+	})
+
+	t.Run("no folder env is a no-op", func(t *testing.T) {
+		fc := newFC()
+
+		_, env := cliScanner.updateArgs(folderPath, nil, fc)
+
+		assert.NotEmpty(t, env["PATH"])
+	})
+
+	t.Run("malformed entry without equals sign is skipped", func(t *testing.T) {
+		fc := newFC()
+		setFolderEnv(fc, "GOOD=val;BADENTRY;ALSO_GOOD=ok")
+
+		_, env := cliScanner.updateArgs(folderPath, nil, fc)
+
+		assert.Equal(t, "val", env["GOOD"])
+		assert.Equal(t, "ok", env["ALSO_GOOD"])
+		assert.Empty(t, env["BADENTRY"])
+	})
+
+	t.Run("value containing equals sign preserved", func(t *testing.T) {
+		fc := newFC()
+		setFolderEnv(fc, "MY_KEY=val=with=equals")
+
+		_, env := cliScanner.updateArgs(folderPath, nil, fc)
+
+		assert.Equal(t, "val=with=equals", env["MY_KEY"])
+	})
+}

@@ -2880,3 +2880,125 @@ func Test_ApplyOrganization_LDXSyncRefreshesForGlobalOrgFallback(t *testing.T) {
 		})
 	}
 }
+
+func TestApplyEnvironment_PersistsGlobalUser(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	// t.Setenv registers cleanup that restores these to "" on test end, so every key we
+	// os.Setenv inside applyEnvironment is cleaned up without a manual t.Cleanup/Unsetenv.
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_X", "")
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_Y", "")
+
+	settings := map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "SNYK_TEST_ADDITIONAL_ENV_X=hello;SNYK_TEST_ADDITIONAL_ENV_Y=world", Changed: true},
+	}
+	applyEnvironment(conf, logger, settings)
+
+	// os.Setenv side effect
+	assert.Equal(t, "hello", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_X"))
+	assert.Equal(t, "world", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_Y"))
+
+	// Persisted to config for dialog pre-population
+	assert.Equal(t, "SNYK_TEST_ADDITIONAL_ENV_X=hello;SNYK_TEST_ADDITIONAL_ENV_Y=world", types.GetGlobalString(conf, types.SettingAdditionalEnvironment))
+}
+
+func TestApplyEnvironment_ClearsPersistedValue(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_CLEAR", "")
+
+	// Seed a prior value (both persisted and applied to the process env).
+	applyEnvironment(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "SNYK_TEST_ADDITIONAL_ENV_CLEAR=set", Changed: true},
+	})
+	assert.Equal(t, "set", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_CLEAR"))
+	assert.Equal(t, "SNYK_TEST_ADDITIONAL_ENV_CLEAR=set", types.GetGlobalString(conf, types.SettingAdditionalEnvironment))
+
+	// User clears the field: {Value: "", Changed: true}.
+	applyEnvironment(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "", Changed: true},
+	})
+
+	// Persisted value is cleared so the dialog repopulates blank.
+	assert.Equal(t, "", types.GetGlobalString(conf, types.SettingAdditionalEnvironment))
+	// And the previously-applied var is removed from the process env.
+	_, present := os.LookupEnv("SNYK_TEST_ADDITIONAL_ENV_CLEAR")
+	assert.False(t, present, "cleared env var should be unset from the process env")
+}
+
+func TestApplyEnvironment_UnchangedFieldNoOp(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	// Seed a persisted value, then apply settings where the field is absent / not Changed.
+	types.SetGlobalUser(conf, types.SettingAdditionalEnvironment, "PRESERVED=1")
+
+	applyEnvironment(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "ignored", Changed: false},
+	})
+
+	// Not Changed -> settingStr returns ok=false -> persisted value is left untouched.
+	assert.Equal(t, "PRESERVED=1", types.GetGlobalString(conf, types.SettingAdditionalEnvironment))
+}
+
+func TestApplyEnvironment_SequentialApplyUnsetsDroppedKeys(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_A", "")
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_B", "")
+
+	applyEnvironment(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "SNYK_TEST_ADDITIONAL_ENV_A=1;SNYK_TEST_ADDITIONAL_ENV_B=2", Changed: true},
+	})
+	assert.Equal(t, "1", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_A"))
+	assert.Equal(t, "2", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_B"))
+
+	// Re-save dropping B: it must be unset from the process env, not left to leak into CLI subprocesses.
+	applyEnvironment(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "SNYK_TEST_ADDITIONAL_ENV_A=1", Changed: true},
+	})
+	assert.Equal(t, "1", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_A"))
+	_, present := os.LookupEnv("SNYK_TEST_ADDITIONAL_ENV_B")
+	assert.False(t, present, "dropped key B should be unset from the process env")
+}
+
+func TestApplyEnvironment_SkipsMalformedEntries(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_GOOD", "")
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_OK", "")
+
+	applyEnvironment(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "SNYK_TEST_ADDITIONAL_ENV_GOOD=1;BAD;SNYK_TEST_ADDITIONAL_ENV_OK=2", Changed: true},
+	})
+
+	// Well-formed entries are set; the malformed "BAD" segment (no '=') is skipped.
+	assert.Equal(t, "1", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_GOOD"))
+	assert.Equal(t, "2", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_OK"))
+	_, present := os.LookupEnv("BAD")
+	assert.False(t, present, "malformed entry should not be set as an env var")
+}
+
+func TestApplyEnvironment_ValuePreservesEquals(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_B64", "")
+
+	// SplitN(..., "=", 2) keeps everything after the first '=' as the value (base64 padding, JWTs, ...).
+	applyEnvironment(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "SNYK_TEST_ADDITIONAL_ENV_B64=Zm9v==", Changed: true},
+	})
+
+	assert.Equal(t, "Zm9v==", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_B64"))
+}
