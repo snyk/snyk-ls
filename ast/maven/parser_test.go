@@ -150,6 +150,31 @@ func TestParse_PropertiesEdgeCases(t *testing.T) {
 `,
 			absentKey: "foo",
 		},
+		{
+			// Empty value: scanPropertyValueSpan returns start==end (the end tag is
+			// reached with no CharData), so the slice is empty and the property is
+			// skipped without a panic or a bogus zero-length entry.
+			name: "empty value element is skipped",
+			content: `<?xml version="1.0" encoding="UTF-8"?>
+<project>
+    <properties>
+        <empty.prop></empty.prop>
+    </properties>
+</project>
+`,
+			absentKey: "empty.prop",
+		},
+		{
+			name: "self-closing value element is skipped",
+			content: `<?xml version="1.0" encoding="UTF-8"?>
+<project>
+    <properties>
+        <selfclosing.prop/>
+    </properties>
+</project>
+`,
+			absentKey: "selfclosing.prop",
+		},
 	}
 
 	for _, tc := range tests {

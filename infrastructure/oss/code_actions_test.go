@@ -66,6 +66,24 @@ func Test_GetCodeActions_MavenPropertyVersion_RedirectsToProperty(t *testing.T) 
 	assert.Equal(t, propStart+len("9.0.5"), edits[0].Range.End.Character)
 }
 
+// A CRLF pom must flow through parse -> quickfix -> stale-edit guard correctly.
+// The parser strips \r before computing positions, and the apply-time guard reads
+// the raw CRLF file from disk; textAtRange normalizes \r so the two stay aligned
+// and the guard passes (edit produced) instead of spuriously refusing on Windows.
+func Test_GetCodeActions_MavenPropertyVersion_CRLF(t *testing.T) {
+	crlf := strings.ReplaceAll(propertyManagedPom, "\n", "\r\n")
+	edits := applyMavenUpgradeQuickfix(t, crlf)
+	require.Len(t, edits, 1, "guard must pass and produce an edit for a CRLF pom")
+	assert.Equal(t, "11.0.1", edits[0].NewText)
+
+	// Positions are those of the CR-stripped content (LF version), proving the
+	// parser normalized line endings before computing offsets.
+	propLine, propStart := locate(t, propertyManagedPom, "<lib.cyclonedx-core-java.version>", "9.0.5")
+	assert.Equal(t, propLine, edits[0].Range.Start.Line)
+	assert.Equal(t, propStart, edits[0].Range.Start.Character)
+	assert.Equal(t, propStart+len("9.0.5"), edits[0].Range.End.Character)
+}
+
 const childPomWithParentProperty = `<?xml version="1.0" encoding="UTF-8"?>
 <project>
     <parent>

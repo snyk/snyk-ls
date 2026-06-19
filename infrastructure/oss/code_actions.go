@@ -388,11 +388,17 @@ func lookupMavenProperty(start *ast.Tree, name string) *ast.Node {
 // textAtRange returns the substring of content covered by the given single-line
 // range. ok is false when content is nil or the range falls outside it (e.g.
 // the file got shorter because the fix was already applied).
+//
+// Carriage returns are stripped before splitting so the line/character offsets
+// line up with those the maven parser produces — it normalizes content with
+// strings.ReplaceAll(content, "\r", "") before computing positions. Without this,
+// a CRLF file read raw from disk at apply time would be indexed inconsistently
+// with the CR-stripped snapshot the range was built from.
 func textAtRange(content []byte, r types.Range) (text string, ok bool) {
 	if content == nil {
 		return "", false
 	}
-	lines := strings.Split(string(content), "\n")
+	lines := strings.Split(strings.ReplaceAll(string(content), "\r", ""), "\n")
 	if r.Start.Line != r.End.Line || r.Start.Line < 0 || r.Start.Line >= len(lines) {
 		return "", false
 	}
