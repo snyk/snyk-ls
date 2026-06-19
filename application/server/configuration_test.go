@@ -2880,3 +2880,48 @@ func Test_ApplyOrganization_LDXSyncRefreshesForGlobalOrgFallback(t *testing.T) {
 		})
 	}
 }
+
+func Test_applyToken_NilEntry(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	ctx := testCtx(t, t.Context(), engine, tokenService)
+	authService := mustAuthenticationServiceFromContext(ctx)
+
+	// Capture the token before the call to detect any unwanted change.
+	tokenBefore := config.GetToken(engine.GetConfiguration())
+
+	// Calling applyToken with a nil map entry must NOT panic.
+	require.NotPanics(t, func() {
+		applyToken(map[string]*types.ConfigSetting{types.SettingToken: nil}, authService)
+	})
+
+	// UpdateCredentials must NOT have been called: the token must remain unchanged.
+	require.Equal(t, tokenBefore, config.GetToken(engine.GetConfiguration()), "token must not change when map entry is nil")
+}
+
+func Test_UpdateSettings_AlwaysSendsLspConfiguration(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(types.SettingIsLspInitialized, true)
+
+	ctx := testCtx(t, t.Context(), engine, tokenService)
+
+	settings := map[string]*types.ConfigSetting{
+		types.SettingToken: {Value: "new-token", Changed: true},
+	}
+	UpdateSettings(ctx, conf, engine, engine.GetLogger(), settings, nil, analytics.TriggerSourceIDE, testutil.DefaultConfigResolver(engine))
+
+	// Extract the notifier that testCtx placed in context and check sent messages.
+	n, ok := notifierFromContext(ctx)
+	require.True(t, ok, "notifier must be present in context")
+	mockNotifier, ok := n.(*notification.MockNotifier)
+	require.True(t, ok, "notifier must be a *notification.MockNotifier")
+
+	var foundLspConfig bool
+	for _, msg := range mockNotifier.SentMessages() {
+		if _, ok := msg.(types.LspConfigurationParam); ok {
+			foundLspConfig = true
+			break
+		}
+	}
+	require.True(t, foundLspConfig, "UpdateSettings must send a types.LspConfigurationParam even for token-only changes")
+}

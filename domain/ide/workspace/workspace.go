@@ -235,9 +235,6 @@ func (w *Workspace) ChangeWorkspaceFolders(params types.DidChangeWorkspaceFolder
 		w.AddFolder(f)
 		changedWorkspaceFolders = append(changedWorkspaceFolders, f)
 	}
-	if (len(params.Event.Removed) > 0 || len(params.Event.Added) > 0) && w.conf.GetBool(types.SettingIsLspInitialized) {
-		w.notifier.Send(types.RefreshHtmlSettingsParams{})
-	}
 	return changedWorkspaceFolders
 }
 
