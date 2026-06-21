@@ -27,7 +27,6 @@ import (
 	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -112,8 +111,9 @@ var jqueryJsTemplate string
 var bootstrapJsTemplate string
 
 type ConfigHtmlRenderer struct {
-	engine   workflow.Engine
-	template *template.Template
+	engine         workflow.Engine
+	configResolver types.ConfigResolverInterface
+	template       *template.Template
 }
 
 // Template helper functions (extracted to reduce cyclomatic complexity)
@@ -165,6 +165,8 @@ func sourceToClass(source string) string {
 		return "source-org-locked"
 	case "ldx-sync":
 		return "source-org"
+	case "user-override", "user-override-defaults":
+		return "source-user-override"
 	default:
 		return ""
 	}
@@ -175,7 +177,8 @@ func tmplIsSecretsFeatureEnabled(fc types.FolderConfig) bool {
 }
 
 // tmplSourceIndicator returns HTML for source indicators (icons with tooltips).
-// Returns: "🏢🔒" for locked, "🏢" for organization, empty for override (instead indicated by CSS border), empty for global/default.
+// Returns: "🏢🔒" for locked, "🏢" for organization, "👤" for user override (with
+// per-project vs project-defaults tooltip variants), empty for global/default.
 func tmplSourceIndicator(effectiveConfig map[string]types.EffectiveValue, settingName string) template.HTML {
 	if effectiveConfig == nil {
 		return ""
@@ -190,12 +193,16 @@ func tmplSourceIndicator(effectiveConfig map[string]types.EffectiveValue, settin
 		return template.HTML(`<span class="source-indicator" data-toggle="tooltip" title="Locked due to organization settings">🏢🔒</span>`)
 	case "ldx-sync":
 		return template.HTML(`<span class="source-indicator" data-toggle="tooltip" title="Set by your organization settings">🏢</span>`)
+	case "user-override":
+		return template.HTML(`<span class="source-indicator" data-toggle="tooltip" title="Set by you at project level">👤</span>`)
+	case "user-override-defaults":
+		return template.HTML(`<span class="source-indicator" data-toggle="tooltip" title="Set by you at project defaults level">👤</span>`)
 	default:
 		return ""
 	}
 }
 
-func NewConfigHtmlRenderer(engine workflow.Engine) (*ConfigHtmlRenderer, error) {
+func NewConfigHtmlRenderer(engine workflow.Engine, configResolver types.ConfigResolverInterface) (*ConfigHtmlRenderer, error) {
 	// Register custom template functions for better template reusability
 	funcMap := template.FuncMap{
 		"toLower":                 strings.ToLower,
@@ -214,16 +221,22 @@ func NewConfigHtmlRenderer(engine workflow.Engine) (*ConfigHtmlRenderer, error) 
 	}
 
 	return &ConfigHtmlRenderer{
-		engine:   engine,
-		template: tmpl,
+		engine:         engine,
+		configResolver: configResolver,
+		template:       tmpl,
 	}, nil
 }
 
-// computeProjectDefaultScopes computes effective values for all org-scope settings at the project level.
-// Uses the engine's configuration to properly resolve settings with their sources.
-func computeProjectDefaultScopes(engine workflow.Engine) map[string]types.EffectiveValue {
+// computeProjectDefaultScopes computes effective values for all org-scope settings at the Project Defaults level.
+// Delegates to the ConfigResolver (with no folder context) so precedence matches the rest of the LS:
+// Locked LDX-Sync > User Override > LDX-Sync > Default. At this level a user-global value is itself a
+// user override of the org/built-in default, so "global" is remapped to "user-override-defaults" — a
+// defaults-scope variant of user-override that drives a different tooltip than per-project overrides.
+func computeProjectDefaultScopes(resolver types.ConfigResolverInterface) map[string]types.EffectiveValue {
 	scopes := make(map[string]types.EffectiveValue)
-	gafConf := engine.GetConfiguration()
+	if resolver == nil {
+		return scopes
+	}
 
 	orgScopeSettings := []string{
 		types.SettingSeverityFilterCritical,
@@ -243,23 +256,11 @@ func computeProjectDefaultScopes(engine workflow.Engine) map[string]types.Effect
 	}
 
 	for _, settingName := range orgScopeSettings {
-		// Get the value and source directly from the configuration
-		var value any
-		source := "default"
-
-		// Check if it's set at global level
-		globalKey := configresolver.UserGlobalKey(settingName)
-		if gafConf.IsSet(globalKey) {
-			source = "global"
-			value = gafConf.Get(globalKey)
-		} else {
-			value = gafConf.Get(settingName)
+		ev := resolver.GetEffectiveValue(settingName, nil)
+		if ev.Source == "global" {
+			ev.Source = "user-override-defaults"
 		}
-
-		scopes[settingName] = types.EffectiveValue{
-			Value:  value,
-			Source: source,
-		}
+		scopes[settingName] = ev
 	}
 
 	return scopes
@@ -307,7 +308,7 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings map[string]any, folderConfig
 	cliReleaseChannel := getCliReleaseChannel(r.engine)
 
 	// Build DefaultsScopes for project default indicator rendering
-	defaultsScopes := computeProjectDefaultScopes(r.engine)
+	defaultsScopes := computeProjectDefaultScopes(r.configResolver)
 
 	data := map[string]any{
 		"Settings":       settings,

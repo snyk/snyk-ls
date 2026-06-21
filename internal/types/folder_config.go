@@ -128,12 +128,8 @@ func (fc *FolderConfig) GetFeatureFlag(flag string) bool {
 	if fc == nil {
 		return false
 	}
-	conf := fc.Conf()
-	if conf == nil {
-		return false
-	}
 	key := configresolver.FolderMetadataKey(string(PathKey(fc.FolderPath)), FeatureFlagPrefix+flag)
-	return conf.GetBool(key)
+	return fc.Conf().GetBool(key)
 }
 
 // SetFeatureFlag writes a feature flag value to configuration under the folder metadata prefix.
@@ -144,16 +140,12 @@ func (fc *FolderConfig) SetFeatureFlag(flag string, value bool) {
 	if fc == nil {
 		return
 	}
-	conf := fc.Conf()
-	if conf == nil {
-		return
-	}
 	key := configresolver.FolderMetadataKey(string(PathKey(fc.FolderPath)), FeatureFlagPrefix+flag)
-	conf.Set(key, value)
+	fc.Conf().Set(key, value)
 }
 
 // Conf returns the configuration for prefix key access.
-// Delegates to ConfigResolver.Configuration() when available.
+// Returns nil if the ConfigResolver is nil.
 func (fc *FolderConfig) Conf() configuration.Configuration {
 	if fc.ConfigResolver != nil {
 		return fc.ConfigResolver.Configuration()
@@ -593,12 +585,12 @@ func (fc *FolderConfig) applyPreferredOrg(update *LspFolderConfig, handled map[s
 	// Blanking preferredOrg means "use global org" (not auto-org), so preserve
 	// curOrgSetByUser — unless the global org is also blank, in which case revert
 	// to auto-org mode (orgSetByUser=false at all levels).
-	// GetGlobalString reads via UserGlobalKey (phase-2 lookup), which correctly
-	// returns "" when SetOrganization("") was explicitly called, unlike conf.Get/
-	// conf.GetString which invoke the defaultFunc and return a non-empty fallback.
+	// SettingLastSetOrganization is written by SetOrganization via SetGlobalUser
+	// and lives at UserGlobalKey — no GAF default function, no /rest/self call.
+	// Returns "" when the user never called SetOrganization or explicitly cleared it.
 	curOrgSetByUser := getBoolFromConfig(conf, fp, SettingOrgSetByUser)
-	globalOrg := GetGlobalString(conf, SettingOrganization)
-	orgSetByUser := preferredOrg != "" || (curOrgSetByUser && globalOrg != "")
+	globalOrgSetByUser := GetGlobalString(conf, SettingLastSetOrganization) != ""
+	orgSetByUser := preferredOrg != "" || (curOrgSetByUser && globalOrgSetByUser)
 	conf.PersistInStorage(keyPreferred)
 	conf.PersistInStorage(keyOrgSetByUser)
 	conf.Set(keyPreferred, &configresolver.LocalConfigField{Value: preferredOrg, Changed: true})

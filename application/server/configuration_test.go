@@ -61,6 +61,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 var sampleSettings = map[string]*types.ConfigSetting{
@@ -917,6 +918,9 @@ func setupFolderConfigTest(t *testing.T) *folderConfigTestSetup {
 	engineConfig.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction("test-default-org-uuid"))
 	engineConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, configuration.ImmutableDefaultValueFunction("test-default-org-slug"))
 
+	// Mark as initialized since tests using this setup simulate post-initialization config updates
+	engineConfig.Set(types.SettingIsLspInitialized, true)
+
 	folderPath := types.FilePath(t.TempDir())
 	err := initTestRepo(t, string(folderPath))
 	require.NoError(t, err)
@@ -1473,20 +1477,10 @@ func Test_FC105_WriteSettings_OldFormat_ProcessesSettingsStruct(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	mockLdx := mock_command.NewMockLdxSyncService(ctrl)
-	mockLdx.EXPECT().
-		RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Times(1)
-	deps := di.TestInit(t, engine, tokenService, &di.Dependencies{
-		LdxSyncService: mockLdx,
-	})
+	deps := di.TestInit(t, engine, tokenService, nil)
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-		ctx2.DepLdxSyncService:      mockLdx,
-		ctx2.DepNotifier:            notification.NewMockNotifier(),
-		ctx2.DepAuthService:         deps.AuthenticationService,
-		ctx2.DepFeatureFlagService:  deps.FeatureFlagService,
-		ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
-		ctx2.DepConfigResolver:      testutil.DefaultConfigResolver(engine),
+		ctx2.DepNotifier:    notification.NewMockNotifier(),
+		ctx2.DepAuthService: deps.AuthenticationService,
 	})
 
 	folderPath := types.FilePath(t.TempDir())
@@ -1744,6 +1738,8 @@ func Test_updateFolderConfig_UserSetOrg_BlankedPreferredOrg_UsesGlobalOrg(t *tes
 	setup.createStoredConfig("user-chosen-org", true)
 	// Store an auto-determined org to confirm it is NOT used after blanking
 	types.SetAutoDeterminedOrg(setup.engine.GetConfiguration(), setup.folderPath, "auto-determined-org")
+	// Set a global org so SettingLastSetOrganization is populated
+	config.SetOrganization(setup.engine.GetConfiguration(), "global-org-id")
 
 	// User blanks the preferred org (clears the field in config dialog)
 	folderConfigs := []types.LspFolderConfig{
@@ -2205,9 +2201,7 @@ func Test_applyOrganization_ResetsSummaryPanelOnOrgChange(t *testing.T) {
 		emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
 		realAgg := scanstates.NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, testutil.DefaultConfigResolver(engine), engine)
 		mockNotifier := notification.NewMockNotifier()
-		mockLdxSync := mock_command.NewMockLdxSyncService(ctrl)
-		mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-		di.TestInit(t, engine, tokenService, &di.Dependencies{ScanStateAggregator: realAgg, Notifier: mockNotifier, LdxSyncService: mockLdxSync})
+		di.TestInit(t, engine, tokenService, &di.Dependencies{ScanStateAggregator: realAgg, Notifier: mockNotifier})
 
 		tmpDir := types.FilePath(t.TempDir())
 		require.NoError(t, initTestRepo(t, string(tmpDir)))
@@ -2228,11 +2222,9 @@ func Test_applyOrganization_ResetsSummaryPanelOnOrgChange(t *testing.T) {
 		config.SetOrganization(engine.GetConfiguration(), oldOrg)
 		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
 			ctx2.DepNotifier:            mockNotifier,
-			ctx2.DepLdxSyncService:      mockLdxSync,
 			ctx2.DepScanStateAggregator: realAgg,
 			ctx2.DepAuthService:         di.AuthenticationService(),
 			ctx2.DepFeatureFlagService:  di.FeatureFlagService(),
-			ctx2.DepConfigResolver:      testutil.DefaultConfigResolver(engine),
 		})
 		return engine, folderPath, realAgg, ctx
 	}
@@ -2809,4 +2801,249 @@ func TestApplyUserSettingsPath_IgnoresUnchanged(t *testing.T) {
 	applyUserSettingsPath(conf, settings)
 
 	assert.Equal(t, "/original", types.GetGlobalString(conf, types.SettingUserSettingsPath))
+}
+
+// Test_ApplyOrganization_LDXSyncRefreshesForGlobalOrgFallback verifies LDX-Sync refresh behavior when global org changes.
+// Tests three scenarios: refresh when folders use global fallback, no refresh when folders have
+// explicit org, and no refresh when org is unchanged.
+func Test_ApplyOrganization_LDXSyncRefreshesForGlobalOrgFallback(t *testing.T) {
+	originalGlobalOrg := "original-global-org"
+	testCases := []struct {
+		name                string
+		preferredOrg        string
+		newGlobalOrg        string
+		expectFolderRefresh bool
+	}{
+		{
+			// When the global org changes and there are folders with OrgSetByUser=true and PreferredOrg="",
+			// LDX-Sync refresh is triggered for those folders.
+			name:                "TriggersRefreshForFoldersUsingGlobalOrgFallback",
+			preferredOrg:        "",
+			newGlobalOrg:        "new-global-org-uuid",
+			expectFolderRefresh: true,
+		},
+		{
+			// When the global org changes but no folders use the global org fallback,
+			// LDX-Sync refresh is NOT triggered.
+			name:                "NoRefreshWhenNoFoldersDependOnGlobalOrg",
+			preferredOrg:        "folder-specific-org",
+			newGlobalOrg:        "new-global-org-uuid",
+			expectFolderRefresh: false,
+		},
+		{
+			// When the org is set to the same value, no refresh is triggered.
+			name:                "NoRefreshWhenOrgUnchanged",
+			preferredOrg:        "",
+			newGlobalOrg:        originalGlobalOrg,
+			expectFolderRefresh: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			setup := setupFolderConfigTest(t)
+
+			// Clear the mock default value function so we can test actual org changes
+			setup.engineConfig.AddDefaultValue(configuration.ORGANIZATION, nil)
+
+			// Setup: Folder config with OrgSetByUser=true, PreferredOrg as specified
+			setup.createStoredConfig(tc.preferredOrg, true)
+
+			// Setup: Mock LDX-Sync service to track refresh calls
+			ctrl := gomock.NewController(t)
+			t.Cleanup(ctrl.Finish)
+			mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
+
+			// Setup: Attach mock LdxSyncService and notifier to a new context
+			ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
+				ctx2.DepLdxSyncService: mockLdxSyncService,
+				ctx2.DepNotifier:       notification.NewMockNotifier(),
+			})
+
+			// Setup: Set initial global org and mark LS as initialized
+			config.SetOrganization(setup.engineConfig, originalGlobalOrg)
+			setup.engineConfig.Set(types.SettingIsLspInitialized, true)
+
+			// Expect: RefreshConfigFromLdxSync should be called as specified
+			mockLdxSyncService.EXPECT().
+				RefreshConfigFromLdxSync(gomock.Any(), setup.engineConfig, setup.engine, setup.logger, gomock.Any(), gomock.Any()).
+				Times(util.Ternary(tc.expectFolderRefresh, 1, 0)).
+				Do(func(_ context.Context, _ configuration.Configuration, _ workflow.Engine, _ *zerolog.Logger, folders []types.Folder, _ any) {
+					assert.Len(t, folders, 1, "Should refresh exactly one folder")
+					assert.Equal(t, setup.folderPath, folders[0].Path(), "Should refresh the folder using global org fallback")
+				})
+
+			// Test: Change global org
+			applyOrganization(ctx, setup.engineConfig, setup.engine, setup.logger, map[string]*types.ConfigSetting{
+				types.SettingOrganization: {Value: tc.newGlobalOrg, Changed: true},
+			}, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
+		})
+	}
+}
+
+func Test_applyToken_NilEntry(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	ctx := testCtx(t, t.Context(), engine, tokenService)
+	authService := mustAuthenticationServiceFromContext(ctx)
+
+	// Capture the token before the call to detect any unwanted change.
+	tokenBefore := config.GetToken(engine.GetConfiguration())
+
+	// Calling applyToken with a nil map entry must NOT panic.
+	require.NotPanics(t, func() {
+		applyToken(map[string]*types.ConfigSetting{types.SettingToken: nil}, authService)
+	})
+
+	// UpdateCredentials must NOT have been called: the token must remain unchanged.
+	require.Equal(t, tokenBefore, config.GetToken(engine.GetConfiguration()), "token must not change when map entry is nil")
+}
+
+func Test_UpdateSettings_AlwaysSendsLspConfiguration(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(types.SettingIsLspInitialized, true)
+
+	ctx := testCtx(t, t.Context(), engine, tokenService)
+
+	settings := map[string]*types.ConfigSetting{
+		types.SettingToken: {Value: "new-token", Changed: true},
+	}
+	UpdateSettings(ctx, conf, engine, engine.GetLogger(), settings, nil, analytics.TriggerSourceIDE, testutil.DefaultConfigResolver(engine))
+
+	// Extract the notifier that testCtx placed in context and check sent messages.
+	n, ok := notifierFromContext(ctx)
+	require.True(t, ok, "notifier must be present in context")
+	mockNotifier, ok := n.(*notification.MockNotifier)
+	require.True(t, ok, "notifier must be a *notification.MockNotifier")
+
+	var foundLspConfig bool
+	for _, msg := range mockNotifier.SentMessages() {
+		if _, ok := msg.(types.LspConfigurationParam); ok {
+			foundLspConfig = true
+			break
+		}
+	}
+	require.True(t, foundLspConfig, "UpdateSettings must send a types.LspConfigurationParam even for token-only changes")
+}
+
+func TestApplyEnvironment_PersistsGlobalUser(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	// t.Setenv registers cleanup that restores these to "" on test end, so every key we
+	// os.Setenv inside applyEnvironment is cleaned up without a manual t.Cleanup/Unsetenv.
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_X", "")
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_Y", "")
+
+	settings := map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "SNYK_TEST_ADDITIONAL_ENV_X=hello;SNYK_TEST_ADDITIONAL_ENV_Y=world", Changed: true},
+	}
+	applyEnvironment(conf, logger, settings)
+
+	// os.Setenv side effect
+	assert.Equal(t, "hello", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_X"))
+	assert.Equal(t, "world", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_Y"))
+
+	// Persisted to config for dialog pre-population
+	assert.Equal(t, "SNYK_TEST_ADDITIONAL_ENV_X=hello;SNYK_TEST_ADDITIONAL_ENV_Y=world", types.GetGlobalString(conf, types.SettingAdditionalEnvironment))
+}
+
+func TestApplyEnvironment_ClearsPersistedValue(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_CLEAR", "")
+
+	// Seed a prior value (both persisted and applied to the process env).
+	applyEnvironment(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "SNYK_TEST_ADDITIONAL_ENV_CLEAR=set", Changed: true},
+	})
+	assert.Equal(t, "set", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_CLEAR"))
+	assert.Equal(t, "SNYK_TEST_ADDITIONAL_ENV_CLEAR=set", types.GetGlobalString(conf, types.SettingAdditionalEnvironment))
+
+	// User clears the field: {Value: "", Changed: true}.
+	applyEnvironment(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "", Changed: true},
+	})
+
+	// Persisted value is cleared so the dialog repopulates blank.
+	assert.Equal(t, "", types.GetGlobalString(conf, types.SettingAdditionalEnvironment))
+	// And the previously-applied var is removed from the process env.
+	_, present := os.LookupEnv("SNYK_TEST_ADDITIONAL_ENV_CLEAR")
+	assert.False(t, present, "cleared env var should be unset from the process env")
+}
+
+func TestApplyEnvironment_UnchangedFieldNoOp(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	// Seed a persisted value, then apply settings where the field is absent / not Changed.
+	types.SetGlobalUser(conf, types.SettingAdditionalEnvironment, "PRESERVED=1")
+
+	applyEnvironment(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "ignored", Changed: false},
+	})
+
+	// Not Changed -> settingStr returns ok=false -> persisted value is left untouched.
+	assert.Equal(t, "PRESERVED=1", types.GetGlobalString(conf, types.SettingAdditionalEnvironment))
+}
+
+func TestApplyEnvironment_SequentialApplyUnsetsDroppedKeys(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_A", "")
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_B", "")
+
+	applyEnvironment(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "SNYK_TEST_ADDITIONAL_ENV_A=1;SNYK_TEST_ADDITIONAL_ENV_B=2", Changed: true},
+	})
+	assert.Equal(t, "1", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_A"))
+	assert.Equal(t, "2", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_B"))
+
+	// Re-save dropping B: it must be unset from the process env, not left to leak into CLI subprocesses.
+	applyEnvironment(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "SNYK_TEST_ADDITIONAL_ENV_A=1", Changed: true},
+	})
+	assert.Equal(t, "1", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_A"))
+	_, present := os.LookupEnv("SNYK_TEST_ADDITIONAL_ENV_B")
+	assert.False(t, present, "dropped key B should be unset from the process env")
+}
+
+func TestApplyEnvironment_SkipsMalformedEntries(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_GOOD", "")
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_OK", "")
+
+	applyEnvironment(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "SNYK_TEST_ADDITIONAL_ENV_GOOD=1;BAD;SNYK_TEST_ADDITIONAL_ENV_OK=2", Changed: true},
+	})
+
+	// Well-formed entries are set; the malformed "BAD" segment (no '=') is skipped.
+	assert.Equal(t, "1", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_GOOD"))
+	assert.Equal(t, "2", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_OK"))
+	_, present := os.LookupEnv("BAD")
+	assert.False(t, present, "malformed entry should not be set as an env var")
+}
+
+func TestApplyEnvironment_ValuePreservesEquals(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_B64", "")
+
+	// SplitN(..., "=", 2) keeps everything after the first '=' as the value (base64 padding, JWTs, ...).
+	applyEnvironment(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "SNYK_TEST_ADDITIONAL_ENV_B64=Zm9v==", Changed: true},
+	})
+
+	assert.Equal(t, "Zm9v==", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_B64"))
 }

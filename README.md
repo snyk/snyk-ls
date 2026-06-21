@@ -524,8 +524,8 @@ synchronization. For further information please see [CONTRIBUTING.md](CONTRIBUTI
 `-f <FILE>` allows you to specify a log file instead of logging to the console
 
 `-l <LOGLEVEL>` <allows to specify the log level (`trace`, `debug`, `info`, `warn`, `error`, `fatal`). The default log
-level is `info`. This can be overruled by setting the env variable `SNYK_DEBUG_LEVEL`,
-e.g. `export SNYK_DEBUG_LEVEL=debug`
+level is `info`. This can be overruled by setting the env variable `SNYK_LOG_LEVEL`,
+e.g. `export SNYK_LOG_LEVEL=debug`
 
 `-licenses` (running standalone) displays the [licenses](https://github.com/snyk/snyk-ls/tree/main/licenses) used by
 Language Server\
