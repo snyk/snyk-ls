@@ -217,6 +217,7 @@
                                             <input type="checkbox" name="snyk_oss_enabled" {{if index .Settings "snyk_oss_enabled"}}checked{{end}}>
                                             <span data-toggle="tooltip" title="Find and fix open source dependency issues.">Snyk Open Source</span>
                                             <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_oss_enabled"></span>
+                                            {{sourceIndicator .DefaultsScopes "snyk_oss_enabled"}}
                                         </label>
                                     </div>
                                     <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "snyk_code_enabled"}}">
@@ -224,6 +225,7 @@
                                             <input type="checkbox" name="snyk_code_enabled" {{if index .Settings "snyk_code_enabled"}}checked{{end}}>
                                             <span data-toggle="tooltip" title="<p>Find and fix security issues in your application code.</p><p><strong>Note: </strong>Snyk Code must be enabled for your organization.</p>">Snyk Code</span>
                                             <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_code_enabled"></span>
+                                            {{sourceIndicator .DefaultsScopes "snyk_code_enabled"}}
                                         </label>
                                     </div>
                                     <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "snyk_iac_enabled"}}">
@@ -231,14 +233,16 @@
                                             <input type="checkbox" name="snyk_iac_enabled" {{if index .Settings "snyk_iac_enabled"}}checked{{end}}>
                                             <span data-toggle="tooltip" title="Find and fix your IaC misconfigurations.">Snyk Infrastructure as Code</span>
                                             <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_iac_enabled"></span>
+                                            {{sourceIndicator .DefaultsScopes "snyk_iac_enabled"}}
                                         </label>
                                     </div>
                                     {{if .IsSecretsFeatureEnabled}}
                                     <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "snyk_secrets_enabled"}}">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="snyk_secrets_enabled" {{if index .Settings "snyk_secrets_enabled"}}checked{{end}}>
-                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code.">Snyk Secrets<span class="deprecated-label">Closed Beta</span></span>
+                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code.">Snyk Secrets</span>
                                             <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_secrets_enabled"></span>
+                                            {{sourceIndicator .DefaultsScopes "snyk_secrets_enabled"}}
                                         </label>
                                     </div>
                                     {{end}}
@@ -247,7 +251,7 @@
 
                             <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "scan_automatic"}}">
                                 <div class="form-group half-width">
-                                    <label for="scan_automatic"><span data-toggle="tooltip" title="Choose whether to run Snyk scans in the background (auto), or only when you run the Scan command (manual).">Scanning mode</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_automatic"></span></label>
+                                    <label for="scan_automatic"><span data-toggle="tooltip" title="Choose whether to run Snyk scans in the background (auto), or only when you run the Scan command (manual).">Scanning mode</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_automatic"></span> {{sourceIndicator .DefaultsScopes "scan_automatic"}}</label>
                                     <select id="scan_automatic" name="scan_automatic" data-bool="1">
                                         <option value="true" {{if index .Settings "scan_automatic"}}selected{{end}}>Auto</option>
                                         <option value="false" {{if not (index .Settings "scan_automatic")}}selected{{end}}>Manual</option>
@@ -257,7 +261,7 @@
 
                             <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "organization"}}">
                                 <div class="form-group half-width">
-                                    <label for="organization"><span data-toggle="tooltip" title="<p>Specify the organization (ID or name) for Snyk to run scans against.</p><p>Organization selection follows this order:</p><ol><li>Project-specific settings (if configured)</li><li>This global setting (if the project-specific setting is empty)</li><li>Your web account's preferred organization (if both above are empty)</li></ol>">Organization</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="organization"></span></label>
+                                    <label for="organization"><span data-toggle="tooltip" title="<p>Specify the organization (ID or name) for Snyk to run scans against.</p><p>Organization selection follows this order:</p><ol><li>Project-specific settings (if configured)</li><li>This global setting (if the project-specific setting is empty)</li><li>Your web account's preferred organization (if both above are empty)</li></ol>">Organization</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="organization"></span> {{sourceIndicator .DefaultsScopes "organization"}}</label>
                                     <input type="text" id="organization" name="organization" value="{{index .Settings "organization"}}" placeholder="Organization UUID or Slug">
                                 </div>
                             </div>
@@ -281,6 +285,7 @@
                                                     <input type="checkbox" name="severity_filter_critical" {{if index .Settings "severity_filter_critical"}}checked{{end}}>
                                                     Critical
                                                     <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="severity_filter_critical"></span>
+                                                    {{sourceIndicator .DefaultsScopes "severity_filter_critical"}}
                                                 </label>
                                             </div>
                                             <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "severity_filter_high"}}">
@@ -288,6 +293,7 @@
                                                     <input type="checkbox" name="severity_filter_high" {{if index .Settings "severity_filter_high"}}checked{{end}}>
                                                     High
                                                     <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="severity_filter_high"></span>
+                                                    {{sourceIndicator .DefaultsScopes "severity_filter_high"}}
                                                 </label>
                                             </div>
                                             <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "severity_filter_medium"}}">
@@ -295,6 +301,7 @@
                                                     <input type="checkbox" name="severity_filter_medium" {{if index .Settings "severity_filter_medium"}}checked{{end}}>
                                                     Medium
                                                     <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="severity_filter_medium"></span>
+                                                    {{sourceIndicator .DefaultsScopes "severity_filter_medium"}}
                                                 </label>
                                             </div>
                                             <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "severity_filter_low"}}">
@@ -302,6 +309,7 @@
                                                     <input type="checkbox" name="severity_filter_low" {{if index .Settings "severity_filter_low"}}checked{{end}}>
                                                     Low
                                                     <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="severity_filter_low"></span>
+                                                    {{sourceIndicator .DefaultsScopes "severity_filter_low"}}
                                                 </label>
                                             </div>
                                         </div>
@@ -317,6 +325,7 @@
                                                     <input type="checkbox" name="issue_view_open_issues" {{if index .Settings "issue_view_open_issues"}}checked{{end}}>
                                                     Show open issues
                                                     <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="issue_view_open_issues"></span>
+                                                    {{sourceIndicator .DefaultsScopes "issue_view_open_issues"}}
                                                 </label>
                                             </div>
                                             <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "issue_view_ignored_issues"}}">
@@ -324,6 +333,7 @@
                                                     <input type="checkbox" name="issue_view_ignored_issues" {{if index .Settings "issue_view_ignored_issues"}}checked{{end}}>
                                                     Show ignored issues
                                                     <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="issue_view_ignored_issues"></span>
+                                                    {{sourceIndicator .DefaultsScopes "issue_view_ignored_issues"}}
                                                 </label>
                                             </div>
                                         </div>
@@ -333,7 +343,7 @@
 
                             <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "risk_score_threshold"}}">
                                 <div class="form-group half-width">
-                                    <label for="risk_score_threshold"><span data-toggle="tooltip" title="<p>Minimum risk score to display issues.</p><p>Valid range: 0 to 1000 (0 = show all issues).</p>">Filter by risk score<span class="deprecated-label">Closed Beta</span></span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="risk_score_threshold"></span></label>
+                                    <label for="risk_score_threshold"><span data-toggle="tooltip" title="<p>Minimum risk score to display issues.</p><p>Valid range: 0 to 1000 (0 = show all issues).</p>">Filter by risk score<span class="deprecated-label">Closed Beta</span></span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="risk_score_threshold"></span> {{sourceIndicator .DefaultsScopes "risk_score_threshold"}}</label>
                                     <input type="number" id="risk_score_threshold" name="risk_score_threshold" min="0" max="1000" value="{{$rst := index .Settings "risk_score_threshold"}}{{if ne $rst nil}}{{$rst}}{{end}}" placeholder="0">
                                     <span id="riskScore-error" class="error-message hidden">Risk score must be between 0 and 1000</span>
                                 </div>
@@ -341,11 +351,39 @@
 
                             <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "scan_net_new"}}">
                                 <div class="form-group half-width">
-                                    <label for="scan_net_new"><span data-toggle="tooltip" title="Choose to see all issues or only those newly introduced by your code changes.">Delta findings</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_net_new"></span></label>
+                                    <label for="scan_net_new"><span data-toggle="tooltip" title="Choose to see all issues or only those newly introduced by your code changes.">Delta findings</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_net_new"></span> {{sourceIndicator .DefaultsScopes "scan_net_new"}}</label>
                                     <select id="scan_net_new" name="scan_net_new" data-bool="1">
                                         <option value="false" {{if not (index .Settings "scan_net_new")}}selected{{end}}>All issues</option>
                                         <option value="true" {{if index .Settings "scan_net_new"}}selected{{end}}>Net new issues</option>
                                     </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Advanced project-default settings -->
+                <div class="section">
+                    <div class="form-group">
+                        <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#defaults-advanced" aria-expanded="false" aria-controls="defaults-advanced">
+                            <span data-toggle="tooltip" title="Advanced default settings including CLI parameters and environment variables applied to all {{.FolderLabel | toLower}}s.">Advanced</span>
+                            <span class="collapse-icon">&#9660;</span>
+                        </button>
+                        <div class="collapse ml-1" id="defaults-advanced">
+                            <div class="mt-2">
+                                <div class="info-box">
+                                    <p>These values combine with any per-{{.FolderLabel | toLower}} values rather than replacing them. CLI parameters from both levels are used together; environment variables defined here are overridden by per-{{.FolderLabel | toLower}} values when the same key is set in both.</p>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="additional_parameters"><span data-toggle="tooltip" title="<p>Default CLI parameters for all {{.FolderLabel | toLower}} scans (space-separated).</p><p>Example: <code>--severity-threshold=high --debug</code></p><p>These are combined with any per-{{.FolderLabel | toLower}} parameters.</p>">Additional CLI parameters</span></label>
+                                    <input type="text" id="additional_parameters" name="additional_parameters" value="{{index .Settings "additional_parameters"}}" placeholder="--severity-threshold=high">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="additional_environment"><span data-toggle="tooltip" title="<p>Default environment variables for all {{.FolderLabel | toLower}} scans.</p><p>Format: <code>VAR1=value1;VAR2=value2</code></p><p>Per-{{.FolderLabel | toLower}} values override these on key conflicts.</p>">Additional environment variables</span></label>
+                                    <input type="text" id="additional_environment" name="additional_environment" value="{{index .Settings "additional_environment"}}" placeholder="VAR1=value1;VAR2=value2">
+                                    <div id="additional_environment-error" class="error-message hidden">Invalid format. Use: VAR1=value1;VAR2=value2</div>
                                 </div>
                             </div>
                         </div>
@@ -400,7 +438,7 @@
                                     <div class="override-indicator-wrapper {{getSourceClass $folder.EffectiveConfig "snyk_secrets_enabled"}}">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="folder_{{$index}}_snyk_secrets_enabled" data-setting="snyk_secrets_enabled" {{with getEffectiveValue $folder.EffectiveConfig "snyk_secrets_enabled"}}{{if .Value}}checked{{end}}{{end}} {{if isLocked $folder.EffectiveConfig "snyk_secrets_enabled"}}disabled{{end}}>
-                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code.">Snyk Secrets<span class="deprecated-label">Closed Beta</span></span>
+                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code.">Snyk Secrets</span>
                                             {{sourceIndicator $folder.EffectiveConfig "snyk_secrets_enabled"}}
                                         </label>
                                     </div>

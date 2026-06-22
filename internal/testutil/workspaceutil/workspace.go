@@ -40,6 +40,18 @@ import (
 // SetupWorkspace creates a minimal workspace if it doesn't exist and adds the given folder paths to it.
 func SetupWorkspace(t *testing.T, engine workflow.Engine, folderPaths ...types.FilePath) (types.Workspace, *notification.MockNotifier) {
 	t.Helper()
+	return SetupWorkspaceWithFeatureFlags(t, engine, nil, folderPaths...)
+}
+
+// SetupWorkspaceWithFeatureFlags is like SetupWorkspace but uses the provided FakeFeatureFlagService
+// for each folder. Pass nil to use a default empty fake service. Use this when the test needs to
+// control feature flags (e.g. SnykCodeConsistentIgnores) that affect folder-level behavior.
+func SetupWorkspaceWithFeatureFlags(t *testing.T, engine workflow.Engine, ffSvc *featureflag.FakeFeatureFlagService, folderPaths ...types.FilePath) (types.Workspace, *notification.MockNotifier) {
+	t.Helper()
+
+	if ffSvc == nil {
+		ffSvc = featureflag.NewFakeService()
+	}
 
 	notifier := notification.NewMockNotifier()
 
@@ -63,7 +75,7 @@ func SetupWorkspace(t *testing.T, engine workflow.Engine, folderPaths ...types.F
 			notifier,
 			persistence.NewNopScanPersister(),
 			scanstates.NewNoopStateAggregator(),
-			featureflag.NewFakeService(),
+			ffSvc,
 			resolver,
 			engine,
 		)
@@ -87,11 +99,17 @@ func SetupWorkspace(t *testing.T, engine workflow.Engine, folderPaths ...types.F
 			notifier,
 			persistence.NewNopScanPersister(),
 			scanstates.NewNoopStateAggregator(),
-			featureflag.NewFakeService(),
+			ffSvc,
 			resolver,
 			engine,
 		)
 		config.GetWorkspace(gafConf).AddFolder(folder)
+
+		// Populate feature flags into config so FolderConfigReadOnly() picks them up.
+		// This mirrors the production path: processFolderConfigs calls ffSvc.PopulateFolderConfig.
+		if folderCfg := folder.FolderConfigReadOnly(); folderCfg != nil {
+			ffSvc.PopulateFolderConfig(folderCfg)
+		}
 	}
 
 	return config.GetWorkspace(gafConf), notifier

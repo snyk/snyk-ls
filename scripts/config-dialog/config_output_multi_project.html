@@ -147,6 +147,7 @@ form > .section {
 
 /* Direct tab-pane children miss the 10px col-md-* gutter; offset them so all blocks share one edge. */
 .tab-pane > .info-box,
+.tab-pane > .section,
 .folder-pane > .section,
 .folder-pane > .reset-overrides-btn {
     margin-left: 10px;
@@ -1066,33 +1067,37 @@ button.secondary[disabled] {
                             <div class="form-group">
                                 <h3>Scanners</h3>
                                 <div class="checkbox-group">
-                                    <div class="override-indicator-wrapper ">
+                                    <div class="override-indicator-wrapper source-user-override">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="snyk_oss_enabled" checked>
                                             <span data-toggle="tooltip" title="Find and fix open source dependency issues.">Snyk Open Source</span>
                                             <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_oss_enabled"></span>
+                                            <span class="source-indicator" data-toggle="tooltip" title="Set by you at project defaults level">👤</span>
                                         </label>
                                     </div>
-                                    <div class="override-indicator-wrapper ">
+                                    <div class="override-indicator-wrapper source-user-override">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="snyk_code_enabled" checked>
                                             <span data-toggle="tooltip" title="<p>Find and fix security issues in your application code.</p><p><strong>Note: </strong>Snyk Code must be enabled for your organization.</p>">Snyk Code</span>
                                             <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_code_enabled"></span>
+                                            <span class="source-indicator" data-toggle="tooltip" title="Set by you at project defaults level">👤</span>
                                         </label>
                                     </div>
-                                    <div class="override-indicator-wrapper ">
+                                    <div class="override-indicator-wrapper source-user-override">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="snyk_iac_enabled" >
                                             <span data-toggle="tooltip" title="Find and fix your IaC misconfigurations.">Snyk Infrastructure as Code</span>
                                             <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_iac_enabled"></span>
+                                            <span class="source-indicator" data-toggle="tooltip" title="Set by you at project defaults level">👤</span>
                                         </label>
                                     </div>
                                     
                                     <div class="override-indicator-wrapper ">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="snyk_secrets_enabled" >
-                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code.">Snyk Secrets<span class="deprecated-label">Closed Beta</span></span>
+                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code.">Snyk Secrets</span>
                                             <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_secrets_enabled"></span>
+                                            
                                         </label>
                                     </div>
                                     
@@ -1101,7 +1106,7 @@ button.secondary[disabled] {
 
                             <div class="override-indicator-wrapper ">
                                 <div class="form-group half-width">
-                                    <label for="scan_automatic"><span data-toggle="tooltip" title="Choose whether to run Snyk scans in the background (auto), or only when you run the Scan command (manual).">Scanning mode</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_automatic"></span></label>
+                                    <label for="scan_automatic"><span data-toggle="tooltip" title="Choose whether to run Snyk scans in the background (auto), or only when you run the Scan command (manual).">Scanning mode</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_automatic"></span> </label>
                                     <select id="scan_automatic" name="scan_automatic" data-bool="1">
                                         <option value="true" selected>Auto</option>
                                         <option value="false" >Manual</option>
@@ -1109,9 +1114,9 @@ button.secondary[disabled] {
                                 </div>
                             </div>
 
-                            <div class="override-indicator-wrapper ">
+                            <div class="override-indicator-wrapper source-user-override">
                                 <div class="form-group half-width">
-                                    <label for="organization"><span data-toggle="tooltip" title="<p>Specify the organization (ID or name) for Snyk to run scans against.</p><p>Organization selection follows this order:</p><ol><li>Project-specific settings (if configured)</li><li>This global setting (if the project-specific setting is empty)</li><li>Your web account's preferred organization (if both above are empty)</li></ol>">Organization</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="organization"></span></label>
+                                    <label for="organization"><span data-toggle="tooltip" title="<p>Specify the organization (ID or name) for Snyk to run scans against.</p><p>Organization selection follows this order:</p><ol><li>Project-specific settings (if configured)</li><li>This global setting (if the project-specific setting is empty)</li><li>Your web account's preferred organization (if both above are empty)</li></ol>">Organization</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="organization"></span> <span class="source-indicator" data-toggle="tooltip" title="Set by you at project defaults level">👤</span></label>
                                     <input type="text" id="organization" name="organization" value="manual-org-uuid-global" placeholder="Organization UUID or Slug">
                                 </div>
                             </div>
@@ -1130,18 +1135,20 @@ button.secondary[disabled] {
                                     <div class="form-group">
                                         <label><span data-toggle="tooltip" title="Select which severity levels to display in the results.">Filter by severity</span></label>
                                         <div class="checkbox-group">
-                                            <div class="override-indicator-wrapper ">
+                                            <div class="override-indicator-wrapper source-user-override">
                                                 <label class="checkbox-label">
                                                     <input type="checkbox" name="severity_filter_critical" checked>
                                                     Critical
                                                     <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="severity_filter_critical"></span>
+                                                    <span class="source-indicator" data-toggle="tooltip" title="Set by you at project defaults level">👤</span>
                                                 </label>
                                             </div>
-                                            <div class="override-indicator-wrapper ">
+                                            <div class="override-indicator-wrapper source-user-override">
                                                 <label class="checkbox-label">
                                                     <input type="checkbox" name="severity_filter_high" >
                                                     High
                                                     <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="severity_filter_high"></span>
+                                                    <span class="source-indicator" data-toggle="tooltip" title="Set by you at project defaults level">👤</span>
                                                 </label>
                                             </div>
                                             <div class="override-indicator-wrapper ">
@@ -1149,6 +1156,7 @@ button.secondary[disabled] {
                                                     <input type="checkbox" name="severity_filter_medium" checked>
                                                     Medium
                                                     <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="severity_filter_medium"></span>
+                                                    
                                                 </label>
                                             </div>
                                             <div class="override-indicator-wrapper ">
@@ -1156,6 +1164,7 @@ button.secondary[disabled] {
                                                     <input type="checkbox" name="severity_filter_low" checked>
                                                     Low
                                                     <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="severity_filter_low"></span>
+                                                    
                                                 </label>
                                             </div>
                                         </div>
@@ -1171,13 +1180,15 @@ button.secondary[disabled] {
                                                     <input type="checkbox" name="issue_view_open_issues" checked>
                                                     Show open issues
                                                     <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="issue_view_open_issues"></span>
+                                                    
                                                 </label>
                                             </div>
-                                            <div class="override-indicator-wrapper ">
+                                            <div class="override-indicator-wrapper source-user-override">
                                                 <label class="checkbox-label">
                                                     <input type="checkbox" name="issue_view_ignored_issues" checked>
                                                     Show ignored issues
                                                     <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="issue_view_ignored_issues"></span>
+                                                    <span class="source-indicator" data-toggle="tooltip" title="Set by you at project defaults level">👤</span>
                                                 </label>
                                             </div>
                                         </div>
@@ -1187,7 +1198,7 @@ button.secondary[disabled] {
 
                             <div class="override-indicator-wrapper ">
                                 <div class="form-group half-width">
-                                    <label for="risk_score_threshold"><span data-toggle="tooltip" title="<p>Minimum risk score to display issues.</p><p>Valid range: 0 to 1000 (0 = show all issues).</p>">Filter by risk score<span class="deprecated-label">Closed Beta</span></span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="risk_score_threshold"></span></label>
+                                    <label for="risk_score_threshold"><span data-toggle="tooltip" title="<p>Minimum risk score to display issues.</p><p>Valid range: 0 to 1000 (0 = show all issues).</p>">Filter by risk score<span class="deprecated-label">Closed Beta</span></span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="risk_score_threshold"></span> </label>
                                     <input type="number" id="risk_score_threshold" name="risk_score_threshold" min="0" max="1000" value="" placeholder="0">
                                     <span id="riskScore-error" class="error-message hidden">Risk score must be between 0 and 1000</span>
                                 </div>
@@ -1195,11 +1206,39 @@ button.secondary[disabled] {
 
                             <div class="override-indicator-wrapper ">
                                 <div class="form-group half-width">
-                                    <label for="scan_net_new"><span data-toggle="tooltip" title="Choose to see all issues or only those newly introduced by your code changes.">Delta findings</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_net_new"></span></label>
+                                    <label for="scan_net_new"><span data-toggle="tooltip" title="Choose to see all issues or only those newly introduced by your code changes.">Delta findings</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_net_new"></span> </label>
                                     <select id="scan_net_new" name="scan_net_new" data-bool="1">
                                         <option value="false" selected>All issues</option>
                                         <option value="true" >Net new issues</option>
                                     </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                
+                <div class="section">
+                    <div class="form-group">
+                        <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#defaults-advanced" aria-expanded="false" aria-controls="defaults-advanced">
+                            <span data-toggle="tooltip" title="Advanced default settings including CLI parameters and environment variables applied to all projects.">Advanced</span>
+                            <span class="collapse-icon">&#9660;</span>
+                        </button>
+                        <div class="collapse ml-1" id="defaults-advanced">
+                            <div class="mt-2">
+                                <div class="info-box">
+                                    <p>These values combine with any per-project values rather than replacing them. CLI parameters from both levels are used together; environment variables defined here are overridden by per-project values when the same key is set in both.</p>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="additional_parameters"><span data-toggle="tooltip" title="<p>Default CLI parameters for all project scans (space-separated).</p><p>Example: <code>--severity-threshold=high --debug</code></p><p>These are combined with any per-project parameters.</p>">Additional CLI parameters</span></label>
+                                    <input type="text" id="additional_parameters" name="additional_parameters" value="" placeholder="--severity-threshold=high">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="additional_environment"><span data-toggle="tooltip" title="<p>Default environment variables for all project scans.</p><p>Format: <code>VAR1=value1;VAR2=value2</code></p><p>Per-project values override these on key conflicts.</p>">Additional environment variables</span></label>
+                                    <input type="text" id="additional_environment" name="additional_environment" value="" placeholder="VAR1=value1;VAR2=value2">
+                                    <div id="additional_environment-error" class="error-message hidden">Invalid format. Use: VAR1=value1;VAR2=value2</div>
                                 </div>
                             </div>
                         </div>
@@ -1545,7 +1584,7 @@ button.secondary[disabled] {
                                     <div class="override-indicator-wrapper source-org">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="folder_1_snyk_secrets_enabled" data-setting="snyk_secrets_enabled" checked >
-                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code.">Snyk Secrets<span class="deprecated-label">Closed Beta</span></span>
+                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code.">Snyk Secrets</span>
                                             <span class="source-indicator" data-toggle="tooltip" title="Set by your organization settings">🏢</span>
                                         </label>
                                     </div>
@@ -2110,36 +2149,36 @@ button.secondary[disabled] {
                             <div class="form-group">
                                 <h3>Scanners</h3>
                                 <div class="checkbox-group">
-                                    <div class="override-indicator-wrapper ">
+                                    <div class="override-indicator-wrapper source-user-override">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="folder_3_snyk_oss_enabled" data-setting="snyk_oss_enabled" checked >
                                             <span data-toggle="tooltip" title="Find and fix open source dependency issues.">Snyk Open Source</span>
-                                            
+                                            <span class="source-indicator" data-toggle="tooltip" title="Set by you at project level">👤</span>
                                         </label>
                                     </div>
-                                    <div class="override-indicator-wrapper ">
+                                    <div class="override-indicator-wrapper source-user-override">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="folder_3_snyk_code_enabled" data-setting="snyk_code_enabled" checked >
                                             <span data-toggle="tooltip" title="<p>Find and fix security issues in your application code in real time.</p><p><strong>Note:</strong> Snyk Code must be enabled for your organization in Snyk settings.</p>">Snyk Code</span>
-                                            
+                                            <span class="source-indicator" data-toggle="tooltip" title="Set by you at project level">👤</span>
                                         </label>
                                     </div>
-                                    <div class="override-indicator-wrapper ">
+                                    <div class="override-indicator-wrapper source-user-override">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="folder_3_snyk_iac_enabled" data-setting="snyk_iac_enabled"  >
                                             <span data-toggle="tooltip" title="Find and fix your IaC misconfigurations.">Snyk Infrastructure as Code</span>
-                                            
+                                            <span class="source-indicator" data-toggle="tooltip" title="Set by you at project level">👤</span>
                                         </label>
                                     </div>
                                     
                                 </div>
                             </div>
 
-                            <div class="override-indicator-wrapper ">
+                            <div class="override-indicator-wrapper source-user-override">
                                 <div class="form-group half-width">
                                     <label for="folder_3_scan_automatic">
                                         <span data-toggle="tooltip" title="Choose whether to run Snyk scans in the background (auto), or only when you run the Scan command (manual).">Scanning mode</span>
-                                        
+                                        <span class="source-indicator" data-toggle="tooltip" title="Set by you at project level">👤</span>
                                     </label>
                                     
                                     <select id="folder_3_scan_automatic" name="folder_3_scan_automatic" data-setting="scan_automatic" data-bool="1" >
@@ -2183,32 +2222,32 @@ button.secondary[disabled] {
                                             <span data-toggle="tooltip" title="Select which severity levels to display in the results.">Filter by severity</span>
                                         </label>
                                         <div class="checkbox-group">
-                                            <div class="override-indicator-wrapper ">
+                                            <div class="override-indicator-wrapper source-user-override">
                                                 <label class="checkbox-label">
                                                     <input type="checkbox" name="folder_3_severity_filter_critical" data-setting="severity_filter_critical" checked >
                                                     Critical
-                                                    
+                                                    <span class="source-indicator" data-toggle="tooltip" title="Set by you at project level">👤</span>
                                                 </label>
                                             </div>
-                                            <div class="override-indicator-wrapper ">
+                                            <div class="override-indicator-wrapper source-user-override">
                                                 <label class="checkbox-label">
                                                     <input type="checkbox" name="folder_3_severity_filter_high" data-setting="severity_filter_high" checked >
                                                     High
-                                                    
+                                                    <span class="source-indicator" data-toggle="tooltip" title="Set by you at project level">👤</span>
                                                 </label>
                                             </div>
-                                            <div class="override-indicator-wrapper ">
+                                            <div class="override-indicator-wrapper source-user-override">
                                                 <label class="checkbox-label">
                                                     <input type="checkbox" name="folder_3_severity_filter_medium" data-setting="severity_filter_medium"  >
                                                     Medium
-                                                    
+                                                    <span class="source-indicator" data-toggle="tooltip" title="Set by you at project level">👤</span>
                                                 </label>
                                             </div>
-                                            <div class="override-indicator-wrapper ">
+                                            <div class="override-indicator-wrapper source-user-override">
                                                 <label class="checkbox-label">
                                                     <input type="checkbox" name="folder_3_severity_filter_low" data-setting="severity_filter_low"  >
                                                     Low
-                                                    
+                                                    <span class="source-indicator" data-toggle="tooltip" title="Set by you at project level">👤</span>
                                                 </label>
                                             </div>
                                         </div>
@@ -2219,18 +2258,18 @@ button.secondary[disabled] {
                                     <div class="form-group">
                                         <label data-toggle="tooltip" title="<p>Code Consistent Ignores helps your teams focus on important tasks by filtering out distractions.</p><p>It ensures that once an ignore is created, it is consistently respected regardless of how and where the test is run.</p>">Issue view options</label>
                                         <div class="checkbox-group">
-                                            <div class="override-indicator-wrapper ">
+                                            <div class="override-indicator-wrapper source-user-override">
                                                 <label class="checkbox-label">
                                                     <input type="checkbox" name="folder_3_issue_view_open_issues" data-setting="issue_view_open_issues" checked >
                                                     Show open issues
-                                                    
+                                                    <span class="source-indicator" data-toggle="tooltip" title="Set by you at project level">👤</span>
                                                 </label>
                                             </div>
-                                            <div class="override-indicator-wrapper ">
+                                            <div class="override-indicator-wrapper source-user-override">
                                                 <label class="checkbox-label">
                                                     <input type="checkbox" name="folder_3_issue_view_ignored_issues" data-setting="issue_view_ignored_issues"  >
                                                     Show ignored issues
-                                                    
+                                                    <span class="source-indicator" data-toggle="tooltip" title="Set by you at project level">👤</span>
                                                 </label>
                                             </div>
                                         </div>
@@ -2238,22 +2277,22 @@ button.secondary[disabled] {
                                 </div>
                             </div>
 
-                            <div class="override-indicator-wrapper ">
+                            <div class="override-indicator-wrapper source-user-override">
                                 <div class="form-group half-width">
                                     <label for="folder_3_risk_score_threshold">
                                         <span data-toggle="tooltip" title="Minimum risk score to display issues (0-1000)">Filter by risk score<span class="deprecated-label">Closed Beta</span></span>
-                                        
+                                        <span class="source-indicator" data-toggle="tooltip" title="Set by you at project level">👤</span>
                                     </label>
                                     <input type="number" id="folder_3_risk_score_threshold" name="folder_3_risk_score_threshold" data-setting="risk_score_threshold" min="0" max="1000" value="500" placeholder="0" >
                                     <span id="folder_3_risk_score_threshold-error" class="error-message hidden">Risk score must be between 0 and 1000</span>
                                 </div>
                             </div>
 
-                            <div class="override-indicator-wrapper ">
+                            <div class="override-indicator-wrapper source-user-override">
                                 <div class="form-group half-width">
                                     <label for="folder_3_scan_net_new">
                                         <span data-toggle="tooltip" title="Choose to see all issues or only those newly introduced by your code changes.">Delta findings</span>
-                                        
+                                        <span class="source-indicator" data-toggle="tooltip" title="Set by you at project level">👤</span>
                                     </label>
                                     <select id="folder_3_scan_net_new" name="folder_3_scan_net_new" data-setting="scan_net_new" data-bool="1" >
                                         <option value="false" selected>All issues</option>
@@ -3875,9 +3914,11 @@ if (window.cssVars) {
 			return true; // Empty is valid
 		}
 
-		// Pattern: KEY=VALUE where KEY is valid env var name [A-Za-z_][A-Za-z0-9_]*
-		// VALUE cannot contain ; or = characters (exactly one = per segment)
-		var envVarPattern = /^\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*[^;=]*\s*$/;
+		// Pattern: KEY=VALUE where KEY is a valid env var name [A-Za-z_][A-Za-z0-9_]*
+		// VALUE may contain '=' (matches the Go backend's strings.Cut on the first '=',
+		// see infrastructure/oss/cli_scanner.go) but not ';' (the segment separator).
+		// This allows base64-padded values, JWTs, query strings, etc.
+		var envVarPattern = /^\s*[A-Za-z_][A-Za-z0-9_]*\s*=[^;]*$/;
 
 		return value.split(";")
 			.filter(function(segment) { return segment.trim() !== ""; })
@@ -4012,6 +4053,20 @@ if (window.cssVars) {
 		}
 	};
 
+	// Validate global (Project Defaults) additional environment variables on input
+	validation.validateGlobalAdditionalEnvOnInput = function() {
+		validation.validateAndShowError("additional_environment", "additional_environment-error", validation.validateAdditionalEnv);
+	};
+
+	// Initialize validation event listener for the global additional environment field
+	validation.initializeGlobalAdditionalEnvValidation = function() {
+		var dom = window.ConfigApp.dom;
+		var input = dom.get("additional_environment");
+		if (input) {
+			dom.addEvent(input, "input", validation.validateGlobalAdditionalEnvOnInput);
+		}
+	};
+
 	// Initialize all validation event listeners
 	validation.initializeAllValidation = function() {
 		var dom = window.ConfigApp.dom;
@@ -4045,6 +4100,9 @@ if (window.cssVars) {
 		if (cliVersionInput) {
 			dom.addEvent(cliVersionInput, "input", validation.validateCliVersionOnInput);
 		}
+
+		// Global (Project Defaults) additional env validation
+		validation.initializeGlobalAdditionalEnvValidation();
 
 		// Per-folder additional env validation
 		validation.initializeFolderAdditionalEnvValidation();

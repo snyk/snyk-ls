@@ -20,6 +20,7 @@ package fflags
 import (
 	_ "embed"
 	"encoding/json"
+	"sync"
 )
 
 type FeatureFlag struct {
@@ -29,13 +30,33 @@ type FeatureFlag struct {
 var (
 	//go:embed features.json
 	featuresEmbed []byte
-	featureFlag   FeatureFlag
+
+	once      sync.Once
+	cached    FeatureFlag
+	errCached error
 )
 
-func LoadFeatureFlags() (*FeatureFlag, error) {
-	err := json.Unmarshal(featuresEmbed, &featureFlag)
-	if err != nil {
-		return nil, err
+func parseFeatureFlags(data []byte) (FeatureFlag, error) {
+	var ff FeatureFlag
+	if err := json.Unmarshal(data, &ff); err != nil {
+		return FeatureFlag{}, err
 	}
-	return &featureFlag, nil
+	return ff, nil
+}
+
+// LoadFeatureFlags returns the parsed feature flags. The embedded JSON is
+// unmarshalled exactly once; errCached is non-nil only if the embedded asset
+// is malformed at build time, which TestLoadFeatureFlags would also catch.
+func LoadFeatureFlags() (*FeatureFlag, error) {
+	once.Do(func() {
+		cached, errCached = parseFeatureFlags(featuresEmbed)
+	})
+	if errCached != nil {
+		return nil, errCached
+	}
+	// Shallow copy is safe because FeatureFlag contains only value-typed fields
+	// (strings). If a slice, map, or pointer is ever added, replace this with
+	// an explicit deep copy to avoid sharing mutable state between callers.
+	cp := cached
+	return &cp, nil
 }

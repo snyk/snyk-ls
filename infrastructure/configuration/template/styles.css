@@ -123,6 +123,7 @@ form > .section {
 
 /* Direct tab-pane children miss the 10px col-md-* gutter; offset them so all blocks share one edge. */
 .tab-pane > .info-box,
+.tab-pane > .section,
 .folder-pane > .section,
 .folder-pane > .reset-overrides-btn {
     margin-left: 10px;
