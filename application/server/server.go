@@ -657,7 +657,7 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		// goroutine reads this channel on its first message.
 		types.NewLspInitializedChannel(conf)
 		go createProgressListener(progress.ToServerProgressChannel, srv, &logger)
-		registerNotifier(conf, &logger, srv, mustNotifierFromContext(ctx))
+		registerNotifier(conf, engine, mustConfigResolverFromContext(ctx), &logger, srv, mustNotifierFromContext(ctx))
 
 		result := types.InitializeResult{
 			ServerInfo: types.ServerInfo{
