@@ -360,6 +360,117 @@ func TestParse_CyclicParentReference_DoesNotRecurseInfinitely(t *testing.T) {
 	assert.Nil(t, tree.ParentTree.ParentTree, "cycle back to A should be refused")
 }
 
+func TestParse_ParentOutsideWorkspaceRoot_Skipped(t *testing.T) {
+	testutil.UnitTest(t)
+	base := t.TempDir()
+	root := filepath.Join(base, "workspace")
+	childDir := filepath.Join(root, "module")
+	outsideDir := filepath.Join(base, "outside")
+	require.NoError(t, os.MkdirAll(childDir, 0755))
+	require.NoError(t, os.MkdirAll(outsideDir, 0755))
+
+	// A real parent POM living outside the workspace root (e.g. a sensitive file a
+	// crafted relativePath points at). It is a valid POM, so only the containment
+	// guard — not a parse/stat error — can stop the walk.
+	outsidePath := filepath.Join(outsideDir, "pom.xml")
+	require.NoError(t, os.WriteFile(outsidePath, []byte("<?xml version=\"1.0\"?>\n<project></project>\n"), 0600))
+
+	childPath := filepath.Join(childDir, "pom.xml")
+	// ../../outside/pom.xml climbs out of the workspace root.
+	content := `<?xml version="1.0" encoding="UTF-8"?>
+<project>
+    <parent>
+        <relativePath>../../outside/pom.xml</relativePath>
+    </parent>
+</project>
+`
+	require.NoError(t, os.WriteFile(childPath, []byte(content), 0600))
+
+	var buf bytes.Buffer
+	logger := zerolog.New(&buf)
+	parser := New(&logger, types.FilePath(root))
+	tree := parser.Parse(content, types.FilePath(childPath))
+
+	assert.Nil(t, tree.ParentTree, "a parent POM resolving outside the workspace root must be skipped")
+	assert.Contains(t, buf.String(), "outside the workspace root",
+		"the containment guard must be what skips the parent, not a read/stat error")
+}
+
+func TestParse_ParentInsideWorkspaceRoot_StillFollowed(t *testing.T) {
+	testutil.UnitTest(t)
+	root := t.TempDir()
+	childDir := filepath.Join(root, "module")
+	parentDir := filepath.Join(root, "parent")
+	require.NoError(t, os.MkdirAll(childDir, 0755))
+	require.NoError(t, os.MkdirAll(parentDir, 0755))
+
+	parentPath := filepath.Join(parentDir, "pom.xml")
+	require.NoError(t, os.WriteFile(parentPath, []byte("<?xml version=\"1.0\"?>\n<project></project>\n"), 0600))
+
+	childPath := filepath.Join(childDir, "pom.xml")
+	content := `<?xml version="1.0" encoding="UTF-8"?>
+<project>
+    <parent>
+        <relativePath>../parent/pom.xml</relativePath>
+    </parent>
+</project>
+`
+	require.NoError(t, os.WriteFile(childPath, []byte(content), 0600))
+
+	var buf bytes.Buffer
+	logger := zerolog.New(&buf)
+	parser := New(&logger, types.FilePath(root))
+	tree := parser.Parse(content, types.FilePath(childPath))
+
+	// The guard must not block a legitimate parent that stays within the workspace.
+	require.NotNil(t, tree.ParentTree, "a parent POM inside the workspace root must still be followed")
+	// Assert the accept-branch was actually taken, not that the guard was bypassed:
+	// the rejection warning must be absent for an in-workspace parent.
+	assert.NotContains(t, buf.String(), "outside the workspace root",
+		"an in-workspace parent must not trip the containment guard")
+}
+
+func TestParse_ParentSymlinkEscapesWorkspaceRoot_Skipped(t *testing.T) {
+	testutil.UnitTest(t)
+	base := t.TempDir()
+	root := filepath.Join(base, "workspace")
+	childDir := filepath.Join(root, "module")
+	outsideDir := filepath.Join(base, "outside")
+	require.NoError(t, os.MkdirAll(childDir, 0755))
+	require.NoError(t, os.MkdirAll(outsideDir, 0755))
+
+	// A real parent POM outside the workspace root.
+	outsidePath := filepath.Join(outsideDir, "pom.xml")
+	require.NoError(t, os.WriteFile(outsidePath, []byte("<?xml version=\"1.0\"?>\n<project></project>\n"), 0600))
+
+	// A symlink that lives INSIDE the workspace root but points at the out-of-root
+	// directory. A purely lexical containment check would accept <root>/module/link/pom.xml
+	// because the string is in-root; the parser must resolve the symlink and refuse it.
+	link := filepath.Join(childDir, "link")
+	if err := os.Symlink(outsideDir, link); err != nil {
+		t.Skipf("symlinks unsupported on this platform: %v", err)
+	}
+
+	childPath := filepath.Join(childDir, "pom.xml")
+	content := `<?xml version="1.0" encoding="UTF-8"?>
+<project>
+    <parent>
+        <relativePath>link/pom.xml</relativePath>
+    </parent>
+</project>
+`
+	require.NoError(t, os.WriteFile(childPath, []byte(content), 0600))
+
+	var buf bytes.Buffer
+	logger := zerolog.New(&buf)
+	parser := New(&logger, types.FilePath(root))
+	tree := parser.Parse(content, types.FilePath(childPath))
+
+	assert.Nil(t, tree.ParentTree, "a parent reached via an in-root symlink that escapes the workspace must be skipped")
+	assert.Contains(t, buf.String(), "outside the workspace root",
+		"the containment guard must resolve the symlink and refuse the out-of-root target")
+}
+
 func TestCreateHierarchicalDependencyTree(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	var testPath, _ = filepath.Abs("testdata/maven-goof/sub/pom.xml")

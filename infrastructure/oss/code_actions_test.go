@@ -125,7 +125,7 @@ func Test_GetCodeActions_MavenPropertyInParentPom_RedirectsToParent(t *testing.T
 	require.NoError(t, os.WriteFile(parentPath, []byte(parentPomWithProperty), 0600))
 
 	from := []string{"root@1.0.0", "org.cyclonedx:cyclonedx-core-java@9.0.5"}
-	depNode := getDependencyNode(engine.GetLogger(), types.FilePath(childPath), "maven", from, []byte(childPomWithParentProperty))
+	depNode := getDependencyNode(engine.GetLogger(), types.FilePath(childPath), "maven", from, []byte(childPomWithParentProperty), types.FilePath(dir))
 	require.NotNil(t, depNode)
 	require.Equal(t, "${foo.version}", depNode.Value)
 
@@ -307,7 +307,7 @@ func Test_MavenPropertyQuickfix_AppliedTwice_DoesNotCorruptPom(t *testing.T) {
 	require.NoError(t, os.WriteFile(pomPath, []byte(propertyManagedPom), 0600))
 
 	from := []string{"root@1.0.0", "org.cyclonedx:cyclonedx-core-java@9.0.5"}
-	depNode := getDependencyNode(engine.GetLogger(), types.FilePath(pomPath), "maven", from, []byte(propertyManagedPom))
+	depNode := getDependencyNode(engine.GetLogger(), types.FilePath(pomPath), "maven", from, []byte(propertyManagedPom), types.FilePath(dir))
 	require.NotNil(t, depNode)
 
 	issue := mavenTestIssue()
@@ -379,7 +379,7 @@ func Test_resolveMavenPropertyNode_CycleAndDepthBounds(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	from := []string{"root@1.0.0", "org.cyclonedx:cyclonedx-core-java@9.0.5"}
 	depFor := func(content string) *ast.Node {
-		return getDependencyNode(engine.GetLogger(), types.FilePath("pom.xml"), "maven", from, []byte(content))
+		return getDependencyNode(engine.GetLogger(), types.FilePath("pom.xml"), "maven", from, []byte(content), "")
 	}
 	wrap := func(properties, versionRef string) string {
 		return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<project>\n    <properties>\n" +
@@ -476,7 +476,7 @@ func Test_resolveMavenPropertyNode_NameAndWhitespaceVariants(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			content := pom(tc.propName, tc.propValue, tc.versionRef)
 			from := []string{"root@1.0.0", "org.cyclonedx:cyclonedx-core-java@9.0.5"}
-			depNode := getDependencyNode(engine.GetLogger(), types.FilePath("pom.xml"), "maven", from, []byte(content))
+			depNode := getDependencyNode(engine.GetLogger(), types.FilePath("pom.xml"), "maven", from, []byte(content), "")
 			require.NotNil(t, depNode)
 
 			resolved := resolveMavenPropertyNode(depNode)
@@ -540,7 +540,7 @@ func applyMavenUpgradeQuickfix(t *testing.T, pom string) []types.TextEdit {
 	require.NoError(t, os.WriteFile(pomPath, []byte(pom), 0600))
 
 	from := []string{"root@1.0.0", "org.cyclonedx:cyclonedx-core-java@9.0.5"}
-	depNode := getDependencyNode(engine.GetLogger(), types.FilePath(pomPath), "maven", from, []byte(pom))
+	depNode := getDependencyNode(engine.GetLogger(), types.FilePath(pomPath), "maven", from, []byte(pom), types.FilePath(dir))
 	require.NotNil(t, depNode)
 
 	issue := mavenTestIssue()

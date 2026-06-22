@@ -42,6 +42,10 @@ const maxParentPOMSize = 16 << 20
 
 type Parser struct {
 	logger *zerolog.Logger
+	// root is an optional workspace boundary. If set, POMs mus reside under this
+	// directory (after relative path and symlink resolution), else they are rejected
+	// Leave empty to disable the check.
+	root types.FilePath
 }
 
 type Parent struct {
@@ -59,9 +63,13 @@ type Dependency struct {
 	Type       string `xml:"type"`
 }
 
-func New(logger *zerolog.Logger) Parser {
+// New builds a Parser. If root is set, POMs must reside under this directory
+// (after relative path and symlink resolution), else they are rejected. Leave
+// empty to disable the check.
+func New(logger *zerolog.Logger, root types.FilePath) Parser {
 	return Parser{
 		logger: logger,
+		root:   root,
 	}
 }
 
@@ -152,6 +160,10 @@ func (p *Parser) handleParent(d *xml.Decoder, tree *ast.Tree, pomDir string, ele
 		p.logger.Err(err).Msg("Couldn't resolve Parent path")
 		return
 	}
+	if !p.isWithinRoot(parentAbsPath) {
+		p.logger.Warn().Str("path", parentAbsPath).Str("root", string(p.root)).Msg("Parent POM resolves outside the workspace root, skipping")
+		return
+	}
 	if depth+1 > maxParentDepth {
 		p.logger.Warn().Str("path", parentAbsPath).Int("depth", depth).Msg("Maximum parent POM depth reached, skipping")
 		return
@@ -179,6 +191,32 @@ func (p *Parser) handleParent(d *xml.Decoder, tree *ast.Tree, pomDir string, ele
 		return
 	}
 	tree.ParentTree = p.parse(string(content), types.FilePath(parentAbsPath), visited, depth+1)
+}
+
+// isWithinRoot reports whether parentAbsPath (an absolute path) is the workspace
+// root or lies inside it.
+//
+// An empty root disables the check (always returns true). Symlinks are resolved
+// before comparison.
+func (p *Parser) isWithinRoot(parentAbsPath string) bool {
+	if p.root == "" {
+		return true
+	}
+	rootAbs, err := filepath.Abs(string(p.root))
+	if err != nil {
+		return false
+	}
+	if resolved, e := filepath.EvalSymlinks(rootAbs); e == nil {
+		rootAbs = resolved
+	}
+	if resolved, e := filepath.EvalSymlinks(parentAbsPath); e == nil {
+		parentAbsPath = resolved
+	}
+	rel, err := filepath.Rel(rootAbs, parentAbsPath)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
 func addDepsFromBOM(path types.FilePath, tree *ast.Tree, dep Dependency) {
@@ -250,11 +288,8 @@ func (p *Parser) addPropertyNodes(tree *ast.Tree, content string, baseOffset int
 
 // scanPropertyValueSpan consumes the children of the current property element
 // from dec and returns the [start, end) offsets (within the inner string) of the
-// property's direct text value. Nesting depth is tracked so a value that itself
-// contains elements (e.g. <v><x>1</x></v>) does not terminate the scan early at
-// the first inner end tag — only the property element's own closing tag (depth
-// back to 0) ends it. This also leaves the decoder positioned past the whole
-// subtree so the caller does not mistake a nested element for a top-level property.
+// property's direct text value. Nesting depth is tracked to ensure that we balance
+// opening and closing tags.
 func scanPropertyValueSpan(dec *xml.Decoder) (start, end int) {
 	start = int(dec.InputOffset())
 	end = start
