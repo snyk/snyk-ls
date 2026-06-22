@@ -22,6 +22,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/domain/ide/command"
@@ -83,7 +84,7 @@ func disposeProgressListener() {
 }
 
 //nolint:gocyclo // this is ok, as it's so high because of forwarding the calls
-func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, srv types.Server, n noti.Notifier) {
+func registerNotifier(conf configuration.Configuration, engine workflow.Engine, configResolver types.ConfigResolverInterface, logger *zerolog.Logger, srv types.Server, n noti.Notifier) {
 	if n == nil {
 		panic("registerNotifier: Notifier must not be nil — check server startup wiring")
 	}
@@ -104,6 +105,9 @@ func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, 
 		case types.AuthenticationParams:
 			notifyClient(logger, srv, "$/snyk.hasAuthenticated", params)
 			l.Debug().Msg("sending token")
+			lspConfig := command.BuildLspConfiguration(conf, engine, logger, nil, configResolver)
+			notifyClient(logger, srv, "$/snyk.configuration", lspConfig)
+			l.Debug().Msg("sending configuration after authentication")
 		case types.SnykIsAvailableCli:
 			notifyClient(logger, srv, "$/snyk.isAvailableCli", params)
 			l.Debug().Msg("sending cli path")

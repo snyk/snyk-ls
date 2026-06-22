@@ -246,6 +246,11 @@ func UpdateSettings(ctx context.Context, conf configuration.Configuration, engin
 	n := mustNotifierFromContext(ctx)
 	notifyLockedFieldsRejected(n, fm, lockedMachineFields, lockedFolderFields)
 
+	if conf.GetBool(types.SettingIsLspInitialized) {
+		lspConfig := command.BuildLspConfiguration(conf, engine, logger, nil, configResolver)
+		n.Send(lspConfig)
+	}
+
 	if ws != nil {
 		for _, folder := range ws.Folders() {
 			newState := folder.DisplayableIssueTypes()
@@ -634,11 +639,12 @@ func applyApiEndpoints(conf configuration.Configuration, engine workflow.Engine,
 
 func applyToken(settings map[string]*types.ConfigSetting, authService authentication.AuthenticationService) {
 	tokenFromIde, tokenExistsInMap := settings[types.SettingToken]
-	if tokenExistsInMap {
-		tokenAsString, parsable := tokenFromIde.Value.(string)
-		if parsable && authService != nil {
-			authService.UpdateCredentials(tokenAsString, false, false)
-		}
+	if !tokenExistsInMap || tokenFromIde == nil {
+		return
+	}
+	tokenAsString, parsable := tokenFromIde.Value.(string)
+	if parsable && authService != nil {
+		authService.UpdateCredentials(tokenAsString, false, false)
 	}
 }
 
