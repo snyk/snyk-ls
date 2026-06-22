@@ -860,10 +860,6 @@ func applyAutoScan(conf configuration.Configuration, settings map[string]*types.
 	types.SetGlobalDeferredFolderScope(conf, types.SettingScanAutomatic, autoScan)
 }
 
-// applyOrganization persists the global org change and emits analytics.
-// Returns true when the global org actually changed and the LSP is initialized
-// so the caller (processConfigSettings → processFolderConfigs) can union the
-// affected workspace folders into the single resetSummaryPanelForOrgChange call.
 // isReset reports whether an incoming ConfigSetting is a reset marker:
 // {changed:true, value:null}. This is the global-scope analog of
 // folder_config.go::isFolderReset.
@@ -871,10 +867,32 @@ func isReset(cs *types.ConfigSetting) bool {
 	return cs != nil && cs.Changed && cs.Value == nil
 }
 
+// globalEffectiveValue returns the effective global value for a resettable key
+// using the type-correct reader for that key's flagset registration.
+// GetGlobalBool is wrong for int-registered (SettingRiskScoreThreshold) and
+// string-registered (SettingScanNetNew) keys — calling it there always yields
+// false regardless of the stored value, silently suppressing analytics.
+// All other GlobalResettableSettings are bool-registered, so they use GetGlobalBool.
+func globalEffectiveValue(conf configuration.Configuration, name string) any {
+	switch name {
+	case types.SettingRiskScoreThreshold:
+		return types.GetGlobalInt(conf, name)
+	case types.SettingScanNetNew:
+		return types.GetGlobalString(conf, name)
+	default:
+		return types.GetGlobalBool(conf, name)
+	}
+}
+
 // globalResetFilterKeys is the subset of GlobalResettableSettings whose reset
-// must trigger a diagnostics refresh (severity filters, issue-view options, risk
-// score threshold), mirroring applySeverityFilter / applyIssueViewOptions.
+// must trigger a diagnostics refresh, mirroring applyProductEnablement /
+// applySeverityFilter / applyIssueViewOptions / applyDeltaFindings.
 var globalResetFilterKeys = map[string]bool{
+	types.SettingSnykOssEnabled:         true,
+	types.SettingSnykCodeEnabled:        true,
+	types.SettingSnykIacEnabled:         true,
+	types.SettingSnykSecretsEnabled:     true,
+	types.SettingScanNetNew:             true,
 	types.SettingSeverityFilterCritical: true,
 	types.SettingSeverityFilterHigh:     true,
 	types.SettingSeverityFilterMedium:   true,
@@ -886,11 +904,11 @@ var globalResetFilterKeys = map[string]bool{
 
 // applyGlobalResets clears user overrides for org-scope global ("Project Defaults")
 // settings sent as {changed:true, value:null}. For each handled key it Unsets the
-// user override (so the resolver falls back to LDX-Sync / flagset default) and
-// deletes the entry from settings so the downstream typed appliers do not also act
-// on it. organization is handled specially via config.ResetOrganization because it
-// is not stored at UserGlobalKey. Returns true if the effective global org changed,
-// so the caller can fold the summary-panel reset into the single org-change path.
+// user override (so the value falls back through the resolver chain) and deletes the
+// entry from settings so the downstream typed appliers do not also act on it.
+// organization is handled specially via config.ResetOrganization because it is not
+// stored at UserGlobalKey. Returns true if the effective global org changed, so the
+// caller can fold the summary-panel reset into the single org-change path.
 //
 // Locked fields: validateLockedMachineFields runs first and strips locked
 // machine-scope entries (incl. a locked organization), so they never reach here.
@@ -907,17 +925,48 @@ func applyGlobalResets(ctx context.Context, conf configuration.Configuration, en
 
 		if name == types.SettingOrganization {
 			oldOrgId := types.GetGlobalOrganization(conf)
+			// Capture folders BEFORE resetting. GetGlobalOrganization has a
+			// write-on-read side effect (conf.Set(ORGANIZATION, org)) that could
+			// produce unexpected state if called after ResetOrganization has cleared
+			// the explicit-set marker. Pre-capturing the list eliminates any order
+			// dependency on that side effect.
+			//
+			// Initialize to a non-nil empty slice (not nil) so that
+			// refreshFoldersForGlobalOrgChange routes through the pre-captured path
+			// (preCaptured != nil) even when there is no workspace. A nil slice
+			// would be treated as "no capture taken — query after reset", defeating
+			// the ordering guarantee this pre-capture provides.
+			foldersToRefresh := []types.Folder{}
+			if ws := config.GetWorkspace(conf); ws != nil {
+				foldersToRefresh = findFoldersUsingGlobalOrgFallback(conf, ws.Folders())
+			}
 			config.ResetOrganization(conf)
 			newOrgId := types.GetGlobalOrganization(conf)
 			if oldOrgId != newOrgId && conf.GetBool(types.SettingIsLspInitialized) {
 				analytics.SendConfigChangedAnalytics(conf, engine, logger, configOrganization, oldOrgId, newOrgId, triggerSource, configResolver)
-				refreshFoldersForGlobalOrgChange(ctx, conf, engine, logger, oldOrgId, newOrgId)
+				refreshFoldersForGlobalOrgChange(ctx, conf, engine, logger, oldOrgId, newOrgId, foldersToRefresh)
 				orgChanged = true
 			}
 		} else if types.HasGlobalUserOverride(conf, name) {
+			// Read the effective value BEFORE and AFTER unset using the type-correct
+			// reader for this key. GetGlobalBool is wrong for int/string-registered keys
+			// (e.g. SettingRiskScoreThreshold, SettingScanNetNew) — the type assertion
+			// always fails, making oldEffective == newEffective == false and silently
+			// suppressing both analytics and the diagnostics refresh.
+			oldEffective := globalEffectiveValue(conf, name)
 			types.UnsetGlobalUser(conf, name)
+			newEffective := globalEffectiveValue(conf, name)
+			effectivelyChanged := oldEffective != newEffective
+			// filterReset: trigger diagnostics for any globalResetFilterKey whose
+			// user override is being removed — regardless of whether the effective
+			// value changes (the user had an intentional override; clearing it is
+			// always meaningful for the filter pipeline). This mirrors the pre-analytics
+			// behavior where filterReset was set unconditionally for keys in the map.
 			if globalResetFilterKeys[name] {
 				filterReset = true
+			}
+			if conf.GetBool(types.SettingIsLspInitialized) && effectivelyChanged {
+				analytics.SendConfigChangedAnalytics(conf, engine, logger, name, oldEffective, newEffective, triggerSource, configResolver)
 			}
 		}
 
@@ -932,6 +981,10 @@ func applyGlobalResets(ctx context.Context, conf configuration.Configuration, en
 	return orgChanged
 }
 
+// applyOrganization persists the global org change and emits analytics.
+// Returns true when the global org actually changed and the LSP is initialized
+// so the caller (processConfigSettings → processFolderConfigs) can union the
+// affected workspace folders into the single resetSummaryPanelForOrgChange call.
 func applyOrganization(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) bool {
 	v, ok := settingStr(settings, types.SettingOrganization)
 	if !ok {
@@ -945,22 +998,30 @@ func applyOrganization(ctx context.Context, conf configuration.Configuration, en
 		return false
 	}
 	analytics.SendConfigChangedAnalytics(conf, engine, logger, configOrganization, oldOrgId, newOrgId, triggerSource, configResolver)
-	refreshFoldersForGlobalOrgChange(ctx, conf, engine, logger, oldOrgId, newOrgId)
+	refreshFoldersForGlobalOrgChange(ctx, conf, engine, logger, oldOrgId, newOrgId, nil)
 
 	return true
 }
 
 // refreshFoldersForGlobalOrgChange triggers an LDX-Sync refresh for folders that
-// depend on the global org fallback (OrgSetByUser && PreferredOrg==""). Shared by
-// applyOrganization (org explicitly set) and applyGlobalResets (org reset to
-// fallback) so both go through the same, scoped refresh — never a full-workspace
-// rescan.
-func refreshFoldersForGlobalOrgChange(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, oldOrgId, newOrgId string) {
-	ws := config.GetWorkspace(conf)
-	if ws == nil {
-		return
+// depend on the global org fallback (OrgSetByUser && PreferredOrg=="").
+//
+// Used by both applyOrganization (org explicitly set) and applyGlobalResets (org
+// reset to fallback). The reset path pre-captures the folder list before calling
+// ResetOrganization to avoid any ordering dependency on GetGlobalOrganization's
+// write-on-read side effect; it passes that list in preCaptured. The set path
+// passes nil, and the function queries the workspace itself.
+func refreshFoldersForGlobalOrgChange(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, oldOrgId, newOrgId string, preCaptured []types.Folder) {
+	var foldersNeedingRefresh []types.Folder
+	if preCaptured != nil {
+		foldersNeedingRefresh = preCaptured
+	} else {
+		ws := config.GetWorkspace(conf)
+		if ws == nil {
+			return
+		}
+		foldersNeedingRefresh = findFoldersUsingGlobalOrgFallback(conf, ws.Folders())
 	}
-	foldersNeedingRefresh := findFoldersUsingGlobalOrgFallback(conf, ws.Folders())
 	if len(foldersNeedingRefresh) == 0 {
 		return
 	}

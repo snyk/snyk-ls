@@ -87,12 +87,14 @@ func SetGlobalRawForRawReader(conf configuration.Configuration, name string, val
 }
 
 // UnsetGlobalUser clears a user-global override so the value falls back through
-// the resolver chain (LDX-Sync remote-unlocked → flagset default). This is the
-// global-scope counterpart of the per-folder reset in
-// folder_config.go::applyGenericFolderOverrides, which Unsets UserFolderKey when
-// an IDE sends {changed: true, value: null}. Like all GAF Unset calls it writes
-// through to shared on-disk storage via PersistInStorage, which is the desired
-// behavior here: a "Reset to defaults" must clear the persisted global override.
+// whatever resolver chain the reader uses (e.g. GetGlobalBool falls through to
+// the LDX-Sync remote-unlocked value → flagset default, while organization
+// resolution uses GAF's ORGANIZATION key). This is the global-scope counterpart
+// of the per-folder reset in folder_config.go::applyGenericFolderOverrides, which
+// Unsets UserFolderKey when an IDE sends {changed: true, value: null}. Like all
+// GAF Unset calls it writes through to shared on-disk storage via
+// PersistInStorage, which is the desired behavior here: a "Reset to defaults"
+// must clear the persisted global override.
 func UnsetGlobalUser(conf configuration.Configuration, name string) {
 	conf.Unset(configresolver.UserGlobalKey(name))
 }
@@ -113,6 +115,10 @@ func HasGlobalUserOverride(conf configuration.Configuration, name string) bool {
 //   - organization is global-only and included here; it is NOT a
 //     UserGlobalKey(SettingOrganization) override, so it is reset via
 //     config.ResetOrganization rather than UnsetGlobalUser (see applyGlobalResets).
+//
+// KEEP IN SYNC with GLOBAL_RESET_FIELDS in
+// infrastructure/configuration/template/js/ui/form-handler.js.
+// A test in js-tests/global-reset.test.mjs asserts the two lists match.
 var GlobalResettableSettings = []string{
 	SettingSnykOssEnabled,
 	SettingSnykCodeEnabled,

@@ -108,9 +108,10 @@
 
 	// Handle global (Project Defaults) override reset button click
 	function handleGlobalOverrideReset() {
-		if (!confirm("Reset all Project Defaults overrides? Your custom overrides will be removed.")) {
-			return;
-		}
+		// No confirm() — VSCode sandboxed webviews silently return false for
+		// window.confirm, which would prevent the reset from ever firing. The
+		// button's own visual affordance (red destructive-action style) is the
+		// confirmation. This matches the folder-override reset (PR #1344).
 
 		// Mark the global scope for reset — on save, formHandler.applyGlobalResets()
 		// sets all org-scope global fields to null (clear overrides).
@@ -122,6 +123,14 @@
 		if (window.dirtyTracker) {
 			window.dirtyTracker.runChangeListeners();
 			window.dirtyTracker.checkDirty();
+		}
+
+		// Persist the reset immediately on every IDE. We call getAndSaveIdeConfig()
+		// directly rather than relying on form-state's triggerChangeHandlers(), which
+		// only saves on auto-save IDEs — a reset must be a commit point everywhere
+		// (incl. OK/Cancel IDEs), since no input event would carry it.
+		if (window.ConfigApp.autoSave && window.ConfigApp.autoSave.getAndSaveIdeConfig) {
+			window.ConfigApp.autoSave.getAndSaveIdeConfig();
 		}
 	}
 

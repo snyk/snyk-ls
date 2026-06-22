@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -3105,10 +3106,14 @@ func Test_ProcessConfigSettings_GlobalReset(t *testing.T) {
 	})
 
 	t.Run("reset of organization reverts to fallback", func(t *testing.T) {
-		engine, tokenService := testutil.UnitTestWithEngine(t)
-		conf := engine.GetConfiguration()
-		ctx := testCtx(t, t.Context(), engine, tokenService)
-		cr := testutil.DefaultConfigResolver(engine)
+		// Use setupFolderConfigTest so we get:
+		//   - SettingIsLspInitialized=true (orgChanged branch fires)
+		//   - registered immutable defaults for ORGANIZATION / ORGANIZATION_SLUG
+		//     so GetGlobalOrganization resolves deterministically to "test-default-org-uuid"
+		setup := setupFolderConfigTest(t)
+		conf := setup.engineConfig
+		ctx := testCtx(t, t.Context(), setup.engine, setup.tokenService)
+		cr := testutil.DefaultConfigResolver(setup.engine)
 
 		config.SetOrganization(conf, "my-custom-org")
 		require.Equal(t, "my-custom-org", types.GetGlobalString(conf, types.SettingLastSetOrganization))
@@ -3116,12 +3121,64 @@ func Test_ProcessConfigSettings_GlobalReset(t *testing.T) {
 		settings := map[string]*types.ConfigSetting{
 			types.SettingOrganization: {Value: nil, Changed: true},
 		}
-		processConfigSettings(ctx, conf, engine, engine.GetLogger(), settings, analytics.TriggerSourceTest, cr)
+		processConfigSettings(ctx, conf, setup.engine, setup.engine.GetLogger(), settings, analytics.TriggerSourceTest, cr)
 
 		assert.Empty(t, types.GetGlobalString(conf, types.SettingLastSetOrganization),
 			"last_set_organization cleared so a later set is not a no-op")
 		_, present := settings[types.SettingOrganization]
 		assert.False(t, present, "handled org reset removed from settings map")
+
+		// After reset, GetGlobalOrganization must resolve to the registered immutable default.
+		org := types.GetGlobalOrganization(conf)
+		assert.Equal(t, "test-default-org-uuid", org,
+			"org must revert to the registered flagset default after reset")
+	})
+
+	t.Run("reset of product-enablement key triggers HandleConfigChange when value changes", func(t *testing.T) {
+		// Verifies that resetting a product-enablement key (snyk_oss_enabled) when the
+		// effective value changes (override false → default true) with LSP initialized
+		// results in ws.HandleConfigChange() being called via sendDiagnosticsForNewSettings.
+		// Uses a MockWorkspace to observe the call.
+		ctrl := gomock.NewController(t)
+		t.Cleanup(ctrl.Finish)
+
+		setup := setupFolderConfigTest(t)
+		conf := setup.engineConfig
+		ctx := testCtx(t, t.Context(), setup.engine, setup.tokenService)
+		cr := testutil.DefaultConfigResolver(setup.engine)
+
+		// Replace the workspace with a mock so we can assert HandleConfigChange fires.
+		// Use an atomic counter so we can wait on the goroutine reliably without a
+		// fixed sleep (which is flaky on loaded CI runners).
+		var handleConfigChangeCalled int32
+		mockWs := mock_types.NewMockWorkspace(ctrl)
+		mockWs.EXPECT().HandleConfigChange().
+			Do(func() { atomic.AddInt32(&handleConfigChangeCalled, 1) }).
+			MinTimes(1)
+		mockWs.EXPECT().Folders().Return(nil).AnyTimes()
+		config.SetWorkspace(conf, mockWs)
+
+		// Seed an override that differs from the default (snyk_oss_enabled default is true).
+		types.SetGlobalUser(conf, types.SettingSnykOssEnabled, false)
+		require.True(t, types.HasGlobalUserOverride(conf, types.SettingSnykOssEnabled))
+		require.False(t, types.GetGlobalBool(conf, types.SettingSnykOssEnabled), "override is false")
+
+		settings := map[string]*types.ConfigSetting{
+			types.SettingSnykOssEnabled: {Value: nil, Changed: true},
+		}
+		processConfigSettings(ctx, conf, setup.engine, setup.engine.GetLogger(), settings, analytics.TriggerSourceTest, cr)
+
+		assert.False(t, types.HasGlobalUserOverride(conf, types.SettingSnykOssEnabled),
+			"override must be cleared by reset")
+		assert.True(t, types.GetGlobalBool(conf, types.SettingSnykOssEnabled),
+			"oss must revert to true (flagset default) after reset")
+
+		// Wait for the goroutine launched by sendDiagnosticsForNewSettings to call
+		// HandleConfigChange. require.Eventually avoids the flaky fixed-sleep pattern.
+		require.Eventually(t,
+			func() bool { return atomic.LoadInt32(&handleConfigChangeCalled) > 0 },
+			time.Second, time.Millisecond,
+			"HandleConfigChange must be called after resetting a product-enablement key")
 	})
 
 	t.Run("no-op when no override exists", func(t *testing.T) {
@@ -3137,5 +3194,62 @@ func Test_ProcessConfigSettings_GlobalReset(t *testing.T) {
 
 		assert.False(t, types.HasGlobalUserOverride(conf, types.SettingSnykOssEnabled))
 		assert.True(t, types.GetGlobalBool(conf, types.SettingSnykOssEnabled), "still default true")
+	})
+
+	t.Run("reset of int and string keys uses type-correct reader", func(t *testing.T) {
+		// Verifies that resetting SettingRiskScoreThreshold (int-registered, default 0)
+		// and SettingScanNetNew (string-registered, default "") correctly reverts to
+		// their flagset defaults. GetGlobalBool would always return false for these,
+		// making oldEffective == newEffective == false and silently suppressing both
+		// analytics and the diagnostics refresh — this test catches that regression.
+		ctrl := gomock.NewController(t)
+		t.Cleanup(ctrl.Finish)
+
+		setup := setupFolderConfigTest(t)
+		conf := setup.engineConfig
+		ctx := testCtx(t, t.Context(), setup.engine, setup.tokenService)
+		cr := testutil.DefaultConfigResolver(setup.engine)
+
+		// Replace the workspace with a mock so we can observe HandleConfigChange.
+		var handleConfigChangeCalled int32
+		mockWs := mock_types.NewMockWorkspace(ctrl)
+		mockWs.EXPECT().HandleConfigChange().
+			Do(func() { atomic.AddInt32(&handleConfigChangeCalled, 1) }).
+			MinTimes(1)
+		mockWs.EXPECT().Folders().Return(nil).AnyTimes()
+		config.SetWorkspace(conf, mockWs)
+
+		// Seed non-default overrides: risk score threshold 500 (default is 0),
+		// scan_net_new "enabled" (default is "").
+		types.SetGlobalUser(conf, types.SettingRiskScoreThreshold, 500)
+		types.SetGlobalUser(conf, types.SettingScanNetNew, "enabled")
+		require.True(t, types.HasGlobalUserOverride(conf, types.SettingRiskScoreThreshold))
+		require.True(t, types.HasGlobalUserOverride(conf, types.SettingScanNetNew))
+		require.Equal(t, 500, types.GetGlobalInt(conf, types.SettingRiskScoreThreshold), "override active")
+		require.Equal(t, "enabled", types.GetGlobalString(conf, types.SettingScanNetNew), "override active")
+
+		settings := map[string]*types.ConfigSetting{
+			types.SettingRiskScoreThreshold: {Value: nil, Changed: true},
+			types.SettingScanNetNew:         {Value: nil, Changed: true},
+		}
+		processConfigSettings(ctx, conf, setup.engine, setup.engine.GetLogger(), settings, analytics.TriggerSourceTest, cr)
+
+		assert.False(t, types.HasGlobalUserOverride(conf, types.SettingRiskScoreThreshold),
+			"int override must be cleared by reset")
+		assert.False(t, types.HasGlobalUserOverride(conf, types.SettingScanNetNew),
+			"string override must be cleared by reset")
+		assert.Equal(t, 0, types.GetGlobalInt(conf, types.SettingRiskScoreThreshold),
+			"risk score must revert to flagset default 0 after reset")
+		assert.Equal(t, "", types.GetGlobalString(conf, types.SettingScanNetNew),
+			"scan_net_new must revert to flagset default empty string after reset")
+
+		// Both keys are in globalResetFilterKeys, so sendDiagnosticsForNewSettings fires.
+		// Assert the goroutine calls HandleConfigChange, proving the analytics + diagnostics
+		// path was exercised (if globalEffectiveValue regresses to GetGlobalBool for these
+		// keys, effectivelyChanged would always be false and the call would never happen).
+		require.Eventually(t,
+			func() bool { return atomic.LoadInt32(&handleConfigChangeCalled) > 0 },
+			time.Second, time.Millisecond,
+			"HandleConfigChange must be called after resetting int/string keys whose effective value changed")
 	})
 }

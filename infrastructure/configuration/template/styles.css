@@ -727,7 +727,8 @@ button.secondary[disabled] {
 }
 
 .reset-global-overrides-btn {
-    float: right;
+    display: inline-block;
+    align-self: flex-end;
     padding: 4px 12px;
     font-size: var(--tiny-font-size);
     background-color: var(--error-background);
