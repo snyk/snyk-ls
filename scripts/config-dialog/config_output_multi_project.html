@@ -3142,6 +3142,18 @@ if (window.cssVars) {
 				}
 			});
 		}
+
+		// Disable the CLI path field while binaries are managed automatically
+		var automaticDownload = dom.getByName("automatic_download")[0];
+		var cliPath = dom.get("cli_path");
+		if (automaticDownload && cliPath) {
+			var syncCliPathDisabled = function () {
+				cliPath.disabled = automaticDownload.checked;
+			};
+			dom.addEvent(automaticDownload, "change", syncCliPathDisabled);
+			// Apply the initial state on load
+			syncCliPathDisabled();
+		}
 	};
 
 	window.ConfigApp.formState = formState;
