@@ -512,6 +512,11 @@
       executeCommand('snyk.showScanErrorDetails', [productAttr, errorMessage]);
     }
 
+    // Untrusted folder nodes are dimmed and non-expandable (no children, no
+    // chevron). The folder template still emits an empty children container, so
+    // bail here to avoid toggling and persisting spurious expand state (IDE-1882).
+    if (hasClass(node, 'tree-node-untrusted')) return;
+
     // Toggle expand/collapse for non-leaf nodes
     var children = findChildrenContainer(node);
     if (!children) return;

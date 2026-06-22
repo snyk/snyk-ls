@@ -60,6 +60,16 @@ func (cmd *trustWorkspaceFoldersCommand) Execute(ctx context.Context) (any, erro
 	if path, ok := folderPathArg(cmd.command.Arguments); ok {
 		toTrust = filterFoldersByPath(untrusted, path)
 		if len(toTrust) == 0 {
+			// The banner echoes back the exact path the builder emitted, so a
+			// non-empty arg should always match an untrusted folder. A zero match
+			// means the client sent a path that doesn't equal any untrusted folder
+			// (e.g. it normalized a trailing slash / case / symlink before sending
+			// it back) — the Trust button would otherwise silently do nothing, so
+			// log it to make that failure mode diagnosable. (IDE-1882)
+			cmd.engine.GetLogger().Debug().
+				Str("method", "trustWorkspaceFoldersCommand.Execute").
+				Str("path", string(path)).
+				Msg("trust folder-path argument matched no untrusted folder; nothing trusted")
 			return nil, nil
 		}
 	}

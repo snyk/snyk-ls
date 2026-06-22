@@ -97,6 +97,21 @@ function untrustedBannerHtml(paths = ["/repo/a", "/repo/b"]) {
   </div>`;
 }
 
+// Mirrors the dimmed, non-expandable untrusted folder node the Go builder emits:
+// class tree-node-untrusted, NO tree-node-has-children, but the folder template
+// still emits an empty tree-node-children container (the source of the
+// spurious-expand bug the row handler must guard against). (IDE-1882)
+function untrustedFolderNodeHtml(path = "/repo/untrusted", name = "untrusted") {
+  return `<div class="tree-node tree-node-untrusted" data-node-id="folder:${path}">
+    <div class="tree-node-row">
+      <span class="tree-chevron"></span>
+      <span class="folder-icon"></span>
+      <span class="tree-label">${name}</span>
+    </div>
+    <div class="tree-node-children"></div>
+  </div>`;
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -308,6 +323,36 @@ test("clicking a per-folder Trust button calls snyk.trustWorkspaceFolders with t
   // expand/collapse on the banner.
   const expandCalls = calls.filter((c) => c.cmd === "snyk.setNodeExpanded");
   assert.equal(expandCalls.length, 0, "trust click must not toggle expand/collapse");
+});
+
+test("clicking an untrusted folder node row does not toggle or persist expand state", async () => {
+  const runtimeScript = await loadRuntimeScript();
+  const calls = [];
+  const dom = new JSDOM(
+    buildHtml({
+      totalIssues: 0,
+      nodesHtml: untrustedFolderNodeHtml("/repo/untrusted", "untrusted"),
+      runtimeScript,
+    }),
+    {
+      runScripts: "dangerously",
+      pretendToBeVisual: true,
+      beforeParse(window) {
+        window.__ideExecuteCommand__ = ideBridge(calls);
+      },
+    }
+  );
+
+  const { document } = dom.window;
+  const node = document.querySelector(".tree-node-untrusted");
+  const row = node.querySelector(".tree-node-row");
+  row.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+
+  // The node is non-expandable: no setNodeExpanded command and no expanded class,
+  // even though the folder template emits an empty children container.
+  const expandCalls = calls.filter((c) => c.cmd === "snyk.setNodeExpanded");
+  assert.equal(expandCalls.length, 0, "untrusted folder row must not persist expand state");
+  assert.ok(!node.className.includes("expanded"), "untrusted folder node must not gain the expanded class");
 });
 
 test("clicking an info node does not expand or collapse it", async () => {
