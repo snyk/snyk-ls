@@ -202,6 +202,31 @@ func SetSeverityFilterOnConfig(conf configuration.Configuration, severityFilter 
 	return filterModified
 }
 
+// SetSeverityFilterForFolder writes the severity filter at the per-folder scope
+// (UserFolderKey, tier "folder value") so it is authoritative for that folder's
+// issue filtering and tree toolbar — outranking LDX-Sync remote defaults and the
+// user-global value (only an org-locked remote value wins). This is what keeps
+// the tree-view toggle and the per-folder settings page in sync. (IDE-1996)
+func SetSeverityFilterForFolder(conf configuration.Configuration, folderPath FilePath, sf *SeverityFilter) {
+	if sf == nil {
+		return
+	}
+	SetUserFolder(conf, folderPath, SettingSeverityFilterCritical, sf.Critical)
+	SetUserFolder(conf, folderPath, SettingSeverityFilterHigh, sf.High)
+	SetUserFolder(conf, folderPath, SettingSeverityFilterMedium, sf.Medium)
+	SetUserFolder(conf, folderPath, SettingSeverityFilterLow, sf.Low)
+}
+
+// SetIssueViewOptionsForFolder writes the issue view options at the per-folder
+// scope (UserFolderKey). See SetSeverityFilterForFolder for scope rationale.
+func SetIssueViewOptionsForFolder(conf configuration.Configuration, folderPath FilePath, opts *IssueViewOptions) {
+	if opts == nil {
+		return
+	}
+	SetUserFolder(conf, folderPath, SettingIssueViewOpenIssues, opts.OpenIssues)
+	SetUserFolder(conf, folderPath, SettingIssueViewIgnoredIssues, opts.IgnoredIssues)
+}
+
 // GetIssueViewOptionsFromConfig returns the issue view options from the given configuration.
 func GetIssueViewOptionsFromConfig(conf configuration.Configuration) IssueViewOptions {
 	return IssueViewOptions{

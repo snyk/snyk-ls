@@ -209,6 +209,33 @@ func TestTreeScanStateEmitter_Dispose_StopsRenderLoop(t *testing.T) {
 	emitter.Emit(scanstates.StateSnapshot{AnyScanInProgressWorkingDirectory: true})
 }
 
+func TestAggregateSeverityFilters(t *testing.T) {
+	t.Run("single folder is never mixed", func(t *testing.T) {
+		f := types.NewSeverityFilter(true, false, true, false)
+		sev, mixed := aggregateSeverityFilters([]types.SeverityFilter{f})
+		assert.Equal(t, f, sev)
+		assert.Equal(t, MixedSeverity{}, mixed)
+	})
+
+	t.Run("all folders agree", func(t *testing.T) {
+		f := types.NewSeverityFilter(true, true, false, false)
+		sev, mixed := aggregateSeverityFilters([]types.SeverityFilter{f, f, f})
+		assert.Equal(t, f, sev)
+		assert.Equal(t, MixedSeverity{}, mixed)
+	})
+
+	t.Run("disagreement marks only the differing severities mixed", func(t *testing.T) {
+		_, mixed := aggregateSeverityFilters([]types.SeverityFilter{
+			types.NewSeverityFilter(true, true, true, true),
+			types.NewSeverityFilter(false, true, true, false),
+		})
+		assert.True(t, mixed.Critical, "critical differs -> mixed")
+		assert.False(t, mixed.High, "high agrees")
+		assert.False(t, mixed.Medium, "medium agrees")
+		assert.True(t, mixed.Low, "low differs -> mixed")
+	})
+}
+
 // TestTreeScanStateEmitter_FolderLevelIssueViewOptions verifies that the info-node message
 // reflects folder-level IssueViewOptions overrides rather than the global setting.
 // Regression for: global open+ignored disabled, folder-level open+ignored enabled →
@@ -270,7 +297,7 @@ func TestTreeScanStateEmitter_FolderLevelIssueViewOptions(t *testing.T) {
 	mu.Unlock()
 	assert.NotContains(t, treeView.TreeViewHtml, "Open and Ignored issues are disabled!",
 		"folder-level enabled override must suppress the disabled info message")
-	assert.Contains(t, treeView.TreeViewHtml, "Congrats",
+	assert.Contains(t, treeView.TreeViewHtml, "No issues found",
 		"product node must still render a non-empty info message so the NotContains above is non-vacuous")
 }
 

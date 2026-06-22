@@ -43,6 +43,11 @@ type FolderData struct {
 	ReferenceFolderPath      string
 	IssueViewOptions         types.IssueViewOptions
 	ConsistentIgnoresEnabled bool
+	// AgentFixEnabled reports whether Snyk Agent Fix (Code autofix) is enabled for
+	// this folder's SAST settings. It gates the Snyk Code product's "fixable" info
+	// line: when Agent Fix is off we hide the line entirely rather than surface a
+	// fix the user cannot action.
+	AgentFixEnabled bool
 }
 
 // fileIconProvider is satisfied by issue data types that can supply a file-node icon
@@ -116,6 +121,18 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 		}
 		if cfg != nil {
 			fd.ConsistentIgnoresEnabled = cfg.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores)
+			// Agent Fix is gated per-folder here (each folder's Code node reflects its
+			// own SAST settings). This intentionally differs from the summary panel,
+			// which is workspace-wide and uses any-folder enablement
+			// (scanstates.HtmlRenderer.isAutofixEnabledInAnyFolder); in a multi-root
+			// workspace with mixed settings the two surfaces can legitimately disagree.
+			// Absent/nil SAST settings deliberately fall through to AgentFixEnabled=false
+			// (unknown == hidden). This is safe: the fixable line only renders after a
+			// completed Code scan (see buildProductNodes' enabled/scanRegistered gate),
+			// which cannot succeed without SAST settings being populated first.
+			if sast := types.GetSastSettings(cfg.Conf(), cfg.FolderPath); sast != nil {
+				fd.AgentFixEnabled = sast.AutofixEnabled
+			}
 			if fd.DeltaEnabled {
 				conf := cfg.Conf()
 				if conf != nil {
@@ -283,15 +300,16 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 		}
 		// else: no scan registered yet → empty description (initial state)
 
-		// IDE-1864: hover tooltip explaining a non-running scanner. Disabled
-		// scanners explain how to re-enable; errored scanners hint the row is
-		// clickable for the full error overlay. Mirrors the description precedence
-		// above (disabled wins over error, since a disabled product never scans).
+		// IDE-1864 / IDE-2027: hover tooltip explaining a non-running scanner.
+		// The copy is tailored to *why* it isn't running so the user knows what
+		// (if anything) they can do about it. Mirrors the description precedence
+		// above (settings-disabled wins over error, since a product turned off in
+		// settings never scans).
 		var tooltip string
 		if !enabled {
-			tooltip = fmt.Sprintf("%s scanning is disabled in Snyk plugin settings. Click the gear icon to re-enable it.", productDisplayName(p))
+			tooltip = productSettingsDisabledTooltip(p)
 		} else if scanError != "" {
-			tooltip = fmt.Sprintf("%s couldn't be scanned. Click for details.", productDisplayName(p))
+			tooltip = productDisabledTooltip(p, scanError)
 		} else if scanRegistered && !scanning && totalIssues == 0 {
 			// Surfaces the ✅ tick's meaning on hover; the child node carries any
 			// filter-aware detail.
@@ -303,12 +321,14 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 		var children []TreeNode
 		if enabled && scanRegistered && !scanning && scanError == "" {
 			children = append(children, b.buildInfoNodes(infoNodeContext{
+				product:                  p,
 				parentKey:                productKey,
 				totalIssues:              totalIssues,
 				fixableCount:             stats.fixableCount,
 				ignoredCount:             stats.ignoredCount,
 				issueViewOptions:         fd.IssueViewOptions,
 				consistentIgnoresEnabled: fd.ConsistentIgnoresEnabled,
+				agentFixEnabled:          fd.AgentFixEnabled,
 				hiddenByFilter:           hiddenByFilter,
 			})...)
 
@@ -355,12 +375,16 @@ func isProductEnabled(p product.Product, supportedTypes map[product.FilterableIs
 
 // infoNodeContext carries the data needed to build info child nodes for a product.
 type infoNodeContext struct {
+	product                  product.Product
 	parentKey                string
 	totalIssues              int
 	fixableCount             int
 	ignoredCount             int
 	issueViewOptions         types.IssueViewOptions
 	consistentIgnoresEnabled bool
+	// agentFixEnabled reflects FolderData.AgentFixEnabled; only consulted for the
+	// Snyk Code product (see showFixableLine).
+	agentFixEnabled bool
 	// hiddenByFilter is true when the scanner has issues but the active filters
 	// hide all of them, so the empty-state text reads "...with these filters".
 	hiddenByFilter bool
@@ -381,22 +405,51 @@ func (b *TreeBuilder) buildInfoNodes(ctx infoNodeContext) []TreeNode {
 		infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, b.issueCountText(ctx),
 			WithID(fmt.Sprintf("info:%s:count", ctx.parentKey))))
 
-		// Fixable line
-		if ctx.fixableCount > 0 {
-			fixWord := "issues are"
-			if ctx.fixableCount == 1 {
-				fixWord = "issue is"
+		// Fixable line — only shown for scanners where automatic fixing is something
+		// the user can action (see showFixableLine).
+		if showFixableLine(ctx) {
+			if ctx.fixableCount > 0 {
+				fixWord := "issues are"
+				if ctx.fixableCount == 1 {
+					fixWord = "issue is"
+				}
+				infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo,
+					fmt.Sprintf("⚡ %d %s fixable automatically.", ctx.fixableCount, fixWord),
+					WithID(fmt.Sprintf("info:%s:fixable", ctx.parentKey))))
+			} else {
+				infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, "There are no issues automatically fixable.",
+					WithID(fmt.Sprintf("info:%s:fixable", ctx.parentKey))))
 			}
-			infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo,
-				fmt.Sprintf("⚡ %d %s fixable automatically.", ctx.fixableCount, fixWord),
-				WithID(fmt.Sprintf("info:%s:fixable", ctx.parentKey))))
-		} else {
-			infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, "There are no issues automatically fixable.",
-				WithID(fmt.Sprintf("info:%s:fixable", ctx.parentKey))))
 		}
 	}
 
 	return infoNodes
+}
+
+// showFixableLine decides whether a scanner's "fixable" info line is shown. We
+// only surface it where automatic fixing is something the user can act on:
+//   - Snyk Code: only when Agent Fix (autofix) is enabled for the folder. When it
+//     is disabled the line is hidden entirely, since the "fixable automatically"
+//     count is not actionable.
+//   - Open Source: always — upgrade-based fixability is available whenever OSS
+//     scanning runs, independent of Agent Fix.
+//   - IaC / Secrets: never — they have no automatic-fix concept (IsFixable is
+//     always false), so the line would only ever read "no issues automatically
+//     fixable", which is noise.
+//
+// This switch encodes per-product fixability knowledge. When a new product or fix
+// mechanism is added, update this switch — and keep it consistent with the
+// summary panel's Agent-Fix logic (scanstates/summary_html.go), which makes the
+// equivalent decision for the workspace-wide summary.
+func showFixableLine(ctx infoNodeContext) bool {
+	switch ctx.product {
+	case product.ProductCode:
+		return ctx.agentFixEnabled
+	case product.ProductOpenSource:
+		return true
+	default:
+		return false
+	}
 }
 
 // zeroIssuesText is the label for the child info node shown under a scanner with
@@ -805,4 +858,33 @@ func productScanErrorDescription(scanError string) string {
 		return "- " + meta.TreeRootSuffix
 	}
 	return "- (scan failed)"
+}
+
+// productSettingsDisabledTooltip is the hint for a scanner turned off via plugin
+// settings. Used both when the product toggle is off (enabled == false) and when
+// a scanner reports it's disabled for the folder — folder config is part of the
+// plugin settings, so the user sees one consistent message either way.
+func productSettingsDisabledTooltip(p product.Product) string {
+	return fmt.Sprintf("%s scanning is disabled in Snyk plugin settings. Click the gear icon to re-enable it.", productDisplayName(p))
+}
+
+// productDisabledTooltip returns the hover hint for a scanner that produced a
+// scan error. The wording is tailored to *why* it didn't run so the user knows
+// whether they can act on it (IDE-1864 / IDE-2027):
+//   - org/entitlement disablement ("…not enabled for this organization") is not
+//     self-serve, so the copy points the user at their org admin.
+//   - folder-level disablement is a plugin-settings choice (folder config), so it
+//     reuses the same settings message as the product toggle being off.
+//   - anything else is a genuine scan failure the user can inspect via the
+//     click-to-open error overlay.
+func productDisabledTooltip(p product.Product, scanError string) string {
+	switch scanError {
+	case utils.ErrSnykCodeNotEnabled, utils.ErrSnykSecretsNotEnabled:
+		return fmt.Sprintf("%s is disabled for your Snyk organization. Contact your org admin if you expected it to be available.", productDisplayName(p))
+	case utils.ErrSnykCodeNotEnabledForFolder, utils.ErrSnykSecretsNotEnabledForFolder,
+		utils.ErrSnykIacNotEnabledForFolder, utils.ErrSnykOssNotEnabledForFolder:
+		return productSettingsDisabledTooltip(p)
+	default:
+		return fmt.Sprintf("%s couldn't be scanned. Click for details.", productDisplayName(p))
+	}
 }

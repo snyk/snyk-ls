@@ -183,20 +183,12 @@ body {
   left: 58px;
 }
 
-/* Chevron: hidden by default — file/issue/location rows use the tree guide
-   lines to indicate structure, so their chevron stays in the DOM (for click
-   handling and screen-reader state) but is not painted. */
+/* IDE-1863: expand/collapse chevron column. Every row reserves a fixed-width
+   chevron slot (the span is always present) so labels stay aligned in a column,
+   and the disclosure glyph is painted on any node that has children
+   (tree-node-has-children) — folders, scanners, files, and multi-location issue
+   groups. Leaf rows reserve the slot but draw no glyph. */
 .tree-chevron {
-  display: none;
-}
-
-/* IDE-1863: scanner (product) rows reserve space for an expand/collapse chevron
-   to the left of the product icon. The span is always present so the product
-   icons stay aligned in a column, but the chevron glyph is only painted when the
-   scanner has something to expand (tree-node-has-children — i.e. completed scans
-   with results or info rows). Scanners that are scanning, awaiting a first scan,
-   errored, or disabled have no children and so render no glyph. */
-[data-product-id] > .tree-node-row > .tree-chevron {
   display: inline-block;
   width: 12px;
   height: 12px;
@@ -208,7 +200,7 @@ body {
 }
 /* The glyph itself: rotated border corners that follow currentColor. Points
    down when expanded, right when collapsed. Only drawn for expandable rows. */
-[data-product-id].tree-node-has-children > .tree-node-row > .tree-chevron::before {
+.tree-node-has-children > .tree-node-row > .tree-chevron::before {
   content: "";
   position: absolute;
   width: 5px;
@@ -219,7 +211,7 @@ body {
   left: 50%;
   transform: translate(-50%, -75%) rotate(45deg);
 }
-[data-product-id].tree-node-has-children:not(.expanded) > .tree-node-row > .tree-chevron::before {
+.tree-node-has-children:not(.expanded) > .tree-node-row > .tree-chevron::before {
   transform: translate(-75%, -50%) rotate(-45deg);
 }
 
@@ -425,6 +417,17 @@ body {
   border-color: transparent;
   color: inherit;
   opacity: 1;
+}
+/* IDE-1866: "mixed" state — the open folders disagree on this severity (some show
+   it, some hide it), which a single workspace-wide toolbar button can't render as
+   a plain on/off. Shown translucent with a dashed accent border so it reads as
+   indeterminate, distinct from both the solid active and the dim inactive states.
+   The explanatory tooltip comes from the button's title attribute. Clicking it
+   resolves the mismatch by enabling the severity for all folders (see tree.js). */
+.filter-btn-icon.filter-mixed {
+  opacity: 0.65;
+  border-color: var(--focus-border);
+  border-style: dashed;
 }
 
 /* Action buttons (expand/collapse all) */
