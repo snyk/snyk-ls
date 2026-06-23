@@ -1469,6 +1469,9 @@ func updateFolderConfigOrg(conf configuration.Configuration, logger *zerolog.Log
 	} else if orgHasJustChanged {
 		types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, currentSnap.PreferredOrg, true)
 	} else if !currentSnap.OrgSetByUser {
+		// Same guard as above: applyPreferredOrg runs before this function in the same
+		// update cycle and has already Unset both keys on a reset. Skip normalisation
+		// when both are absent so we don't re-create them as active overrides.
 		if types.HasUserOverride(conf, folderConfig.FolderPath, types.SettingPreferredOrg) ||
 			types.HasUserOverride(conf, folderConfig.FolderPath, types.SettingOrgSetByUser) {
 			types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "", false)
