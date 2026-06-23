@@ -1,5 +1,5 @@
 // ABOUTME: Tests for the per-folder "Reset overrides" flow (form-handler + reset-handler).
-// ABOUTME: Verifies resets are keyed by folderPath, emit 14 flat nulls, and survive compaction.
+// ABOUTME: Verifies resets are keyed by folderPath, emit 17 flat nulls, and survive compaction.
 
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -65,7 +65,7 @@ test("markFolderForReset ignores empty/missing folderPath", async () => {
 	assert.equal(fh.isFolderMarkedForReset(undefined), false, "undefined path must not mark");
 });
 
-test("applyFolderResets sets all 14 fields to null on an existing edited folder, preserving folderPath", async () => {
+test("applyFolderResets sets all 17 fields to null on an existing edited folder, preserving folderPath", async () => {
 	const win = await buildDom();
 	const fh = win.ConfigApp.formHandler;
 
@@ -83,7 +83,7 @@ test("applyFolderResets sets all 14 fields to null on an existing edited folder,
 	assertAllNull(entry, RESET_FIELDS);
 });
 
-test("applyFolderResets emits a reset-only folder absent from data.folderConfigs (bug #2)", async () => {
+test("applyFolderResets emits a reset-only folder absent from data.folderConfigs", async () => {
 	const win = await buildDom();
 	const fh = win.ConfigApp.formHandler;
 
