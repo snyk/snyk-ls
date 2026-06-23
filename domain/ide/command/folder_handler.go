@@ -41,9 +41,7 @@ func HandleFolders(conf configuration.Configuration, engine workflow.Engine, log
 	populateFolderFeatureFlagsAndSastSettings(conf, engine, logger, featureFlagService, configResolver)
 	sendFolderConfigs(conf, engine, logger, notifier, featureFlagService, configResolver)
 
-	// Untrusted folders are surfaced by the tree-view trust banner (IDE-1882), which
-	// the client renders/pulls via snyk.getTreeView — there is no longer a modal
-	// window/showMessageRequest trust dialog here.
+	// No modal trust dialog here — removed in favour of the tree-view trust banner (IDE-1882).
 	mcpWorkflow.CallMcpConfigWorkflow(conf, configResolver, engine, logger, notifier, false, true)
 }
 
