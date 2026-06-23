@@ -472,12 +472,14 @@ func TestFilterState_FolderWithNilConfigReadOnly_IsSkipped(t *testing.T) {
 	assert.Equal(t, MixedSeverity{}, fs.MixedSeverity, "nil workspace → no mixed severity")
 }
 
-// TestFilterState_IVO_PinsFirstFolderBehavior pins the CURRENT "first folder only" IVO
-// semantics. When two folders have different IVO settings the result should reflect
-// the FIRST folder's value (not the second's, not an aggregate). This test will
-// deliberately fail when the follow-up IVO aggregation branch lands — that failure
-// is intentional and the test should then be updated.
-func TestFilterState_IVO_PinsFirstFolderBehavior(t *testing.T) {
+// TestFilterState_IVO_PinsSingleFolderBehavior pins the CURRENT (non-aggregated) IVO
+// semantics: when folders disagree, filterState takes one folder's IVO wholesale rather
+// than aggregating across folders (unlike severity, which detects "mixed"). Workspace.Folders()
+// iterates a map, so *which* folder is picked is non-deterministic — the test therefore
+// asserts the result is exactly one of the two folders' values, never an OR/AND aggregate.
+// This test will deliberately fail when the follow-up IVO aggregation branch lands — that
+// failure is intentional and the test should then be updated.
+func TestFilterState_IVO_PinsSingleFolderBehavior(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()
 
@@ -485,8 +487,8 @@ func TestFilterState_IVO_PinsFirstFolderBehavior(t *testing.T) {
 	folder2 := types.FilePath("/project-ivo-second")
 	workspaceutil.SetupWorkspace(t, engine, folder1, folder2)
 
-	// Folder 1 (first): open issues ON, ignored issues OFF.
-	// Folder 2 (second): open issues OFF, ignored issues ON.
+	// Opposite settings so aggregation is detectable: an OR-aggregate would yield
+	// both-true, an AND-aggregate both-false. A single-folder pick yields exactly one.
 	ivo1 := types.NewIssueViewOptions(true, false)
 	ivo2 := types.NewIssueViewOptions(false, true)
 	types.SetIssueViewOptionsForFolder(conf, folder1, &ivo1)
@@ -503,9 +505,12 @@ func TestFilterState_IVO_PinsFirstFolderBehavior(t *testing.T) {
 	ws := config.GetWorkspace(conf)
 	fs := emitter.filterState(ws)
 
-	// Current behavior: first folder wins.
-	assert.True(t, fs.IssueViewOptions.OpenIssues, "IVO reads from first folder: OpenIssues should be true")
-	assert.False(t, fs.IssueViewOptions.IgnoredIssues, "IVO reads from first folder: IgnoredIssues should be false")
+	// Current behavior: exactly one folder's IVO is used wholesale (not aggregated).
+	// Folder iteration order is non-deterministic, so accept either folder's value.
+	got := fs.IssueViewOptions
+	matchesOneFolder := got == ivo1 || got == ivo2
+	assert.True(t, matchesOneFolder,
+		"IVO should equal exactly one folder's value (no aggregation); got %+v", got)
 }
 
 // TestFilterState_AggregateSeverityFilters_UsesFilters0AsBaseline verifies the coupling:
