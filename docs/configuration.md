@@ -456,6 +456,23 @@ The `Changed` field on `ConfigSetting` controls whether the LS processes a setti
 
 This applies uniformly to both initialization (`InitializeSettings`) and runtime updates (`UpdateSettings`). The IDE is responsible for setting `Changed: true` only on settings the user explicitly configured.
 
+### Resetting a folder override
+
+A `ConfigSetting` value of `nil` combined with `Changed: true` is a **reset**: it tells the LS to `Unset` the `user:folder:<path>:<name>` override so the effective value falls back through the precedence chain (org / LDX-sync / GAF default). This is how the HTML settings dialog's per-folder "Reset overrides" button clears a folder's user edits.
+
+| `ConfigSetting` on the wire | LS behaviour |
+|---|---|
+| absent from the map (`cs == nil`) | no-op |
+| `{Changed: false}` (or omitted) | no-op (skipped, as above) |
+| `{Changed: true, Value: <x>}` | set `user:folder:` override to `<x>` |
+| `{Changed: true, Value: nil}` | **Unset** `user:folder:` override → fall back |
+
+The null-reset applies to org-scope folder fields (those resolved through `applyGenericFolderOverrides`), which have a lower-precedence layer to fall back to. Most basic folder-native fields (`base_branch`, etc.) have no fallback layer, so a null value on them is treated as a no-op rather than a reset. **Exception:** `additional_parameters`, `additional_environment`, and `scan_command_config` are basic folder fields whose null-reset is honoured — their handlers in `applyBasicFolderFields` call `unsetFolderOverride` on `{Changed: true, Value: nil}`, clearing the user override.
+
+`preferred_org` is the one exception among the basic-handled fields: it *does* have a fallback (the auto-determined LDX org, then the global org), so its null-reset is honoured. Resetting `preferred_org` Unsets **both** `user:folder:preferred_org` and `user:folder:org_set_by_user`, reverting the folder to its auto-determined / global org. See `applyPreferredOrg` in `internal/types/folder_config.go`.
+
+Locked-field resets are rejected exactly like locked-field sets: `validateLockedFields` (`application/server/configuration.go`) strips a reset for a field locked by org policy before `ApplyLspUpdate` runs, so the locked value is preserved.
+
 ### IDE → LS Flow (didChangeConfiguration)
 
 ```mermaid

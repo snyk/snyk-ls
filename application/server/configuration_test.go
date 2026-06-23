@@ -717,6 +717,152 @@ func Test_UpdateSettings(t *testing.T) {
 	})
 }
 
+// Test_updateFolderConfig_ResetClearsUserOverrides_EndToEnd drives the full HTML-save reset path:
+// the IDE plugin maps each flat-null folder field to {Value:nil, Changed:true}, and UpdateSettings
+// must Unset the user:folder: override so the effective value falls back to org/LDX/default.
+// preferred_org is the special case — its reset also clears org_set_by_user, reverting to auto/global org.
+func Test_updateFolderConfig_ResetClearsUserOverrides_EndToEnd(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	deps := di.TestInit(t, engine, tokenService, nil)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	folderDir := filepath.Join(t.TempDir(), "folder")
+	require.NoError(t, initTestRepo(t, folderDir))
+	folderPath := types.FilePath(folderDir)
+
+	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
+		ctx2.DepNotifier:            deps.Notifier,
+		ctx2.DepAuthService:         deps.AuthenticationService,
+		ctx2.DepConfigResolver:      deps.ConfigResolver,
+		ctx2.DepFeatureFlagService:  deps.FeatureFlagService,
+		ctx2.DepLdxSyncService:      deps.LdxSyncService,
+		ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
+	})
+	resolver := testutil.DefaultConfigResolver(engine)
+
+	// Exercise the production code path: updateFolderOrgIfNeeded is gated on this flag.
+	conf.Set(types.SettingIsLspInitialized, true)
+
+	// Step 1: seed user overrides on the folder (the "user edited overrides" state).
+	seed := []types.LspFolderConfig{{
+		FolderPath: folderPath,
+		Settings: map[string]*types.ConfigSetting{
+			types.SettingSnykCodeEnabled:       {Value: true, Changed: true},
+			types.SettingScanAutomatic:         {Value: true, Changed: true},
+			types.SettingPreferredOrg:          {Value: "my-folder-org", Changed: true},
+			types.SettingAdditionalParameters:  {Value: []string{"--all-projects"}, Changed: true},
+			types.SettingAdditionalEnvironment: {Value: "FOO=bar", Changed: true},
+			types.SettingScanCommandConfig: {Value: map[product.Product]types.ScanCommandConfig{
+				product.ProductOpenSource: {PreScanCommand: "echo pre"},
+			}, Changed: true},
+		},
+	}}
+	UpdateSettings(ctx, conf, engine, logger, map[string]*types.ConfigSetting{}, seed, analytics.TriggerSourceTest, resolver)
+
+	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingSnykCodeEnabled), "snyk_code_enabled override seeded")
+	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingScanAutomatic), "scan_automatic override seeded")
+	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingPreferredOrg), "preferred_org override seeded")
+	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingOrgSetByUser), "org_set_by_user set alongside preferred_org")
+	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingAdditionalParameters), "additional_parameters override seeded")
+	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingAdditionalEnvironment), "additional_environment override seeded")
+	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingScanCommandConfig), "scan_command_config override seeded")
+
+	seededFC := config.GetFolderConfigFromEngine(engine, resolver, folderPath, logger)
+	require.Equal(t, "my-folder-org", seededFC.PreferredOrg(), "seeded preferred_org is effective")
+
+	// Step 2: simulate the HTML-save reset — the IDE maps flat-null to {Value:nil, Changed:true}.
+	reset := []types.LspFolderConfig{{
+		FolderPath: folderPath,
+		Settings: map[string]*types.ConfigSetting{
+			types.SettingSnykCodeEnabled:       {Value: nil, Changed: true},
+			types.SettingScanAutomatic:         {Value: nil, Changed: true},
+			types.SettingPreferredOrg:          {Value: nil, Changed: true},
+			types.SettingAdditionalParameters:  {Value: nil, Changed: true},
+			types.SettingAdditionalEnvironment: {Value: nil, Changed: true},
+			types.SettingScanCommandConfig:     {Value: nil, Changed: true},
+		},
+	}}
+	UpdateSettings(ctx, conf, engine, logger, map[string]*types.ConfigSetting{}, reset, analytics.TriggerSourceTest, resolver)
+
+	// Step 3: every user:folder: override is cleared and the underlying key is no longer set.
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingSnykCodeEnabled), "snyk_code_enabled override cleared")
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingScanAutomatic), "scan_automatic override cleared")
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingPreferredOrg), "preferred_org override cleared")
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingOrgSetByUser), "org_set_by_user cleared by org reset")
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingAdditionalParameters), "additional_parameters override cleared")
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingAdditionalEnvironment), "additional_environment override cleared")
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingScanCommandConfig), "scan_command_config override cleared")
+
+	// After Unset the key no longer holds an active *LocalConfigField override (Unset writes a
+	// tombstone, so conf.IsSet may still report true — HasUserOverride is the real contract).
+	fp := string(types.PathKey(folderPath))
+	for _, key := range []string{types.SettingSnykCodeEnabled, types.SettingPreferredOrg, types.SettingOrgSetByUser} {
+		got := conf.Get(configresolver.UserFolderKey(fp, key))
+		lf, ok := got.(*configresolver.LocalConfigField)
+		assert.False(t, ok && lf != nil && lf.Changed, "no active override should remain for %s after reset", key)
+	}
+
+	// Effective org reverts to auto/global (empty in this unit setup with no global org).
+	resetFC := config.GetFolderConfigFromEngine(engine, resolver, folderPath, logger)
+	assert.False(t, resetFC.OrgSetByUser(), "OrgSetByUser reverts to false after reset")
+	assert.Empty(t, resetFC.PreferredOrg(), "PreferredOrg falls back after reset")
+}
+
+// Test_updateFolderConfig_AutoDeterminedOrgChangeAfterReset guards the else-if branch in
+// updateFolderConfigOrg: after a reset clears both overrides, a subsequent update that
+// changes only AutoDeterminedOrg must not re-add preferred_org / org_set_by_user.
+func Test_updateFolderConfig_AutoDeterminedOrgChangeAfterReset(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	deps := di.TestInit(t, engine, tokenService, nil)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	folderDir := filepath.Join(t.TempDir(), "folder")
+	require.NoError(t, initTestRepo(t, folderDir))
+	folderPath := types.FilePath(folderDir)
+
+	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
+		ctx2.DepNotifier:            deps.Notifier,
+		ctx2.DepAuthService:         deps.AuthenticationService,
+		ctx2.DepConfigResolver:      deps.ConfigResolver,
+		ctx2.DepFeatureFlagService:  deps.FeatureFlagService,
+		ctx2.DepLdxSyncService:      deps.LdxSyncService,
+		ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
+	})
+	resolver := testutil.DefaultConfigResolver(engine)
+	conf.Set(types.SettingIsLspInitialized, true)
+
+	// Seed a folder org override, then reset it.
+	seed := []types.LspFolderConfig{{
+		FolderPath: folderPath,
+		Settings: map[string]*types.ConfigSetting{
+			types.SettingPreferredOrg: {Value: "my-folder-org", Changed: true},
+		},
+	}}
+	UpdateSettings(ctx, conf, engine, logger, map[string]*types.ConfigSetting{}, seed, analytics.TriggerSourceTest, resolver)
+	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingPreferredOrg))
+
+	reset := []types.LspFolderConfig{{
+		FolderPath: folderPath,
+		Settings:   map[string]*types.ConfigSetting{types.SettingPreferredOrg: {Value: nil, Changed: true}},
+	}}
+	UpdateSettings(ctx, conf, engine, logger, map[string]*types.ConfigSetting{}, reset, analytics.TriggerSourceTest, resolver)
+	require.False(t, types.HasUserOverride(conf, folderPath, types.SettingPreferredOrg), "precondition: override cleared")
+	require.False(t, types.HasUserOverride(conf, folderPath, types.SettingOrgSetByUser), "precondition: org_set_by_user cleared")
+
+	// Simulate an AutoDeterminedOrg change (e.g. from LDX-sync) while org-user settings stay empty.
+	// This triggers the else-if !currentSnap.OrgSetByUser branch in updateFolderConfigOrg.
+	types.SetAutoDeterminedOrg(conf, folderPath, "ldx-org")
+
+	noop := []types.LspFolderConfig{{FolderPath: folderPath, Settings: map[string]*types.ConfigSetting{}}}
+	UpdateSettings(ctx, conf, engine, logger, map[string]*types.ConfigSetting{}, noop, analytics.TriggerSourceTest, resolver)
+
+	// The reset keys must remain absent — the AutoDeterminedOrg change must not re-add them.
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingPreferredOrg), "preferred_org must stay absent after AutoDeterminedOrg change")
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingOrgSetByUser), "org_set_by_user must stay absent after AutoDeterminedOrg change")
+}
+
 func initTestRepo(t *testing.T, tempDir string) error {
 	t.Helper()
 	repo1, err := git.PlainInit(tempDir, false)

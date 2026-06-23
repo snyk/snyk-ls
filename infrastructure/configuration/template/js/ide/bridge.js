@@ -101,6 +101,22 @@
 		}
 	};
 
+	/**
+	 * Show a confirmation dialog via the IDE native UI.
+	 * In VSCode the sandboxed webview blocks window.confirm(), so this routes through
+	 * the executeCommand bridge to show a native modal. Falls back to window.confirm()
+	 * in IDEs that inject no bridge (JetBrains, Eclipse, etc.).
+	 * @param {string} message - Message to display
+	 * @param {function} callback - Called with true if confirmed, false if cancelled
+	 */
+	ideBridge.confirm = function (message, callback) {
+		if (typeof window.__ideExecuteCommand__ === "function") {
+			window.__ideExecuteCommand__("snyk.showConfirmationDialog", [message], callback);
+		} else if (typeof callback === "function") {
+			callback(window.confirm(message));
+		}
+	};
+
 	// Expose window-level functions for IDE to call
 
 	/**
