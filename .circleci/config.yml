@@ -24,6 +24,7 @@ workflows:
           context:
             - snyk-bot-slack
           channel: snyk-on-snyk-devex_ide
+          debug: true
           filters:
             branches:
               ignore:
