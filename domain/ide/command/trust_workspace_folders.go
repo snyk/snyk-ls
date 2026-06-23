@@ -22,13 +22,11 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
-	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type trustWorkspaceFoldersCommand struct {
 	command        types.CommandData
-	notifier       noti.Notifier
 	engine         workflow.Engine
 	configResolver types.ConfigResolverInterface
 }

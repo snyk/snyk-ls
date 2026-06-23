@@ -79,7 +79,9 @@ func CreateFromCommandData(
 	case types.LogoutCommand:
 		return &logoutCommand{command: commandData, authService: authService, engine: engine, featureFlagService: featureFlagService}, nil
 	case types.TrustWorkspaceFoldersCommand:
-		return &trustWorkspaceFoldersCommand{command: commandData, notifier: notifier, engine: engine, configResolver: configResolver}, nil
+		// notifier omitted: trust notifications are sent by ws.TrustFoldersAndScan
+		// using the workspace's own notifier — this command needs no separate one.
+		return &trustWorkspaceFoldersCommand{command: commandData, engine: engine, configResolver: configResolver}, nil
 	case types.GetLearnLesson:
 		return &getLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	case types.OpenLearnLesson:

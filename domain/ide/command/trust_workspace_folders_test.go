@@ -24,16 +24,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 // newTrustCommand builds a trustWorkspaceFoldersCommand wired to the test engine.
+// Note: no notifier field — Execute sends trust notifications via ws.TrustFoldersAndScan,
+// which uses the workspace's own notifier; this command has no need for one.
 func newTrustCommand(engine workflow.Engine, args ...any) *trustWorkspaceFoldersCommand {
 	return &trustWorkspaceFoldersCommand{
 		command:        types.CommandData{CommandId: types.TrustWorkspaceFoldersCommand, Arguments: args},
-		notifier:       notification.NewMockNotifier(),
 		engine:         engine,
 		configResolver: testutil.DefaultConfigResolver(engine),
 	}
