@@ -72,9 +72,9 @@ type TreeNode struct {
 	// reveals it when severity filters hide every issue; "untrusted-folder"
 	// (IDE-1882) is the workspace-trust banner with a folder list + Trust button.
 	InfoVariant string `json:"infoVariant,omitempty"`
-	// FolderPaths lists the untrusted folder paths shown in the "untrusted-folder"
-	// info banner (IDE-1882).
-	FolderPaths         []string `json:"folderPaths,omitempty"`
+	// UntrustedFolderPaths lists the untrusted folder paths shown in the
+	// "untrusted-folder" info banner (IDE-1882).
+	UntrustedFolderPaths []string `json:"untrustedFolderPaths,omitempty"`
 	DeltaEnabled        bool     `json:"deltaEnabled,omitempty"`
 	BaseBranch          string   `json:"baseBranch,omitempty"`
 	LocalBranches       []string `json:"localBranches,omitempty"`
@@ -210,8 +210,8 @@ func WithInfoVariant(variant string) TreeNodeOption {
 	return func(n *TreeNode) { n.InfoVariant = variant }
 }
 
-func WithFolderPaths(paths []string) TreeNodeOption {
-	return func(n *TreeNode) { n.FolderPaths = paths }
+func WithUntrustedFolderPaths(paths []string) TreeNodeOption {
+	return func(n *TreeNode) { n.UntrustedFolderPaths = paths }
 }
 
 func WithDeltaEnabled(enabled bool) TreeNodeOption {
