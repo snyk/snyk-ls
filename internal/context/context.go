@@ -134,12 +134,12 @@ func DependenciesFromContext(ctx context.Context) (map[string]any, bool) {
 	return d, ok
 }
 
-// copyDependenciesFromContext returns a shallow copy of the dependencies map
+// CopyDependenciesFromContext returns a shallow copy of the dependencies map
 // stored in ctx, or an empty map if none is present. Merge helpers use this so
 // that enriching a context never mutates the map shared with the parent context.
 // Without the copy, deriving multiple contexts concurrently from a single parent
 // (e.g. one scan goroutine per folder) races on the shared map.
-func copyDependenciesFromContext(ctx context.Context) map[string]any {
+func CopyDependenciesFromContext(ctx context.Context) map[string]any {
 	deps, found := DependenciesFromContext(ctx)
 	newDeps := make(map[string]any, len(deps)+1)
 	if found {
@@ -148,6 +148,12 @@ func copyDependenciesFromContext(ctx context.Context) map[string]any {
 		}
 	}
 	return newDeps
+}
+
+// copyDependenciesFromContext is the package-internal alias kept for backward
+// compatibility with internal callers that pre-date the exported version.
+func copyDependenciesFromContext(ctx context.Context) map[string]any {
+	return CopyDependenciesFromContext(ctx)
 }
 
 // ConfigResolverFromContext returns the ConfigResolver stored in ctx, if any.
