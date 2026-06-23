@@ -85,3 +85,20 @@ func SetGlobalDeferredFolderScope(conf configuration.Configuration, name string,
 func SetGlobalRawForRawReader(conf configuration.Configuration, name string, value any) {
 	conf.Set(configresolver.UserGlobalKey(name), value)
 }
+
+// SetUserFolder writes a user-intent value for a folder-scoped setting at the
+// per-folder UserFolderKey. The value is wrapped as *LocalConfigField{Changed:
+// true} because the resolver's folder pass only treats UserFolderKey as the
+// authoritative "folder value" (ConfigSourceUserFolderOverride, which outranks
+// remote-folder and user-global) when Changed is true; an unwrapped write is
+// ignored at that tier. Use this for folder-scoped settings the user controls
+// per folder (e.g. severity filters, issue view options) so the choice survives
+// LDX-Sync remote defaults.
+func SetUserFolder(conf configuration.Configuration, folderPath FilePath, name string, value any) {
+	// Normalize with PathKey to match how the resolver builds the folder key on
+	// read (getValueLocked uses string(PathKey(folderConfig.GetFolderPath()))).
+	conf.Set(configresolver.UserFolderKey(string(PathKey(folderPath)), name), &configresolver.LocalConfigField{
+		Value:   value,
+		Changed: true,
+	})
+}
