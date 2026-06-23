@@ -37,20 +37,12 @@ import (
 )
 
 // setupToggleWorkspaceFolder registers a workspace with a single folder so the
-// toggle command (which writes per-folder, workspace-wide) has a folder to act
-// on. Returns the folder path for reading the resolved per-folder filters back.
+// toggle command has a folder to act on. Returns the folder path for reading
+// the resolved per-folder filters back.
 func setupToggleWorkspaceFolder(t *testing.T, engine workflow.Engine) types.FilePath {
 	t.Helper()
-	sc := &scanner.TestScanner{}
-	scanNotifier := scanner.NewMockScanNotifier()
-	scanPersister := persistence.NewGitPersistenceProvider(engine.GetLogger(), engine.GetConfiguration())
-	scanStateAggregator := scanstates.NewNoopStateAggregator()
-	resolver := testutil.DefaultConfigResolver(engine)
 	folderPath := types.PathKey("dummy")
-	w := workspace.New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewMockNotifier(), scanPersister, scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
-	folder := workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath, "dummy", sc, nil, scanNotifier, notification.NewMockNotifier(), scanPersister, scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
-	w.AddFolder(folder)
-	config.SetWorkspace(engine.GetConfiguration(), w)
+	setupToggleWorkspaceFolders(t, engine, folderPath)
 	return folderPath
 }
 
@@ -214,6 +206,44 @@ func TestToggleTreeFilter_PerFolderValueOutranksGlobal(t *testing.T) {
 	filter := folderSeverityFilter(t, engine, folderPath)
 	assert.False(t, filter.Critical, "per-folder value must outrank the user-global value for the folder")
 	assert.True(t, filter.High)
+}
+
+func TestToggleTreeFilter_Execute_SendsConfigurationNotification(t *testing.T) {
+	// Toggling a filter must push the current configuration via the $/snyk.configuration
+	//notification so any open settings windows reflect the new filter values.
+	engine := testutil.UnitTest(t)
+	folderPath := setupToggleWorkspaceFolder(t, engine)
+	types.SetSeverityFilterForFolder(engine.GetConfiguration(), folderPath, util.Ptr(types.NewSeverityFilter(true, true, true, true)))
+
+	notifier := notification.NewMockNotifier()
+	cmd := &toggleTreeFilter{
+		command: types.CommandData{
+			CommandId: types.ToggleTreeFilter,
+			Arguments: []any{"severity", "high", false},
+		},
+		engine:         engine,
+		notifier:       notifier,
+		configResolver: testutil.DefaultConfigResolver(engine),
+	}
+
+	_, err := cmd.Execute(t.Context())
+	require.NoError(t, err)
+
+	// The push is synchronous within Execute; the workspace's async HandleConfigChange
+	// uses a different notifier, so this notifier receives only the config push.
+	var configParam *types.LspConfigurationParam
+	for _, msg := range notifier.SentMessages() {
+		if p, ok := msg.(types.LspConfigurationParam); ok {
+			configParam = &p
+			break
+		}
+	}
+	require.NotNil(t, configParam, "expected an LspConfigurationParam ($/snyk.configuration) to be sent")
+
+	require.Len(t, configParam.FolderConfigs, 1, "the open folder should be in the pushed config")
+	high := configParam.FolderConfigs[0].Settings[types.SettingSeverityFilterHigh]
+	require.NotNil(t, high, "severity_filter_high should be present in the pushed folder config")
+	assert.Equal(t, false, high.Value, "pushed config should carry High=false after toggling it off")
 }
 
 func TestToggleTreeFilter_Execute_MissingArgs_ReturnsError(t *testing.T) {
