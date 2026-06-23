@@ -635,13 +635,20 @@
                (cs.fontSize || '13px') + ' ' +
                (cs.fontFamily || 'sans-serif');
     if (font !== measureFontKey) {
+      var ctx = getMeasureCtx();
+      if (!ctx) return; // canvas 2d unavailable (restricted webview) — skip
       measureFontKey = font;
-      getMeasureCtx().font = font;
+      ctx.font = font;
     }
   }
 
   function measureWidth(text) {
-    return getMeasureCtx().measureText(text).width;
+    var ctx = getMeasureCtx();
+    // No 2d context (canvas disabled in some webview hosts): report 0 so callers
+    // treat everything as "fits" and middle-truncation no-ops, leaving CSS
+    // end-truncation in charge rather than throwing.
+    if (!ctx) return 0;
+    return ctx.measureText(text).width;
   }
 
   function truncateMiddleByWidth(text, maxWidth) {
