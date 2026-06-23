@@ -228,6 +228,17 @@ func UpdateSettings(ctx context.Context, conf configuration.Configuration, engin
 		}
 	}
 
+	// Snapshot the effective configuration BEFORE any settings are applied so
+	// we can compare after. This straddles both processConfigSettings and
+	// processFolderConfigs because folder configs also mutate the effective
+	// LspConfigurationParam. Gated on SettingIsLspInitialized because
+	// BuildLspConfiguration is only meaningful after initialization.
+	var beforeLspConfig types.LspConfigurationParam
+	lspInitialized := conf.GetBool(types.SettingIsLspInitialized)
+	if lspInitialized {
+		beforeLspConfig = command.BuildLspConfiguration(conf, engine, logger, nil, configResolver)
+	}
+
 	globalOrgChanged, lockedMachineFields := processConfigSettings(ctx, conf, engine, logger, settings, triggerSource, configResolver)
 
 	// Flush stale cached errors (e.g. 401s from a previous token) before
@@ -246,9 +257,16 @@ func UpdateSettings(ctx context.Context, conf configuration.Configuration, engin
 	n := mustNotifierFromContext(ctx)
 	notifyLockedFieldsRejected(n, fm, lockedMachineFields, lockedFolderFields)
 
-	if conf.GetBool(types.SettingIsLspInitialized) {
-		lspConfig := command.BuildLspConfiguration(conf, engine, logger, nil, configResolver)
-		n.Send(lspConfig)
+	// Only send $/snyk.configuration when the EFFECTIVE configuration actually
+	// changed. Sending unconditionally caused an infinite refresh loop in the
+	// IDE HTML settings page (IDE-2149): a no-op save (e.g. a SAST-gated
+	// checkbox whose effective value stays false) would trigger a re-render,
+	// which auto-saved again, echoing forever.
+	if lspInitialized {
+		afterLspConfig := command.BuildLspConfiguration(conf, engine, logger, nil, configResolver)
+		if !reflect.DeepEqual(beforeLspConfig, afterLspConfig) {
+			n.Send(afterLspConfig)
+		}
 	}
 
 	if ws != nil {

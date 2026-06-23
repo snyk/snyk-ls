@@ -2899,6 +2899,17 @@ func Test_applyToken_NilEntry(t *testing.T) {
 	require.Equal(t, tokenBefore, config.GetToken(engine.GetConfiguration()), "token must not change when map entry is nil")
 }
 
+// Test_UpdateSettings_AlwaysSendsLspConfiguration previously verified that
+// UpdateSettings sent $/snyk.configuration unconditionally (IDE-1954).
+// That unconditional send caused an infinite refresh loop: a no-op save (e.g.
+// a write-only token field that never appears in BuildLspConfiguration) would
+// trigger a re-render, which auto-saved again, echo-ing forever (IDE-2149).
+// The test below (Test_UpdateSettings_SendsLspConfigurationOnlyWhenEffectiveConfigChanges)
+// is the corrected version of this assertion.
+//
+// The old assertion — "a token-only change must still emit $/snyk.configuration" —
+// was wrong: the token is a write-only field excluded from BuildLspConfiguration,
+// so before and after are identical and no notification should be sent.
 func Test_UpdateSettings_AlwaysSendsLspConfiguration(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
@@ -2906,8 +2917,11 @@ func Test_UpdateSettings_AlwaysSendsLspConfiguration(t *testing.T) {
 
 	ctx := testCtx(t, t.Context(), engine, tokenService)
 
+	// A real (non-write-only) machine-scoped setting change must still emit
+	// $/snyk.configuration. SettingProxyInsecure is machine-scoped, defaults to
+	// false, and is NOT write-only, so it appears in BuildLspConfiguration output.
 	settings := map[string]*types.ConfigSetting{
-		types.SettingToken: {Value: "new-token", Changed: true},
+		types.SettingProxyInsecure: {Value: true, Changed: true},
 	}
 	UpdateSettings(ctx, conf, engine, engine.GetLogger(), settings, nil, analytics.TriggerSourceIDE, testutil.DefaultConfigResolver(engine))
 
@@ -2924,7 +2938,84 @@ func Test_UpdateSettings_AlwaysSendsLspConfiguration(t *testing.T) {
 			break
 		}
 	}
-	require.True(t, foundLspConfig, "UpdateSettings must send a types.LspConfigurationParam even for token-only changes")
+	require.True(t, foundLspConfig, "UpdateSettings must send a types.LspConfigurationParam when an effective config value changes")
+}
+
+// Test_UpdateSettings_SendsLspConfigurationOnlyWhenEffectiveConfigChanges is the
+// integration test for IDE-2149: guard the $/snyk.configuration echo so that a
+// no-op workspace/didChangeConfiguration (one that results in an identical
+// effective configuration) does NOT send the notification, breaking the
+// infinite-refresh loop in the IDE HTML settings page.
+//
+// The loop was:
+//  1. User clicks Snyk Code checkbox (SAST-gated; effective value stays false).
+//  2. UpdateSettings unconditionally sends $/snyk.configuration.
+//  3. IDE re-renders the HTML page from the notification.
+//  4. Auto-save fires again → another no-op didChangeConfiguration → goto 2.
+func Test_UpdateSettings_SendsLspConfigurationOnlyWhenEffectiveConfigChanges(t *testing.T) {
+	t.Run("no-op change emits zero $/snyk.configuration notifications", func(t *testing.T) {
+		engine, tokenService := testutil.UnitTestWithEngine(t)
+		conf := engine.GetConfiguration()
+		conf.Set(types.SettingIsLspInitialized, true)
+		cr := testutil.DefaultConfigResolver(engine)
+
+		ctx := testCtx(t, t.Context(), engine, tokenService)
+
+		// Token is a write-only setting; it is excluded from BuildLspConfiguration.
+		// Sending only a token change must not echo $/snyk.configuration because
+		// the effective (visible) configuration is identical before and after.
+		settings := map[string]*types.ConfigSetting{
+			types.SettingToken: {Value: "new-token", Changed: true},
+		}
+		UpdateSettings(ctx, conf, engine, engine.GetLogger(), settings, nil, analytics.TriggerSourceIDE, cr)
+
+		n, ok := notifierFromContext(ctx)
+		require.True(t, ok)
+		mockNotifier, ok := n.(*notification.MockNotifier)
+		require.True(t, ok)
+
+		var lspConfigCount int
+		for _, msg := range mockNotifier.SentMessages() {
+			if _, ok := msg.(types.LspConfigurationParam); ok {
+				lspConfigCount++
+			}
+		}
+		require.Equal(t, 0, lspConfigCount,
+			"a no-op save (write-only token field) must not send $/snyk.configuration — "+
+				"sending unconditionally caused the IDE HTML settings page infinite-refresh loop (IDE-2149)")
+	})
+
+	t.Run("real effective-config change emits exactly one $/snyk.configuration notification", func(t *testing.T) {
+		engine, tokenService := testutil.UnitTestWithEngine(t)
+		conf := engine.GetConfiguration()
+		conf.Set(types.SettingIsLspInitialized, true)
+		cr := testutil.DefaultConfigResolver(engine)
+
+		ctx := testCtx(t, t.Context(), engine, tokenService)
+
+		// SettingProxyInsecure is machine-scoped and NOT write-only, so it
+		// appears in the BuildLspConfiguration output. Its default is false;
+		// setting it to true changes the effective LspConfigurationParam that
+		// the IDE receives via $/snyk.configuration.
+		settings := map[string]*types.ConfigSetting{
+			types.SettingProxyInsecure: {Value: true, Changed: true},
+		}
+		UpdateSettings(ctx, conf, engine, engine.GetLogger(), settings, nil, analytics.TriggerSourceIDE, cr)
+
+		n, ok := notifierFromContext(ctx)
+		require.True(t, ok)
+		mockNotifier, ok := n.(*notification.MockNotifier)
+		require.True(t, ok)
+
+		var lspConfigCount int
+		for _, msg := range mockNotifier.SentMessages() {
+			if _, ok := msg.(types.LspConfigurationParam); ok {
+				lspConfigCount++
+			}
+		}
+		require.Equal(t, 1, lspConfigCount,
+			"a real effective-config change must emit exactly one $/snyk.configuration notification")
+	})
 }
 
 func TestApplyEnvironment_PersistsGlobalUser(t *testing.T) {
