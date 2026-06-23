@@ -3550,7 +3550,7 @@ if (window.cssVars) {
 
 	// Check if a folder is marked for reset
 	formHandler.isFolderMarkedForReset = function (folderIndex) {
-		return (
+		return !!(
 			window.ConfigApp.folderResets &&
 			window.ConfigApp.folderResets[folderIndex]
 		);
@@ -3577,7 +3577,6 @@ if (window.cssVars) {
 				fc.risk_score_threshold = null;
 			}
 		}
-		window.ConfigApp.folderResets = {};
 	};
 
 	// Org-scope global ("Project Defaults") fields cleared by a global reset.
@@ -3620,7 +3619,6 @@ if (window.cssVars) {
 		for (var i = 0; i < GLOBAL_RESET_FIELDS.length; i++) {
 			data[GLOBAL_RESET_FIELDS[i]] = null;
 		}
-		window.ConfigApp.globalReset = false;
 	};
 
 	window.ConfigApp.formHandler = formHandler;
@@ -3786,6 +3784,12 @@ if (window.cssVars) {
 		// (incl. OK/Cancel IDEs), since no input event would carry it.
 		if (window.ConfigApp.autoSave && window.ConfigApp.autoSave.getAndSaveIdeConfig) {
 			window.ConfigApp.autoSave.getAndSaveIdeConfig();
+		} else {
+			// getAndSaveIdeConfig will not run, so its finally block will not clear
+			// the reset marks. Clear both defensively here — mirroring the finally —
+			// to prevent any armed marks from leaking into a later unrelated save (IDE-2149).
+			window.ConfigApp.globalReset = false;
+			window.ConfigApp.folderResets = {};
 		}
 	}
 
@@ -4581,9 +4585,6 @@ if (window.cssVars) {
 			// Check validation state
 			var validationInfo = window.ConfigApp.validation.getFormValidationInfo();
 			if (!validationInfo.isValid) {
-				// Clear the global-reset flag so a blocked reset intent cannot
-				// silently leak into a later, unrelated save (IDE-2149 bug fix).
-				window.ConfigApp.globalReset = false;
 				if (ideBridge) {
 					ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.VALIDATION_ERROR);
 				}
@@ -4592,9 +4593,6 @@ if (window.cssVars) {
 
 			// Collect form data
 			if (!window.ConfigApp.formHandler || !window.ConfigApp.formHandler.collectChangedData || !window.ConfigApp.formHandler.collectData) {
-				// Clear the global-reset flag so a blocked reset intent cannot
-				// silently leak into a later, unrelated save (IDE-2149 bug fix).
-				window.ConfigApp.globalReset = false;
 				if (ideBridge) {
 					ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.ERROR);
 				}
@@ -4639,6 +4637,11 @@ if (window.cssVars) {
 			}
 		} finally {
 			_isSaving = false;
+			// Authoritative clear: runs on every exit of the try body — validation-fail
+			// return, collectData-guard return, exception, AND happy path — so reset
+			// marks can never survive an invocation (IDE-2149).
+			window.ConfigApp.globalReset = false;
+			window.ConfigApp.folderResets = {};
 		}
 	};
 

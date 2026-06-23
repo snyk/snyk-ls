@@ -57,7 +57,7 @@ test("applyGlobalResets: no-op when not marked", async () => {
 	assert.equal(data.snyk_code_enabled, true, "unmarked reset must not touch data");
 });
 
-test("applyGlobalResets: sets all 14 fields to null at top level and clears the flag", async () => {
+test("applyGlobalResets: sets all 14 fields to null at top level (flag cleared by getAndSaveIdeConfig finally)", async () => {
 	const win = await buildDom();
 	const fh = win.ConfigApp.formHandler;
 
@@ -79,7 +79,9 @@ test("applyGlobalResets: sets all 14 fields to null at top level and clears the 
 		"global reset must not write into folderConfigs"
 	);
 
-	assert.equal(fh.isGlobalMarkedForReset(), false, "flag must be cleared after applyGlobalResets");
+	// Flag clearing is now centralized in getAndSaveIdeConfig's finally block, not in applyGlobalResets.
+	// applyGlobalResets only injects nulls; the clear happens after every save attempt exit.
+	assert.equal(fh.isGlobalMarkedForReset(), true, "flag is still set — cleared by getAndSaveIdeConfig finally, not applyGlobalResets directly");
 });
 
 // ---------------------------------------------------------------------------
@@ -321,13 +323,58 @@ test("global reset and folder reset coexist without interfering", async () => {
 		assert.equal(data[key], null, key + " must be null at top level from global reset");
 	}
 
-	// After global reset, the global flag is cleared.
-	assert.equal(fh.isGlobalMarkedForReset(), false, "global reset flag must be cleared");
+	// Flag clearing is now centralized in getAndSaveIdeConfig's finally block, not in
+	// applyGlobalResets directly. When called standalone (as in this unit test),
+	// the flag remains set until getAndSaveIdeConfig's finally clears it.
+	assert.equal(fh.isGlobalMarkedForReset(), true, "flag still set — cleared by getAndSaveIdeConfig finally, not applyGlobalResets");
 
 	// Folder reset also applied (snyk_oss_enabled set to null in folderConfigs[0]).
 	assert.equal(
 		data.folderConfigs[0].snyk_oss_enabled,
 		null,
 		"folder reset must set snyk_oss_enabled to null in folderConfigs[0]"
+	);
+});
+
+// ---------------------------------------------------------------------------
+// Defensive else-branch symmetry: when getAndSaveIdeConfig is unavailable,
+// the else branch must clear BOTH globalReset and folderResets — not just
+// the global flag — so armed folder marks cannot leak into a later save.
+// ---------------------------------------------------------------------------
+
+test("else branch (no autoSave) clears both globalReset and folderResets marks", async () => {
+	var win = await buildDom();
+	var fh = win.ConfigApp.formHandler;
+
+	// Arm a global reset mark.
+	fh.markGlobalForReset();
+	assert.equal(fh.isGlobalMarkedForReset(), true, "global mark must be set");
+
+	// Arm a per-folder reset mark for folder 0.
+	fh.markFolderForReset(0);
+	assert.equal(fh.isFolderMarkedForReset(0), true, "folder 0 mark must be set");
+
+	// Remove getAndSaveIdeConfig so the else branch fires when the button is clicked.
+	var origGetAndSave = win.ConfigApp.autoSave.getAndSaveIdeConfig;
+	win.ConfigApp.autoSave.getAndSaveIdeConfig = null;
+
+	// Click the global reset button — handleGlobalOverrideReset runs, hits the else.
+	var btn = win.document.querySelector(".reset-global-overrides-btn");
+	assert.ok(btn, ".reset-global-overrides-btn must exist in the fixture");
+	btn.click();
+
+	// Restore so teardown / later tests are unaffected.
+	win.ConfigApp.autoSave.getAndSaveIdeConfig = origGetAndSave;
+
+	// CRITICAL: both marks must be cleared — the else branch must mirror the finally.
+	assert.equal(
+		fh.isGlobalMarkedForReset(),
+		false,
+		"global reset mark must be cleared by the else branch"
+	);
+	assert.equal(
+		fh.isFolderMarkedForReset(0),
+		false,
+		"folder 0 reset mark must be cleared by the else branch (was missing before fix)"
 	);
 });

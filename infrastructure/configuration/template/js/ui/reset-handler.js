@@ -131,6 +131,12 @@
 		// (incl. OK/Cancel IDEs), since no input event would carry it.
 		if (window.ConfigApp.autoSave && window.ConfigApp.autoSave.getAndSaveIdeConfig) {
 			window.ConfigApp.autoSave.getAndSaveIdeConfig();
+		} else {
+			// getAndSaveIdeConfig will not run, so its finally block will not clear
+			// the reset marks. Clear both defensively here — mirroring the finally —
+			// to prevent any armed marks from leaking into a later unrelated save (IDE-2149).
+			window.ConfigApp.globalReset = false;
+			window.ConfigApp.folderResets = {};
 		}
 	}
 

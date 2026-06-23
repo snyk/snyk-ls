@@ -214,7 +214,7 @@
 
 	// Check if a folder is marked for reset
 	formHandler.isFolderMarkedForReset = function (folderIndex) {
-		return (
+		return !!(
 			window.ConfigApp.folderResets &&
 			window.ConfigApp.folderResets[folderIndex]
 		);
@@ -241,7 +241,6 @@
 				fc.risk_score_threshold = null;
 			}
 		}
-		window.ConfigApp.folderResets = {};
 	};
 
 	// Org-scope global ("Project Defaults") fields cleared by a global reset.
@@ -284,7 +283,6 @@
 		for (var i = 0; i < GLOBAL_RESET_FIELDS.length; i++) {
 			data[GLOBAL_RESET_FIELDS[i]] = null;
 		}
-		window.ConfigApp.globalReset = false;
 	};
 
 	window.ConfigApp.formHandler = formHandler;
