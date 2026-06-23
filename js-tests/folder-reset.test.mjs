@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildDom } from "./helpers.mjs";
 
-// The 14 org-scope folder fields a reset must clear (mirrors FOLDER_RESET_FIELDS in form-handler.js).
+// The 17 folder fields a reset must clear (mirrors FOLDER_RESET_FIELDS in form-handler.js).
 const RESET_FIELDS = [
 	"scan_automatic",
 	"scan_net_new",
@@ -21,6 +21,9 @@ const RESET_FIELDS = [
 	"issue_view_ignored_issues",
 	"risk_score_threshold",
 	"preferred_org",
+	"additional_parameters",
+	"additional_environment",
+	"scan_command_config",
 ];
 
 // Folder paths embedded in the dummy-data fixture (js-tests/fixtures/config-page.html).
@@ -108,7 +111,7 @@ test("applyFolderResets creates folderConfigs array when missing", async () => {
 	assert.equal(data.folderConfigs[0].folderPath, PATH_A);
 });
 
-test("applyFolderResets nulls only the marked folder; others untouched (bug #1 — compaction/index drift)", async () => {
+test("applyFolderResets nulls only the marked folder; others untouched", async () => {
 	const win = await buildDom();
 	const fh = win.ConfigApp.formHandler;
 
@@ -149,7 +152,7 @@ test("applyFolderResets clears window.ConfigApp.folderResets after applying", as
 	assert.equal(fh.isFolderMarkedForReset(PATH_A), false, "no longer marked");
 });
 
-test("DOM-driven: clicking .reset-overrides-btn produces 14 nulls for that folderPath in the save payload", async () => {
+test("DOM-driven: clicking .reset-overrides-btn produces 17 nulls for that folderPath in the save payload", async () => {
 	const win = await buildDom();
 	const doc = win.document;
 	const calls = spySave(win);

@@ -1176,7 +1176,7 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 			"ApplyLspUpdate should apply setting; lock enforcement is the caller's responsibility (validateLockedFields)")
 	})
 
-	t.Run("clears preferred_org override via explicit null and reverts to global org", func(t *testing.T) {
+	t.Run("clears preferred_org override via explicit null and reverts to auto-org", func(t *testing.T) {
 		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 		types.RegisterAllConfigurations(fs)

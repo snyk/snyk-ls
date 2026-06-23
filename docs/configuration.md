@@ -467,7 +467,7 @@ A `ConfigSetting` value of `nil` combined with `Changed: true` is a **reset**: i
 | `{Changed: true, Value: <x>}` | set `user:folder:` override to `<x>` |
 | `{Changed: true, Value: nil}` | **Unset** `user:folder:` override → fall back |
 
-The null-reset applies to org-scope folder fields (those resolved through `applyGenericFolderOverrides`), which have a lower-precedence layer to fall back to. **Basic folder-native fields** (`base_branch`, `scan_command_config`, etc.) have no fallback layer, so a null value on them is treated as a no-op rather than a reset.
+The null-reset applies to org-scope folder fields (those resolved through `applyGenericFolderOverrides`), which have a lower-precedence layer to fall back to. Most basic folder-native fields (`base_branch`, etc.) have no fallback layer, so a null value on them is treated as a no-op rather than a reset. **Exception:** `additional_parameters`, `additional_environment`, and `scan_command_config` are basic folder fields whose null-reset is honoured — their handlers in `applyBasicFolderFields` call `unsetFolderOverride` on `{Changed: true, Value: nil}`, clearing the user override.
 
 `preferred_org` is the one exception among the basic-handled fields: it *does* have a fallback (the auto-determined LDX org, then the global org), so its null-reset is honoured. Resetting `preferred_org` Unsets **both** `user:folder:preferred_org` and `user:folder:org_set_by_user`, reverting the folder to its auto-determined / global org. See `applyPreferredOrg` in `internal/types/folder_config.go`.
 

@@ -155,14 +155,15 @@ See [Saving Configuration Flow](#saving-configuration-flow) for the sequence dia
 
 The per-folder **"Reset overrides"** button (one per folder tab, top-right in the disclaimer banner) clears all of that folder's user overrides so the effective values fall back to org / LDX-sync / default.
 
-**JS side (snyk-ls, already implemented):** clicking the button marks the folder *by its `folderPath`* (read from the hidden `folder_<index>_folderPath` input — not the index, which is compacted away during diffing). On save, `form-handler.applyFolderResets()` emits **flat `null`** for each of these 14 folder fields on that folder's entry in `folderConfigs`:
+**JS side (snyk-ls, already implemented):** clicking the button marks the folder *by its `folderPath`* (read from the hidden `folder_<index>_folderPath` input — not the index, which is compacted away during diffing). On save, `form-handler.applyFolderResets()` emits **flat `null`** for each of these 17 folder fields on that folder's entry in `folderConfigs`:
 
 ```
 scan_automatic, scan_net_new,
 severity_filter_critical, severity_filter_high, severity_filter_medium, severity_filter_low,
 snyk_oss_enabled, snyk_code_enabled, snyk_iac_enabled, snyk_secrets_enabled,
 issue_view_open_issues, issue_view_ignored_issues, risk_score_threshold,
-preferred_org
+preferred_org,
+additional_parameters, additional_environment, scan_command_config
 ```
 
 A reset is emitted **even if the folder has no other edits** — a reset-only folder still appears in the outbound `folderConfigs` keyed by `folderPath`. The JS deliberately emits **flat snake_case `null`**, not a `ConfigSetting` envelope; building the envelope is the IDE plugin's job (next paragraph).
