@@ -65,14 +65,18 @@
 			return;
 		}
 
-		var defaults = sectionDefaults[section];
-		applyDefaults(defaults);
+		window.ConfigApp.ideBridge.confirm("Reset all settings in this section to defaults?", function (confirmed) {
+			if (!confirmed) return;
 
-		// Trigger dirty tracking update
-		if (window.dirtyTracker) {
-			window.dirtyTracker.runChangeListeners();
-			window.dirtyTracker.checkDirty();
-		}
+			var defaults = sectionDefaults[section];
+			applyDefaults(defaults);
+
+			// Trigger dirty tracking update
+			if (window.dirtyTracker) {
+				window.dirtyTracker.runChangeListeners();
+				window.dirtyTracker.checkDirty();
+			}
+		});
 	}
 
 	// Handle folder override reset button click
@@ -95,20 +99,24 @@
 			return;
 		}
 
-		resetFolderOverrides(folderPath);
+		window.ConfigApp.ideBridge.confirm("Reset all overrides for this folder?", function (confirmed) {
+			if (!confirmed) return;
 
-		// Keep dirty state in sync (a reset changes no DOM input, so no change/blur event fires).
-		if (window.dirtyTracker) {
-			window.dirtyTracker.runChangeListeners();
-			window.dirtyTracker.checkDirty();
-		}
+			resetFolderOverrides(folderPath);
 
-		// Persist the reset immediately on every IDE. We call getAndSaveIdeConfig() directly rather
-		// than formState.triggerChangeHandlers(), which only saves on auto-save IDEs — a reset must
-		// be a commit point everywhere (incl. OK/Cancel IDEs), since no input event would carry it.
-		if (window.ConfigApp.autoSave && window.ConfigApp.autoSave.getAndSaveIdeConfig) {
-			window.ConfigApp.autoSave.getAndSaveIdeConfig();
-		}
+			// Keep dirty state in sync (a reset changes no DOM input, so no change/blur event fires).
+			if (window.dirtyTracker) {
+				window.dirtyTracker.runChangeListeners();
+				window.dirtyTracker.checkDirty();
+			}
+
+			// Persist the reset immediately on every IDE. We call getAndSaveIdeConfig() directly rather
+			// than formState.triggerChangeHandlers(), which only saves on auto-save IDEs — a reset must
+			// be a commit point everywhere (incl. OK/Cancel IDEs), since no input event would carry it.
+			if (window.ConfigApp.autoSave && window.ConfigApp.autoSave.getAndSaveIdeConfig) {
+				window.ConfigApp.autoSave.getAndSaveIdeConfig();
+			}
+		});
 	}
 
 	// Apply default values to form fields

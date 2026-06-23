@@ -40,6 +40,9 @@ function assertAllNull(entry, fields) {
 // Enable auto-save and spy on the IDE save bridge; returns the list of JSON payloads sent.
 function spySave(win) {
 	win.__IS_IDE_AUTOSAVE_ENABLED__ = true;
+	// window.confirm() returns false in JSDOM, so stub it to auto-accept so ideBridge.confirm()
+	// calls its callback with true and the reset/save proceeds.
+	win.confirm = () => true;
 	const calls = [];
 	win.__saveIdeConfig__ = (jsonString) => calls.push(jsonString);
 	return calls;
