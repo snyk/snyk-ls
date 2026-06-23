@@ -63,6 +63,15 @@ type AuthenticationService interface {
 	// but before the $/snyk.hasAuthenticated notification is sent to the IDE.
 	// This allows callers to perform setup (e.g. fetching feature flags) while the token
 	// is available but before the IDE reacts to the authentication event.
+	//
+	// Lock-state contract: the hook is invoked WITHOUT a.m held when called from
+	// the credentialUpdateWorker (async path), but WITH a.m held when called from
+	// the synchronous path (UpdateCredentials / Authenticate / Logout via
+	// updateCredentials → runPostMutationEffects). The hook MUST be safe to run
+	// in either state. In particular, the hook must NOT call back into any method
+	// that attempts to acquire a.m (e.g. UpdateCredentials, Logout), because
+	// sync.RWMutex is not reentrant: doing so from the synchronous path will
+	// deadlock.
 	SetPostCredentialUpdateHook(hook func())
 
 	// AuthURL retrieves the authentication URL
