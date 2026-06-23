@@ -187,22 +187,17 @@ test("DOM-driven: reset button click does not require the folder to have other e
 	assertAllNull(entry, RESET_FIELDS);
 });
 
-test("clicking reset triggers a save even with no other edits", async () => {
+test("reset click leaves dirty tracker clean after save", async () => {
 	const win = await buildDom();
-	const doc = win.document;
 	const calls = spySave(win);
 
-	// A folder reset changes no DOM input, so without an explicit save trigger it would never
-	// persist (this was the VS Code bug). Regression guard: the click alone must reach
-	// __saveIdeConfig__. The reset handler calls getAndSaveIdeConfig() directly, so this holds for
-	// every IDE, not just auto-save ones.
-	const btn = doc.querySelector('.reset-overrides-btn[data-folder-index="1"]');
-	assert.ok(btn, "reset button for folder 1 exists");
+	win.dirtyTracker.setDirtyState(true);
+	assert.ok(win.dirtyTracker.isDirty, "precondition: tracker is dirty");
+
+	const btn = win.document.querySelector('.reset-overrides-btn[data-folder-index="0"]');
+	assert.ok(btn, "reset button for folder 0 exists");
 	btn.click();
 
-	assert.ok(calls.length > 0, "reset click must trigger a save");
-	const saved = JSON.parse(calls[calls.length - 1]);
-	const entry = (saved.folderConfigs || []).find((f) => f.folderPath === PATH_B);
-	assert.ok(entry, "saved payload must contain the reset folder");
-	assertAllNull(entry, RESET_FIELDS);
+	assert.ok(calls.length > 0, "reset must trigger a save");
+	assert.equal(win.dirtyTracker.isDirty, false, "dirty tracker must be clean after a successful reset save");
 });
