@@ -360,7 +360,7 @@ func TestTreeScanStateEmitter_GlobalDisabledIVO_ShowsDisabledMessage(t *testing.
 }
 
 // TestFilterState_MultipleFolders_DifferingSeverity_SetsMixedAndRendersFilterMixed is an
-// end-to-end test covering the headline IDE-1866 behaviour: when two open folders have
+// end-to-end test covering the headline IDE-1866 behavior: when two open folders have
 // different per-folder severity filters the toolbar button carries filter-mixed.
 func TestFilterState_MultipleFolders_DifferingSeverity_SetsMixedAndRendersFilterMixed(t *testing.T) {
 	engine := testutil.UnitTest(t)
@@ -503,7 +503,7 @@ func TestFilterState_IVO_PinsFirstFolderBehavior(t *testing.T) {
 	ws := config.GetWorkspace(conf)
 	fs := emitter.filterState(ws)
 
-	// Current behaviour: first folder wins.
+	// Current behavior: first folder wins.
 	assert.True(t, fs.IssueViewOptions.OpenIssues, "IVO reads from first folder: OpenIssues should be true")
 	assert.False(t, fs.IssueViewOptions.IgnoredIssues, "IVO reads from first folder: IgnoredIssues should be false")
 }

@@ -75,10 +75,10 @@ type TreeNode struct {
 	// UntrustedFolderPaths lists the untrusted folder paths shown in the
 	// "untrusted-folder" info banner (IDE-1882).
 	UntrustedFolderPaths []string `json:"untrustedFolderPaths,omitempty"`
-	DeltaEnabled        bool     `json:"deltaEnabled,omitempty"`
-	BaseBranch          string   `json:"baseBranch,omitempty"`
-	LocalBranches       []string `json:"localBranches,omitempty"`
-	ReferenceFolderPath string   `json:"referenceFolderPath,omitempty"`
+	DeltaEnabled         bool     `json:"deltaEnabled,omitempty"`
+	BaseBranch           string   `json:"baseBranch,omitempty"`
+	LocalBranches        []string `json:"localBranches,omitempty"`
+	ReferenceFolderPath  string   `json:"referenceFolderPath,omitempty"`
 	// FileIconHTML holds a pre-rendered HTML fragment (inline SVG or <img> tag)
 	// for the file icon shown on file-type nodes. Empty string falls back to the
 	// generic icon defined in the template.
