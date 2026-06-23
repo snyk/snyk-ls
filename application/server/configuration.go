@@ -882,17 +882,21 @@ func isReset(cs *types.ConfigSetting) bool {
 }
 
 // globalEffectiveValue returns the effective global value for a resettable key
-// using the type-correct reader for that key's flagset registration.
-// GetGlobalBool is wrong for int-registered (SettingRiskScoreThreshold) and
-// string-registered (SettingScanNetNew) keys — calling it there always yields
-// false regardless of the stored value, silently suppressing analytics.
-// All other GlobalResettableSettings are bool-registered, so they use GetGlobalBool.
+// using the type-correct reader for the shape in which the value is stored.
+//
+// SettingRiskScoreThreshold is int-registered (flagset default 0); use GetGlobalInt.
+//
+// SettingScanNetNew is string-registered in the flagset (default ""), but
+// applyDeltaFindings writes it as a raw bool via SetGlobalDeferredFolderScope.
+// GetGlobalString would silently fail the bool→string type assertion and return ""
+// both before and after a reset, making effectivelyChanged always false and
+// suppressing analytics. GetGlobalBool correctly reads the stored bool value.
+//
+// All other GlobalResettableSettings are written as bools; they use GetGlobalBool.
 func globalEffectiveValue(conf configuration.Configuration, name string) any {
 	switch name {
 	case types.SettingRiskScoreThreshold:
 		return types.GetGlobalInt(conf, name)
-	case types.SettingScanNetNew:
-		return types.GetGlobalString(conf, name)
 	default:
 		return types.GetGlobalBool(conf, name)
 	}

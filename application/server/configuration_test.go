@@ -3407,12 +3407,13 @@ func Test_ProcessConfigSettings_GlobalReset(t *testing.T) {
 		assert.True(t, types.GetGlobalBool(conf, types.SettingSnykOssEnabled), "still default true")
 	})
 
-	t.Run("reset of int and string keys uses type-correct reader", func(t *testing.T) {
+	t.Run("reset of int key (SettingRiskScoreThreshold) uses type-correct reader", func(t *testing.T) {
 		// Verifies that resetting SettingRiskScoreThreshold (int-registered, default 0)
-		// and SettingScanNetNew (string-registered, default "") correctly reverts to
-		// their flagset defaults. GetGlobalBool would always return false for these,
-		// making oldEffective == newEffective == false and silently suppressing both
-		// analytics and the diagnostics refresh — this test catches that regression.
+		// correctly reverts to the flagset default. GetGlobalBool would always return false
+		// for an int-registered key, making oldEffective == newEffective == false and
+		// silently suppressing both analytics and the diagnostics refresh.
+		// Note: SettingScanNetNew is covered by the "globalEffectiveValue reads bool-stored
+		// scan_net_new correctly" sub-test, which uses the production bool storage path.
 		ctrl := gomock.NewController(t)
 		t.Cleanup(ctrl.Finish)
 
@@ -3430,37 +3431,133 @@ func Test_ProcessConfigSettings_GlobalReset(t *testing.T) {
 		mockWs.EXPECT().Folders().Return(nil).AnyTimes()
 		config.SetWorkspace(conf, mockWs)
 
-		// Seed non-default overrides: risk score threshold 500 (default is 0),
-		// scan_net_new "enabled" (default is "").
+		// Seed non-default override: risk score threshold 500 (default is 0).
 		types.SetGlobalUser(conf, types.SettingRiskScoreThreshold, 500)
-		types.SetGlobalUser(conf, types.SettingScanNetNew, "enabled")
 		require.True(t, types.HasGlobalUserOverride(conf, types.SettingRiskScoreThreshold))
-		require.True(t, types.HasGlobalUserOverride(conf, types.SettingScanNetNew))
 		require.Equal(t, 500, types.GetGlobalInt(conf, types.SettingRiskScoreThreshold), "override active")
-		require.Equal(t, "enabled", types.GetGlobalString(conf, types.SettingScanNetNew), "override active")
 
 		settings := map[string]*types.ConfigSetting{
 			types.SettingRiskScoreThreshold: {Value: nil, Changed: true},
-			types.SettingScanNetNew:         {Value: nil, Changed: true},
 		}
 		processConfigSettings(ctx, conf, setup.engine, setup.engine.GetLogger(), settings, analytics.TriggerSourceTest, cr)
 
 		assert.False(t, types.HasGlobalUserOverride(conf, types.SettingRiskScoreThreshold),
 			"int override must be cleared by reset")
-		assert.False(t, types.HasGlobalUserOverride(conf, types.SettingScanNetNew),
-			"string override must be cleared by reset")
 		assert.Equal(t, 0, types.GetGlobalInt(conf, types.SettingRiskScoreThreshold),
 			"risk score must revert to flagset default 0 after reset")
-		assert.Equal(t, "", types.GetGlobalString(conf, types.SettingScanNetNew),
-			"scan_net_new must revert to flagset default empty string after reset")
 
-		// Both keys are in globalResetFilterKeys, so sendDiagnosticsForNewSettings fires.
-		// Assert the goroutine calls HandleConfigChange, proving the analytics + diagnostics
-		// path was exercised (if globalEffectiveValue regresses to GetGlobalBool for these
-		// keys, effectivelyChanged would always be false and the call would never happen).
+		// SettingRiskScoreThreshold is in globalResetFilterKeys, so sendDiagnosticsForNewSettings
+		// fires. Assert HandleConfigChange is called, proving the analytics + diagnostics path
+		// was exercised (if globalEffectiveValue regresses to GetGlobalBool for int keys,
+		// effectivelyChanged would always be false and the call would never happen).
 		require.Eventually(t,
 			func() bool { return atomic.LoadInt32(&handleConfigChangeCalled) > 0 },
 			time.Second, time.Millisecond,
-			"HandleConfigChange must be called after resetting int/string keys whose effective value changed")
+			"HandleConfigChange must be called after resetting int key whose effective value changed")
+	})
+
+	t.Run("globalEffectiveValue reads bool-stored scan_net_new correctly", func(t *testing.T) {
+		// Regression test for IDE-2149: applyDeltaFindings stores scan_net_new as a raw bool via
+		// SetGlobalDeferredFolderScope (unwrapped write). globalEffectiveValue must use GetGlobalBool
+		// for this key; using GetGlobalString silently fails the type-assertion and returns "" both
+		// before and after the reset, making effectivelyChanged=false and suppressing analytics.
+		engine, tokenService := testutil.UnitTestWithEngine(t)
+		conf := engine.GetConfiguration()
+		_ = tokenService
+
+		// Store scan_net_new as a bool (true = enabled), matching the production write
+		// path in applyDeltaFindings which calls SetGlobalDeferredFolderScope with a bool.
+		types.SetGlobalDeferredFolderScope(conf, types.SettingScanNetNew, true)
+		require.True(t, types.HasGlobalUserOverride(conf, types.SettingScanNetNew),
+			"bool override must be detected by HasGlobalUserOverride")
+
+		// globalEffectiveValue must return true before reset and false (flagset default) after.
+		// If GetGlobalString is used instead of GetGlobalBool, both calls return "" and
+		// effectivelyChanged is always false — analytics are silently suppressed.
+		beforeReset := globalEffectiveValue(conf, types.SettingScanNetNew)
+		types.UnsetGlobalUser(conf, types.SettingScanNetNew)
+		afterReset := globalEffectiveValue(conf, types.SettingScanNetNew)
+
+		assert.Equal(t, true, beforeReset,
+			"globalEffectiveValue must return the stored bool true before reset")
+		assert.Equal(t, false, afterReset,
+			"globalEffectiveValue must return the flagset default false after reset")
+		assert.NotEqual(t, beforeReset, afterReset,
+			"effectivelyChanged must be true so analytics are emitted on reset")
+	})
+
+	t.Run("scan_net_new reset via processConfigSettings emits analytics event", func(t *testing.T) {
+		// End-to-end regression for IDE-2149: proves the analytics + diagnostics path
+		// is exercised when scan_net_new is reset via processConfigSettings.
+		//
+		// The unit test above verifies globalEffectiveValue returns the correct bool values.
+		// This test proves the full production path all the way to the analytics workflow:
+		//   processConfigSettings → applyGlobalResets
+		//     → analytics.SendConfigChangedAnalytics  (gated on effectivelyChanged)
+		//       → engine.InvokeWithInputAndConfig(WORKFLOWID_REPORT_ANALYTICS, ...)
+		//
+		// RED signal: if globalEffectiveValue regresses to GetGlobalString for scan_net_new,
+		// effectivelyChanged becomes false (both before/after read as ""), and
+		// SendConfigChangedAnalytics short-circuits (oldVal==newVal guard), so the analytics
+		// workflow is never invoked — the counter stays at 0 and the test fails.
+		//
+		// GREEN signal: with GetGlobalBool, effectivelyChanged is true (true→false),
+		// SendConfigChangedAnalytics calls the workflow, counter > 0, test passes.
+		ctrl := gomock.NewController(t)
+		t.Cleanup(ctrl.Finish)
+
+		// setupFolderConfigTest initializes SettingIsLspInitialized=true, which is
+		// required for SendConfigChangedAnalytics to act.
+		setup := setupFolderConfigTest(t)
+		conf := setup.engineConfig
+		ctx := testCtx(t, t.Context(), setup.engine, setup.tokenService)
+		cr := testutil.DefaultConfigResolver(setup.engine)
+
+		// Intercept the analytics workflow with a no-op spy to count invocations and
+		// avoid outbound network calls. DisableOutboundAnalyticsForTest re-registers
+		// WORKFLOWID_REPORT_ANALYTICS with a counter callback.
+		analyticsCalls := testutil.DisableOutboundAnalyticsForTest(t, setup.engine)
+
+		// Replace workspace with a mock. Folders() returns nil (no folder org to use),
+		// so SendConfigChangedAnalytics falls back to the global org path. This also
+		// means HandleConfigChange fires from sendDiagnosticsForNewSettings.
+		var handleConfigChangeCalled int32
+		mockWs := mock_types.NewMockWorkspace(ctrl)
+		mockWs.EXPECT().HandleConfigChange().
+			Do(func() { atomic.AddInt32(&handleConfigChangeCalled, 1) }).
+			MinTimes(0) // may or may not fire; the analytics assertion is the primary gate
+		mockWs.EXPECT().Folders().Return(nil).AnyTimes()
+		config.SetWorkspace(conf, mockWs)
+
+		// Store scan_net_new as a bool via the production write path (same as
+		// applyDeltaFindings → SetGlobalDeferredFolderScope). Override must differ
+		// from the flagset default (false) so effectivelyChanged becomes true.
+		types.SetGlobalDeferredFolderScope(conf, types.SettingScanNetNew, true)
+		require.True(t, types.HasGlobalUserOverride(conf, types.SettingScanNetNew),
+			"bool override must be detectable before reset")
+		require.True(t, types.GetGlobalBool(conf, types.SettingScanNetNew),
+			"scan_net_new override must read as true before reset")
+
+		// Issue a reset payload: {changed:true, value:nil} triggers applyGlobalResets.
+		settings := map[string]*types.ConfigSetting{
+			types.SettingScanNetNew: {Value: nil, Changed: true},
+		}
+		processConfigSettings(ctx, conf, setup.engine, setup.engine.GetLogger(), settings, analytics.TriggerSourceTest, cr)
+
+		// Override must be cleared and value must revert to flagset default (false).
+		assert.False(t, types.HasGlobalUserOverride(conf, types.SettingScanNetNew),
+			"scan_net_new override must be cleared by reset")
+		assert.False(t, types.GetGlobalBool(conf, types.SettingScanNetNew),
+			"scan_net_new must revert to flagset default false after reset")
+
+		// SendConfigChangedAnalytics spawns a goroutine to invoke the analytics workflow.
+		// Wait for it to land. A count of 0 here means effectivelyChanged was false —
+		// the GetGlobalString regression would leave analytics suppressed.
+		require.Eventually(t,
+			func() bool { return analyticsCalls.Load() > 0 },
+			time.Second, time.Millisecond,
+			"analytics workflow must be invoked after resetting bool-stored scan_net_new — "+
+				"count=0 means effectivelyChanged was false (GetGlobalString regression: "+
+				"both before/after read as '' so oldVal==newVal guard short-circuits analytics)")
 	})
 }
