@@ -732,13 +732,17 @@ func Test_updateFolderConfig_ResetClearsUserOverrides_EndToEnd(t *testing.T) {
 	folderPath := types.FilePath(folderDir)
 
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-		ctx2.DepNotifier:           deps.Notifier,
-		ctx2.DepAuthService:        deps.AuthenticationService,
-		ctx2.DepConfigResolver:     deps.ConfigResolver,
-		ctx2.DepFeatureFlagService: deps.FeatureFlagService,
-		ctx2.DepLdxSyncService:     deps.LdxSyncService,
+		ctx2.DepNotifier:            deps.Notifier,
+		ctx2.DepAuthService:         deps.AuthenticationService,
+		ctx2.DepConfigResolver:      deps.ConfigResolver,
+		ctx2.DepFeatureFlagService:  deps.FeatureFlagService,
+		ctx2.DepLdxSyncService:      deps.LdxSyncService,
+		ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
 	})
 	resolver := testutil.DefaultConfigResolver(engine)
+
+	// Exercise the production code path: updateFolderOrgIfNeeded is gated on this flag.
+	conf.Set(types.SettingIsLspInitialized, true)
 
 	// Step 1: seed user overrides on the folder (the "user edited overrides" state).
 	seed := []types.LspFolderConfig{{

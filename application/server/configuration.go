@@ -1457,7 +1457,14 @@ func updateFolderConfigOrg(conf configuration.Configuration, logger *zerolog.Log
 	orgHasJustChanged := currentSnap.PreferredOrg != oldSnapshot.PreferredOrg
 	if orgSetByUserJustChanged {
 		if !currentSnap.OrgSetByUser {
-			types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "", false)
+			// Only normalise to {"","false"} if the keys are still present. A reset via
+			// applyPreferredOrg already Unset both; re-writing them here would turn the
+			// clean absence into an explicit {Value:""/false, Changed:true} entry that
+			// HasUserOverride treats as an active override.
+			if types.HasUserOverride(conf, folderConfig.FolderPath, types.SettingPreferredOrg) ||
+				types.HasUserOverride(conf, folderConfig.FolderPath, types.SettingOrgSetByUser) {
+				types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "", false)
+			}
 		}
 	} else if orgHasJustChanged {
 		types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, currentSnap.PreferredOrg, true)
