@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  prodsec: snyk/prodsec-orb@1
+  prodsec: snyk/prodsec-orb@dev:77296498b43f146daab0c41a89d6ddd21ed2e74c
 
 jobs:
   security-scans:
@@ -14,6 +14,7 @@ jobs:
           mode: auto
           open-source-additional-arguments: --exclude=testdata
           iac-scan: disabled
+          open-source-scan: low
 
 workflows:
   version: 2
