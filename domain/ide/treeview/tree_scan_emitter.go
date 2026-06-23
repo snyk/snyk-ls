@@ -159,6 +159,10 @@ func (e *TreeScanStateEmitter) filterState(ws types.Workspace) TreeViewFilterSta
 			severity, mixed = aggregateSeverityFilters(severities)
 		}
 		if firstFC != nil {
+			// TODO: IssueViewOptions currently reads from the first folder only
+			// (firstFC), unlike severity which is aggregated across all folders.
+			// When IVO toolbar buttons land (separate branch, same release),
+			// aggregate into a MixedIssueViewOptions analogous to MixedSeverity.
 			issueView = firstFC.ConfigResolver.IssueViewOptionsForFolder(firstFC)
 		}
 	}
