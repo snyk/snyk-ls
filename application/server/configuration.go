@@ -1457,12 +1457,25 @@ func updateFolderConfigOrg(conf configuration.Configuration, logger *zerolog.Log
 	orgHasJustChanged := currentSnap.PreferredOrg != oldSnapshot.PreferredOrg
 	if orgSetByUserJustChanged {
 		if !currentSnap.OrgSetByUser {
-			types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "", false)
+			// Only normalise to {"","false"} if the keys are still present. A reset via
+			// applyPreferredOrg already Unset both; re-writing them here would turn the
+			// clean absence into an explicit {Value:""/false, Changed:true} entry that
+			// HasUserOverride treats as an active override.
+			if types.HasUserOverride(conf, folderConfig.FolderPath, types.SettingPreferredOrg) ||
+				types.HasUserOverride(conf, folderConfig.FolderPath, types.SettingOrgSetByUser) {
+				types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "", false)
+			}
 		}
 	} else if orgHasJustChanged {
 		types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, currentSnap.PreferredOrg, true)
 	} else if !currentSnap.OrgSetByUser {
-		types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "", false)
+		// Same guard as above: applyPreferredOrg runs before this function in the same
+		// update cycle and has already Unset both keys on a reset. Skip normalisation
+		// when both are absent so we don't re-create them as active overrides.
+		if types.HasUserOverride(conf, folderConfig.FolderPath, types.SettingPreferredOrg) ||
+			types.HasUserOverride(conf, folderConfig.FolderPath, types.SettingOrgSetByUser) {
+			types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "", false)
+		}
 	}
 }
 

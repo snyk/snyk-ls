@@ -253,6 +253,14 @@ h3 {
     line-height: 1.5;
 }
 
+/* Folder override disclaimer: text on the left, "Reset overrides" button top-right. */
+.folder-disclaimer {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--container-padding);
+}
+
 .folder-config {
     margin-bottom: var(--folder-config-margin);
     padding: var(--section-padding);
@@ -732,22 +740,24 @@ button.secondary[disabled] {
     cursor: not-allowed;
 }
 
+/* Outlined (ghost) danger button: red text + border on a transparent fill reads clearly on the
+   dark panel. A solid --error-background fill is a subtle marker color and washes out light text. */
 .reset-overrides-btn {
-    display: none;
     padding: 4px 12px;
+    white-space: nowrap;
     font-size: var(--tiny-font-size);
-    background-color: var(--error-background);
-    border: 1px solid var(--error-background);
-    color: var(--input-foreground);
+    background-color: transparent;
+    border: 1px solid var(--error-foreground);
+    color: var(--error-foreground);
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .reset-overrides-btn:hover {
-    color: var(--editor-foreground);
-    background-color: var(--error-background);
-    border-color: var(--error-background);
+    background-color: var(--error-foreground);
+    border-color: var(--error-foreground);
+    color: var(--background-color);
 }
 
 /* - - - Settings Tabs - - - */
@@ -1252,8 +1262,9 @@ button.secondary[disabled] {
             <div class="tab-pane folder-pane" id="folder-pane-0" role="tabpanel" aria-labelledby="folder-tab-0">
                 <input type="hidden" name="folder_0_folderPath" value="/Users/username/workspace/defaults-project">
 
-                <div class="info-box">
+                <div class="info-box folder-disclaimer">
                     <p>These settings override the project defaults for this specific project.</p>
+                    <button type="button" class="reset-overrides-btn" data-folder-index="0" title="Reset all overrides for this folder">Reset overrides</button>
                 </div>
 
                 
@@ -1537,14 +1548,14 @@ button.secondary[disabled] {
                         </div>
                     </div>
                 </div>
-                <button type="button" class="reset-overrides-btn" data-folder-index="0" title="Reset all overrides for this folder">Reset overrides</button>
             </div>
             
             <div class="tab-pane folder-pane" id="folder-pane-1" role="tabpanel" aria-labelledby="folder-tab-1">
                 <input type="hidden" name="folder_1_folderPath" value="/Users/username/workspace/org-set-project">
 
-                <div class="info-box">
+                <div class="info-box folder-disclaimer">
                     <p>These settings override the project defaults for this specific project.</p>
+                    <button type="button" class="reset-overrides-btn" data-folder-index="1" title="Reset all overrides for this folder">Reset overrides</button>
                 </div>
 
                 
@@ -1836,14 +1847,14 @@ button.secondary[disabled] {
                         </div>
                     </div>
                 </div>
-                <button type="button" class="reset-overrides-btn" data-folder-index="1" title="Reset all overrides for this folder">Reset overrides</button>
             </div>
             
             <div class="tab-pane folder-pane" id="folder-pane-2" role="tabpanel" aria-labelledby="folder-tab-2">
                 <input type="hidden" name="folder_2_folderPath" value="/Users/username/workspace/org-locked-project">
 
-                <div class="info-box">
+                <div class="info-box folder-disclaimer">
                     <p>These settings override the project defaults for this specific project.</p>
+                    <button type="button" class="reset-overrides-btn" data-folder-index="2" title="Reset all overrides for this folder">Reset overrides</button>
                 </div>
 
                 
@@ -2127,14 +2138,14 @@ button.secondary[disabled] {
                         </div>
                     </div>
                 </div>
-                <button type="button" class="reset-overrides-btn" data-folder-index="2" title="Reset all overrides for this folder">Reset overrides</button>
             </div>
             
             <div class="tab-pane folder-pane" id="folder-pane-3" role="tabpanel" aria-labelledby="folder-tab-3">
                 <input type="hidden" name="folder_3_folderPath" value="/Users/username/workspace/user-override-project">
 
-                <div class="info-box">
+                <div class="info-box folder-disclaimer">
                     <p>These settings override the project defaults for this specific project.</p>
+                    <button type="button" class="reset-overrides-btn" data-folder-index="3" title="Reset all overrides for this folder">Reset overrides</button>
                 </div>
 
                 
@@ -2418,7 +2429,6 @@ button.secondary[disabled] {
                         </div>
                     </div>
                 </div>
-                <button type="button" class="reset-overrides-btn" data-folder-index="3" title="Reset all overrides for this folder">Reset overrides</button>
             </div>
             
             
@@ -3522,41 +3532,83 @@ if (window.cssVars) {
 		}
 	}
 
-	// Mark a folder for complete reset (all org-scope overrides will be set to null)
-	formHandler.markFolderForReset = function (folderIndex) {
+	// Folder override fields cleared by a folder reset. Emitting flat null for each
+	// tells the IDE plugin to send {value:null, changed:true}, which makes snyk-ls
+	// Unset the user:folder: override so the value falls back to org/LDX/default.
+	// preferred_org is included: snyk-ls special-cases its null-reset to also unset
+	// org_set_by_user, reverting the folder to its auto-determined / global org.
+	// additional_parameters / additional_environment / scan_command_config are
+	// non-scalar overrides; snyk-ls's basic folder-field handlers honor the null reset.
+	var FOLDER_RESET_FIELDS = [
+		"scan_automatic",
+		"scan_net_new",
+		"severity_filter_critical",
+		"severity_filter_high",
+		"severity_filter_medium",
+		"severity_filter_low",
+		"snyk_oss_enabled",
+		"snyk_code_enabled",
+		"snyk_iac_enabled",
+		"snyk_secrets_enabled",
+		"issue_view_open_issues",
+		"issue_view_ignored_issues",
+		"risk_score_threshold",
+		"preferred_org",
+		"additional_parameters",
+		"additional_environment",
+		"scan_command_config",
+	];
+
+	// Mark a folder for complete reset (all org-scope overrides will be set to null).
+	// Keyed by folderPath, not index: collectChangedData() compacts folderConfigs, so an
+	// index captured at click time no longer maps to the same entry in the saved payload.
+	formHandler.markFolderForReset = function (folderPath) {
+		if (!folderPath) return;
 		window.ConfigApp.folderResets = window.ConfigApp.folderResets || {};
-		window.ConfigApp.folderResets[folderIndex] = true;
+		window.ConfigApp.folderResets[folderPath] = true;
 	};
 
 	// Check if a folder is marked for reset
-	formHandler.isFolderMarkedForReset = function (folderIndex) {
-		return (
+	formHandler.isFolderMarkedForReset = function (folderPath) {
+		return !!(
 			window.ConfigApp.folderResets &&
-			window.ConfigApp.folderResets[folderIndex]
+			window.ConfigApp.folderResets[folderPath]
 		);
 	};
 
-	// Apply reset: set all org-scope fields to null on the folder config
+	// Apply reset: set all org-scope fields to null on each reset-marked folder.
+	// A reset-only folder (no other edits) is dropped by collectChangedData's diff, so
+	// add a fresh entry for any marked folderPath missing from data.folderConfigs.
 	formHandler.applyFolderResets = function (data) {
-		if (!data.folderConfigs) return;
+		var marked = window.ConfigApp.folderResets;
+		if (!marked) return;
+
+		data.folderConfigs = data.folderConfigs || [];
+
+		// Index existing entries by folderPath.
+		var byPath = {};
 		for (var i = 0; i < data.folderConfigs.length; i++) {
-			if (formHandler.isFolderMarkedForReset(i) && data.folderConfigs[i]) {
-				var fc = data.folderConfigs[i];
-				fc.scan_automatic = null;
-				fc.scan_net_new = null;
-				fc.severity_filter_critical = null;
-				fc.severity_filter_high = null;
-				fc.severity_filter_medium = null;
-				fc.severity_filter_low = null;
-				fc.snyk_oss_enabled = null;
-				fc.snyk_code_enabled = null;
-				fc.snyk_iac_enabled = null;
-				fc.snyk_secrets_enabled = null;
-				fc.issue_view_open_issues = null;
-				fc.issue_view_ignored_issues = null;
-				fc.risk_score_threshold = null;
+			var fc = data.folderConfigs[i];
+			if (fc && fc.folderPath) {
+				byPath[fc.folderPath] = fc;
 			}
 		}
+
+		for (var folderPath in marked) {
+			if (!marked.hasOwnProperty(folderPath) || !marked[folderPath]) continue;
+
+			var entry = byPath[folderPath];
+			if (!entry) {
+				entry = { folderPath: folderPath };
+				data.folderConfigs.push(entry);
+				byPath[folderPath] = entry;
+			}
+
+			for (var f = 0; f < FOLDER_RESET_FIELDS.length; f++) {
+				entry[FOLDER_RESET_FIELDS[f]] = null;
+			}
+		}
+
 		window.ConfigApp.folderResets = {};
 	};
 
@@ -3657,12 +3709,8 @@ if (window.cssVars) {
 			return;
 		}
 
-		if (!confirm("Reset " + formatSectionName(section) + " to defaults?")) {
-			return;
-		}
-
 		var defaults = sectionDefaults[section];
-		applyDefaults(defaults, section);
+		applyDefaults(defaults);
 
 		// Trigger dirty tracking update
 		if (window.dirtyTracker) {
@@ -3679,21 +3727,36 @@ if (window.cssVars) {
 			return;
 		}
 
-		if (!confirm("Reset all overrides for this folder to defaults? Your custom overrides will be removed.")) {
+		// Resolve the folderPath from the hidden input so resets are keyed by path, not the
+		// (later compacted) index. Without a path we cannot reliably target the folder on save.
+		var folderPath = null;
+		var pathInputs = dom.getByName("folder_" + folderIndex + "_folderPath");
+		if (pathInputs && pathInputs.length > 0) {
+			folderPath = pathInputs[0].value;
+		}
+		if (!folderPath) {
+			console.warn("No folder path for reset; folderIndex=" + folderIndex);
 			return;
 		}
 
-		resetFolderOverrides(parseInt(folderIndex));
+		resetFolderOverrides(folderPath);
 
-		// Trigger dirty tracking update
+		// Keep dirty state in sync (a reset changes no DOM input, so no change/blur event fires).
 		if (window.dirtyTracker) {
 			window.dirtyTracker.runChangeListeners();
 			window.dirtyTracker.checkDirty();
 		}
+
+		// Persist the reset immediately on every IDE. We call getAndSaveIdeConfig() directly rather
+		// than formState.triggerChangeHandlers(), which only saves on auto-save IDEs — a reset must
+		// be a commit point everywhere (incl. OK/Cancel IDEs), since no input event would carry it.
+		if (window.ConfigApp.autoSave && window.ConfigApp.autoSave.getAndSaveIdeConfig) {
+			window.ConfigApp.autoSave.getAndSaveIdeConfig();
+		}
 	}
 
 	// Apply default values to form fields
-	function applyDefaults(defaults, section) {
+	function applyDefaults(defaults) {
 		for (var fieldName in defaults) {
 			if (!defaults.hasOwnProperty(fieldName)) continue;
 
@@ -3735,24 +3798,12 @@ if (window.cssVars) {
 	}
 
 	// Reset folder overrides - marks the folder so all org-scope fields are set to null on save
-	function resetFolderOverrides(folderIndex) {
+	function resetFolderOverrides(folderPath) {
 		// Mark the folder for reset — on save, formHandler.applyFolderResets() will
 		// set all org-scope LspFolderConfig fields to null (clear overrides)
 		if (window.ConfigApp.formHandler && window.ConfigApp.formHandler.markFolderForReset) {
-			window.ConfigApp.formHandler.markFolderForReset(folderIndex);
+			window.ConfigApp.formHandler.markFolderForReset(folderPath);
 		}
-	}
-
-	// Format section name for display
-	function formatSectionName(section) {
-		var names = {
-			scanConfiguration: "Scan configuration",
-			filteringDisplay: "Filters and views",
-			authentication: "Authentication",
-			cliConfiguration: "CLI configuration",
-			permissions: "Trust settings"
-		};
-		return names[section] || section;
 	}
 
 	// Trigger change event on element
