@@ -35,10 +35,10 @@
       <button data-filter-type="severity" data-filter-value="medium" class="filter-btn filter-btn-icon{{if .FilterState.MixedSeverity.Medium}} filter-mixed{{else if .FilterState.SeverityFilter.Medium}} filter-active{{end}}" title="{{if .FilterState.MixedSeverity.Medium}}Open folders use different Medium severity filters{{else}}Medium{{end}}">{{severitySVGByName "medium"}}</button>
       <button data-filter-type="severity" data-filter-value="low" class="filter-btn filter-btn-icon{{if .FilterState.MixedSeverity.Low}} filter-mixed{{else if .FilterState.SeverityFilter.Low}} filter-active{{end}}" title="{{if .FilterState.MixedSeverity.Low}}Open folders use different Low severity filters{{else}}Low{{end}}">{{severitySVGByName "low"}}</button>
     </span>
-    {{/* IDE-1863: Expand/Collapse All removed from the toolbar — they aren't
-        filters, and per-scanner chevrons (see .tree-chevron in styles.css) now
-        handle expand/collapse. tree.js keeps the expandAll/collapseAll handlers,
-        which simply no-op when the buttons are absent. */}}
+    {{/* The toolbar has no Expand/Collapse All buttons — they aren't filters.
+        Per-scanner chevrons (see .tree-chevron in styles.css) handle
+        expand/collapse. tree.js keeps the expandAll/collapseAll handlers,
+        which no-op when the buttons are absent. */}}
   </div>
 
   <div class="tree-container" id="treeContainer" data-total-issues="{{.TotalIssues}}">

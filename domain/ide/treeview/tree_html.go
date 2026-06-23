@@ -166,12 +166,12 @@ func checkmarkSVG() string {
 	return svgCheckmark
 }
 
-// untrustedFolderLearnMoreURL is the "Learn more" target for the IDE-1882
-// untrusted-folder banner. Each Snyk IDE plugin has its own workspace-trust docs
-// page; this points at the VS Code page as the default.
+// untrustedFolderLearnMoreURL is the "Learn more" target for the untrusted-folder
+// banner. Each Snyk IDE plugin has its own workspace-trust docs page; this points
+// at the VS Code page as the default.
 //
-// TODO(IDE-1882): branch on configuration.INTEGRATION_ENVIRONMENT (set from the
-// LSP clientInfo.Name in application/server/server.go) so Visual Studio and
+// TODO: branch on configuration.INTEGRATION_ENVIRONMENT (set from the LSP
+// clientInfo.Name in application/server/server.go) so Visual Studio and
 // JetBrains users get their IDE-specific page, mirroring how
 // infrastructure/configuration/config_html.go swaps "Project"/"Solution" by
 // integration name. Per-IDE URLs as of 2026-05-26:

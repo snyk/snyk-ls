@@ -93,7 +93,7 @@ func SetGlobalRawForRawReader(conf configuration.Configuration, name string, val
 // remote-folder and user-global) when Changed is true; an unwrapped write is
 // ignored at that tier. Use this for folder-scoped settings the user controls
 // per folder (e.g. severity filters, issue view options) so the choice survives
-// LDX-Sync remote defaults. (IDE-1996)
+// LDX-Sync remote defaults.
 func SetUserFolder(conf configuration.Configuration, folderPath FilePath, name string, value any) {
 	// Normalize with PathKey to match how the resolver builds the folder key on
 	// read (getValueLocked uses string(PathKey(folderConfig.GetFolderPath()))).

@@ -183,9 +183,9 @@ body {
   left: 58px;
 }
 
-/* IDE-1863: expand/collapse chevron column. Every row reserves a fixed-width
-   chevron slot (the span is always present) so labels stay aligned in a column,
-   and the disclosure glyph is painted on any node that has children
+/* Expand/collapse chevron column. Every row reserves a fixed-width chevron slot
+   (the span is always present) so labels stay aligned in a column, and the
+   disclosure glyph is painted on any node that has children
    (tree-node-has-children) — folders, scanners, files, and multi-location issue
    groups. Leaf rows reserve the slot but draw no glyph. */
 .tree-chevron {
@@ -280,12 +280,12 @@ body {
   vertical-align: middle;
 }
 
-/* IDE-1864: errored scanners no longer paint the row label red. Scanner names
-   stay in the normal foreground regardless of state; only the inline description
-   suffix shifts to the dim --description-foreground (see product-description
-   rules below). Errors are already discoverable via the click-to-open overlay
-   plus the inline "- (Code settings unavailable)" suffix — no need for an
-   additional red-alarm at the row level. */
+/* Errored scanner rows keep neutral label color. Scanner names stay in the
+   normal foreground regardless of state; only the inline description suffix
+   shifts to the dim --description-foreground (see product-description rules
+   below). Errors are surfaced via the click-to-open overlay and the inline
+   "- (Code settings unavailable)" suffix, so no row-level red is applied by
+   design. */
 
 /* Abbreviated product icons (@patchui/icons) carry per-product accent gradients
    inline, so color/fill rules don't apply. Both disabled and errored products
@@ -296,7 +296,7 @@ body {
   opacity: 0.55;
 }
 
-/* IDE-1864: inline description suffix on product rows.
+/* Inline description suffix on product rows.
    - Normal scanner: same foreground colour as the bold scanner name, regular weight.
    - Disabled or errored scanner: dim to --description-foreground (the existing gray)
      so the suffix recedes without ever touching the scanner name's colour or weight. */
@@ -418,9 +418,9 @@ body {
   color: inherit;
   opacity: 1;
 }
-/* IDE-1866: "mixed" state — the open folders disagree on this severity (some show
-   it, some hide it), which a single workspace-wide toolbar button can't render as
-   a plain on/off. Shown translucent with a dashed accent border so it reads as
+/* "Mixed" state — the open folders disagree on this severity (some show it,
+   some hide it), which a single workspace-wide toolbar button can't render as a
+   plain on/off. Shown translucent with a dashed accent border so it reads as
    indeterminate, distinct from both the solid active and the dim inactive states.
    The explanatory tooltip comes from the button's title attribute. Clicking it
    resolves the mismatch by enabling the severity for all folders (see tree.js). */
@@ -486,19 +486,19 @@ body {
   font-synthesis: none;
 }
 
-/* IDE-1864: disabled scanner rows use targeted dimming on the product icon and
-   the description suffix (rules above) rather than a row-wide opacity drop —
-   the scanner name itself stays at full contrast, since product names are
-   wayfinding and should never look "off". Cursor is `help` so the row signals
-   that hovering reveals the explanatory tooltip. */
+/* Disabled scanner rows use targeted dimming on the product icon and the
+   description suffix (rules above). The scanner name itself stays at full
+   contrast, since product names are wayfinding and should never look "off".
+   Cursor is `help` so the row signals that hovering reveals the explanatory
+   tooltip. */
 .tree-node-disabled .tree-node-row {
   cursor: help;
 }
 
-/* IDE-1882: untrusted-folder info node. Sits on the existing .tree-node-info
-   foundation (no banner chrome) so it visually belongs in the same family as
-   the other inline info rows ("✅ No issues found", "⚡ N fixable…"). The action row
-   is stacked under the message so the Trust button is always visible at the
+/* Untrusted-folder info node. Sits on the existing .tree-node-info foundation
+   (no banner chrome) so it visually belongs in the same family as the other
+   inline info rows ("✅ No issues found", "⚡ N fixable…"). The action row is
+   stacked under the message so the Trust button is always visible at the
    sidebar's natural width. Button styling reuses --vscode-button-* tokens,
    matching the IDE's primary-button look. */
 .tree-node-info--untrusted-folder .tree-label {

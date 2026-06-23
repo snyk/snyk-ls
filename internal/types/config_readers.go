@@ -206,7 +206,7 @@ func SetSeverityFilterOnConfig(conf configuration.Configuration, severityFilter 
 // (UserFolderKey, tier "folder value") so it is authoritative for that folder's
 // issue filtering and tree toolbar — outranking LDX-Sync remote defaults and the
 // user-global value (only an org-locked remote value wins). This is what keeps
-// the tree-view toggle and the per-folder settings page in sync. (IDE-1996)
+// the tree-view toggle and the per-folder settings page in sync.
 func SetSeverityFilterForFolder(conf configuration.Configuration, folderPath FilePath, sf *SeverityFilter) {
 	if sf == nil {
 		return

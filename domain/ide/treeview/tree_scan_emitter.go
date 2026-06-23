@@ -136,7 +136,7 @@ func (e *TreeScanStateEmitter) renderPending() {
 // default) — the same source the issue filtering uses. So the toolbar reflects
 // the aggregate across all open folders: a severity is shown/hidden when every
 // folder agrees, or marked "mixed" when they disagree. Falls back to the global
-// value when there is no folder or resolver. (IDE-1866 / IDE-1996)
+// value when there is no folder or resolver.
 func (e *TreeScanStateEmitter) filterState(ws types.Workspace) TreeViewFilterState {
 	severity := config.GetFilterSeverity(e.conf)
 	issueView := config.GetIssueViewOptions(e.conf)

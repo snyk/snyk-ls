@@ -360,8 +360,8 @@ func TestTreeScanStateEmitter_GlobalDisabledIVO_ShowsDisabledMessage(t *testing.
 }
 
 // TestFilterState_MultipleFolders_DifferingSeverity_SetsMixedAndRendersFilterMixed is an
-// end-to-end test covering the headline IDE-1866 behavior: when two open folders have
-// different per-folder severity filters the toolbar button carries filter-mixed.
+// end-to-end test: when two open folders have different per-folder severity
+// filters the toolbar button carries filter-mixed.
 func TestFilterState_MultipleFolders_DifferingSeverity_SetsMixedAndRendersFilterMixed(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()

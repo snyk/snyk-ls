@@ -300,11 +300,10 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 		}
 		// else: no scan registered yet → empty description (initial state)
 
-		// IDE-1864 / IDE-2027: hover tooltip explaining a non-running scanner.
-		// The copy is tailored to *why* it isn't running so the user knows what
-		// (if anything) they can do about it. Mirrors the description precedence
-		// above (settings-disabled wins over error, since a product turned off in
-		// settings never scans).
+		// Hover tooltip explaining a non-running scanner. The copy is tailored to
+		// *why* it isn't running so the user knows what (if anything) they can do
+		// about it. Mirrors the description precedence above (settings-disabled
+		// wins over error, since a product turned off in settings never scans).
 		var tooltip string
 		if !enabled {
 			tooltip = productSettingsDisabledTooltip(p)
@@ -871,7 +870,7 @@ func productSettingsDisabledTooltip(p product.Product) string {
 
 // productDisabledTooltip returns the hover hint for a scanner that produced a
 // scan error. The wording is tailored to *why* it didn't run so the user knows
-// whether they can act on it (IDE-1864 / IDE-2027):
+// whether they can act on it:
 //   - org/entitlement disablement ("…not enabled for this organization") is not
 //     self-serve, so the copy points the user at their org admin.
 //   - folder-level disablement is a plugin-settings choice (folder config), so it

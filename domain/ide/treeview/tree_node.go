@@ -64,16 +64,16 @@ type TreeNode struct {
 	Enabled        *bool           `json:"enabled,omitempty"`
 	ErrorMessage   string          `json:"errorMessage,omitempty"`
 	// Tooltip is a hover hint rendered as the `title` attribute on a node row.
-	// Two uses (IDE-1864): disabled scanners explain *why* they're off, and
-	// errored scanners hint that the row is clickable for details.
+	// Used for disabled scanners (to explain why they're off) and errored
+	// scanners (to hint that the row is clickable for details).
 	Tooltip string `json:"tooltip,omitempty"`
 	// InfoVariant selects an alternate rendering for info nodes. "" is the plain
-	// inline info row; "filter-empty" (IDE-1869) is hidden until the client
-	// reveals it when severity filters hide every issue; "untrusted-folder"
-	// (IDE-1882) is the workspace-trust banner with a folder list + Trust button.
+	// inline info row; "filter-empty" is hidden until the client reveals it when
+	// severity filters hide every issue; "untrusted-folder" is the
+	// workspace-trust banner with a folder list + Trust button.
 	InfoVariant string `json:"infoVariant,omitempty"`
 	// UntrustedFolderPaths lists the untrusted folder paths shown in the
-	// "untrusted-folder" info banner (IDE-1882).
+	// "untrusted-folder" info banner.
 	UntrustedFolderPaths []string `json:"untrustedFolderPaths,omitempty"`
 	DeltaEnabled         bool     `json:"deltaEnabled,omitempty"`
 	BaseBranch           string   `json:"baseBranch,omitempty"`
@@ -90,7 +90,6 @@ type TreeNode struct {
 // severity's filter (some show it, some hide it). The tree shows all open
 // folders under one workspace-wide toolbar, so when folders disagree the toolbar
 // button is rendered in a "mixed" (translucent) state rather than on/off.
-// (IDE-1866)
 type MixedSeverity struct {
 	Critical bool `json:"critical,omitempty"`
 	High     bool `json:"high,omitempty"`
