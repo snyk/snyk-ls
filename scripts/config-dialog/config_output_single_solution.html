@@ -2448,15 +2448,19 @@ if (window.cssVars) {
 			}
 		}
 
-		// Folder configs: per-folder, only include changed fields
+		// Folder configs: per-folder, only include changed fields.
+		// Also force-include folders marked for reset even when they have no other
+		// changed fields, so applyFolderResets can null their org-scope overrides.
 		if (current.folderConfigs) {
 			var changedFolders = [];
 			var origFolders = original.folderConfigs || [];
+			var resetPaths = window.ConfigApp.folderResetPaths;
 			for (var fi = 0; fi < current.folderConfigs.length; fi++) {
 				var curFc = current.folderConfigs[fi] || {};
 				var origFc = origFolders[fi] || {};
 				var changedFc = null;
 				var fcKeys = window.FormUtils.getKeys(curFc);
+				var fcPath = curFc.folderPath || "";
 
 				for (var ki = 0; ki < fcKeys.length; ki++) {
 					var fk = fcKeys[ki];
@@ -2469,8 +2473,14 @@ if (window.cssVars) {
 					}
 				}
 
-				if (changedFc && curFc.folderPath) {
-					changedFc.folderPath = curFc.folderPath;
+				if (changedFc && fcPath) {
+					changedFc.folderPath = fcPath;
+					changedFolders.push(changedFc);
+				} else if (!changedFc && fcPath && resetPaths && resetPaths.has(fcPath)) {
+					// Folder has no other edits but is marked for reset: force-include
+					// so applyFolderResets can write the null fields.
+					changedFc = {};
+					changedFc.folderPath = fcPath;
 					changedFolders.push(changedFc);
 				}
 			}
@@ -2625,26 +2635,39 @@ if (window.cssVars) {
 		}
 	}
 
-	// Mark a folder for complete reset (all org-scope overrides will be set to null)
+	// Mark a folder for complete reset (all org-scope overrides will be set to null).
+	// Resolves the folder's path from the hidden input rendered by config.html and
+	// stores it in a Set keyed by path — never by DOM index — so the mark survives
+	// collectChangedData's compression (which re-indexes 0..n via push).
 	formHandler.markFolderForReset = function (folderIndex) {
-		window.ConfigApp.folderResets = window.ConfigApp.folderResets || {};
-		window.ConfigApp.folderResets[folderIndex] = true;
+		var input = document.querySelector("[name='folder_" + folderIndex + "_folderPath']");
+		var path = input ? input.value : "";
+		if (!path) {
+			console.warn("markFolderForReset: could not resolve folderPath for index " + folderIndex + "; mark not stored");
+			return;
+		}
+		window.ConfigApp.folderResetPaths = window.ConfigApp.folderResetPaths || new Set();
+		window.ConfigApp.folderResetPaths.add(path);
 	};
 
-	// Check if a folder is marked for reset
-	formHandler.isFolderMarkedForReset = function (folderIndex) {
+	// Check if a folder is marked for reset.
+	// Takes a folderPath string and returns true when that path is in the reset set.
+	formHandler.isFolderMarkedForReset = function (folderPath) {
 		return !!(
-			window.ConfigApp.folderResets &&
-			window.ConfigApp.folderResets[folderIndex]
+			window.ConfigApp.folderResetPaths &&
+			window.ConfigApp.folderResetPaths.has(folderPath)
 		);
 	};
 
-	// Apply reset: set all org-scope fields to null on the folder config
+	// Apply reset: set all org-scope fields to null on each folder config entry
+	// whose folderPath is in the reset set. Matches by path, never by position.
 	formHandler.applyFolderResets = function (data) {
 		if (!data.folderConfigs) return;
+		var resetPaths = window.ConfigApp.folderResetPaths;
+		if (!resetPaths) return;
 		for (var i = 0; i < data.folderConfigs.length; i++) {
-			if (formHandler.isFolderMarkedForReset(i) && data.folderConfigs[i]) {
-				var fc = data.folderConfigs[i];
+			var fc = data.folderConfigs[i];
+			if (fc && fc.folderPath && resetPaths.has(fc.folderPath)) {
 				fc.scan_automatic = null;
 				fc.scan_net_new = null;
 				fc.severity_filter_critical = null;
@@ -2872,7 +2895,7 @@ if (window.cssVars) {
 			// the reset marks. Clear both defensively here — mirroring the finally —
 			// to prevent any armed marks from leaking into a later unrelated save (IDE-2149).
 			window.ConfigApp.globalReset = false;
-			window.ConfigApp.folderResets = {};
+			window.ConfigApp.folderResetPaths = new Set();
 		}
 	}
 
@@ -3724,7 +3747,7 @@ if (window.cssVars) {
 			// return, collectData-guard return, exception, AND happy path — so reset
 			// marks can never survive an invocation (IDE-2149).
 			window.ConfigApp.globalReset = false;
-			window.ConfigApp.folderResets = {};
+			window.ConfigApp.folderResetPaths = new Set();
 		}
 	};
 

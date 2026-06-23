@@ -136,7 +136,7 @@
 			// the reset marks. Clear both defensively here — mirroring the finally —
 			// to prevent any armed marks from leaking into a later unrelated save (IDE-2149).
 			window.ConfigApp.globalReset = false;
-			window.ConfigApp.folderResets = {};
+			window.ConfigApp.folderResetPaths = new Set();
 		}
 	}
 

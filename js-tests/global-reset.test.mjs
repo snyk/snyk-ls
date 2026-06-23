@@ -301,12 +301,14 @@ test("global reset and folder reset coexist without interfering", async () => {
 	// Mark global for reset.
 	fh.markGlobalForReset();
 
-	// Mark first folder for reset (index 0).
+	// Mark first folder for reset (index 0). markFolderForReset resolves the
+	// real DOM path, so the data must use that same path for applyFolderResets to match.
 	fh.markFolderForReset(0);
+	const folder0Path = win.document.querySelector("[name='folder_0_folderPath']").value;
 
 	const data = {
 		folderConfigs: [
-			{ folderPath: "/test-folder", snyk_oss_enabled: true },
+			{ folderPath: folder0Path, snyk_oss_enabled: true },
 		],
 	};
 
@@ -338,11 +340,11 @@ test("global reset and folder reset coexist without interfering", async () => {
 
 // ---------------------------------------------------------------------------
 // Defensive else-branch symmetry: when getAndSaveIdeConfig is unavailable,
-// the else branch must clear BOTH globalReset and folderResets — not just
+// the else branch must clear BOTH globalReset and folderResetPaths — not just
 // the global flag — so armed folder marks cannot leak into a later save.
 // ---------------------------------------------------------------------------
 
-test("else branch (no autoSave) clears both globalReset and folderResets marks", async () => {
+test("else branch (no autoSave) clears both globalReset and folderResetPaths marks", async () => {
 	var win = await buildDom();
 	var fh = win.ConfigApp.formHandler;
 
@@ -352,7 +354,8 @@ test("else branch (no autoSave) clears both globalReset and folderResets marks",
 
 	// Arm a per-folder reset mark for folder 0.
 	fh.markFolderForReset(0);
-	assert.equal(fh.isFolderMarkedForReset(0), true, "folder 0 mark must be set");
+	var folder0Path = win.document.querySelector("[name='folder_0_folderPath']").value;
+	assert.equal(fh.isFolderMarkedForReset(folder0Path), true, "folder 0 mark must be set");
 
 	// Remove getAndSaveIdeConfig so the else branch fires when the button is clicked.
 	var origGetAndSave = win.ConfigApp.autoSave.getAndSaveIdeConfig;
@@ -373,7 +376,7 @@ test("else branch (no autoSave) clears both globalReset and folderResets marks",
 		"global reset mark must be cleared by the else branch"
 	);
 	assert.equal(
-		fh.isFolderMarkedForReset(0),
+		fh.isFolderMarkedForReset(folder0Path),
 		false,
 		"folder 0 reset mark must be cleared by the else branch (was missing before fix)"
 	);
