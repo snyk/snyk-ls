@@ -253,6 +253,14 @@ h3 {
     line-height: 1.5;
 }
 
+/* Folder override disclaimer: text on the left, "Reset overrides" button top-right. */
+.folder-disclaimer {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--container-padding);
+}
+
 .folder-config {
     margin-bottom: var(--folder-config-margin);
     padding: var(--section-padding);
@@ -732,22 +740,24 @@ button.secondary[disabled] {
     cursor: not-allowed;
 }
 
+/* Outlined (ghost) danger button: red text + border on a transparent fill reads clearly on the
+   dark panel. A solid --error-background fill is a subtle marker color and washes out light text. */
 .reset-overrides-btn {
-    display: none;
     padding: 4px 12px;
+    white-space: nowrap;
     font-size: var(--tiny-font-size);
-    background-color: var(--error-background);
-    border: 1px solid var(--error-background);
-    color: var(--input-foreground);
+    background-color: transparent;
+    border: 1px solid var(--error-foreground);
+    color: var(--error-foreground);
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .reset-overrides-btn:hover {
-    color: var(--editor-foreground);
-    background-color: var(--error-background);
-    border-color: var(--error-background);
+    background-color: var(--error-foreground);
+    border-color: var(--error-foreground);
+    color: var(--background-color);
 }
 
 /* Lay out the fallbacks-pane Reset-overrides info-box as a single row so the
@@ -2162,12 +2172,11 @@ if (window.cssVars) {
 		}
 
 		// Folder configs: per-folder, only include changed fields.
-		// Also force-include folders marked for reset even when they have no other
-		// changed fields, so applyFolderResets can null their org-scope overrides.
+		// applyFolderResets() handles force-including reset-only folders that
+		// collectChangedData's diff would otherwise drop.
 		if (current.folderConfigs) {
 			var changedFolders = [];
 			var origFolders = original.folderConfigs || [];
-			var resetPaths = window.ConfigApp.folderResetPaths;
 			for (var fi = 0; fi < current.folderConfigs.length; fi++) {
 				var curFc = current.folderConfigs[fi] || {};
 				var origFc = origFolders[fi] || {};
@@ -2187,12 +2196,6 @@ if (window.cssVars) {
 				}
 
 				if (changedFc && fcPath) {
-					changedFc.folderPath = fcPath;
-					changedFolders.push(changedFc);
-				} else if (!changedFc && fcPath && resetPaths && resetPaths.has(fcPath)) {
-					// Folder has no other edits but is marked for reset: force-include
-					// so applyFolderResets can write the null fields.
-					changedFc = {};
 					changedFc.folderPath = fcPath;
 					changedFolders.push(changedFc);
 				}
@@ -2348,54 +2351,84 @@ if (window.cssVars) {
 		}
 	}
 
+	// Folder override fields cleared by a folder reset. Emitting flat null for each
+	// tells the IDE plugin to send {value:null, changed:true}, which makes snyk-ls
+	// Unset the user:folder: override so the value falls back to org/LDX/default.
+	// preferred_org is included: snyk-ls special-cases its null-reset to also unset
+	// org_set_by_user, reverting the folder to its auto-determined / global org.
+	// additional_parameters / additional_environment / scan_command_config are
+	// non-scalar overrides; snyk-ls's basic folder-field handlers honor the null reset.
+	var FOLDER_RESET_FIELDS = [
+		"scan_automatic",
+		"scan_net_new",
+		"severity_filter_critical",
+		"severity_filter_high",
+		"severity_filter_medium",
+		"severity_filter_low",
+		"snyk_oss_enabled",
+		"snyk_code_enabled",
+		"snyk_iac_enabled",
+		"snyk_secrets_enabled",
+		"issue_view_open_issues",
+		"issue_view_ignored_issues",
+		"risk_score_threshold",
+		"preferred_org",
+		"additional_parameters",
+		"additional_environment",
+		"scan_command_config",
+	];
+
 	// Mark a folder for complete reset (all org-scope overrides will be set to null).
-	// Resolves the folder's path from the hidden input rendered by config.html and
-	// stores it in a Set keyed by path — never by DOM index — so the mark survives
-	// collectChangedData's compression (which re-indexes 0..n via push).
-	formHandler.markFolderForReset = function (folderIndex) {
-		var input = document.querySelector("[name='folder_" + folderIndex + "_folderPath']");
-		var path = input ? input.value : "";
-		if (!path) {
-			console.warn("markFolderForReset: could not resolve folderPath for index " + folderIndex + "; mark not stored");
-			return;
-		}
-		window.ConfigApp.folderResetPaths = window.ConfigApp.folderResetPaths || new Set();
-		window.ConfigApp.folderResetPaths.add(path);
+	// Keyed by folderPath, not index: collectChangedData() compacts folderConfigs, so an
+	// index captured at click time no longer maps to the same entry in the saved payload.
+	formHandler.markFolderForReset = function (folderPath) {
+		if (!folderPath) return;
+		window.ConfigApp.folderResets = window.ConfigApp.folderResets || {};
+		window.ConfigApp.folderResets[folderPath] = true;
 	};
 
-	// Check if a folder is marked for reset.
-	// Takes a folderPath string and returns true when that path is in the reset set.
+	// Check if a folder is marked for reset
 	formHandler.isFolderMarkedForReset = function (folderPath) {
 		return !!(
-			window.ConfigApp.folderResetPaths &&
-			window.ConfigApp.folderResetPaths.has(folderPath)
+			window.ConfigApp.folderResets &&
+			window.ConfigApp.folderResets[folderPath]
 		);
 	};
 
-	// Apply reset: set all org-scope fields to null on each folder config entry
-	// whose folderPath is in the reset set. Matches by path, never by position.
+	// Apply reset: set all org-scope fields to null on each reset-marked folder.
+	// A reset-only folder (no other edits) is dropped by collectChangedData's diff, so
+	// add a fresh entry for any marked folderPath missing from data.folderConfigs.
 	formHandler.applyFolderResets = function (data) {
-		if (!data.folderConfigs) return;
-		var resetPaths = window.ConfigApp.folderResetPaths;
-		if (!resetPaths) return;
+		var marked = window.ConfigApp.folderResets;
+		if (!marked) return;
+
+		data.folderConfigs = data.folderConfigs || [];
+
+		// Index existing entries by folderPath.
+		var byPath = {};
 		for (var i = 0; i < data.folderConfigs.length; i++) {
 			var fc = data.folderConfigs[i];
-			if (fc && fc.folderPath && resetPaths.has(fc.folderPath)) {
-				fc.scan_automatic = null;
-				fc.scan_net_new = null;
-				fc.severity_filter_critical = null;
-				fc.severity_filter_high = null;
-				fc.severity_filter_medium = null;
-				fc.severity_filter_low = null;
-				fc.snyk_oss_enabled = null;
-				fc.snyk_code_enabled = null;
-				fc.snyk_iac_enabled = null;
-				fc.snyk_secrets_enabled = null;
-				fc.issue_view_open_issues = null;
-				fc.issue_view_ignored_issues = null;
-				fc.risk_score_threshold = null;
+			if (fc && fc.folderPath) {
+				byPath[fc.folderPath] = fc;
 			}
 		}
+
+		for (var folderPath in marked) {
+			if (!marked.hasOwnProperty(folderPath) || !marked[folderPath]) continue;
+
+			var entry = byPath[folderPath];
+			if (!entry) {
+				entry = { folderPath: folderPath };
+				data.folderConfigs.push(entry);
+				byPath[folderPath] = entry;
+			}
+
+			for (var f = 0; f < FOLDER_RESET_FIELDS.length; f++) {
+				entry[FOLDER_RESET_FIELDS[f]] = null;
+			}
+		}
+
+		window.ConfigApp.folderResets = {};
 	};
 
 	// Org-scope global ("Project Defaults") fields cleared by a global reset.
@@ -2543,12 +2576,8 @@ if (window.cssVars) {
 			return;
 		}
 
-		if (!confirm("Reset " + formatSectionName(section) + " to defaults?")) {
-			return;
-		}
-
 		var defaults = sectionDefaults[section];
-		applyDefaults(defaults, section);
+		applyDefaults(defaults);
 
 		// Trigger dirty tracking update
 		if (window.dirtyTracker) {
@@ -2565,16 +2594,31 @@ if (window.cssVars) {
 			return;
 		}
 
-		if (!confirm("Reset all overrides for this folder to defaults? Your custom overrides will be removed.")) {
+		// Resolve the folderPath from the hidden input so resets are keyed by path, not the
+		// (later compacted) index. Without a path we cannot reliably target the folder on save.
+		var folderPath = null;
+		var pathInputs = dom.getByName("folder_" + folderIndex + "_folderPath");
+		if (pathInputs && pathInputs.length > 0) {
+			folderPath = pathInputs[0].value;
+		}
+		if (!folderPath) {
+			console.warn("No folder path for reset; folderIndex=" + folderIndex);
 			return;
 		}
 
-		resetFolderOverrides(parseInt(folderIndex));
+		resetFolderOverrides(folderPath);
 
-		// Trigger dirty tracking update
+		// Keep dirty state in sync (a reset changes no DOM input, so no change/blur event fires).
 		if (window.dirtyTracker) {
 			window.dirtyTracker.runChangeListeners();
 			window.dirtyTracker.checkDirty();
+		}
+
+		// Persist the reset immediately on every IDE. We call getAndSaveIdeConfig() directly rather
+		// than formState.triggerChangeHandlers(), which only saves on auto-save IDEs — a reset must
+		// be a commit point everywhere (incl. OK/Cancel IDEs), since no input event would carry it.
+		if (window.ConfigApp.autoSave && window.ConfigApp.autoSave.getAndSaveIdeConfig) {
+			window.ConfigApp.autoSave.getAndSaveIdeConfig();
 		}
 	}
 
@@ -2608,12 +2652,12 @@ if (window.cssVars) {
 			// the reset marks. Clear both defensively here — mirroring the finally —
 			// to prevent any armed marks from leaking into a later unrelated save (IDE-2149).
 			window.ConfigApp.globalReset = false;
-			window.ConfigApp.folderResetPaths = new Set();
+			window.ConfigApp.folderResets = {};
 		}
 	}
 
 	// Apply default values to form fields
-	function applyDefaults(defaults, section) {
+	function applyDefaults(defaults) {
 		for (var fieldName in defaults) {
 			if (!defaults.hasOwnProperty(fieldName)) continue;
 
@@ -2655,24 +2699,12 @@ if (window.cssVars) {
 	}
 
 	// Reset folder overrides - marks the folder so all org-scope fields are set to null on save
-	function resetFolderOverrides(folderIndex) {
+	function resetFolderOverrides(folderPath) {
 		// Mark the folder for reset — on save, formHandler.applyFolderResets() will
 		// set all org-scope LspFolderConfig fields to null (clear overrides)
 		if (window.ConfigApp.formHandler && window.ConfigApp.formHandler.markFolderForReset) {
-			window.ConfigApp.formHandler.markFolderForReset(folderIndex);
+			window.ConfigApp.formHandler.markFolderForReset(folderPath);
 		}
-	}
-
-	// Format section name for display
-	function formatSectionName(section) {
-		var names = {
-			scanConfiguration: "Scan configuration",
-			filteringDisplay: "Filters and views",
-			authentication: "Authentication",
-			cliConfiguration: "CLI configuration",
-			permissions: "Trust settings"
-		};
-		return names[section] || section;
 	}
 
 	// Trigger change event on element
@@ -3460,7 +3492,7 @@ if (window.cssVars) {
 			// return, collectData-guard return, exception, AND happy path — so reset
 			// marks can never survive an invocation (IDE-2149).
 			window.ConfigApp.globalReset = false;
-			window.ConfigApp.folderResetPaths = new Set();
+			window.ConfigApp.folderResets = {};
 		}
 	};
 
@@ -3686,6 +3718,111 @@ if (window.cssVars) {
 		});
 	});
 })();
+
+    </script>
+    <script nonce="ideNonce">
+        // ABOUTME: Applies inbound per-folder filter values (severity + issue view) to the
+// open settings form when they change elsewhere (e.g. the tree-view toolbar),
+// without firing change events (so it can't trigger autosave / a feedback loop)
+// and rebaselining only those fields in the dirty-tracker (so unrelated
+// in-progress edits are preserved). Exposed as window.applyFilterSettings and
+// invoked by the IDE host's message bridge on a $/snyk.configuration update.
+(function (window) {
+	"use strict";
+
+	// Checkbox filter fields that live per folder and can change from outside the
+	// settings window (the tree-view toolbar). Keyed by the setting name used both
+	// in the form control name (folder_<index>_<field>) and the inbound settings map.
+	var FILTER_FIELDS = [
+		"severity_filter_critical",
+		"severity_filter_high",
+		"severity_filter_medium",
+		"severity_filter_low",
+		"issue_view_open_issues",
+		"issue_view_ignored_issues",
+	];
+
+	// Maps each folder path to its form index via the hidden folder_<index>_folderPath inputs.
+	function buildPathToIndex(doc) {
+		var map = {};
+		var inputs = doc.querySelectorAll('input[type="hidden"][name$="_folderPath"]');
+		for (var i = 0; i < inputs.length; i++) {
+			var match = /^folder_(\d+)_folderPath$/.exec(inputs[i].name);
+			if (match) {
+				map[inputs[i].value] = match[1];
+			}
+		}
+		return map;
+	}
+
+	// Reads a boolean from an inbound ConfigSetting ({ value, changed }); returns
+	// undefined when absent or not a boolean (so we only touch provided fields).
+	function settingBool(settings, field) {
+		var setting = settings && settings[field];
+		if (!setting || typeof setting.value !== "boolean") {
+			return undefined;
+		}
+		return setting.value;
+	}
+
+	function rebaselineField(index, field, value) {
+		var tracker = window.dirtyTracker;
+		if (!tracker || !tracker.originalData || !tracker.originalData.folderConfigs) {
+			return;
+		}
+		var baseline = tracker.originalData.folderConfigs[index];
+		if (baseline) {
+			baseline[field] = value;
+		}
+	}
+
+	// applyFilterSettings updates the per-folder filter checkboxes from an inbound
+	// $/snyk.configuration payload. folderConfigs is the LspConfigurationParam
+	// FolderConfigs array: [{ folderPath, settings: { <name>: { value } } }].
+	window.applyFilterSettings = function (folderConfigs) {
+		if (!folderConfigs || !folderConfigs.length) {
+			return;
+		}
+		var doc = window.document;
+		var pathToIndex = buildPathToIndex(doc);
+		var touched = false;
+
+		for (var f = 0; f < folderConfigs.length; f++) {
+			var fc = folderConfigs[f];
+			if (!fc || !fc.folderPath) {
+				continue;
+			}
+			var index = pathToIndex[fc.folderPath];
+			if (index === undefined) {
+				continue;
+			}
+			for (var k = 0; k < FILTER_FIELDS.length; k++) {
+				var field = FILTER_FIELDS[k];
+				var value = settingBool(fc.settings, field);
+				if (value === undefined) {
+					continue;
+				}
+				var el = doc.querySelector('input[name="folder_' + index + "_" + field + '"]');
+				if (!el || el.checked === value) {
+					// Still rebaseline if the control matches, so a prior divergent
+					// baseline doesn't leave the field falsely dirty.
+					if (el) rebaselineField(index, field, value);
+					continue;
+				}
+				// Set without dispatching a change event: no autosave, no echo, no loop.
+				el.checked = value;
+				rebaselineField(index, field, value);
+				touched = true;
+			}
+		}
+
+		// Re-evaluate dirty state so the save/dirty UI reflects that these fields
+		// are now in sync with the baseline (unrelated edits stay dirty).
+		if (touched && window.dirtyTracker && typeof window.dirtyTracker.checkDirty === "function") {
+			window.dirtyTracker.checkDirty();
+		}
+	};
+})(window);
 
     </script>
 

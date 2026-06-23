@@ -30,12 +30,11 @@
 		}
 
 		// Folder configs: per-folder, only include changed fields.
-		// Also force-include folders marked for reset even when they have no other
-		// changed fields, so applyFolderResets can null their org-scope overrides.
+		// applyFolderResets() handles force-including reset-only folders that
+		// collectChangedData's diff would otherwise drop.
 		if (current.folderConfigs) {
 			var changedFolders = [];
 			var origFolders = original.folderConfigs || [];
-			var resetPaths = window.ConfigApp.folderResetPaths;
 			for (var fi = 0; fi < current.folderConfigs.length; fi++) {
 				var curFc = current.folderConfigs[fi] || {};
 				var origFc = origFolders[fi] || {};
@@ -55,12 +54,6 @@
 				}
 
 				if (changedFc && fcPath) {
-					changedFc.folderPath = fcPath;
-					changedFolders.push(changedFc);
-				} else if (!changedFc && fcPath && resetPaths && resetPaths.has(fcPath)) {
-					// Folder has no other edits but is marked for reset: force-include
-					// so applyFolderResets can write the null fields.
-					changedFc = {};
 					changedFc.folderPath = fcPath;
 					changedFolders.push(changedFc);
 				}
@@ -216,54 +209,84 @@
 		}
 	}
 
+	// Folder override fields cleared by a folder reset. Emitting flat null for each
+	// tells the IDE plugin to send {value:null, changed:true}, which makes snyk-ls
+	// Unset the user:folder: override so the value falls back to org/LDX/default.
+	// preferred_org is included: snyk-ls special-cases its null-reset to also unset
+	// org_set_by_user, reverting the folder to its auto-determined / global org.
+	// additional_parameters / additional_environment / scan_command_config are
+	// non-scalar overrides; snyk-ls's basic folder-field handlers honor the null reset.
+	var FOLDER_RESET_FIELDS = [
+		"scan_automatic",
+		"scan_net_new",
+		"severity_filter_critical",
+		"severity_filter_high",
+		"severity_filter_medium",
+		"severity_filter_low",
+		"snyk_oss_enabled",
+		"snyk_code_enabled",
+		"snyk_iac_enabled",
+		"snyk_secrets_enabled",
+		"issue_view_open_issues",
+		"issue_view_ignored_issues",
+		"risk_score_threshold",
+		"preferred_org",
+		"additional_parameters",
+		"additional_environment",
+		"scan_command_config",
+	];
+
 	// Mark a folder for complete reset (all org-scope overrides will be set to null).
-	// Resolves the folder's path from the hidden input rendered by config.html and
-	// stores it in a Set keyed by path — never by DOM index — so the mark survives
-	// collectChangedData's compression (which re-indexes 0..n via push).
-	formHandler.markFolderForReset = function (folderIndex) {
-		var input = document.querySelector("[name='folder_" + folderIndex + "_folderPath']");
-		var path = input ? input.value : "";
-		if (!path) {
-			console.warn("markFolderForReset: could not resolve folderPath for index " + folderIndex + "; mark not stored");
-			return;
-		}
-		window.ConfigApp.folderResetPaths = window.ConfigApp.folderResetPaths || new Set();
-		window.ConfigApp.folderResetPaths.add(path);
+	// Keyed by folderPath, not index: collectChangedData() compacts folderConfigs, so an
+	// index captured at click time no longer maps to the same entry in the saved payload.
+	formHandler.markFolderForReset = function (folderPath) {
+		if (!folderPath) return;
+		window.ConfigApp.folderResets = window.ConfigApp.folderResets || {};
+		window.ConfigApp.folderResets[folderPath] = true;
 	};
 
-	// Check if a folder is marked for reset.
-	// Takes a folderPath string and returns true when that path is in the reset set.
+	// Check if a folder is marked for reset
 	formHandler.isFolderMarkedForReset = function (folderPath) {
 		return !!(
-			window.ConfigApp.folderResetPaths &&
-			window.ConfigApp.folderResetPaths.has(folderPath)
+			window.ConfigApp.folderResets &&
+			window.ConfigApp.folderResets[folderPath]
 		);
 	};
 
-	// Apply reset: set all org-scope fields to null on each folder config entry
-	// whose folderPath is in the reset set. Matches by path, never by position.
+	// Apply reset: set all org-scope fields to null on each reset-marked folder.
+	// A reset-only folder (no other edits) is dropped by collectChangedData's diff, so
+	// add a fresh entry for any marked folderPath missing from data.folderConfigs.
 	formHandler.applyFolderResets = function (data) {
-		if (!data.folderConfigs) return;
-		var resetPaths = window.ConfigApp.folderResetPaths;
-		if (!resetPaths) return;
+		var marked = window.ConfigApp.folderResets;
+		if (!marked) return;
+
+		data.folderConfigs = data.folderConfigs || [];
+
+		// Index existing entries by folderPath.
+		var byPath = {};
 		for (var i = 0; i < data.folderConfigs.length; i++) {
 			var fc = data.folderConfigs[i];
-			if (fc && fc.folderPath && resetPaths.has(fc.folderPath)) {
-				fc.scan_automatic = null;
-				fc.scan_net_new = null;
-				fc.severity_filter_critical = null;
-				fc.severity_filter_high = null;
-				fc.severity_filter_medium = null;
-				fc.severity_filter_low = null;
-				fc.snyk_oss_enabled = null;
-				fc.snyk_code_enabled = null;
-				fc.snyk_iac_enabled = null;
-				fc.snyk_secrets_enabled = null;
-				fc.issue_view_open_issues = null;
-				fc.issue_view_ignored_issues = null;
-				fc.risk_score_threshold = null;
+			if (fc && fc.folderPath) {
+				byPath[fc.folderPath] = fc;
 			}
 		}
+
+		for (var folderPath in marked) {
+			if (!marked.hasOwnProperty(folderPath) || !marked[folderPath]) continue;
+
+			var entry = byPath[folderPath];
+			if (!entry) {
+				entry = { folderPath: folderPath };
+				data.folderConfigs.push(entry);
+				byPath[folderPath] = entry;
+			}
+
+			for (var f = 0; f < FOLDER_RESET_FIELDS.length; f++) {
+				entry[FOLDER_RESET_FIELDS[f]] = null;
+			}
+		}
+
+		window.ConfigApp.folderResets = {};
 	};
 
 	// Org-scope global ("Project Defaults") fields cleared by a global reset.

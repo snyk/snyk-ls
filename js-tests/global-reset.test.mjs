@@ -301,10 +301,9 @@ test("global reset and folder reset coexist without interfering", async () => {
 	// Mark global for reset.
 	fh.markGlobalForReset();
 
-	// Mark first folder for reset (index 0). markFolderForReset resolves the
-	// real DOM path, so the data must use that same path for applyFolderResets to match.
-	fh.markFolderForReset(0);
+	// Mark first folder for reset by folderPath (the unified API takes a path string).
 	const folder0Path = win.document.querySelector("[name='folder_0_folderPath']").value;
+	fh.markFolderForReset(folder0Path);
 
 	const data = {
 		folderConfigs: [
@@ -340,11 +339,11 @@ test("global reset and folder reset coexist without interfering", async () => {
 
 // ---------------------------------------------------------------------------
 // Defensive else-branch symmetry: when getAndSaveIdeConfig is unavailable,
-// the else branch must clear BOTH globalReset and folderResetPaths — not just
+// the else branch must clear BOTH globalReset and folderResets — not just
 // the global flag — so armed folder marks cannot leak into a later save.
 // ---------------------------------------------------------------------------
 
-test("else branch (no autoSave) clears both globalReset and folderResetPaths marks", async () => {
+test("else branch (no autoSave) clears both globalReset and folderResets marks", async () => {
 	var win = await buildDom();
 	var fh = win.ConfigApp.formHandler;
 
@@ -352,9 +351,9 @@ test("else branch (no autoSave) clears both globalReset and folderResetPaths mar
 	fh.markGlobalForReset();
 	assert.equal(fh.isGlobalMarkedForReset(), true, "global mark must be set");
 
-	// Arm a per-folder reset mark for folder 0.
-	fh.markFolderForReset(0);
+	// Arm a per-folder reset mark for folder 0 (unified API takes a folderPath string).
 	var folder0Path = win.document.querySelector("[name='folder_0_folderPath']").value;
+	fh.markFolderForReset(folder0Path);
 	assert.equal(fh.isFolderMarkedForReset(folder0Path), true, "folder 0 mark must be set");
 
 	// Remove getAndSaveIdeConfig so the else branch fires when the button is clicked.

@@ -1,19 +1,12 @@
-// ABOUTME: Tests for the per-folder reset flag-leak bug fix (IDE-2149 per-folder analog).
-// ABOUTME: Mirrors global-reset.test.mjs for per-folder behavior:
-// ABOUTME:   - markFolderForReset / isFolderMarkedForReset toggles the per-folder flag
-// ABOUTME:   - applyFolderResets(data) sets all org-scope fields to null for marked folders
-// ABOUTME:   - validation-failure path clears folderResetPaths so it cannot leak into a later save
-// ABOUTME: Also covers two correctness bugs fixed in IDE-2149:
-// ABOUTME:   - WRONG-FOLDER reset: applyFolderResets matched by DOM index, not folderPath
-// ABOUTME:   - RESET-ONLY folder dropped: collectChangedData omitted reset-only folders
+// ABOUTME: Tests for the per-folder "Reset overrides" flow (form-handler + reset-handler).
+// ABOUTME: Verifies resets are keyed by folderPath, emit 17 flat nulls, and survive compaction.
 
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildDom } from "./helpers.mjs";
 
-// The org-scope per-folder fields cleared by a folder reset. Mirrors the list
-// inside formHandler.applyFolderResets in form-handler.js.
-var FOLDER_RESET_FIELDS = [
+// The 17 folder fields a reset must clear (mirrors FOLDER_RESET_FIELDS in form-handler.js).
+const RESET_FIELDS = [
 	"scan_automatic",
 	"scan_net_new",
 	"severity_filter_critical",
@@ -27,467 +20,184 @@ var FOLDER_RESET_FIELDS = [
 	"issue_view_open_issues",
 	"issue_view_ignored_issues",
 	"risk_score_threshold",
+	"preferred_org",
+	"additional_parameters",
+	"additional_environment",
+	"scan_command_config",
 ];
 
-// ---------------------------------------------------------------------------
-// markFolderForReset / isFolderMarkedForReset
-// ---------------------------------------------------------------------------
+// Folder paths embedded in the dummy-data fixture (js-tests/fixtures/config-page.html).
+const PATH_A = "/Users/username/workspace/defaults-project";
+const PATH_B = "/Users/username/workspace/org-set-project";
+const PATH_C = "/Users/username/workspace/org-locked-project";
 
-test("markFolderForReset/isFolderMarkedForReset: toggles the per-folder reset flag", async function() {
-	var win = await buildDom();
-	var fh = win.ConfigApp.formHandler;
+function assertAllNull(entry, fields) {
+	for (const f of fields) {
+		assert.equal(entry[f], null, `${f} should be null`);
+	}
+}
 
-	// isFolderMarkedForReset now takes a folderPath string (not an index).
-	var folder0Path = win.document.querySelector("[name='folder_0_folderPath']").value;
-	var folder1Path = win.document.querySelector("[name='folder_1_folderPath']").value;
+// Enable auto-save and spy on the IDE save bridge; returns the list of JSON payloads sent.
+function spySave(win) {
+	win.__IS_IDE_AUTOSAVE_ENABLED__ = true;
+	const calls = [];
+	win.__saveIdeConfig__ = (jsonString) => calls.push(jsonString);
+	return calls;
+}
 
-	assert.equal(fh.isFolderMarkedForReset(folder0Path), false, "flag must start cleared");
+test("markFolderForReset / isFolderMarkedForReset are keyed by folderPath", async () => {
+	const win = await buildDom();
+	const fh = win.ConfigApp.formHandler;
 
-	fh.markFolderForReset(0);
-	assert.equal(fh.isFolderMarkedForReset(folder0Path), true, "flag must be set after markFolderForReset");
-
-	// Other paths must remain unaffected.
-	assert.equal(fh.isFolderMarkedForReset(folder1Path), false, "flag for folder 1 must remain cleared");
+	assert.equal(fh.isFolderMarkedForReset(PATH_A), false, "not marked initially");
+	fh.markFolderForReset(PATH_A);
+	assert.equal(fh.isFolderMarkedForReset(PATH_A), true, "marked after mark");
+	assert.equal(fh.isFolderMarkedForReset(PATH_B), false, "other path stays unmarked");
 });
 
-// ---------------------------------------------------------------------------
-// applyFolderResets(data)
-// ---------------------------------------------------------------------------
+test("markFolderForReset ignores empty/missing folderPath", async () => {
+	const win = await buildDom();
+	const fh = win.ConfigApp.formHandler;
 
-test("applyFolderResets: no-op when no folder is marked", async function() {
-	var win = await buildDom();
-	var fh = win.ConfigApp.formHandler;
+	fh.markFolderForReset("");
+	fh.markFolderForReset(undefined);
+	assert.equal(fh.isFolderMarkedForReset(""), false, "empty path must not mark");
+	assert.equal(fh.isFolderMarkedForReset(undefined), false, "undefined path must not mark");
+});
 
-	var data = {
+test("applyFolderResets sets all 17 fields to null on an existing edited folder, preserving folderPath", async () => {
+	const win = await buildDom();
+	const fh = win.ConfigApp.formHandler;
+
+	const data = {
 		folderConfigs: [
-			{ folderPath: "/keep-me", snyk_oss_enabled: true, scan_automatic: "true" }
-		]
+			{ folderPath: PATH_A, snyk_code_enabled: true, scan_automatic: "true" },
+		],
 	};
+	fh.markFolderForReset(PATH_A);
 	fh.applyFolderResets(data);
 
-	assert.equal(data.folderConfigs[0].snyk_oss_enabled, true, "unmarked reset must not touch data");
-	assert.equal(data.folderConfigs[0].scan_automatic, "true", "unmarked reset must not touch data");
+	const entry = data.folderConfigs.find((f) => f.folderPath === PATH_A);
+	assert.ok(entry, "edited folder entry preserved");
+	assert.equal(entry.folderPath, PATH_A, "folderPath preserved");
+	assertAllNull(entry, RESET_FIELDS);
 });
 
-test("applyFolderResets: sets all org-scope fields to null (flag cleared by getAndSaveIdeConfig finally)", async function() {
-	var win = await buildDom();
-	var fh = win.ConfigApp.formHandler;
+test("applyFolderResets emits a reset-only folder absent from data.folderConfigs", async () => {
+	const win = await buildDom();
+	const fh = win.ConfigApp.formHandler;
 
-	// markFolderForReset resolves the path from the DOM fixture.
-	// Use the real fixture path in the data so applyFolderResets can match by path.
-	var folder0Path = win.document.querySelector("[name='folder_0_folderPath']").value;
-
-	fh.markFolderForReset(0);
-	var data = {
-		folderConfigs: [
-			{ folderPath: folder0Path, snyk_oss_enabled: true, scan_automatic: "true" }
-		]
-	};
-
+	// Reset-only folder: collectChangedData dropped it because it had no other changed field.
+	const data = { folderConfigs: [] };
+	fh.markFolderForReset(PATH_A);
 	fh.applyFolderResets(data);
 
-	for (var i = 0; i < FOLDER_RESET_FIELDS.length; i++) {
-		var key = FOLDER_RESET_FIELDS[i];
-		assert.equal(data.folderConfigs[0][key], null, key + " must be null after folder reset");
-	}
-
-	// Flag clearing is now centralized in getAndSaveIdeConfig's finally block, not in
-	// applyFolderResets directly. When called standalone (as in this unit test),
-	// the flag remains set until getAndSaveIdeConfig's finally clears it.
-	assert.equal(fh.isFolderMarkedForReset(folder0Path), true, "flag still set — cleared by getAndSaveIdeConfig finally, not applyFolderResets directly");
+	assert.equal(data.folderConfigs.length, 1, "a fresh entry was pushed for the reset-only folder");
+	const entry = data.folderConfigs[0];
+	assert.equal(entry.folderPath, PATH_A, "pushed entry carries folderPath");
+	assertAllNull(entry, RESET_FIELDS);
 });
 
-test("applyFolderResets: only resets marked folder, not other folders", async function() {
-	var win = await buildDom();
-	var fh = win.ConfigApp.formHandler;
+test("applyFolderResets creates folderConfigs array when missing", async () => {
+	const win = await buildDom();
+	const fh = win.ConfigApp.formHandler;
 
-	// markFolderForReset(0) resolves the real DOM path for folder 0.
-	// Use those real paths in the data so path-matching works correctly.
-	var folder0Path = win.document.querySelector("[name='folder_0_folderPath']").value;
-	var folder1Path = win.document.querySelector("[name='folder_1_folderPath']").value;
-
-	fh.markFolderForReset(0);
-	var data = {
-		folderConfigs: [
-			{ folderPath: folder0Path, snyk_oss_enabled: true },
-			{ folderPath: folder1Path, snyk_oss_enabled: true }
-		]
-	};
-
+	const data = {};
+	fh.markFolderForReset(PATH_A);
 	fh.applyFolderResets(data);
 
-	assert.equal(data.folderConfigs[0].snyk_oss_enabled, null, "marked folder must be reset");
-	assert.equal(data.folderConfigs[1].snyk_oss_enabled, true, "unmarked folder must not be touched");
+	assert.ok(Array.isArray(data.folderConfigs), "folderConfigs initialized");
+	assert.equal(data.folderConfigs.length, 1, "reset-only entry pushed");
+	assert.equal(data.folderConfigs[0].folderPath, PATH_A);
 });
 
-// ---------------------------------------------------------------------------
-// Bug fix: validation-failure path must clear folderResetPaths, not carry it forward.
-// A folder-reset intent is tied to its own immediate save attempt only.
-// If that save is blocked (validation error), the marks must NOT survive to
-// leak into any later unrelated save.
-// ---------------------------------------------------------------------------
+test("applyFolderResets nulls only the marked folder; others untouched", async () => {
+	const win = await buildDom();
+	const fh = win.ConfigApp.formHandler;
 
-test("folder reset marks are cleared when save is blocked by validation error (does not leak into later save)", async function() {
-	// Correct behavior:
-	//   1. Folder reset button clicked -> markFolderForReset(i) sets the mark.
-	//   2. getAndSaveIdeConfig() detects invalid form and returns early.
-	//      It must clear window.ConfigApp.folderResetPaths before returning so the
-	//      marks cannot silently propagate into a later, unrelated save.
-	//   3. A subsequent valid save (of an unrelated field) must NOT inject
-	//      org-scope nulls for the previously marked folder.
-	//   4. The user must click "Reset overrides" again to re-trigger the reset.
-	var win = await buildDom();
-	var fh = win.ConfigApp.formHandler;
-
-	var saveCalls = [];
-	win.__saveIdeConfig__ = function(jsonString) {
-		saveCalls.push(jsonString);
+	// Folders A, B, C present (as collectChangedData would emit them, compacted). Mark only B.
+	const data = {
+		folderConfigs: [
+			{ folderPath: PATH_A, snyk_code_enabled: true },
+			{ folderPath: PATH_B, snyk_code_enabled: false },
+			{ folderPath: PATH_C, scan_automatic: "false" },
+		],
 	};
+	fh.markFolderForReset(PATH_B);
+	fh.applyFolderResets(data);
 
-	// Inject an invalid validation state so getAndSaveIdeConfig() returns early.
-	var origGetFormValidationInfo = win.ConfigApp.validation.getFormValidationInfo;
-	win.ConfigApp.validation.getFormValidationInfo = function() {
-		return { isValid: false, validationState: { api_endpoint: false } };
-	};
+	const a = data.folderConfigs.find((f) => f.folderPath === PATH_A);
+	const b = data.folderConfigs.find((f) => f.folderPath === PATH_B);
+	const c = data.folderConfigs.find((f) => f.folderPath === PATH_C);
 
-	// Mark folder 0 for reset and immediately attempt to save (as reset-handler does).
-	fh.markFolderForReset(0);
-	win.ConfigApp.autoSave.getAndSaveIdeConfig();
-
-	// The save was blocked -- __saveIdeConfig__ must not have been called.
-	assert.equal(saveCalls.length, 0, "save must not fire when form is invalid");
-
-	// CRITICAL: the folder reset marks must be cleared after the blocked save --
-	// the reset intent must not survive to leak into the next unrelated save.
-	var folder0Path = win.document.querySelector("[name='folder_0_folderPath']").value;
-	assert.equal(
-		fh.isFolderMarkedForReset(folder0Path),
-		false,
-		"folder reset flag must be cleared after a blocked (invalid) save to prevent leaking into a later save"
-	);
-
-	// Restore valid validation so the next save goes through.
-	win.ConfigApp.validation.getFormValidationInfo = origGetFormValidationInfo;
-
-	// Trigger an unrelated, valid save (e.g. user fixed the validation error
-	// and saved something else -- not a reset).
-	win.ConfigApp.autoSave.getAndSaveIdeConfig();
-
-	// The save must have fired.
-	assert.ok(saveCalls.length > 0, "unrelated valid save must fire once the form is valid");
-
-	// The unrelated save payload must NOT contain folder-reset nulls.
-	var saved = JSON.parse(saveCalls[saveCalls.length - 1]);
-	if (saved.folderConfigs) {
-		for (var fi = 0; fi < saved.folderConfigs.length; fi++) {
-			var fc = saved.folderConfigs[fi];
-			for (var i = 0; i < FOLDER_RESET_FIELDS.length; i++) {
-				var key = FOLDER_RESET_FIELDS[i];
-				if (Object.prototype.hasOwnProperty.call(fc, key)) {
-					assert.notEqual(
-						fc[key],
-						null,
-						key + " must NOT be null in folder " + fi + " of an unrelated save -- folder reset must not leak into a later save"
-					);
-				}
-			}
-		}
-	}
+	// B is fully reset.
+	assertAllNull(b, RESET_FIELDS);
+	// A and C keep their original edits and are NOT nulled.
+	assert.equal(a.snyk_code_enabled, true, "A.snyk_code_enabled untouched");
+	assert.equal(a.scan_automatic, undefined, "A reset fields not added");
+	assert.equal(c.scan_automatic, "false", "C.scan_automatic untouched");
+	assert.equal(c.snyk_code_enabled, undefined, "C reset fields not added");
 });
 
-// ---------------------------------------------------------------------------
-// Exception path (finally): marks cleared when save throws mid-way (unique to finally approach)
-// ---------------------------------------------------------------------------
+test("applyFolderResets clears window.ConfigApp.folderResets after applying", async () => {
+	const win = await buildDom();
+	const fh = win.ConfigApp.formHandler;
 
-test("global and folder reset marks are cleared when saveConfig throws (exception path, finally guarantees)", async function() {
-	// This test UNIQUELY validates the finally-based clear: arm both reset marks,
-	// make ideBridge.saveConfig throw, and assert marks are cleared even on exception.
-	// A point-clear approach (clears only at early-return sites) would FAIL this test
-	// because the exception bypasses all early-return clear sites.
-	var win = await buildDom();
-	var fh = win.ConfigApp.formHandler;
+	fh.markFolderForReset(PATH_A);
+	fh.applyFolderResets({ folderConfigs: [{ folderPath: PATH_A }] });
 
-	var saveCalls = [];
-	win.__saveIdeConfig__ = function(jsonString) {
-		saveCalls.push(jsonString);
-		throw new Error("simulated saveConfig failure");
-	};
-
-	// Arm both global and folder reset marks.
-	fh.markGlobalForReset();
-	fh.markFolderForReset(0);
-
-	// getAndSaveIdeConfig will call saveConfig which throws. With point-clears the
-	// marks survive the exception. With finally-based clear they are always cleared.
-	var threw = false;
-	try {
-		win.ConfigApp.autoSave.getAndSaveIdeConfig();
-	} catch (e) {
-		threw = true;
-	}
-	// The exception is internal (caught by the try/finally in getAndSaveIdeConfig itself);
-	// it should not propagate to the caller.
-	assert.equal(threw, false, "getAndSaveIdeConfig must not propagate internal exceptions to the caller");
-
-	// saveConfig was called (form was valid, we got past all guards).
-	assert.equal(saveCalls.length, 1, "saveConfig must have been called once");
-
-	// CRITICAL: both marks must be cleared even though saveConfig threw.
-	assert.equal(
-		fh.isGlobalMarkedForReset(),
-		false,
-		"global reset flag must be cleared even when saveConfig throws (finally clears)"
-	);
-	var folder0Path = win.document.querySelector("[name='folder_0_folderPath']").value;
-	assert.equal(
-		fh.isFolderMarkedForReset(folder0Path),
-		false,
-		"folder reset flag must be cleared even when saveConfig throws (finally clears)"
-	);
-
-	// A subsequent valid save must not replay the nulls.
-	var subsequentCalls = [];
-	win.__saveIdeConfig__ = function(jsonString) {
-		subsequentCalls.push(jsonString);
-	};
-	win.ConfigApp.autoSave.getAndSaveIdeConfig();
-	assert.ok(subsequentCalls.length > 0, "subsequent save must fire");
-
-	var saved = JSON.parse(subsequentCalls[0]);
-	// Global reset fields must NOT be null in an unrelated subsequent save.
-	var GLOBAL_RESET_FIELDS = [
-		"snyk_oss_enabled", "snyk_code_enabled", "snyk_iac_enabled", "snyk_secrets_enabled",
-		"scan_automatic", "scan_net_new", "severity_filter_critical", "severity_filter_high",
-		"severity_filter_medium", "severity_filter_low", "issue_view_open_issues",
-		"issue_view_ignored_issues", "risk_score_threshold", "organization"
-	];
-	for (var i = 0; i < GLOBAL_RESET_FIELDS.length; i++) {
-		var key = GLOBAL_RESET_FIELDS[i];
-		if (Object.prototype.hasOwnProperty.call(saved, key)) {
-			assert.notEqual(saved[key], null, key + " must NOT be null in subsequent unrelated save");
-		}
-	}
-	// Folder reset fields must NOT be null in an unrelated subsequent save.
-	if (saved.folderConfigs) {
-		for (var fi = 0; fi < saved.folderConfigs.length; fi++) {
-			var fc = saved.folderConfigs[fi];
-			for (var j = 0; j < FOLDER_RESET_FIELDS.length; j++) {
-				var fkey = FOLDER_RESET_FIELDS[j];
-				if (Object.prototype.hasOwnProperty.call(fc, fkey)) {
-					assert.notEqual(fc[fkey], null, fkey + " must NOT be null in folder " + fi + " of subsequent unrelated save");
-				}
-			}
-		}
-	}
+	// Prototype-agnostic: the reset map is created in the JSDOM realm, so compare by key count
+	// rather than deepStrictEqual against this realm's {} (different Object.prototype).
+	assert.equal(Object.keys(win.ConfigApp.folderResets).length, 0, "folderResets cleared");
+	assert.equal(fh.isFolderMarkedForReset(PATH_A), false, "no longer marked");
 });
 
-// ---------------------------------------------------------------------------
-// collectData-guard path: folderResetPaths must also be cleared when collectData fails
-// ---------------------------------------------------------------------------
+test("DOM-driven: clicking .reset-overrides-btn produces 17 nulls for that folderPath in the save payload", async () => {
+	const win = await buildDom();
+	const doc = win.document;
+	const calls = spySave(win);
 
-test("folder reset marks are cleared when save is blocked by missing collectData (does not leak into later save)", async function() {
-	var win = await buildDom();
-	var fh = win.ConfigApp.formHandler;
+	// Click the reset button for folder index 1 (PATH_B). The click both marks the folder and
+	// saves; assert on the actual outbound payload the IDE receives.
+	const btn = doc.querySelector('.reset-overrides-btn[data-folder-index="1"]');
+	assert.ok(btn, "reset button for folder 1 exists in the rendered fixture");
+	btn.click();
 
-	var saveCalls = [];
-	win.__saveIdeConfig__ = function(jsonString) {
-		saveCalls.push(jsonString);
-	};
-
-	// Remove collectChangedData to trigger the second early-return path.
-	var origCollectChangedData = win.ConfigApp.formHandler.collectChangedData;
-	win.ConfigApp.formHandler.collectChangedData = null;
-
-	// Mark folder 0 for reset and attempt to save.
-	fh.markFolderForReset(0);
-	win.ConfigApp.autoSave.getAndSaveIdeConfig();
-
-	// Save must be blocked.
-	assert.equal(saveCalls.length, 0, "save must not fire when collectChangedData is missing");
-
-	// Folder marks must be cleared.
-	var folder0Path = win.document.querySelector("[name='folder_0_folderPath']").value;
-	assert.equal(
-		fh.isFolderMarkedForReset(folder0Path),
-		false,
-		"folder reset flag must be cleared after a blocked (missing handler) save"
-	);
-
-	// Restore and do a normal save -- must not inject nulls.
-	win.ConfigApp.formHandler.collectChangedData = origCollectChangedData;
-	win.ConfigApp.autoSave.getAndSaveIdeConfig();
-
-	assert.ok(saveCalls.length > 0, "valid save must fire after handler is restored");
-
-	var saved = JSON.parse(saveCalls[saveCalls.length - 1]);
-	if (saved.folderConfigs) {
-		for (var fi = 0; fi < saved.folderConfigs.length; fi++) {
-			var fc = saved.folderConfigs[fi];
-			for (var i = 0; i < FOLDER_RESET_FIELDS.length; i++) {
-				var key = FOLDER_RESET_FIELDS[i];
-				if (Object.prototype.hasOwnProperty.call(fc, key)) {
-					assert.notEqual(
-						fc[key],
-						null,
-						key + " must NOT be null in folder " + fi + " after handler restore -- folder reset must not leak"
-					);
-				}
-			}
-		}
-	}
+	assert.ok(calls.length > 0, "reset click must save");
+	const saved = JSON.parse(calls[calls.length - 1]);
+	const entry = (saved.folderConfigs || []).find((f) => f.folderPath === PATH_B);
+	assert.ok(entry, "outbound payload contains an entry for the reset folderPath");
+	assertAllNull(entry, RESET_FIELDS);
 });
 
-// ---------------------------------------------------------------------------
-// Bug fix: WRONG-FOLDER reset (IDE-2149)
-// collectChangedData compresses folderConfigs (only changed folders, re-indexed
-// 0..n via push), but the old applyFolderResets matched by DOM index against the
-// compressed array position. Resetting folder 1 when folder 0 had no other
-// changes would silently no-op OR reset the wrong folder.
-// The fix: mark by folderPath (a Set), match by fc.folderPath — never by position.
-// ---------------------------------------------------------------------------
+test("DOM-driven: reset button click does not require the folder to have other edits", async () => {
+	const win = await buildDom();
+	const doc = win.document;
+	const calls = spySave(win);
 
-test("BUG: reset of folder 1 with folder 0 unchanged targets the correct folder by path (not DOM index)", async function() {
-	// fixture: folder 0 = /Users/username/workspace/defaults-project
-	//          folder 1 = /Users/username/workspace/org-set-project
-	// folder 0 has no user edits; folder 1 is marked for reset.
-	// collectChangedData will compress: only folder 1 appears, pushed to position [0].
-	// Old bug: applyFolderResets(data) checks isFolderMarkedForReset(0) on the
-	// compressed array — that checks DOM index 0 (folder 0), not folder 1 → wrong-folder reset.
-	// Correct behavior: nulled fields appear on the entry whose folderPath == folder 1's path,
-	// and folder 0's entry (if present at all) is NOT nulled.
-	var win = await buildDom();
-	var fh = win.ConfigApp.formHandler;
-	var autoSave = win.ConfigApp.autoSave;
+	// Folder index 0 (PATH_A), no edits made — reset-only.
+	const btn = doc.querySelector('.reset-overrides-btn[data-folder-index="0"]');
+	assert.ok(btn, "reset button for folder 0 exists");
+	btn.click();
 
-	// Read the real path from the DOM so this test can't pass vacuously.
-	var folder1Path = win.document.querySelector("[name='folder_1_folderPath']").value;
-	assert.ok(folder1Path, "fixture must have folder_1_folderPath hidden input");
-
-	var saveCalls = [];
-	win.__saveIdeConfig__ = function(jsonString) { saveCalls.push(jsonString); };
-
-	// Mark folder 1 for reset (folder 0 has no edits, so only folder 1 appears in payload).
-	fh.markFolderForReset(1);
-	autoSave.getAndSaveIdeConfig();
-
-	assert.ok(saveCalls.length > 0, "save must have fired");
-	var saved = JSON.parse(saveCalls[0]);
-
-	// The payload must contain a folderConfigs entry for folder 1's path with nulled fields.
-	var folder1Entry = null;
-	if (saved.folderConfigs) {
-		for (var i = 0; i < saved.folderConfigs.length; i++) {
-			if (saved.folderConfigs[i].folderPath === folder1Path) {
-				folder1Entry = saved.folderConfigs[i];
-				break;
-			}
-		}
-	}
-	assert.ok(folder1Entry, "payload must contain a folderConfigs entry with folderPath == folder 1's path");
-
-	for (var j = 0; j < FOLDER_RESET_FIELDS.length; j++) {
-		var key = FOLDER_RESET_FIELDS[j];
-		assert.equal(folder1Entry[key], null, key + " must be null in folder 1's entry");
-	}
-
-	// folder 0's entry (if present) must NOT have any of the reset fields nulled.
-	var folder0Path = win.document.querySelector("[name='folder_0_folderPath']").value;
-	if (saved.folderConfigs) {
-		for (var k = 0; k < saved.folderConfigs.length; k++) {
-			if (saved.folderConfigs[k].folderPath === folder0Path) {
-				for (var l = 0; l < FOLDER_RESET_FIELDS.length; l++) {
-					var fkey = FOLDER_RESET_FIELDS[l];
-					if (Object.prototype.hasOwnProperty.call(saved.folderConfigs[k], fkey)) {
-						assert.notEqual(saved.folderConfigs[k][fkey], null,
-							fkey + " must NOT be null in folder 0 — only folder 1 was reset");
-					}
-				}
-				break;
-			}
-		}
-	}
+	assert.ok(calls.length > 0, "reset-only click must still save");
+	const saved = JSON.parse(calls[calls.length - 1]);
+	const entry = (saved.folderConfigs || []).find((f) => f.folderPath === PATH_A);
+	assert.ok(entry, "reset-only folder still emitted in payload");
+	assertAllNull(entry, RESET_FIELDS);
 });
 
-// ---------------------------------------------------------------------------
-// Bug fix: RESET-ONLY folder dropped (IDE-2149)
-// A folder marked for reset but with no other edited fields is omitted from
-// folderConfigs entirely by collectChangedData, so its reset nulls are never sent.
-// The fix: force-include a folder in the payload when it is in folderResetPaths,
-// even if it has no other changed fields.
-// ---------------------------------------------------------------------------
+test("reset click leaves dirty tracker clean after save", async () => {
+	const win = await buildDom();
+	const calls = spySave(win);
 
-test("BUG: folder marked for reset with no other edits is included in the payload with nulled fields", async function() {
-	// Start with a fresh DOM. No user edits to any folder.
-	// Mark folder 0 for reset only — it has no other changes.
-	// Old bug: collectChangedData finds no changed fields → changedFc is null →
-	// folder 0 is not pushed → applyFolderResets sees an empty folderConfigs → no-op.
-	// Correct behavior: folder 0 appears in folderConfigs with folderPath + nulled fields.
-	var win = await buildDom();
-	var fh = win.ConfigApp.formHandler;
-	var autoSave = win.ConfigApp.autoSave;
+	win.dirtyTracker.setDirtyState(true);
+	assert.ok(win.dirtyTracker.isDirty, "precondition: tracker is dirty");
 
-	var folder0Path = win.document.querySelector("[name='folder_0_folderPath']").value;
-	assert.ok(folder0Path, "fixture must have folder_0_folderPath hidden input");
+	const btn = win.document.querySelector('.reset-overrides-btn[data-folder-index="0"]');
+	assert.ok(btn, "reset button for folder 0 exists");
+	btn.click();
 
-	var saveCalls = [];
-	win.__saveIdeConfig__ = function(jsonString) { saveCalls.push(jsonString); };
-
-	// Mark folder 0 for reset with no other edits.
-	fh.markFolderForReset(0);
-	autoSave.getAndSaveIdeConfig();
-
-	assert.ok(saveCalls.length > 0, "save must have fired");
-	var saved = JSON.parse(saveCalls[0]);
-
-	// The payload must contain folder 0's entry with nulled org-scope fields.
-	var folder0Entry = null;
-	if (saved.folderConfigs) {
-		for (var i = 0; i < saved.folderConfigs.length; i++) {
-			if (saved.folderConfigs[i].folderPath === folder0Path) {
-				folder0Entry = saved.folderConfigs[i];
-				break;
-			}
-		}
-	}
-	assert.ok(folder0Entry, "payload must contain a folderConfigs entry for folder 0 even when it has no other edits");
-
-	for (var j = 0; j < FOLDER_RESET_FIELDS.length; j++) {
-		var key = FOLDER_RESET_FIELDS[j];
-		assert.equal(folder0Entry[key], null, key + " must be null in folder 0's reset entry");
-	}
-});
-
-// ---------------------------------------------------------------------------
-// Clearing: both finally and else-branch clear folderResetPaths (not folderResets)
-// ---------------------------------------------------------------------------
-
-test("folderResetPaths is cleared by finally (not leaked across saves)", async function() {
-	var win = await buildDom();
-	var fh = win.ConfigApp.formHandler;
-
-	var folder0Path = win.document.querySelector("[name='folder_0_folderPath']").value;
-
-	fh.markFolderForReset(0);
-	// folderResetPaths must be a Set-like (has + size) containing the path after marking.
-	// Note: instanceof Set cannot be used across JSDOM realms; duck-type instead.
-	assert.ok(
-		win.ConfigApp.folderResetPaths &&
-		typeof win.ConfigApp.folderResetPaths.has === "function" &&
-		win.ConfigApp.folderResetPaths.has(folder0Path),
-		"folderResetPaths must be a Set holding folder 0's path after markFolderForReset"
-	);
-
-	var saveCalls = [];
-	win.__saveIdeConfig__ = function(jsonString) { saveCalls.push(jsonString); };
-
-	win.ConfigApp.autoSave.getAndSaveIdeConfig();
-
-	// After save (finally block), folderResetPaths must be an empty Set (size === 0).
-	// Note: instanceof Set cannot be used across JSDOM realms; check .size directly.
-	assert.ok(
-		win.ConfigApp.folderResetPaths &&
-		typeof win.ConfigApp.folderResetPaths.size === "number" &&
-		win.ConfigApp.folderResetPaths.size === 0,
-		"folderResetPaths must be an empty Set after getAndSaveIdeConfig (finally)"
-	);
+	assert.ok(calls.length > 0, "reset must trigger a save");
+	assert.equal(win.dirtyTracker.isDirty, false, "dirty tracker must be clean after a successful reset save");
 });

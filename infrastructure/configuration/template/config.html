@@ -398,8 +398,9 @@
             <div class="tab-pane folder-pane" id="folder-pane-{{$index}}" role="tabpanel" aria-labelledby="folder-tab-{{$index}}">
                 <input type="hidden" name="folder_{{$index}}_folderPath" value="{{$folder.FolderPath}}">
 
-                <div class="info-box">
+                <div class="info-box folder-disclaimer">
                     <p>These settings override the {{$.FolderLabel | toLower}} defaults for this specific {{$.FolderLabel | toLower}}.</p>
+                    <button type="button" class="reset-overrides-btn" data-folder-index="{{$index}}" title="Reset all overrides for this folder">Reset overrides</button>
                 </div>
 
                 <!-- Row: Scan Configuration + Filters and Views -->
@@ -691,7 +692,6 @@
                         </div>
                     </div>
                 </div>
-                <button type="button" class="reset-overrides-btn" data-folder-index="{{$index}}" title="Reset all overrides for this folder">Reset overrides</button>
             </div>
             {{end}}
             {{end}}
@@ -762,6 +762,9 @@
     </script>
     <script nonce="{{.Nonce}}">
         {{.App}}
+    </script>
+    <script nonce="{{.Nonce}}">
+        {{.FilterSync}}
     </script>
 </body>
 </html>

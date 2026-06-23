@@ -86,7 +86,7 @@
 			// return, collectData-guard return, exception, AND happy path — so reset
 			// marks can never survive an invocation (IDE-2149).
 			window.ConfigApp.globalReset = false;
-			window.ConfigApp.folderResetPaths = new Set();
+			window.ConfigApp.folderResets = {};
 		}
 	};
 

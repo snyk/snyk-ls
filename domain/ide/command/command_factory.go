@@ -138,7 +138,7 @@ func CreateFromCommandData(
 	case types.GetTreeView:
 		return &getTreeViewCommand{command: commandData, engine: engine, scanStateFunc: scanStateFunc}, nil
 	case types.ToggleTreeFilter:
-		return &toggleTreeFilter{command: commandData, engine: engine}, nil
+		return &toggleTreeFilter{command: commandData, engine: engine, notifier: notifier, configResolver: configResolver}, nil
 	case types.SetNodeExpanded:
 		return &setNodeExpanded{command: commandData, expandState: treeview.GlobalExpandState()}, nil
 	case types.ShowScanErrorDetails:
