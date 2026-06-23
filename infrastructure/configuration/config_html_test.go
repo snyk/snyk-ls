@@ -872,9 +872,17 @@ func TestConfigHtml_FormFieldNamesMatchRegisteredSettings(t *testing.T) {
 	html := renderer.GetConfigHtml(settings, folderConfigs)
 	require.NotEmpty(t, html)
 
-	// 3. Parse all name="..." attributes
+	// 3. Parse all name="..." attributes.
+	// Strip <script> and <style> blocks first: form field names live in HTML
+	// elements, not in embedded JS/CSS. Inline JS that builds attribute selectors —
+	// e.g. `input[name="folder_' + index + '_' + field + '"]` in filter-sync.js —
+	// would otherwise be scraped as bogus field names and falsely flagged.
+	scriptRegex := regexp.MustCompile(`(?s)<script\b[^>]*>.*?</script>`)
+	styleRegex := regexp.MustCompile(`(?s)<style\b[^>]*>.*?</style>`)
+	htmlNoScripts := styleRegex.ReplaceAllString(scriptRegex.ReplaceAllString(html, ""), "")
+
 	nameRegex := regexp.MustCompile(`name="([^"]+)"`)
-	matches := nameRegex.FindAllStringSubmatch(html, -1)
+	matches := nameRegex.FindAllStringSubmatch(htmlNoScripts, -1)
 
 	// UI-only helpers and non-form-element name= attributes
 	allowedNonPflag := map[string]bool{
