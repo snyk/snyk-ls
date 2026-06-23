@@ -809,6 +809,60 @@ func Test_updateFolderConfig_ResetClearsUserOverrides_EndToEnd(t *testing.T) {
 	assert.Empty(t, resetFC.PreferredOrg(), "PreferredOrg falls back after reset")
 }
 
+// Test_updateFolderConfig_AutoDeterminedOrgChangeAfterReset guards the else-if branch in
+// updateFolderConfigOrg: after a reset clears both overrides, a subsequent update that
+// changes only AutoDeterminedOrg must not re-add preferred_org / org_set_by_user.
+func Test_updateFolderConfig_AutoDeterminedOrgChangeAfterReset(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	deps := di.TestInit(t, engine, tokenService, nil)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	folderDir := filepath.Join(t.TempDir(), "folder")
+	require.NoError(t, initTestRepo(t, folderDir))
+	folderPath := types.FilePath(folderDir)
+
+	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
+		ctx2.DepNotifier:            deps.Notifier,
+		ctx2.DepAuthService:         deps.AuthenticationService,
+		ctx2.DepConfigResolver:      deps.ConfigResolver,
+		ctx2.DepFeatureFlagService:  deps.FeatureFlagService,
+		ctx2.DepLdxSyncService:      deps.LdxSyncService,
+		ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
+	})
+	resolver := testutil.DefaultConfigResolver(engine)
+	conf.Set(types.SettingIsLspInitialized, true)
+
+	// Seed a folder org override, then reset it.
+	seed := []types.LspFolderConfig{{
+		FolderPath: folderPath,
+		Settings: map[string]*types.ConfigSetting{
+			types.SettingPreferredOrg: {Value: "my-folder-org", Changed: true},
+		},
+	}}
+	UpdateSettings(ctx, conf, engine, logger, map[string]*types.ConfigSetting{}, seed, analytics.TriggerSourceTest, resolver)
+	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingPreferredOrg))
+
+	reset := []types.LspFolderConfig{{
+		FolderPath: folderPath,
+		Settings:   map[string]*types.ConfigSetting{types.SettingPreferredOrg: {Value: nil, Changed: true}},
+	}}
+	UpdateSettings(ctx, conf, engine, logger, map[string]*types.ConfigSetting{}, reset, analytics.TriggerSourceTest, resolver)
+	require.False(t, types.HasUserOverride(conf, folderPath, types.SettingPreferredOrg), "precondition: override cleared")
+	require.False(t, types.HasUserOverride(conf, folderPath, types.SettingOrgSetByUser), "precondition: org_set_by_user cleared")
+
+	// Simulate an AutoDeterminedOrg change (e.g. from LDX-sync) while org-user settings stay empty.
+	// This triggers the else-if !currentSnap.OrgSetByUser branch in updateFolderConfigOrg.
+	types.SetAutoDeterminedOrg(conf, folderPath, "ldx-org")
+
+	noop := []types.LspFolderConfig{{FolderPath: folderPath, Settings: map[string]*types.ConfigSetting{}}}
+	UpdateSettings(ctx, conf, engine, logger, map[string]*types.ConfigSetting{}, noop, analytics.TriggerSourceTest, resolver)
+
+	// The reset keys must remain absent — the AutoDeterminedOrg change must not re-add them.
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingPreferredOrg), "preferred_org must stay absent after AutoDeterminedOrg change")
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingOrgSetByUser), "org_set_by_user must stay absent after AutoDeterminedOrg change")
+}
+
 func initTestRepo(t *testing.T, tempDir string) error {
 	t.Helper()
 	repo1, err := git.PlainInit(tempDir, false)

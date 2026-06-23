@@ -1469,7 +1469,10 @@ func updateFolderConfigOrg(conf configuration.Configuration, logger *zerolog.Log
 	} else if orgHasJustChanged {
 		types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, currentSnap.PreferredOrg, true)
 	} else if !currentSnap.OrgSetByUser {
-		types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "", false)
+		if types.HasUserOverride(conf, folderConfig.FolderPath, types.SettingPreferredOrg) ||
+			types.HasUserOverride(conf, folderConfig.FolderPath, types.SettingOrgSetByUser) {
+			types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "", false)
+		}
 	}
 }
 
