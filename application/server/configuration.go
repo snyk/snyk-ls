@@ -236,7 +236,7 @@ func UpdateSettings(ctx context.Context, conf configuration.Configuration, engin
 	var beforeLspConfig types.LspConfigurationParam
 	lspInitialized := conf.GetBool(types.SettingIsLspInitialized)
 	if lspInitialized {
-		beforeLspConfig = command.BuildLspConfiguration(conf, engine, logger, nil, configResolver)
+		beforeLspConfig = command.BuildLspConfiguration(conf, engine, logger, configResolver)
 	}
 
 	globalOrgChanged, lockedMachineFields := processConfigSettings(ctx, conf, engine, logger, settings, triggerSource, configResolver)
@@ -263,7 +263,7 @@ func UpdateSettings(ctx context.Context, conf configuration.Configuration, engin
 	// checkbox whose effective value stays false) would trigger a re-render,
 	// which auto-saved again, echoing forever.
 	if lspInitialized {
-		afterLspConfig := command.BuildLspConfiguration(conf, engine, logger, nil, configResolver)
+		afterLspConfig := command.BuildLspConfiguration(conf, engine, logger, configResolver)
 		if !reflect.DeepEqual(beforeLspConfig, afterLspConfig) {
 			n.Send(afterLspConfig)
 		}
