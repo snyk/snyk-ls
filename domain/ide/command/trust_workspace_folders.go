@@ -54,8 +54,21 @@ func (cmd *trustWorkspaceFoldersCommand) Execute(ctx context.Context) (any, erro
 	// tree-view banner's per-folder Trust button trusts just that folder (IDE-1882).
 	// With no argument we trust every untrusted folder (the original behavior, used
 	// by the "trust all" flows).
+	// Safety: a present-but-malformed arg (wrong type, empty string) must NOT fall
+	// through to trust-all — it takes the safe path (trust nothing). Only a truly
+	// absent argument (len==0) triggers the trust-all behaviour.
 	toTrust := untrusted
-	if path, ok := folderPathArg(cmd.command.Arguments); ok {
+	if path, argPresent, ok := folderPathArg(cmd.command.Arguments); argPresent {
+		if !ok {
+			// Arg was present but malformed (wrong type or empty string) — safer to
+			// do nothing than to trust all folders the user didn't explicitly choose.
+			// (nil, nil) is the correct no-op return for this command bus: the
+			// executor does not surface errors to the user; Warn is the observable signal.
+			cmd.engine.GetLogger().Warn().
+				Str("method", "trustWorkspaceFoldersCommand.Execute").
+				Msg("trust folder-path argument present but malformed; nothing trusted")
+			return nil, nil
+		}
 		toTrust = filterFoldersByPath(untrusted, path)
 		if len(toTrust) == 0 {
 			// The banner echoes back the exact path the builder emitted, so a
@@ -88,25 +101,33 @@ func (cmd *trustWorkspaceFoldersCommand) Execute(ctx context.Context) (any, erro
 }
 
 // folderPathArg extracts an optional folder-path string from the command
-// arguments. Returns ("", false) when no usable path argument is present.
-func folderPathArg(args []any) (types.FilePath, bool) {
+// arguments. It returns three values:
+//   - path: the extracted FilePath (valid only when ok is true)
+//   - argPresent: true when args is non-empty (an argument was provided)
+//   - ok: true when the argument is a non-empty string
+//
+// Callers must distinguish "no argument" (argPresent=false → trust all) from
+// "malformed argument" (argPresent=true, ok=false → trust nothing).
+func folderPathArg(args []any) (path types.FilePath, argPresent bool, ok bool) {
 	if len(args) == 0 {
-		return "", false
+		return "", false, false
 	}
-	path, ok := args[0].(string)
-	if !ok || path == "" {
-		return "", false
+	s, isString := args[0].(string)
+	if !isString || s == "" {
+		return "", true, false
 	}
-	return types.FilePath(path), true
+	return types.FilePath(s), true, true
 }
 
-// filterFoldersByPath returns the folders whose path exactly matches the given
-// path. The banner sends back the same path string it received in FolderPaths,
-// so an exact match is sufficient.
+// filterFoldersByPath returns the folders whose normalised path matches the
+// given path after PathKey normalisation on both sides. PathKey trims trailing
+// slashes and runs filepath.Clean, so the IDE can safely round-trip paths with
+// or without a trailing slash (e.g. "/repo/a/" matches folder "/repo/a").
 func filterFoldersByPath(folders []types.Folder, path types.FilePath) []types.Folder {
+	normPath := types.PathKey(path)
 	var matched []types.Folder
 	for _, f := range folders {
-		if f.Path() == path {
+		if types.PathKey(f.Path()) == normPath {
 			matched = append(matched, f)
 		}
 	}

@@ -91,6 +91,53 @@ func TestTrustWorkspaceFolders_UnknownPath_TrustsNothing(t *testing.T) {
 	assert.NotContains(t, trusted, f1, "an unmatched folder-path arg must not trust any folder")
 }
 
+// TestTrustWorkspaceFolders_MalformedArg_TrustsNothing guards against a
+// present-but-wrong-typed argument (e.g. an object) falling through to
+// trust-all. The safe path is to trust nothing. (IDE-1882)
+func TestTrustWorkspaceFolders_MalformedArg_TrustsNothing(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
+
+	f1 := types.PathKey("folder-one")
+	setupToggleWorkspaceFolders(t, engine, f1)
+
+	// Pass a non-string argument (a map) — the command must not trust all folders.
+	cmd := newTrustCommand(engine, map[string]any{"path": string(f1)})
+	_, err := cmd.Execute(t.Context())
+	require.NoError(t, err)
+
+	trusted := types.GetGlobalSliceFilePath(conf, types.SettingTrustedFolders)
+	assert.Empty(t, trusted, "a non-string argument must not cause trust-all fallthrough")
+}
+
+// TestTrustWorkspaceFolders_TrailingSlash_MatchesFolder guards against a
+// folder-path argument with a trailing slash failing to match. workspace.NewFolder
+// stores paths pre-normalised (via PathKey), so the stored path has no trailing
+// slash. filterFoldersByPath must apply PathKey to the incoming argument to close
+// that gap. (IDE-1882)
+func TestTrustWorkspaceFolders_TrailingSlash_MatchesFolder(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
+
+	// Register with a trailing-slash raw path — NewFolder normalises it to
+	// "/repo/my-project" on store, so the stored path has no trailing slash.
+	rawPath := types.FilePath("/repo/my-project/")
+	setupToggleWorkspaceFolders(t, engine, rawPath)
+
+	// Send the arg WITH a trailing slash (mimicking what the IDE might echo back).
+	// filterFoldersByPath must normalise the arg with PathKey to match the stored path.
+	cmd := newTrustCommand(engine, string(rawPath))
+	_, err := cmd.Execute(t.Context())
+	require.NoError(t, err)
+
+	trusted := types.GetGlobalSliceFilePath(conf, types.SettingTrustedFolders)
+	// Use a hardcoded literal (not PathKey) as the oracle so the assertion is
+	// independent of the function under test.
+	assert.Contains(t, trusted, types.FilePath("/repo/my-project"), "trailing-slash argument must match and trust the folder")
+}
+
 func TestTrustWorkspaceFolders_TrustDisabled_NoOp(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()
