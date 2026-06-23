@@ -47,7 +47,12 @@ type Workspace struct {
 	scanner             scanner.Scanner
 	hoverService        hover.Service
 	scanNotifier        scanner.ScanNotifier
-	trustMutex          sync.Mutex
+	// trustStateMutex guards two trust-related invariants:
+	//   1. trustRequestOngoing — debounce flag for the UI trust dialog
+	//   2. the addTrustedFolders read-modify-write on SettingTrustedFolders
+	// Both are serialised by the same lock so there is a single mutex ordering
+	// between all trust state mutations. (IDE-1882)
+	trustStateMutex     sync.Mutex
 	trustRequestOngoing bool // for debouncing
 	notifier            noti.Notifier
 	conf                configuration.Configuration
@@ -249,12 +254,19 @@ func (w *Workspace) Clear() {
 	w.hoverService.ClearAllHovers()
 }
 
-func AddTrustedFolders(conf configuration.Configuration, configResolver types.ConfigResolverInterface, logger *zerolog.Logger, engine workflow.Engine, foldersToSet []types.Folder) {
+// addTrustedFolders appends foldersToSet to the SettingTrustedFolders config
+// key and returns the resulting full slice so callers do not need to re-read
+// config to build notification payloads.
+//
+// CONCURRENCY: callers that may run concurrently must hold Workspace.trustStateMutex
+// for the duration of this call. The function is package-level (no receiver) and
+// cannot acquire the lock itself.
+func addTrustedFolders(conf configuration.Configuration, configResolver types.ConfigResolverInterface, logger *zerolog.Logger, engine workflow.Engine, foldersToSet []types.Folder) []types.FilePath {
 	oldTrustedFolderPaths := types.GetGlobalSliceFilePath(conf, types.SettingTrustedFolders)
 
 	trustedFolderPaths := append([]types.FilePath(nil), oldTrustedFolderPaths...)
 	for _, folder := range foldersToSet {
-		logger.Debug().Str("method", "AddTrustedFolders").Msgf("adding trusted folder %s", folder.Path())
+		logger.Debug().Str("method", "addTrustedFolders").Msgf("adding trusted folder %s", folder.Path())
 		trustedFolderPaths = append(trustedFolderPaths, folder.Path())
 	}
 
@@ -265,14 +277,26 @@ func AddTrustedFolders(conf configuration.Configuration, configResolver types.Co
 		newFoldersJSON, _ := json.Marshal(trustedFolderPaths)
 		go analytics.SendConfigChangedAnalyticsEvent(conf, engine, logger, "trustedFolders", string(oldFoldersJSON), string(newFoldersJSON), types.FilePath(""), analytics.TriggerSourceIDE, configResolver)
 	}
+	return trustedFolderPaths
 }
 
 func (w *Workspace) TrustFoldersAndScan(ctx context.Context, foldersToBeTrusted []types.Folder) {
-	// Add trusted folders to config and send analytics
-	AddTrustedFolders(w.conf, w.configResolver, w.logger, w.engine, foldersToBeTrusted)
-	val, _ := w.configResolver.GetValue(types.SettingTrustedFolders, nil)
-	trustedVal, _ := val.([]types.FilePath)
-	w.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: trustedVal})
+	// Guard the read-modify-write in addTrustedFolders: two concurrent calls
+	// (e.g. user clicking "Trust" on two banner buttons simultaneously) would
+	// both read the same old trusted-folder list, append their folder, and the
+	// last writer would drop the other's folder. trustStateMutex serialises the
+	// Get+Set pair so neither call loses its update. (IDE-1882)
+	//
+	// addTrustedFolders returns the full post-write slice so we avoid a
+	// second config read (which could observe a different writer's update).
+	// The closure scopes the defer-unlock so the mutex is released before
+	// notifier.Send and the goroutine launches below.
+	trustedFolderPaths := func() []types.FilePath {
+		w.trustStateMutex.Lock()
+		defer w.trustStateMutex.Unlock()
+		return addTrustedFolders(w.conf, w.configResolver, w.logger, w.engine, foldersToBeTrusted)
+	}()
+	w.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: trustedFolderPaths})
 	for _, f := range foldersToBeTrusted {
 		go f.ScanFolder(ctx)
 	}
