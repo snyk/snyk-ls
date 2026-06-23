@@ -3018,6 +3018,126 @@ func Test_UpdateSettings_SendsLspConfigurationOnlyWhenEffectiveConfigChanges(t *
 	})
 }
 
+// Test_UpdateSettings_FolderConfigChange_EmitsExactlyOneLspConfiguration is the
+// integration test for the double-send bug: when workspace/didChangeConfiguration
+// carries a real folder-config change (e.g. baseBranch), the IDE must receive
+// EXACTLY ONE $/snyk.configuration notification — not two.
+//
+// Before the fix, UpdateSettings emitted two:
+//   - one from sendFolderConfigUpdateIfNeeded (inside processFolderConfigs), and
+//   - one from the outer DeepEqual guard (in UpdateSettings itself).
+//
+// The fix removes sendFolderConfigUpdateIfNeeded, making the outer guard the
+// single emission point. The outer guard is strictly more correct: it sends only
+// when the IDE-visible payload (which already includes folder configs via
+// BuildLspConfiguration) actually changes, and it is gated on lspInitialized
+// (matching the semantics of didChangeConfiguration = post-init).
+func Test_UpdateSettings_FolderConfigChange_EmitsExactlyOneLspConfiguration(t *testing.T) {
+	t.Run("real folder-config change emits exactly one $/snyk.configuration", func(t *testing.T) {
+		engine, tokenService := testutil.UnitTestWithEngine(t)
+		cr := testutil.DefaultConfigResolver(engine)
+		conf := engine.GetConfiguration()
+		conf.Set(types.SettingIsLspInitialized, true)
+
+		mockNotifier := notification.NewMockNotifier()
+		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
+			ctx2.DepNotifier:            mockNotifier,
+			ctx2.DepAuthService:         di.TestInit(t, engine, tokenService, &di.Dependencies{Notifier: mockNotifier}).AuthenticationService,
+			ctx2.DepFeatureFlagService:  di.FeatureFlagService(),
+			ctx2.DepConfigResolver:      cr,
+			ctx2.DepLdxSyncService:      command.NewLdxSyncService(cr),
+			ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
+		})
+
+		folderPath := types.FilePath(t.TempDir())
+		require.NoError(t, initTestRepo(t, string(folderPath)))
+		_, _ = workspaceutil.SetupWorkspace(t, engine, folderPath)
+
+		// Change the base branch — a folder-scoped setting that appears in
+		// buildLspFolderConfigs and therefore in the outer DeepEqual snapshot.
+		folderConfigs := []types.LspFolderConfig{
+			{
+				FolderPath: folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingBaseBranch: {Value: "new-branch", Changed: true},
+				},
+			},
+		}
+		UpdateSettings(ctx, conf, engine, engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceIDE, cr)
+
+		var lspConfigCount int
+		for _, msg := range mockNotifier.SentMessages() {
+			if _, ok := msg.(types.LspConfigurationParam); ok {
+				lspConfigCount++
+			}
+		}
+		require.Equal(t, 1, lspConfigCount,
+			"a folder-config change must emit EXACTLY ONE $/snyk.configuration — "+
+				"two indicates the double-send bug (inner sendFolderConfigUpdateIfNeeded + outer DeepEqual guard)")
+	})
+
+	t.Run("no-op folder-config change emits zero $/snyk.configuration", func(t *testing.T) {
+		engine, tokenService := testutil.UnitTestWithEngine(t)
+		cr := testutil.DefaultConfigResolver(engine)
+		conf := engine.GetConfiguration()
+		conf.Set(types.SettingIsLspInitialized, true)
+
+		mockNotifier := notification.NewMockNotifier()
+		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
+			ctx2.DepNotifier:            mockNotifier,
+			ctx2.DepAuthService:         di.TestInit(t, engine, tokenService, &di.Dependencies{Notifier: mockNotifier}).AuthenticationService,
+			ctx2.DepFeatureFlagService:  di.FeatureFlagService(),
+			ctx2.DepConfigResolver:      cr,
+			ctx2.DepLdxSyncService:      command.NewLdxSyncService(cr),
+			ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
+		})
+
+		folderPath := types.FilePath(t.TempDir())
+		require.NoError(t, initTestRepo(t, string(folderPath)))
+		_, _ = workspaceutil.SetupWorkspace(t, engine, folderPath)
+
+		// First call: seed the base branch so the config is already stored.
+		UpdateSettings(ctx, conf, engine, engine.GetLogger(), nil, []types.LspFolderConfig{
+			{
+				FolderPath: folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingBaseBranch: {Value: "same-branch", Changed: true},
+				},
+			},
+		}, analytics.TriggerSourceIDE, cr)
+
+		// Reset notifier so we only count what the second (no-op) call sends.
+		mockNotifier2 := notification.NewMockNotifier()
+		ctx2Deps := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
+			ctx2.DepNotifier:            mockNotifier2,
+			ctx2.DepAuthService:         di.AuthenticationService(),
+			ctx2.DepFeatureFlagService:  di.FeatureFlagService(),
+			ctx2.DepConfigResolver:      cr,
+			ctx2.DepLdxSyncService:      command.NewLdxSyncService(cr),
+			ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
+		})
+
+		// Second call: send the exact same baseBranch — no effective change.
+		UpdateSettings(ctx2Deps, conf, engine, engine.GetLogger(), nil, []types.LspFolderConfig{
+			{
+				FolderPath: folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingBaseBranch: {Value: "same-branch", Changed: true},
+				},
+			},
+		}, analytics.TriggerSourceIDE, cr)
+
+		var lspConfigCount int
+		for _, msg := range mockNotifier2.SentMessages() {
+			if _, ok := msg.(types.LspConfigurationParam); ok {
+				lspConfigCount++
+			}
+		}
+		require.Equal(t, 0, lspConfigCount,
+			"a no-op folder-config change (same value resent) must not emit $/snyk.configuration")
+	})
+}
+
 func TestApplyEnvironment_PersistsGlobalUser(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()

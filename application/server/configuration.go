@@ -503,7 +503,6 @@ func processFolderConfigs(ctx context.Context, conf configuration.Configuration,
 		Bool("globalOrgChanged", globalOrgChanged).
 		Msg("processFolderConfigs - processing folder configs")
 
-	var processedConfigs []types.FolderConfig
 	var changedConfigs []*types.FolderConfig
 	var lockedFields []string
 	filterChanged := false
@@ -540,7 +539,6 @@ func processFolderConfigs(ctx context.Context, conf configuration.Configuration,
 		}
 
 		handleFolderCacheClearing(conf, engine, logger, path, result.oldSnapshot, result.newSnapshot, triggerSource, configResolver)
-		processedConfigs = append(processedConfigs, result.config)
 	}
 
 	if len(changedConfigs) > 0 {
@@ -561,8 +559,6 @@ func processFolderConfigs(ctx context.Context, conf configuration.Configuration,
 		}
 		resetSummaryPanelForOrgChange(mustScanStateAggregatorFromContext(ctx), paths)
 	}
-
-	sendFolderConfigUpdateIfNeeded(conf, engine, logger, notifier, processedConfigs, len(changedConfigs) > 0, triggerSource, configResolver)
 
 	return lockedFields
 }
@@ -1547,14 +1543,6 @@ func handleFolderCacheClearing(conf configuration.Configuration, engine workflow
 	}
 
 	sendFolderConfigAnalytics(conf, engine, logger, path, triggerSource, oldSnapshot, newSnapshot, configResolver)
-}
-
-func sendFolderConfigUpdateIfNeeded(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, notifier notification.Notifier, folderConfigs []types.FolderConfig, needsToSendUpdate bool, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
-	// Don't send folder configs on initialize, since initialized will always send them.
-	if needsToSendUpdate && triggerSource != analytics.TriggerSourceInitialize {
-		lspConfig := command.BuildLspConfiguration(conf, engine, logger, nil, configResolver)
-		notifier.Send(lspConfig)
-	}
 }
 
 func sendFolderConfigAnalytics(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path types.FilePath, triggerSource analytics.TriggerSource, oldSnapshot, newSnapshot types.FolderConfigSnapshot, configResolver types.ConfigResolverInterface) {
