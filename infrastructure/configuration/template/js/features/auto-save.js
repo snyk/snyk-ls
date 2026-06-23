@@ -30,6 +30,9 @@
 			// Check validation state
 			var validationInfo = window.ConfigApp.validation.getFormValidationInfo();
 			if (!validationInfo.isValid) {
+				// Clear the global-reset flag so a blocked reset intent cannot
+				// silently leak into a later, unrelated save (IDE-2149 bug fix).
+				window.ConfigApp.globalReset = false;
 				if (ideBridge) {
 					ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.VALIDATION_ERROR);
 				}
@@ -38,6 +41,9 @@
 
 			// Collect form data
 			if (!window.ConfigApp.formHandler || !window.ConfigApp.formHandler.collectChangedData || !window.ConfigApp.formHandler.collectData) {
+				// Clear the global-reset flag so a blocked reset intent cannot
+				// silently leak into a later, unrelated save (IDE-2149 bug fix).
+				window.ConfigApp.globalReset = false;
 				if (ideBridge) {
 					ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.ERROR);
 				}

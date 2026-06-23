@@ -219,18 +219,22 @@ test("global reset flag starts cleared on a fresh window load", async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Item 7 gap (3): validation-failure path — flag survives a blocked save
+// Bug fix: validation-failure path must clear the flag, not carry it forward.
+// A global-reset intent is tied to its own immediate save attempt only.
+// If that save is blocked (validation error), the flag must NOT survive to
+// leak into any later unrelated save.
 // ---------------------------------------------------------------------------
 
-test("global reset flag persists through a blocked save and applies on the next successful save", async () => {
-	// Behavior under test:
+test("global reset flag is cleared when save is blocked by validation error (does not leak into later save)", async () => {
+	// Correct behavior:
 	//   1. Reset button clicked → markGlobalForReset() sets the flag, then
 	//      getAndSaveIdeConfig() is called immediately.
-	//   2. getAndSaveIdeConfig() checks validation first; when the form is
-	//      invalid it returns early — BEFORE applyGlobalResets() is reached —
-	//      so __saveIdeConfig__ is never called and the flag stays set.
-	//   3. On the next call to getAndSaveIdeConfig() when the form is valid,
-	//      applyGlobalResets() fires and the 14 nulls reach the IDE bridge.
+	//   2. getAndSaveIdeConfig() detects invalid form and returns early.
+	//      It must clear the globalReset flag before returning so the intent
+	//      cannot silently propagate into a later, unrelated save.
+	//   3. A subsequent valid save (of an unrelated field) must NOT inject
+	//      the 14 GLOBAL_RESET_FIELDS nulls into the payload.
+	//   4. The user must click "Reset overrides" again to re-trigger the reset.
 	const win = await buildDom();
 	const fh = win.ConfigApp.formHandler;
 
@@ -240,8 +244,6 @@ test("global reset flag persists through a blocked save and applies on the next 
 	};
 
 	// Inject an invalid validation state so getAndSaveIdeConfig() returns early.
-	// validation.getFormValidationInfo() iterates validationState; we patch
-	// getFormValidationInfo directly to avoid manipulating internal state.
 	var origGetFormValidationInfo = win.ConfigApp.validation.getFormValidationInfo;
 	win.ConfigApp.validation.getFormValidationInfo = function () {
 		return { isValid: false, validationState: { api_endpoint: false } };
@@ -254,39 +256,36 @@ test("global reset flag persists through a blocked save and applies on the next 
 	// The save was blocked — __saveIdeConfig__ must not have been called.
 	assert.equal(saveCalls.length, 0, "save must not fire when form is invalid");
 
-	// The flag must still be set — the reset must not be silently dropped.
+	// CRITICAL: the flag must be cleared after the blocked save — the reset
+	// intent must not survive to leak into the next unrelated save.
 	assert.equal(
 		fh.isGlobalMarkedForReset(),
-		true,
-		"global reset flag must still be set after a blocked (invalid) save"
+		false,
+		"global reset flag must be cleared after a blocked (invalid) save to prevent leaking into a later save"
 	);
 
 	// Restore valid validation so the next save goes through.
 	win.ConfigApp.validation.getFormValidationInfo = origGetFormValidationInfo;
 
-	// Trigger a normal (valid) save.
+	// Trigger an unrelated, valid save (e.g. user fixed the validation error
+	// and saved something else — not a reset).
 	win.ConfigApp.autoSave.getAndSaveIdeConfig();
 
-	// The save must have fired this time.
-	assert.ok(saveCalls.length > 0, "save must fire once the form is valid");
+	// The save must have fired.
+	assert.ok(saveCalls.length > 0, "unrelated valid save must fire once the form is valid");
 
-	// The saved payload must contain all 14 global-reset nulls.
+	// The unrelated save payload must NOT contain the global-reset nulls.
 	var saved = JSON.parse(saveCalls[saveCalls.length - 1]);
 	for (var i = 0; i < GLOBAL_RESET_FIELDS.length; i++) {
 		var key = GLOBAL_RESET_FIELDS[i];
-		assert.ok(
-			Object.prototype.hasOwnProperty.call(saved, key),
-			key + " must be present in saved payload after deferred reset"
-		);
-		assert.equal(saved[key], null, key + " must be null in saved payload after deferred reset");
+		if (Object.prototype.hasOwnProperty.call(saved, key)) {
+			assert.notEqual(
+				saved[key],
+				null,
+				key + " must NOT be null in an unrelated save — global reset must not leak into a later save"
+			);
+		}
 	}
-
-	// The flag must be cleared after the successful save.
-	assert.equal(
-		fh.isGlobalMarkedForReset(),
-		false,
-		"global reset flag must be cleared after the successful save"
-	);
 });
 
 // ---------------------------------------------------------------------------
