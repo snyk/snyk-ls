@@ -57,10 +57,8 @@ func (cmd *getTreeViewCommand) Execute(_ context.Context) (any, error) {
 	if ws != nil {
 		data = builder.BuildTree(ws)
 	}
-	// Use the shared aggregation so this on-demand render matches the scan
-	// emitter's toolbar — including the filter popover gating and the cross-folder
-	// "mixed" state. Building FilterState from global config alone would leave the
-	// popover hidden and mixed flags unset on this path.
+
+	// Filter state is an aggregate of the folder configs states for all open folders
 	data.FilterState = treeview.BuildFilterState(conf, ws)
 
 	return renderer.RenderTreeView(data), nil

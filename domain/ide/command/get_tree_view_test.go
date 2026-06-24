@@ -97,9 +97,7 @@ func TestGetTreeViewCommand_Execute_WithScanStateFunc_CallsIt(t *testing.T) {
 	assert.True(t, called, "scanStateFunc should be called during Execute")
 }
 
-// TestGetTreeViewCommand_Execute_RendersFilterPopover guards the fix for the
-// review finding that this command bypassed the cross-folder filterState
-// aggregation: with the risk-score feature flag on, the on-demand render must
+// With the risk-score feature flag on, the on-demand render must
 // include the filter popover, matching the scan-emitter render path.
 func TestGetTreeViewCommand_Execute_RendersFilterPopover(t *testing.T) {
 	engine := testutil.UnitTest(t)
