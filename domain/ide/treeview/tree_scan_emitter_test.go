@@ -516,58 +516,47 @@ func TestFilterState_IVO_AggregatesAcrossFolders(t *testing.T) {
 // with the OsTestWorkflow flag on, agreeing folders yield a single threshold and
 // RiskScoreEnabled; disagreeing folders set RiskScoreMixed.
 func TestFilterState_RiskScore_AggregatesAcrossFolders(t *testing.T) {
-	setRisk := func(conf configuration.Configuration, folder types.FilePath, v int) {
-		conf.Set(configresolver.UserFolderKey(string(types.PathKey(folder)), types.SettingRiskScoreThreshold),
-			&configresolver.LocalConfigField{Value: v, Changed: true})
+	tests := []struct {
+		name          string
+		f1Score       int
+		f2Score       int
+		wantMixed     bool
+		wantThreshold int
+	}{
+		{name: "agree", f1Score: 700, f2Score: 700, wantMixed: false, wantThreshold: 700},
+		{name: "disagree surfaces highest", f1Score: 300, f2Score: 800, wantMixed: true, wantThreshold: 800},
 	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			conf := engine.GetConfiguration()
+			f1 := types.FilePath("/project-rs-" + tc.name + "-1")
+			f2 := types.FilePath("/project-rs-" + tc.name + "-2")
+			ffSvc := featureflag.NewFakeService()
+			ffSvc.Override(featureflag.UseExperimentalRiskScoreInCLI, true)
+			workspaceutil.SetupWorkspaceWithFeatureFlags(t, engine, ffSvc, f1, f2)
+			setFolderRiskScore(conf, f1, tc.f1Score)
+			setFolderRiskScore(conf, f2, tc.f2Score)
 
-	t.Run("agree", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		conf := engine.GetConfiguration()
-		f1 := types.FilePath("/project-rs-a1")
-		f2 := types.FilePath("/project-rs-a2")
-		ffSvc := featureflag.NewFakeService()
-		ffSvc.Override(featureflag.UseExperimentalRiskScoreInCLI, true)
-		workspaceutil.SetupWorkspaceWithFeatureFlags(t, engine, ffSvc, f1, f2)
-		setRisk(conf, f1, 700)
-		setRisk(conf, f2, 700)
+			notif := notification.NewNotifier()
+			notif.CreateListener(func(params any) {})
+			t.Cleanup(func() { notif.DisposeListener() })
+			emitter, err := NewTreeScanStateEmitter(conf, engine.GetLogger(), notif)
+			require.NoError(t, err)
+			t.Cleanup(emitter.Dispose)
 
-		notif := notification.NewNotifier()
-		notif.CreateListener(func(params any) {})
-		t.Cleanup(func() { notif.DisposeListener() })
-		emitter, err := NewTreeScanStateEmitter(conf, engine.GetLogger(), notif)
-		require.NoError(t, err)
-		t.Cleanup(emitter.Dispose)
+			fs := emitter.filterState(config.GetWorkspace(conf))
+			assert.True(t, fs.RiskScoreEnabled, "flag on → section enabled")
+			assert.Equal(t, tc.wantMixed, fs.RiskScoreMixed)
+			assert.Equal(t, tc.wantThreshold, fs.RiskScoreThreshold)
+		})
+	}
+}
 
-		fs := emitter.filterState(config.GetWorkspace(conf))
-		assert.True(t, fs.RiskScoreEnabled, "flag on → section enabled")
-		assert.False(t, fs.RiskScoreMixed, "folders agree → not mixed")
-		assert.Equal(t, 700, fs.RiskScoreThreshold, "agreed threshold surfaced")
-	})
-
-	t.Run("disagree", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		conf := engine.GetConfiguration()
-		f1 := types.FilePath("/project-rs-d1")
-		f2 := types.FilePath("/project-rs-d2")
-		ffSvc := featureflag.NewFakeService()
-		ffSvc.Override(featureflag.UseExperimentalRiskScoreInCLI, true)
-		workspaceutil.SetupWorkspaceWithFeatureFlags(t, engine, ffSvc, f1, f2)
-		setRisk(conf, f1, 300)
-		setRisk(conf, f2, 800)
-
-		notif := notification.NewNotifier()
-		notif.CreateListener(func(params any) {})
-		t.Cleanup(func() { notif.DisposeListener() })
-		emitter, err := NewTreeScanStateEmitter(conf, engine.GetLogger(), notif)
-		require.NoError(t, err)
-		t.Cleanup(emitter.Dispose)
-
-		fs := emitter.filterState(config.GetWorkspace(conf))
-		assert.True(t, fs.RiskScoreEnabled, "flag on → section enabled")
-		assert.True(t, fs.RiskScoreMixed, "folders disagree → mixed")
-		assert.Equal(t, 800, fs.RiskScoreThreshold, "mixed → highest folder threshold surfaced")
-	})
+// setFolderRiskScore writes a per-folder risk-score threshold override.
+func setFolderRiskScore(conf configuration.Configuration, folder types.FilePath, v int) {
+	conf.Set(configresolver.UserFolderKey(string(types.PathKey(folder)), types.SettingRiskScoreThreshold),
+		&configresolver.LocalConfigField{Value: v, Changed: true})
 }
 
 // TestFilterState_AggregateSeverityFilters_UsesFilters0AsBaseline verifies the coupling:
