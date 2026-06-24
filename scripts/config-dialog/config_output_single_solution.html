@@ -760,6 +760,38 @@ button.secondary[disabled] {
     color: var(--background-color);
 }
 
+/* Lay out the fallbacks-pane Reset-overrides info-box as a single row so the
+   "Reset overrides" button sits inline at the right of the description paragraph
+   instead of wrapping to a second line (the default .info-box uses
+   flex-direction: column). The child combinator (>) targets only the direct-child
+   info-box at the top of #fallbacks-pane (the Reset-overrides row) and leaves
+   the nested info-box inside the "Advanced" collapsible unaffected. */
+#fallbacks-pane > .info-box {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.reset-global-overrides-btn {
+    flex-shrink: 0;
+    padding: 4px 12px;
+    white-space: nowrap;
+    font-size: var(--tiny-font-size);
+    background-color: transparent;
+    border: 1px solid var(--error-foreground);
+    color: var(--error-foreground);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.reset-global-overrides-btn:hover {
+    background-color: var(--error-foreground);
+    border-color: var(--error-foreground);
+    color: var(--background-color);
+}
+
 /* - - - Settings Tabs - - - */
 .settings-tabs {
     border-bottom: 1px solid var(--border-color);
@@ -1038,6 +1070,7 @@ button.secondary[disabled] {
             <div class="tab-pane" id="fallbacks-pane" role="tabpanel" aria-labelledby="fallbacks-tab">
                 <div class="info-box">
                     <p>These settings apply to all solutions unless overridden.</p>
+                    <button type="button" class="reset-global-overrides-btn" title="Reset all Project Defaults overrides">Reset overrides</button>
                 </div>
                 <div class="row">
                     <div class="col-md-6">
@@ -2438,7 +2471,9 @@ if (window.cssVars) {
 			}
 		}
 
-		// Folder configs: per-folder, only include changed fields
+		// Folder configs: per-folder, only include changed fields.
+		// applyFolderResets() handles force-including reset-only folders that
+		// collectChangedData's diff would otherwise drop.
 		if (current.folderConfigs) {
 			var changedFolders = [];
 			var origFolders = original.folderConfigs || [];
@@ -2447,6 +2482,7 @@ if (window.cssVars) {
 				var origFc = origFolders[fi] || {};
 				var changedFc = null;
 				var fcKeys = window.FormUtils.getKeys(curFc);
+				var fcPath = curFc.folderPath || "";
 
 				for (var ki = 0; ki < fcKeys.length; ki++) {
 					var fk = fcKeys[ki];
@@ -2459,8 +2495,8 @@ if (window.cssVars) {
 					}
 				}
 
-				if (changedFc && curFc.folderPath) {
-					changedFc.folderPath = curFc.folderPath;
+				if (changedFc && fcPath) {
+					changedFc.folderPath = fcPath;
 					changedFolders.push(changedFc);
 				}
 			}
@@ -2695,6 +2731,48 @@ if (window.cssVars) {
 		window.ConfigApp.folderResets = {};
 	};
 
+	// Org-scope global ("Project Defaults") fields cleared by a global reset.
+	// Mirrors the folder reset list, minus preferred_org (folder-only) plus
+	// organization (global-only). Kept in sync with the Go list
+	// types.GlobalResettableSettings.
+	var GLOBAL_RESET_FIELDS = [
+		"snyk_oss_enabled",
+		"snyk_code_enabled",
+		"snyk_iac_enabled",
+		"snyk_secrets_enabled",
+		"scan_automatic",
+		"scan_net_new",
+		"severity_filter_critical",
+		"severity_filter_high",
+		"severity_filter_medium",
+		"severity_filter_low",
+		"issue_view_open_issues",
+		"issue_view_ignored_issues",
+		"risk_score_threshold",
+		"organization",
+	];
+
+	// Mark the global (Project Defaults) scope for reset — on save,
+	// applyGlobalResets() sets every GLOBAL_RESET_FIELDS to null at the top level.
+	formHandler.markGlobalForReset = function () {
+		window.ConfigApp.globalReset = true;
+	};
+
+	formHandler.isGlobalMarkedForReset = function () {
+		return !!window.ConfigApp.globalReset;
+	};
+
+	// Apply reset: set all org-scope global fields to null at the top level of the
+	// payload (NOT inside folderConfigs). The hosting IDE converts each
+	// top-level key:null into a {changed:true, value:null} ConfigSetting reaching
+	// the LS, which Unsets the user override.
+	formHandler.applyGlobalResets = function (data) {
+		if (!window.ConfigApp.globalReset) return;
+		for (var i = 0; i < GLOBAL_RESET_FIELDS.length; i++) {
+			data[GLOBAL_RESET_FIELDS[i]] = null;
+		}
+	};
+
 	window.ConfigApp.formHandler = formHandler;
 })();
 
@@ -2782,6 +2860,12 @@ if (window.cssVars) {
 		for (var j = 0; j < overrideResetButtons.length; j++) {
 			overrideResetButtons[j].addEventListener("click", handleFolderOverrideReset);
 		}
+
+		// Attach click handler to the global (Project Defaults) override reset button
+		var globalResetButtons = document.querySelectorAll(".reset-global-overrides-btn");
+		for (var k = 0; k < globalResetButtons.length; k++) {
+			globalResetButtons[k].addEventListener("click", handleGlobalOverrideReset);
+		}
 	};
 
 	// Handle section reset button click
@@ -2835,6 +2919,40 @@ if (window.cssVars) {
 		// be a commit point everywhere (incl. OK/Cancel IDEs), since no input event would carry it.
 		if (window.ConfigApp.autoSave && window.ConfigApp.autoSave.getAndSaveIdeConfig) {
 			window.ConfigApp.autoSave.getAndSaveIdeConfig();
+		}
+	}
+
+	// Handle global (Project Defaults) override reset button click
+	function handleGlobalOverrideReset() {
+		// No confirm() — VSCode sandboxed webviews silently return false for
+		// window.confirm, which would prevent the reset from ever firing. The
+		// button's own visual affordance (red destructive-action style) is the
+		// confirmation. This matches the folder-override reset (PR #1344).
+
+		// Mark the global scope for reset — on save, formHandler.applyGlobalResets()
+		// sets all org-scope global fields to null (clear overrides).
+		if (window.ConfigApp.formHandler && window.ConfigApp.formHandler.markGlobalForReset) {
+			window.ConfigApp.formHandler.markGlobalForReset();
+		}
+
+		// Trigger dirty tracking update
+		if (window.dirtyTracker) {
+			window.dirtyTracker.runChangeListeners();
+			window.dirtyTracker.checkDirty();
+		}
+
+		// Persist the reset immediately on every IDE. We call getAndSaveIdeConfig()
+		// directly rather than relying on form-state's triggerChangeHandlers(), which
+		// only saves on auto-save IDEs — a reset must be a commit point everywhere
+		// (incl. OK/Cancel IDEs), since no input event would carry it.
+		if (window.ConfigApp.autoSave && window.ConfigApp.autoSave.getAndSaveIdeConfig) {
+			window.ConfigApp.autoSave.getAndSaveIdeConfig();
+		} else {
+			// getAndSaveIdeConfig will not run, so its finally block will not clear
+			// the reset marks. Clear both defensively here — mirroring the finally —
+			// to prevent any armed marks from leaking into a later unrelated save (IDE-2149).
+			window.ConfigApp.globalReset = false;
+			window.ConfigApp.folderResets = {};
 		}
 	}
 
@@ -3639,6 +3757,11 @@ if (window.cssVars) {
 				window.ConfigApp.formHandler.applyFolderResets(data);
 			}
 
+			// Apply global reset (sets all org-scope global fields to null at top level)
+			if (window.ConfigApp.formHandler.applyGlobalResets) {
+				window.ConfigApp.formHandler.applyGlobalResets(data);
+			}
+
 			var jsonString = JSON.stringify(data);
 
 			// Save using IDE bridge
@@ -3665,6 +3788,11 @@ if (window.cssVars) {
 			}
 		} finally {
 			_isSaving = false;
+			// Authoritative clear: runs on every exit of the try body — validation-fail
+			// return, collectData-guard return, exception, AND happy path — so reset
+			// marks can never survive an invocation (IDE-2149).
+			window.ConfigApp.globalReset = false;
+			window.ConfigApp.folderResets = {};
 		}
 	};
 

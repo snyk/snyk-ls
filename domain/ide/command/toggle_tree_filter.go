@@ -156,6 +156,6 @@ func (cmd *toggleTreeFilter) notifyConfigurationChanged() {
 	if cmd.notifier == nil {
 		return
 	}
-	lspConfig := BuildLspConfiguration(cmd.engine.GetConfiguration(), cmd.engine, cmd.engine.GetLogger(), nil, cmd.configResolver)
+	lspConfig := BuildLspConfiguration(cmd.engine.GetConfiguration(), cmd.engine, cmd.engine.GetLogger(), cmd.configResolver)
 	cmd.notifier.Send(lspConfig)
 }

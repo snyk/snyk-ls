@@ -55,6 +55,12 @@
 		for (var j = 0; j < overrideResetButtons.length; j++) {
 			overrideResetButtons[j].addEventListener("click", handleFolderOverrideReset);
 		}
+
+		// Attach click handler to the global (Project Defaults) override reset button
+		var globalResetButtons = document.querySelectorAll(".reset-global-overrides-btn");
+		for (var k = 0; k < globalResetButtons.length; k++) {
+			globalResetButtons[k].addEventListener("click", handleGlobalOverrideReset);
+		}
 	};
 
 	// Handle section reset button click
@@ -108,6 +114,40 @@
 		// be a commit point everywhere (incl. OK/Cancel IDEs), since no input event would carry it.
 		if (window.ConfigApp.autoSave && window.ConfigApp.autoSave.getAndSaveIdeConfig) {
 			window.ConfigApp.autoSave.getAndSaveIdeConfig();
+		}
+	}
+
+	// Handle global (Project Defaults) override reset button click
+	function handleGlobalOverrideReset() {
+		// No confirm() — VSCode sandboxed webviews silently return false for
+		// window.confirm, which would prevent the reset from ever firing. The
+		// button's own visual affordance (red destructive-action style) is the
+		// confirmation. This matches the folder-override reset (PR #1344).
+
+		// Mark the global scope for reset — on save, formHandler.applyGlobalResets()
+		// sets all org-scope global fields to null (clear overrides).
+		if (window.ConfigApp.formHandler && window.ConfigApp.formHandler.markGlobalForReset) {
+			window.ConfigApp.formHandler.markGlobalForReset();
+		}
+
+		// Trigger dirty tracking update
+		if (window.dirtyTracker) {
+			window.dirtyTracker.runChangeListeners();
+			window.dirtyTracker.checkDirty();
+		}
+
+		// Persist the reset immediately on every IDE. We call getAndSaveIdeConfig()
+		// directly rather than relying on form-state's triggerChangeHandlers(), which
+		// only saves on auto-save IDEs — a reset must be a commit point everywhere
+		// (incl. OK/Cancel IDEs), since no input event would carry it.
+		if (window.ConfigApp.autoSave && window.ConfigApp.autoSave.getAndSaveIdeConfig) {
+			window.ConfigApp.autoSave.getAndSaveIdeConfig();
+		} else {
+			// getAndSaveIdeConfig will not run, so its finally block will not clear
+			// the reset marks. Clear both defensively here — mirroring the finally —
+			// to prevent any armed marks from leaking into a later unrelated save (IDE-2149).
+			window.ConfigApp.globalReset = false;
+			window.ConfigApp.folderResets = {};
 		}
 	}
 

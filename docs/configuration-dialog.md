@@ -178,6 +178,12 @@ A reset is emitted **even if the folder has no other edits** — a reset-only fo
 
 A plugin that treats a flat `null` as "absent" (e.g. nullable-type `?.let{}`, `node.isNull() → continue`, `.HasValue == false`) will silently drop the reset and the button will appear to do nothing. The null must survive deserialization (parse the raw JSON tree to distinguish present-with-null from absent when the data model can't) and reach the LS as `{value: null, changed: true}`. See the reset contract in [configuration.md](configuration.md#resetting-a-folder-override).
 
+#### Reset overrides (Project Defaults)
+
+The `{{FolderLabel}} defaults` (Project Defaults) tab has a **Reset overrides** button (`.reset-global-overrides-btn`, rendered in the fallbacks-pane info-box of `config.html`). Clicking it calls `formHandler.markGlobalForReset()`, which sets `ConfigApp.globalReset = true`. On the next save, `auto-save.js` calls `formHandler.applyGlobalResets(data)`, which writes every key in `GLOBAL_RESET_FIELDS` (the 14 org-scope keys, kept in sync with the Go `types.GlobalResettableSettings`) as **`null` at the top level** of the saved JSON — never inside `folderConfigs` — and clears the flag. The IDE translates each top-level `key: null` into a `{changed: true, value: null}` `ConfigSetting`, which the LS treats as a global reset: it clears the `user:global` override and reverts the value to the LDX-Sync / org / flagset default (`organization` reverts to the web account's preferred org). See [Global Reset](configuration.md#global-reset-changed-true-value-null) in configuration.md.
+
+This is distinct from the **per-section Reset** buttons (`.reset-section-btn`, handled by `reset-handler.js`): a section reset only writes hard-coded constant defaults back into the form fields client-side (it does not clear `user:global` overrides server-side), whereas **Reset overrides** clears the stored overrides so the effective values fall back through the precedence chain. It also mirrors the per-folder **Reset overrides** button (`.reset-overrides-btn`), which clears `user:folder` overrides for a single folder rather than the machine-wide `user:global` layer.
+
 ### 5. Authentication Flow
 
 When the user clicks **Authenticate**, `features/authentication.js` calls `ConfigApp.ideBridge.login(authMethod, endpoint, insecure)`, which invokes **`window.__ideExecuteCommand__('snyk.login', [authMethod, endpoint, insecure])`**.
