@@ -559,6 +559,97 @@
     });
   }
 
+  // Filter popover (Risk Score + Issue View Options).
+  // The funnel button opens a small popover whose controls write per-folder
+  // settings to EVERY open folder (workspace-wide), mirroring the severity
+  // buttons. When open folders disagree on a setting it renders "mixed":
+  // indeterminate checkboxes / a "Mixed" risk-score label, plus a dot on the
+  // funnel. The first change aligns all folders, resolving the mismatch.
+  // Note: each change triggers a server-side re-render that replaces this view,
+  // so the popover closes after a change — same model as the severity buttons.
+  var popoverBtn = document.getElementById('filtersPopoverBtn');
+  var popover = document.getElementById('filtersPopover');
+  if (popoverBtn && popover) {
+    var openPopover = function() {
+      popover.hidden = false;
+      popoverBtn.setAttribute('aria-expanded', 'true');
+    };
+    var closePopover = function() {
+      if (popover.hidden) return;
+      popover.hidden = true;
+      popoverBtn.setAttribute('aria-expanded', 'false');
+    };
+
+    popoverBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (popover.hidden) { openPopover(); } else { closePopover(); }
+    });
+
+    // Keep clicks inside the popover from reaching the document dismiss handler.
+    popover.addEventListener('click', function(e) { e.stopPropagation(); });
+
+    document.addEventListener('click', function() { closePopover(); });
+    document.addEventListener('keydown', function(e) {
+      if (popover.hidden) return;
+      if (e.key === 'Escape' || e.key === 'Esc' || e.keyCode === 27) { closePopover(); }
+    });
+
+    // The DOM `indeterminate` flag can't be expressed in HTML markup, so apply it
+    // here on load from the server-set data-mixed attribute.
+    var issueViewChecks = popover.querySelectorAll('input[type="checkbox"][data-filter-type="issueView"]');
+    for (var ci = 0; ci < issueViewChecks.length; ci++) {
+      if (issueViewChecks[ci].getAttribute('data-mixed') === 'true') {
+        issueViewChecks[ci].indeterminate = true;
+      }
+      issueViewChecks[ci].addEventListener('change', function(e) {
+        var chk = e.target;
+        chk.indeterminate = false;
+        chk.removeAttribute('data-mixed');
+        executeCommand('snyk.toggleTreeFilter', ['issueView', chk.getAttribute('data-filter-value'), chk.checked]);
+      });
+    }
+
+    // Risk-score slider: update the label live on input, commit on change (avoids
+    // a command per drag step). Reads "All" at 0, otherwise "≥ N".
+    var slider = document.getElementById('riskScoreSlider');
+    var riskValue = document.getElementById('riskScoreValue');
+    var updateRiskLabel = function(v) {
+      if (riskValue) { riskValue.textContent = (v === 0) ? 'All' : ('≥ ' + v); }
+    };
+    if (slider) {
+      slider.addEventListener('input', function() {
+        slider.removeAttribute('data-mixed');
+        updateRiskLabel(parseIntSafe(slider.value, 0));
+      });
+      slider.addEventListener('change', function() {
+        executeCommand('snyk.toggleTreeFilter', ['riskScore', '', parseIntSafe(slider.value, 0)]);
+      });
+    }
+
+    // Reset: restore defaults (risk score 0, open issues on, ignored off). The
+    // controls are updated optimistically, then a SINGLE 'reset' command writes all
+    // defaults to every folder server-side — one config-change cycle / re-render for
+    // the whole reset rather than one per control.
+    var resetBtn = document.getElementById('filtersResetBtn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (slider) {
+          slider.value = '0';
+          slider.removeAttribute('data-mixed');
+          updateRiskLabel(0);
+        }
+        for (var ri = 0; ri < issueViewChecks.length; ri++) {
+          var chk = issueViewChecks[ri];
+          chk.indeterminate = false;
+          chk.removeAttribute('data-mixed');
+          chk.checked = (chk.getAttribute('data-filter-value') === 'openIssues');
+        }
+        executeCommand('snyk.toggleTreeFilter', ['reset', '', 0]);
+      });
+    }
+  }
+
   // Expand All / Collapse All toolbar buttons.
   // Suppresses reflows by hiding the container during bulk DOM mutations.
   function expandAllNodes() {

@@ -1229,7 +1229,11 @@ func TestFolderConfig_ToLspFolderConfig(t *testing.T) {
 		require.NotNil(t, result.Settings[types.SettingSeverityFilterCritical])
 		assert.Equal(t, true, result.Settings[types.SettingSeverityFilterCritical].Value)
 		assert.Equal(t, "default", result.Settings[types.SettingSeverityFilterCritical].Source)
-		assert.Nil(t, result.Settings[types.SettingRiskScoreThreshold])
+		// Risk score is always sent (even its 0 default) so a reset to 0 syncs to the
+		// open settings page — see ToLspFolderConfig's SettingRiskScoreThreshold exemption.
+		require.NotNil(t, result.Settings[types.SettingRiskScoreThreshold])
+		assert.Equal(t, 0, result.Settings[types.SettingRiskScoreThreshold].Value)
+		assert.Equal(t, "default", result.Settings[types.SettingRiskScoreThreshold].Source)
 		require.NotNil(t, result.Settings[types.SettingScanAutomatic])
 		assert.Equal(t, true, result.Settings[types.SettingScanAutomatic].Value)
 		assert.Equal(t, "default", result.Settings[types.SettingScanAutomatic].Source)

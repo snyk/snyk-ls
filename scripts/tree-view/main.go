@@ -143,7 +143,7 @@ func buildExampleTreeData() treeview.TreeViewData {
 	// Folder 2: shared-lib (OSS issues only)
 	folder2Issues := groupIssuesByFile(exampleFolder2Issues())
 
-	return builder.BuildTreeFromFolderData([]treeview.FolderData{
+	data := builder.BuildTreeFromFolderData([]treeview.FolderData{
 		{
 			FolderPath:          "/Users/dev/workspace/my-app",
 			FolderName:          "my-app",
@@ -159,6 +159,23 @@ func buildExampleTreeData() treeview.TreeViewData {
 			FilteredIssues:      folder2Issues,
 		},
 	})
+
+	// Preview the filter popover (Risk Score + Issue View Options). In a running
+	// LS this state comes from filterState() aggregating per-folder config; here we
+	// hand-craft it so the funnel + popover render. The mixed flags demonstrate the
+	// cross-folder "mixed" treatment (dot on the funnel, "Mixed" slider label,
+	// indeterminate open-issues checkbox).
+	data.FilterState = treeview.TreeViewFilterState{
+		SeverityFilter:          types.NewSeverityFilter(true, true, true, true),
+		RiskScoreThreshold:      500,
+		RiskScoreMixed:          true,
+		IssueViewOptions:        types.NewIssueViewOptions(true, false),
+		MixedIssueViewOptions:   treeview.MixedIssueViewOptions{OpenIssues: true},
+		RiskScoreEnabled:        true,
+		IssueViewOptionsEnabled: true,
+		ShowFilterPopover:       true,
+	}
+	return data
 }
 
 func groupIssuesByFile(issues []types.Issue) snyk.IssuesByFile {

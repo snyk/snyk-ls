@@ -3863,6 +3863,11 @@ if (window.cssVars) {
 		"issue_view_ignored_issues",
 	];
 
+	// Numeric per-folder filter fields, rendered as <input type="number"> rather than
+	// checkboxes (so they're applied via .value, not .checked). Risk score is the
+	// only one; it changes from the tree-view filter popover.
+	var NUMBER_FIELDS = ["risk_score_threshold"];
+
 	// Maps each folder path to its form index via the hidden folder_<index>_folderPath inputs.
 	function buildPathToIndex(doc) {
 		var map = {};
@@ -3881,6 +3886,17 @@ if (window.cssVars) {
 	function settingBool(settings, field) {
 		var setting = settings && settings[field];
 		if (!setting || typeof setting.value !== "boolean") {
+			return undefined;
+		}
+		return setting.value;
+	}
+
+	// Reads a number from an inbound ConfigSetting; returns undefined when absent or
+	// not a number (so we only touch provided fields). Risk score is always sent by
+	// the LS (including its 0 default), so an inbound payload reliably carries it.
+	function settingNumber(settings, field) {
+		var setting = settings && settings[field];
+		if (!setting || typeof setting.value !== "number") {
 			return undefined;
 		}
 		return setting.value;
@@ -3933,6 +3949,28 @@ if (window.cssVars) {
 				// Set without dispatching a change event: no autosave, no echo, no loop.
 				el.checked = value;
 				rebaselineField(index, field, value);
+				touched = true;
+			}
+
+			for (var n = 0; n < NUMBER_FIELDS.length; n++) {
+				var numField = NUMBER_FIELDS[n];
+				var numValue = settingNumber(fc.settings, numField);
+				if (numValue === undefined) {
+					continue;
+				}
+				var numEl = doc.querySelector('input[name="folder_' + index + "_" + numField + '"]');
+				if (!numEl) {
+					continue;
+				}
+				// Compare as strings since input.value is a string; rebaseline either
+				// way so a matching control isn't left falsely dirty.
+				if (String(numEl.value) === String(numValue)) {
+					rebaselineField(index, numField, numValue);
+					continue;
+				}
+				// Set without dispatching a change event: no autosave, no echo, no loop.
+				numEl.value = String(numValue);
+				rebaselineField(index, numField, numValue);
 				touched = true;
 			}
 		}

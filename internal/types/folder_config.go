@@ -215,7 +215,12 @@ func (fc *FolderConfig) ToLspFolderConfig() *LspFolderConfig {
 			OriginScope: ev.OriginScope,
 			IsLocked:    strings.Contains(ev.Source, "locked"),
 		}
-		if !isMeaningfulValue(ev.Value) {
+		// Risk score is always sent (even its 0 = "All" default), so the tree-view
+		// filter popover and the settings page stay in sync when it is reset to 0.
+		// Without this exemption isMeaningfulValue would drop int 0 and a reset
+		// would never reach the open settings window. Other filter settings are
+		// booleans, which isMeaningfulValue always keeps.
+		if name != SettingRiskScoreThreshold && !isMeaningfulValue(ev.Value) {
 			continue
 		}
 		switch name {

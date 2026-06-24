@@ -39,6 +39,33 @@
         Per-scanner chevrons (see .tree-chevron in styles.css) handle
         expand/collapse. tree.js keeps the expandAll/collapseAll handlers,
         which no-op when the buttons are absent. */}}
+    {{if .FilterState.ShowFilterPopover}}
+    <span class="filter-popover-wrap">
+      <button type="button" id="filtersPopoverBtn" class="filters-popover-trigger{{if or .FilterState.RiskScoreMixed .FilterState.MixedIssueViewOptions.OpenIssues .FilterState.MixedIssueViewOptions.IgnoredIssues}} filters-popover-trigger-mixed{{end}}" title="More filters" aria-haspopup="dialog" aria-expanded="false" aria-controls="filtersPopover"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 3h12l-4.5 6v4l-3 1.5V9L2 3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" fill="none"/></svg></button>
+      <div class="filters-popover" id="filtersPopover" role="dialog" aria-label="More filters" aria-modal="false" tabindex="-1" hidden>
+        {{if .FilterState.RiskScoreEnabled}}
+        <div class="filters-popover-section">
+          <div class="filters-popover-row">
+            <label class="filters-popover-label" for="riskScoreSlider">Risk score</label>
+            <span class="filters-popover-value" id="riskScoreValue" aria-live="polite">{{if .FilterState.RiskScoreMixed}}Mixed{{else if eq .FilterState.RiskScoreThreshold 0}}All{{else}}≥ {{.FilterState.RiskScoreThreshold}}{{end}}</span>
+          </div>
+          <input type="range" id="riskScoreSlider" min="0" max="1000" step="50" value="{{.FilterState.RiskScoreThreshold}}" class="filters-popover-slider"{{if .FilterState.RiskScoreMixed}} data-mixed="true"{{end}} aria-label="Minimum risk score">
+        </div>
+        {{end}}
+        {{if and .FilterState.RiskScoreEnabled .FilterState.IssueViewOptionsEnabled}}<div class="filters-popover-divider"></div>{{end}}
+        {{if .FilterState.IssueViewOptionsEnabled}}
+        <div class="filters-popover-section">
+          <div class="filters-popover-label filters-popover-section-label">Issue view options</div>
+          <label class="filters-popover-check"><input type="checkbox" data-filter-type="issueView" data-filter-value="openIssues"{{if .FilterState.IssueViewOptions.OpenIssues}} checked{{end}}{{if .FilterState.MixedIssueViewOptions.OpenIssues}} data-mixed="true"{{end}}><span>Show open issues</span></label>
+          <label class="filters-popover-check"><input type="checkbox" data-filter-type="issueView" data-filter-value="ignoredIssues"{{if .FilterState.IssueViewOptions.IgnoredIssues}} checked{{end}}{{if .FilterState.MixedIssueViewOptions.IgnoredIssues}} data-mixed="true"{{end}}><span>Show ignored issues</span></label>
+        </div>
+        {{end}}
+        <div class="filters-popover-footer">
+          <button type="button" class="filters-popover-reset" id="filtersResetBtn">Reset filters</button>
+        </div>
+      </div>
+    </span>
+    {{end}}
   </div>
 
   <div class="tree-container" id="treeContainer" data-total-issues="{{.TotalIssues}}">

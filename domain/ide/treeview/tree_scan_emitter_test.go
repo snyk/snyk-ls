@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -472,23 +473,23 @@ func TestFilterState_FolderWithNilConfigReadOnly_IsSkipped(t *testing.T) {
 	assert.Equal(t, MixedSeverity{}, fs.MixedSeverity, "nil workspace → no mixed severity")
 }
 
-// TestFilterState_IVO_PinsSingleFolderBehavior pins the CURRENT (non-aggregated) IVO
-// semantics: when folders disagree, filterState takes one folder's IVO wholesale rather
-// than aggregating across folders (unlike severity, which detects "mixed"). Workspace.Folders()
-// iterates a map, so *which* folder is picked is non-deterministic — the test therefore
-// asserts the result is exactly one of the two folders' values, never an OR/AND aggregate.
-// This test will deliberately fail when the follow-up IVO aggregation branch lands — that
-// failure is intentional and the test should then be updated.
-func TestFilterState_IVO_PinsSingleFolderBehavior(t *testing.T) {
+// TestFilterState_IVO_AggregatesAcrossFolders verifies the IVO aggregation that
+// replaced the old first-folder-only read: when the SnykCodeConsistentIgnores flag
+// is on and open folders disagree on an option, that option is marked mixed
+// (analogous to severity), and IssueViewOptionsEnabled is set so the popover shows
+// the toggles.
+func TestFilterState_IVO_AggregatesAcrossFolders(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()
 
 	folder1 := types.FilePath("/project-ivo-first")
 	folder2 := types.FilePath("/project-ivo-second")
-	workspaceutil.SetupWorkspace(t, engine, folder1, folder2)
 
-	// Opposite settings so aggregation is detectable: an OR-aggregate would yield
-	// both-true, an AND-aggregate both-false. A single-folder pick yields exactly one.
+	ffSvc := featureflag.NewFakeService()
+	ffSvc.Override(featureflag.SnykCodeConsistentIgnores, true)
+	workspaceutil.SetupWorkspaceWithFeatureFlags(t, engine, ffSvc, folder1, folder2)
+
+	// Opposite settings: both options disagree across folders → both mixed.
 	ivo1 := types.NewIssueViewOptions(true, false)
 	ivo2 := types.NewIssueViewOptions(false, true)
 	types.SetIssueViewOptionsForFolder(conf, folder1, &ivo1)
@@ -505,12 +506,67 @@ func TestFilterState_IVO_PinsSingleFolderBehavior(t *testing.T) {
 	ws := config.GetWorkspace(conf)
 	fs := emitter.filterState(ws)
 
-	// Current behavior: exactly one folder's IVO is used wholesale (not aggregated).
-	// Folder iteration order is non-deterministic, so accept either folder's value.
-	got := fs.IssueViewOptions
-	matchesOneFolder := got == ivo1 || got == ivo2
-	assert.True(t, matchesOneFolder,
-		"IVO should equal exactly one folder's value (no aggregation); got %+v", got)
+	assert.True(t, fs.IssueViewOptionsEnabled, "flag on for a folder → section enabled")
+	assert.True(t, fs.ShowFilterPopover, "an enabled section → funnel shown")
+	assert.True(t, fs.MixedIssueViewOptions.OpenIssues, "open issues differ → mixed")
+	assert.True(t, fs.MixedIssueViewOptions.IgnoredIssues, "ignored issues differ → mixed")
+}
+
+// TestFilterState_RiskScore_AggregatesAcrossFolders verifies risk-score aggregation:
+// with the OsTestWorkflow flag on, agreeing folders yield a single threshold and
+// RiskScoreEnabled; disagreeing folders set RiskScoreMixed.
+func TestFilterState_RiskScore_AggregatesAcrossFolders(t *testing.T) {
+	setRisk := func(conf configuration.Configuration, folder types.FilePath, v int) {
+		conf.Set(configresolver.UserFolderKey(string(types.PathKey(folder)), types.SettingRiskScoreThreshold),
+			&configresolver.LocalConfigField{Value: v, Changed: true})
+	}
+
+	t.Run("agree", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		conf := engine.GetConfiguration()
+		f1 := types.FilePath("/project-rs-a1")
+		f2 := types.FilePath("/project-rs-a2")
+		ffSvc := featureflag.NewFakeService()
+		ffSvc.Override(featureflag.UseExperimentalRiskScoreInCLI, true)
+		workspaceutil.SetupWorkspaceWithFeatureFlags(t, engine, ffSvc, f1, f2)
+		setRisk(conf, f1, 700)
+		setRisk(conf, f2, 700)
+
+		notif := notification.NewNotifier()
+		notif.CreateListener(func(params any) {})
+		t.Cleanup(func() { notif.DisposeListener() })
+		emitter, err := NewTreeScanStateEmitter(conf, engine.GetLogger(), notif)
+		require.NoError(t, err)
+		t.Cleanup(emitter.Dispose)
+
+		fs := emitter.filterState(config.GetWorkspace(conf))
+		assert.True(t, fs.RiskScoreEnabled, "flag on → section enabled")
+		assert.False(t, fs.RiskScoreMixed, "folders agree → not mixed")
+		assert.Equal(t, 700, fs.RiskScoreThreshold, "agreed threshold surfaced")
+	})
+
+	t.Run("disagree", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		conf := engine.GetConfiguration()
+		f1 := types.FilePath("/project-rs-d1")
+		f2 := types.FilePath("/project-rs-d2")
+		ffSvc := featureflag.NewFakeService()
+		ffSvc.Override(featureflag.UseExperimentalRiskScoreInCLI, true)
+		workspaceutil.SetupWorkspaceWithFeatureFlags(t, engine, ffSvc, f1, f2)
+		setRisk(conf, f1, 300)
+		setRisk(conf, f2, 800)
+
+		notif := notification.NewNotifier()
+		notif.CreateListener(func(params any) {})
+		t.Cleanup(func() { notif.DisposeListener() })
+		emitter, err := NewTreeScanStateEmitter(conf, engine.GetLogger(), notif)
+		require.NoError(t, err)
+		t.Cleanup(emitter.Dispose)
+
+		fs := emitter.filterState(config.GetWorkspace(conf))
+		assert.True(t, fs.RiskScoreEnabled, "flag on → section enabled")
+		assert.True(t, fs.RiskScoreMixed, "folders disagree → mixed")
+	})
 }
 
 // TestFilterState_AggregateSeverityFilters_UsesFilters0AsBaseline verifies the coupling:
@@ -531,4 +587,31 @@ func TestFilterState_AggregateSeverityFilters_UsesFilters0AsBaseline(t *testing.
 	assert.True(t, mixed2.High, "High differs from baseline → mixed")
 	assert.False(t, mixed2.Medium, "Medium agrees with baseline → not mixed")
 	assert.True(t, mixed2.Low, "Low differs from baseline → mixed")
+}
+
+func TestAggregateIssueViewOptions(t *testing.T) {
+	agree := []types.IssueViewOptions{
+		types.NewIssueViewOptions(true, false),
+		types.NewIssueViewOptions(true, false),
+	}
+	got, mixed := aggregateIssueViewOptions(agree)
+	assert.Equal(t, agree[0], got, "all agree → first value returned")
+	assert.Equal(t, MixedIssueViewOptions{}, mixed, "all agree → nothing mixed")
+
+	disagree := []types.IssueViewOptions{
+		types.NewIssueViewOptions(true, false),
+		types.NewIssueViewOptions(false, false), // only OpenIssues differs
+	}
+	_, mixed2 := aggregateIssueViewOptions(disagree)
+	assert.True(t, mixed2.OpenIssues, "OpenIssues differs → mixed")
+	assert.False(t, mixed2.IgnoredIssues, "IgnoredIssues agrees → not mixed")
+}
+
+func TestAggregateRiskScores(t *testing.T) {
+	got, mixed := aggregateRiskScores([]int{500, 500, 500})
+	assert.Equal(t, 500, got, "all agree → agreed threshold")
+	assert.False(t, mixed, "all agree → not mixed")
+
+	_, mixed2 := aggregateRiskScores([]int{300, 800})
+	assert.True(t, mixed2, "thresholds differ → mixed")
 }

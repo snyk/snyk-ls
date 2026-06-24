@@ -46,7 +46,7 @@ func (cmd *toggleTreeFilter) Command() types.CommandData {
 func (cmd *toggleTreeFilter) Execute(_ context.Context) (any, error) {
 	args := cmd.command.Arguments
 	if len(args) < 3 {
-		return nil, fmt.Errorf("expected 3 arguments [filterType, filterValue, enabled], got %d", len(args))
+		return nil, fmt.Errorf("expected 3 arguments [filterType, filterValue, value], got %d", len(args))
 	}
 
 	filterType, ok := args[0].(string)
@@ -57,20 +57,38 @@ func (cmd *toggleTreeFilter) Execute(_ context.Context) (any, error) {
 	if !ok {
 		return nil, fmt.Errorf("filterValue must be a string")
 	}
-	enabled, ok := args[2].(bool)
-	if !ok {
-		return nil, fmt.Errorf("enabled must be a bool")
-	}
 
+	// args[2] is type-dependent: severity/issueView carry a bool (on/off), while
+	// riskScore carries a numeric threshold. It is asserted per branch below.
 	switch filterType {
 	case "severity":
+		enabled, ok := args[2].(bool)
+		if !ok {
+			return nil, fmt.Errorf("enabled must be a bool")
+		}
 		if err := cmd.applySeverityFilter(filterValue, enabled); err != nil {
 			return nil, err
 		}
 	case "issueView":
+		enabled, ok := args[2].(bool)
+		if !ok {
+			return nil, fmt.Errorf("enabled must be a bool")
+		}
 		if err := cmd.applyIssueViewFilter(filterValue, enabled); err != nil {
 			return nil, err
 		}
+	case "riskScore":
+		threshold, err := toInt(args[2])
+		if err != nil {
+			return nil, fmt.Errorf("risk score threshold must be a number: %w", err)
+		}
+		cmd.applyRiskScoreFilter(threshold)
+	case "reset":
+		// filterValue and args[2] are unused; the popover's Reset button restores
+		// all of its filters at once. Batched into one command so the whole reset
+		// triggers a single config-change cycle / tree re-render instead of one per
+		// control (see applyResetFilters).
+		cmd.applyResetFilters()
 	default:
 		return nil, fmt.Errorf("unknown filter type %q", filterType)
 	}
@@ -123,18 +141,64 @@ func (cmd *toggleTreeFilter) applyIssueViewFilter(value string, enabled bool) er
 	return nil
 }
 
+// applyRiskScoreFilter writes the risk-score threshold to every open folder. Like
+// the severity/issue-view toggles, the slider is workspace-wide: changing it
+// aligns all folders (resolving a "mixed" state). The threshold is clamped to the
+// valid [0,1000] domain (the same range the slider and isVisibleRiskScore use):
+// the slider can't produce out-of-range values, but this command is a public LSP
+// entry point, so normalising here keeps every folder in a representable state.
+func (cmd *toggleTreeFilter) applyRiskScoreFilter(threshold int) {
+	if threshold < 0 {
+		threshold = 0
+	} else if threshold > 1000 {
+		threshold = 1000
+	}
+	cmd.writeFilterToAllFolders(types.SettingRiskScoreThreshold, threshold)
+}
+
+// applyResetFilters restores the popover's filters — risk score and the two
+// issue-view options — to their defaults across every open folder. Severity
+// filters are not part of the popover and are intentionally left untouched. All
+// writes happen before Execute's single HandleConfigChange/notify, so one reset
+// click costs one config-change cycle rather than one per control.
+func (cmd *toggleTreeFilter) applyResetFilters() {
+	conf := cmd.engine.GetConfiguration()
+	defaults := types.DefaultIssueViewOptions()
+	for _, f := range cmd.workspaceFolders() {
+		types.SetUserFolder(conf, f.Path(), types.SettingRiskScoreThreshold, 0)
+		types.SetUserFolder(conf, f.Path(), types.SettingIssueViewOpenIssues, defaults.OpenIssues)
+		types.SetUserFolder(conf, f.Path(), types.SettingIssueViewIgnoredIssues, defaults.IgnoredIssues)
+	}
+}
+
 // writeFilterToAllFolders writes a single folder-scoped filter setting to every
 // open folder, leaving each folder's OTHER filter values untouched. The toolbar
-// is workspace-wide, so a toggle applies the toggled severity to all folders
+// is workspace-wide, so a change applies the toggled value to all folders
 // (e.g. clicking a "mixed" button enables just that severity everywhere) — it
-// must not rewrite the other severities, which can legitimately differ per
-// folder. Writing per-folder only (not user-global) also keeps the toggle from
-// moving the global default in lockstep; the per-folder value is authoritative
-// for filtering, outranking LDX-Sync remote defaults.
-func (cmd *toggleTreeFilter) writeFilterToAllFolders(settingName string, enabled bool) {
+// must not rewrite the other filters, which can legitimately differ per folder.
+// Writing per-folder only (not user-global) also keeps the toggle from moving the
+// global default in lockstep; the per-folder value is authoritative for filtering,
+// outranking LDX-Sync remote defaults.
+func (cmd *toggleTreeFilter) writeFilterToAllFolders(settingName string, value any) {
 	conf := cmd.engine.GetConfiguration()
 	for _, f := range cmd.workspaceFolders() {
-		types.SetUserFolder(conf, f.Path(), settingName, enabled)
+		types.SetUserFolder(conf, f.Path(), settingName, value)
+	}
+}
+
+// toInt coerces a command argument to an int. JSON numbers arrive as float64 over
+// the LSP boundary, but int/int64 are accepted too for direct in-process callers
+// and tests.
+func toInt(v any) (int, error) {
+	switch n := v.(type) {
+	case float64:
+		return int(n), nil
+	case int:
+		return n, nil
+	case int64:
+		return int(n), nil
+	default:
+		return 0, fmt.Errorf("unsupported numeric type %T", v)
 	}
 }
 

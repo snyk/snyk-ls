@@ -295,7 +295,7 @@ func TestTreeHtmlRenderer_FilterToolbar_SeverityButtons_Rendered(t *testing.T) {
 	assert.Contains(t, html, `<svg`)
 }
 
-func TestTreeHtmlRenderer_FilterToolbar_NoIssueViewButtons(t *testing.T) {
+func TestTreeHtmlRenderer_FilterToolbar_PopoverHiddenWhenFlagsOff(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
@@ -303,13 +303,60 @@ func TestTreeHtmlRenderer_FilterToolbar_NoIssueViewButtons(t *testing.T) {
 	html := renderer.RenderTreeView(TreeViewData{
 		FilterState: TreeViewFilterState{
 			SeverityFilter: types.DefaultSeverityFilter(),
+			// ShowFilterPopover defaults to false (no feature flag enabled).
 		},
 	})
 
-	// Issue view buttons should NOT be present
-	assert.NotContains(t, html, `data-filter-type="issueView"`)
-	assert.NotContains(t, html, `data-filter-value="openIssues"`)
-	assert.NotContains(t, html, `data-filter-value="ignoredIssues"`)
+	// The funnel button and popover markup must be absent. We match on the
+	// double-quoted attribute markup (id="filtersPopover"), which appears only in
+	// the rendered body — the embedded tree.js references these ids via
+	// getElementById('filtersPopover'), so a bare substring match would false-hit.
+	assert.NotContains(t, html, `id="filtersPopover"`, "popover panel must not render when flags are off")
+	assert.NotContains(t, html, `id="filtersPopoverBtn"`, "funnel button must not render when flags are off")
+}
+
+func TestTreeHtmlRenderer_FilterToolbar_Popover_RiskScoreOnly(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	html := renderer.RenderTreeView(TreeViewData{
+		FilterState: TreeViewFilterState{
+			SeverityFilter:     types.DefaultSeverityFilter(),
+			RiskScoreThreshold: 500,
+			RiskScoreEnabled:   true,
+			ShowFilterPopover:  true,
+		},
+	})
+
+	assert.Contains(t, html, `id="filtersPopoverBtn"`, "funnel button renders when a section is enabled")
+	assert.Contains(t, html, `id="riskScoreSlider"`, "risk-score slider renders when RiskScoreEnabled")
+	assert.Contains(t, html, `value="500"`, "slider reflects the aggregated threshold")
+	assert.Contains(t, html, `≥ 500`, "value label reflects the threshold")
+	// Issue-view section is gated off.
+	assert.NotContains(t, html, `data-filter-value="ignoredIssues"`, "issue-view toggles absent when IssueViewOptionsEnabled is false")
+}
+
+func TestTreeHtmlRenderer_FilterToolbar_Popover_MixedState(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	html := renderer.RenderTreeView(TreeViewData{
+		FilterState: TreeViewFilterState{
+			SeverityFilter:          types.DefaultSeverityFilter(),
+			RiskScoreEnabled:        true,
+			RiskScoreMixed:          true,
+			IssueViewOptionsEnabled: true,
+			IssueViewOptions:        types.NewIssueViewOptions(true, false),
+			MixedIssueViewOptions:   MixedIssueViewOptions{OpenIssues: true},
+			ShowFilterPopover:       true,
+		},
+	})
+
+	assert.Contains(t, html, `filters-popover-trigger-mixed`, "funnel shows the mixed dot when any control is mixed")
+	assert.Contains(t, html, `Mixed`, "risk-score value reads Mixed when folders disagree")
+	assert.Contains(t, html, `data-mixed="true"`, "the disagreeing open-issues checkbox carries data-mixed")
 }
 
 func TestTreeHtmlRenderer_FilterToolbar_ExpandCollapseButtons_NotRendered(t *testing.T) {

@@ -76,6 +76,13 @@ func folderIssueViewOptions(t *testing.T, engine workflow.Engine, folderPath typ
 	return resolver.IssueViewOptionsForFolder(fc)
 }
 
+func folderRiskScore(t *testing.T, engine workflow.Engine, folderPath types.FilePath) int {
+	t.Helper()
+	resolver := testutil.DefaultConfigResolver(engine)
+	fc := config.GetFolderConfigFromEngine(engine, resolver, folderPath, engine.GetLogger())
+	return resolver.RiskScoreThresholdForFolder(fc)
+}
+
 func TestToggleTreeFilter_Execute_SeverityHigh_Disabled(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	folderPath := setupToggleWorkspaceFolder(t, engine)
@@ -162,6 +169,130 @@ func TestToggleTreeFilter_Execute_IssueViewIgnoredIssues_Enabled(t *testing.T) {
 
 	options := folderIssueViewOptions(t, engine, folderPath)
 	assert.True(t, options.IgnoredIssues, "ignored issues should be enabled for the folder")
+}
+
+func TestToggleTreeFilter_Execute_RiskScore_WritesToAllFolders(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	pathA := types.PathKey("rsA")
+	pathB := types.PathKey("rsB")
+	setupToggleWorkspaceFolders(t, engine, pathA, pathB)
+
+	cmd := &toggleTreeFilter{
+		command: types.CommandData{
+			CommandId: types.ToggleTreeFilter,
+			// JSON numbers arrive as float64 over the LSP boundary.
+			Arguments: []any{"riskScore", "", float64(700)},
+		},
+		engine: engine,
+	}
+
+	result, err := cmd.Execute(t.Context())
+	require.NoError(t, err)
+	assert.Nil(t, result, "toggleTreeFilter should return nil; tree HTML is pushed via notification")
+
+	assert.Equal(t, 700, folderRiskScore(t, engine, pathA), "folder A threshold written")
+	assert.Equal(t, 700, folderRiskScore(t, engine, pathB), "folder B threshold written")
+}
+
+func TestToggleTreeFilter_Execute_Reset_RestoresDefaultsAllFolders(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	pathA := types.PathKey("resetA")
+	pathB := types.PathKey("resetB")
+	setupToggleWorkspaceFolders(t, engine, pathA, pathB)
+
+	// Diverge both folders from the defaults across all popover filters.
+	conf := engine.GetConfiguration()
+	for _, p := range []types.FilePath{pathA, pathB} {
+		types.SetUserFolder(conf, p, types.SettingRiskScoreThreshold, 600)
+		types.SetIssueViewOptionsForFolder(conf, p, util.Ptr(types.NewIssueViewOptions(false, true)))
+	}
+
+	cmd := &toggleTreeFilter{
+		command: types.CommandData{
+			CommandId: types.ToggleTreeFilter,
+			Arguments: []any{"reset", "", 0},
+		},
+		engine: engine,
+	}
+
+	result, err := cmd.Execute(t.Context())
+	require.NoError(t, err)
+	assert.Nil(t, result, "toggleTreeFilter should return nil; tree HTML is pushed via notification")
+
+	defaults := types.DefaultIssueViewOptions()
+	for _, p := range []types.FilePath{pathA, pathB} {
+		assert.Equal(t, 0, folderRiskScore(t, engine, p), "risk score reset to 0 for %s", p)
+		assert.Equal(t, defaults, folderIssueViewOptions(t, engine, p), "issue view options reset to defaults for %s", p)
+	}
+}
+
+func TestToggleTreeFilter_Execute_Reset_LeavesSeverityUntouched(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	folderPath := setupToggleWorkspaceFolder(t, engine)
+	// A non-default severity filter must survive a popover reset (severity is not
+	// part of the popover).
+	custom := types.NewSeverityFilter(true, false, true, false)
+	types.SetSeverityFilterForFolder(engine.GetConfiguration(), folderPath, util.Ptr(custom))
+
+	cmd := &toggleTreeFilter{
+		command: types.CommandData{
+			CommandId: types.ToggleTreeFilter,
+			Arguments: []any{"reset", "", 0},
+		},
+		engine: engine,
+	}
+
+	_, err := cmd.Execute(t.Context())
+	require.NoError(t, err)
+
+	assert.Equal(t, custom, folderSeverityFilter(t, engine, folderPath), "reset must not touch severity filters")
+}
+
+func TestToggleTreeFilter_Execute_RiskScore_ClampsOutOfRange(t *testing.T) {
+	tests := []struct {
+		name  string
+		input float64
+		want  int
+	}{
+		{"negative clamps to 0", -50, 0},
+		{"above max clamps to 1000", 5000, 1000},
+		{"in range unchanged", 300, 300},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			folderPath := setupToggleWorkspaceFolder(t, engine)
+
+			cmd := &toggleTreeFilter{
+				command: types.CommandData{
+					CommandId: types.ToggleTreeFilter,
+					Arguments: []any{"riskScore", "", tc.input},
+				},
+				engine: engine,
+			}
+
+			_, err := cmd.Execute(t.Context())
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, folderRiskScore(t, engine, folderPath),
+				"threshold should be clamped to the valid [0,1000] domain")
+		})
+	}
+}
+
+func TestToggleTreeFilter_Execute_RiskScore_NonNumeric_ReturnsError(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	setupToggleWorkspaceFolder(t, engine)
+
+	cmd := &toggleTreeFilter{
+		command: types.CommandData{
+			CommandId: types.ToggleTreeFilter,
+			Arguments: []any{"riskScore", "", "not-a-number"},
+		},
+		engine: engine,
+	}
+
+	_, err := cmd.Execute(t.Context())
+	require.Error(t, err, "non-numeric risk score must be rejected")
 }
 
 func TestToggleTreeFilter_MixedFolders_TogglesOnlyClickedSeverity(t *testing.T) {
