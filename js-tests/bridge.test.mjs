@@ -96,3 +96,178 @@ test("setAuthToken preserves OAuth visibility classes and shows logout", async (
   assert.equal(authBtn.disabled, true, "authenticate button should be disabled after setAuthToken");
   assert.equal(logoutBtn.disabled, false, "logout button should be enabled after setAuthToken");
 });
+
+// ---------------------------------------------------------------------------
+// ideBridge.confirm — dedicated __ideConfirmationDialog__ bridge
+// ---------------------------------------------------------------------------
+
+test("ideBridge.confirm: __ideConfirmationDialog__ called with the message and a function callback", async () => {
+  const win = await buildDom();
+
+  let receivedMessage = null;
+  let receivedCallback = null;
+  win.__ideConfirmationDialog__ = (msg, cb) => { receivedMessage = msg; receivedCallback = cb; };
+
+  win.ConfigApp.ideBridge.confirm("Are you sure?", () => {});
+
+  assert.equal(receivedMessage, "Are you sure?", "message forwarded to __ideConfirmationDialog__");
+  assert.equal(typeof receivedCallback, "function", "__ideConfirmationDialog__ receives a function callback (done wrapper)");
+});
+
+test("ideBridge.confirm: cb(false) → outer callback called with false (cancel → no save)", async () => {
+  const win = await buildDom();
+  win.__IS_IDE_AUTOSAVE_ENABLED__ = true;
+  const saveCalls = [];
+  win.__saveIdeConfig__ = (json) => saveCalls.push(json);
+
+  let capturedCb;
+  win.__ideConfirmationDialog__ = (_msg, cb) => { capturedCb = cb; };
+
+  let confirmedResult = null;
+  win.ConfigApp.ideBridge.confirm("Reset?", (result) => { confirmedResult = result; });
+
+  capturedCb(false);
+
+  assert.equal(confirmedResult, false, "outer callback receives false");
+  assert.equal(saveCalls.length, 0, "no save triggered when cancelled");
+});
+
+test("ideBridge.confirm: cb(true) → outer callback called with true (confirm → proceeds)", async () => {
+  const win = await buildDom();
+  win.__IS_IDE_AUTOSAVE_ENABLED__ = true;
+  const saveCalls = [];
+  win.__saveIdeConfig__ = (json) => saveCalls.push(json);
+
+  let capturedCb;
+  win.__ideConfirmationDialog__ = (_msg, cb) => { capturedCb = cb; };
+
+  let confirmedResult = null;
+  win.ConfigApp.ideBridge.confirm("Reset?", (result) => { confirmedResult = result; });
+
+  capturedCb(true);
+
+  assert.equal(confirmedResult, true, "outer callback receives true");
+});
+
+test("ideBridge.confirm: non-boolean result logs console.error and is treated as cancel (fail-closed)", async () => {
+  const win = await buildDom();
+
+  let capturedCb;
+  win.__ideConfirmationDialog__ = (_msg, cb) => { capturedCb = cb; };
+
+  const errors = [];
+  win.console = { error: (...args) => errors.push(args) };
+
+  let confirmedResult = null;
+  win.ConfigApp.ideBridge.confirm("Reset?", (result) => { confirmedResult = result; });
+
+  // Pass a non-boolean (object) — should log error and coerce to false (fail-closed)
+  capturedCb({ confirmed: true });
+
+  assert.ok(errors.length > 0, "console.error called for non-boolean result");
+  assert.ok(errors[0].join(" ").includes("expected boolean"), "error message mentions expected boolean");
+  assert.equal(confirmedResult, false, "non-boolean result treated as cancel (fail-closed)");
+});
+
+test("ideBridge.confirm: non-boolean string result also fail-closed", async () => {
+  const win = await buildDom();
+
+  let capturedCb;
+  win.__ideConfirmationDialog__ = (_msg, cb) => { capturedCb = cb; };
+
+  const errors = [];
+  win.console = { error: (...args) => errors.push(args) };
+
+  let confirmedResult = null;
+  win.ConfigApp.ideBridge.confirm("Reset?", (result) => { confirmedResult = result; });
+
+  capturedCb("yes");
+
+  assert.ok(errors.length > 0, "console.error called for string result");
+  assert.equal(confirmedResult, false, "string result treated as cancel (fail-closed)");
+});
+
+test("ideBridge.confirm: no-bridge fallback uses window.confirm (returns true)", async () => {
+  const win = await buildDom();
+  // Ensure no dedicated bridge is present
+  delete win.__ideConfirmationDialog__;
+  win.confirm = () => true;
+
+  let confirmedResult = null;
+  win.ConfigApp.ideBridge.confirm("Reset?", (result) => { confirmedResult = result; });
+
+  assert.equal(confirmedResult, true, "fallback window.confirm true → callback called with true");
+});
+
+test("ideBridge.confirm: no-bridge fallback uses window.confirm (returns false)", async () => {
+  const win = await buildDom();
+  delete win.__ideConfirmationDialog__;
+  win.confirm = () => false;
+
+  let confirmedResult = null;
+  win.ConfigApp.ideBridge.confirm("Reset?", (result) => { confirmedResult = result; });
+
+  assert.equal(confirmedResult, false, "fallback window.confirm false → callback called with false");
+});
+
+test("ideBridge.confirm: missing callback throws TypeError (programmer error — fail fast)", async () => {
+  const win = await buildDom();
+
+  win.__ideConfirmationDialog__ = (_msg, _cb) => {};
+
+  // A missing callback is a coding mistake — confirm must throw loudly, not silently no-op.
+  assert.throws(
+    () => win.ConfigApp.ideBridge.confirm("Reset?"),
+    /callback is required and must be a function/,
+    "confirm with no callback must throw TypeError"
+  );
+});
+
+// ---------------------------------------------------------------------------
+// handleSectionReset — gates applyDefaults behind confirm callback
+// ---------------------------------------------------------------------------
+
+test("handleSectionReset: confirmed=false → no defaults applied (fields unchanged)", async () => {
+  const win = await buildDom();
+
+  // Stub ideBridge.confirm to capture the callback and NOT invoke it yet
+  let pendingConfirmCb = null;
+  win.ConfigApp.ideBridge.confirm = (_msg, cb) => { pendingConfirmCb = cb; };
+
+  // Change a field from its default so we can detect if applyDefaults runs
+  const scanOssEl = win.document.querySelector('[name="snyk_oss_enabled"]');
+  assert.ok(scanOssEl, "snyk_oss_enabled element exists");
+  const originalValue = scanOssEl.checked;
+
+  const btn = win.document.querySelector('.reset-section-btn[data-section="scanConfiguration"]');
+  assert.ok(btn, "scanConfiguration reset button exists");
+  btn.click();
+
+  assert.ok(pendingConfirmCb, "confirm was called on reset button click");
+
+  // Cancel: defaults must NOT be applied
+  pendingConfirmCb(false);
+
+  assert.equal(scanOssEl.checked, originalValue, "snyk_oss_enabled unchanged when reset cancelled");
+});
+
+test("handleSectionReset: confirmed=true → defaults applied", async () => {
+  const win = await buildDom();
+  win.__IS_IDE_AUTOSAVE_ENABLED__ = true;
+
+  // Inject dedicated bridge so we control the confirmation
+  let pendingConfirmCb = null;
+  win.__ideConfirmationDialog__ = (_msg, cb) => { pendingConfirmCb = cb; };
+
+  const btn = win.document.querySelector('.reset-section-btn[data-section="scanConfiguration"]');
+  assert.ok(btn, "scanConfiguration reset button exists");
+  btn.click();
+
+  assert.ok(pendingConfirmCb, "ideConfirmationDialog was called on reset button click");
+
+  // Confirm: defaults should be applied (snyk_oss_enabled default is false per sectionDefaults)
+  pendingConfirmCb(true);
+
+  const scanOssEl = win.document.querySelector('[name="snyk_oss_enabled"]');
+  assert.equal(scanOssEl.checked, false, "snyk_oss_enabled reset to default (false) after confirmed=true");
+});
