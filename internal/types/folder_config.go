@@ -215,12 +215,16 @@ func (fc *FolderConfig) ToLspFolderConfig() *LspFolderConfig {
 			OriginScope: ev.OriginScope,
 			IsLocked:    strings.Contains(ev.Source, "locked"),
 		}
-		// Risk score is always sent (even its 0 = "All" default), so the tree-view
-		// filter popover and the settings page stay in sync when it is reset to 0.
-		// Without this exemption isMeaningfulValue would drop int 0 and a reset
-		// would never reach the open settings window. Other filter settings are
-		// booleans, which isMeaningfulValue always keeps.
-		if name != SettingRiskScoreThreshold && !isMeaningfulValue(ev.Value) {
+		// Settings annotated AnnotationAlwaysSend are emitted even at their zero
+		// default (e.g. risk score 0 = "All"), so a reset syncs to an open settings
+		// window; isMeaningfulValue would otherwise drop a zero-valued numeric
+		// setting. The policy is declared at registration rather than hardcoded
+		// here, so a future always-send setting needs no edit to this shared loop.
+		alwaysSend := false
+		if as, found := fm.GetConfigurationOptionAnnotation(name, AnnotationAlwaysSend); found && as == "true" {
+			alwaysSend = true
+		}
+		if !alwaysSend && !isMeaningfulValue(ev.Value) {
 			continue
 		}
 		switch name {

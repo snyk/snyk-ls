@@ -616,13 +616,26 @@
     var updateRiskLabel = function(v) {
       if (riskValue) { riskValue.textContent = (v === 0) ? 'All' : ('≥ ' + v); }
     };
+    var commitRiskScore = function() {
+      slider.removeAttribute('data-mixed');
+      executeCommand('snyk.toggleTreeFilter', ['riskScore', '', parseIntSafe(slider.value, 0)]);
+    };
     if (slider) {
       slider.addEventListener('input', function() {
         slider.removeAttribute('data-mixed');
         updateRiskLabel(parseIntSafe(slider.value, 0));
       });
-      slider.addEventListener('change', function() {
-        executeCommand('snyk.toggleTreeFilter', ['riskScore', '', parseIntSafe(slider.value, 0)]);
+      slider.addEventListener('change', commitRiskScore);
+      // When folders disagree the slider is "mixed": it shows the highest threshold
+      // but commits nothing until the value changes. Accepting the shown value by
+      // clicking/releasing on it fires no 'change', so the mixed state would never
+      // resolve. Treat a click on a still-mixed slider as a commit of the shown
+      // value, aligning every folder to it. 'input'/'change' clear data-mixed first
+      // on a real drag, so this no-ops then (no double-commit).
+      slider.addEventListener('click', function() {
+        if (slider.getAttribute('data-mixed') !== 'true') return;
+        updateRiskLabel(parseIntSafe(slider.value, 0));
+        commitRiskScore();
       });
     }
 

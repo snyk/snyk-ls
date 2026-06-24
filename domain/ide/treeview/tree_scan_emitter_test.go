@@ -553,6 +553,33 @@ func TestFilterState_RiskScore_AggregatesAcrossFolders(t *testing.T) {
 	}
 }
 
+// TestFilterState_FlagsOff_HidesPopover is the negative case for the popover
+// flag-gating: with neither gating flag enabled for any folder, BuildFilterState
+// must leave both sections disabled and the popover hidden. Guards against a
+// regression that drops a gate and exposes controls that filter nothing.
+func TestFilterState_FlagsOff_HidesPopover(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+
+	// A fake service with no overrides → both gating flags off for the folder.
+	ffSvc := featureflag.NewFakeService()
+	workspaceutil.SetupWorkspaceWithFeatureFlags(t, engine, ffSvc, types.FilePath("/project-flags-off"))
+
+	notif := notification.NewNotifier()
+	notif.CreateListener(func(params any) {})
+	t.Cleanup(func() { notif.DisposeListener() })
+	emitter, err := NewTreeScanStateEmitter(conf, engine.GetLogger(), notif)
+	require.NoError(t, err)
+	t.Cleanup(emitter.Dispose)
+
+	fs := emitter.filterState(config.GetWorkspace(conf))
+	assert.False(t, fs.RiskScoreEnabled, "risk-score flag off → section disabled")
+	assert.False(t, fs.IssueViewOptionsEnabled, "consistent-ignores flag off → section disabled")
+	assert.False(t, fs.ShowFilterPopover, "no enabled section → funnel hidden")
+	assert.False(t, fs.RiskScoreMixed, "flag off → no mixed risk score")
+	assert.Equal(t, MixedIssueViewOptions{}, fs.MixedIssueViewOptions, "flag off → no mixed issue-view options")
+}
+
 // setFolderRiskScore writes a per-folder risk-score threshold override.
 func setFolderRiskScore(conf configuration.Configuration, folder types.FilePath, v int) {
 	conf.Set(configresolver.UserFolderKey(string(types.PathKey(folder)), types.SettingRiskScoreThreshold),
@@ -595,6 +622,21 @@ func TestAggregateIssueViewOptions(t *testing.T) {
 	_, mixed2 := aggregateIssueViewOptions(disagree)
 	assert.True(t, mixed2.OpenIssues, "OpenIssues differs → mixed")
 	assert.False(t, mixed2.IgnoredIssues, "IgnoredIssues agrees → not mixed")
+
+	// A mixed option is pinned to its default, not opts[0]'s arbitrary value, so
+	// the rendered checkbox has a deterministic first-click direction. Here opts[0]
+	// has OpenIssues=false but the default is true, so the aggregate must report
+	// true; IgnoredIssues agrees (both true) and is preserved as-is.
+	defaults := types.DefaultIssueViewOptions()
+	pinned := []types.IssueViewOptions{
+		types.NewIssueViewOptions(false, true),
+		types.NewIssueViewOptions(true, true),
+	}
+	got2, mixed3 := aggregateIssueViewOptions(pinned)
+	assert.True(t, mixed3.OpenIssues, "OpenIssues differs → mixed")
+	assert.False(t, mixed3.IgnoredIssues, "IgnoredIssues agrees → not mixed")
+	assert.Equal(t, defaults.OpenIssues, got2.OpenIssues, "mixed option pinned to default, not opts[0]")
+	assert.True(t, got2.IgnoredIssues, "agreed option preserved")
 }
 
 func TestAggregateRiskScores(t *testing.T) {

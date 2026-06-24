@@ -19,6 +19,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -160,13 +161,21 @@ func (cmd *toggleTreeFilter) applyRiskScoreFilter(threshold int) {
 // filters are not part of the popover and are intentionally left untouched. All
 // writes happen before Execute's single HandleConfigChange/notify, so one reset
 // click costs one config-change cycle rather than one per control.
+//
+// Writes go to ALL open folders, not just flag-enabled ones, matching the
+// severity/issue-view toggles: the toolbar is workspace-wide, so a reset aligns
+// every folder. A write to a folder whose gating flag (UseOsTestWorkflow /
+// SnykCodeConsistentIgnores) is off is inert — the per-folder server filter is
+// gated by the same flag (see folder.buildFilterContext) — so resetting it to the
+// default changes nothing for that folder. The issue-view pair goes through
+// types.SetIssueViewOptionsForFolder so this write site can't drift from the
+// canonical one.
 func (cmd *toggleTreeFilter) applyResetFilters() {
 	conf := cmd.engine.GetConfiguration()
 	defaults := types.DefaultIssueViewOptions()
 	for _, f := range cmd.workspaceFolders() {
 		types.SetUserFolder(conf, f.Path(), types.SettingRiskScoreThreshold, 0)
-		types.SetUserFolder(conf, f.Path(), types.SettingIssueViewOpenIssues, defaults.OpenIssues)
-		types.SetUserFolder(conf, f.Path(), types.SettingIssueViewIgnoredIssues, defaults.IgnoredIssues)
+		types.SetIssueViewOptionsForFolder(conf, f.Path(), &defaults)
 	}
 }
 
@@ -178,6 +187,10 @@ func (cmd *toggleTreeFilter) applyResetFilters() {
 // Writing per-folder only (not user-global) also keeps the toggle from moving the
 // global default in lockstep; the per-folder value is authoritative for filtering,
 // outranking LDX-Sync remote defaults.
+//
+// Risk-score and issue-view writes land on every open folder including ones whose
+// gating flag is off; that is inert, since the per-folder server filter is gated by
+// the same flag (see folder.buildFilterContext).
 func (cmd *toggleTreeFilter) writeFilterToAllFolders(settingName string, value any) {
 	conf := cmd.engine.GetConfiguration()
 	for _, f := range cmd.workspaceFolders() {
@@ -204,10 +217,15 @@ func toggleArgs(args []any) (string, bool, error) {
 
 // toInt coerces a command argument to an int. JSON numbers arrive as float64 over
 // the LSP boundary, but int/int64 are accepted too for direct in-process callers
-// and tests.
+// and tests. Non-finite floats (NaN/Inf) are rejected: int(NaN) is
+// implementation-defined in Go and the downstream [0,1000] clamp only bounds
+// range, so they are caught here at the public LSP boundary.
 func toInt(v any) (int, error) {
 	switch n := v.(type) {
 	case float64:
+		if math.IsNaN(n) || math.IsInf(n, 0) {
+			return 0, fmt.Errorf("non-finite number %v", n)
+		}
 		return int(n), nil
 	case int:
 		return n, nil

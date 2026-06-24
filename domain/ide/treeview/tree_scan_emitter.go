@@ -246,6 +246,18 @@ func aggregateIssueViewOptions(opts []types.IssueViewOptions) (types.IssueViewOp
 			mixed.IgnoredIssues = true
 		}
 	}
+	// For a mixed option the agreed value is undefined, so pin the rendered
+	// (indeterminate) checkbox to that option's default rather than opts[0]'s
+	// arbitrary value. This gives a deterministic first-click direction — the
+	// analog of aggregateRiskScores returning the highest threshold — so two
+	// identical-looking mixed checkboxes always resolve the same way.
+	defaults := types.DefaultIssueViewOptions()
+	if mixed.OpenIssues {
+		agg.OpenIssues = defaults.OpenIssues
+	}
+	if mixed.IgnoredIssues {
+		agg.IgnoredIssues = defaults.IgnoredIssues
+	}
 	return agg, mixed
 }
 

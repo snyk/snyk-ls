@@ -17,6 +17,7 @@
 package command
 
 import (
+	"math"
 	"testing"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -192,6 +193,34 @@ func TestToggleTreeFilter_Execute_RiskScore_WritesToAllFolders(t *testing.T) {
 
 	assert.Equal(t, 700, folderRiskScore(t, engine, pathA), "folder A threshold written")
 	assert.Equal(t, 700, folderRiskScore(t, engine, pathB), "folder B threshold written")
+}
+
+func TestToInt(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   any
+		want    int
+		wantErr bool
+	}{
+		{name: "float64 (LSP path)", input: float64(700), want: 700},
+		{name: "int (in-process caller)", input: 500, want: 500},
+		{name: "int64 (in-process caller)", input: int64(250), want: 250},
+		{name: "NaN rejected", input: math.NaN(), wantErr: true},
+		{name: "positive Inf rejected", input: math.Inf(1), wantErr: true},
+		{name: "negative Inf rejected", input: math.Inf(-1), wantErr: true},
+		{name: "unsupported type rejected", input: "700", wantErr: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := toInt(tc.input)
+			if tc.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
 }
 
 func TestToggleTreeFilter_Execute_Reset_RestoresDefaultsAllFolders(t *testing.T) {
