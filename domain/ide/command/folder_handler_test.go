@@ -375,3 +375,55 @@ func Test_BuildLspConfiguration_PopulatesSourceFromResolver(t *testing.T) {
 	assert.Equal(t, "ldx-sync-locked", lspConfig.Settings[types.SettingApiEndpoint].Source)
 	assert.True(t, lspConfig.Settings[types.SettingApiEndpoint].IsLocked)
 }
+
+// Test_BuildLspConfiguration_FolderConfigsStableOrder verifies that BuildLspConfiguration produces
+// a deterministically ordered FolderConfigs slice regardless of Go map iteration order.
+//
+// Root cause (IDE-2149 follow-up): Workspace.Folders() ranges over a map, so the slice order is
+// randomized each call. reflect.DeepEqual on two consecutive BuildLspConfiguration calls can return
+// false even when nothing changed, causing the $/snyk.configuration guard to fire and re-trigger the
+// infinite IDE settings refresh loop on workspaces with 2+ folders.
+//
+// Fix: FolderConfigs must be sorted by FolderPath before returning so the slice is stable across calls.
+//
+// This test runs 50 consecutive BuildLspConfiguration calls with 8 folders whose paths are in
+// intentionally non-sorted alphabetical order (all under one shared base dir so the full paths are
+// non-sorted) and asserts:
+//  1. The FolderPath slice is sorted ascending on every call.
+//  2. Every call produces a result that is reflect.DeepEqual to the first call.
+func Test_BuildLspConfiguration_FolderConfigsStableOrder(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	engineConfig := engine.GetConfiguration()
+
+	// All folders share a single base dir so the full absolute paths are sorted only by the suffix,
+	// not by any auto-incrementing temp-dir counter. Insert them in non-sorted suffix order to
+	// maximize the chance that randomized map iteration surfaces a different order on each call.
+	base := t.TempDir()
+	suffixes := []string{"h", "a", "f", "b", "g", "c", "e", "d"}
+	folderPaths := make([]types.FilePath, len(suffixes))
+	for i, s := range suffixes {
+		folderPaths[i] = types.FilePath(base + "/workspace-" + s)
+	}
+	_, _ = workspaceutil.SetupWorkspace(t, engine, folderPaths...)
+
+	resolver := newConfigResolverForTest(engine)
+
+	first := BuildLspConfiguration(engineConfig, engine, engine.GetLogger(), resolver)
+	require.Len(t, first.FolderConfigs, len(folderPaths), "all folders must appear in the result")
+
+	// Assert sorted order on the first result.
+	for i := 1; i < len(first.FolderConfigs); i++ {
+		assert.LessOrEqual(t, string(first.FolderConfigs[i-1].FolderPath), string(first.FolderConfigs[i].FolderPath),
+			"FolderConfigs[%d].FolderPath (%q) must be <= FolderConfigs[%d].FolderPath (%q)",
+			i-1, first.FolderConfigs[i-1].FolderPath, i, first.FolderConfigs[i].FolderPath)
+	}
+
+	// Run 50 iterations; a map-order regression will almost certainly produce a different order
+	// within that many iterations, making the DeepEqual guard fail.
+	for iter := 0; iter < 50; iter++ {
+		got := BuildLspConfiguration(engineConfig, engine, engine.GetLogger(), resolver)
+		require.Equal(t, first, got,
+			"iteration %d: BuildLspConfiguration result must be identical to the first call (got ordering mismatch)",
+			iter)
+	}
+}
