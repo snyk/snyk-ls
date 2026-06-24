@@ -271,13 +271,14 @@ func computeProjectDefaultScopes(resolver types.ConfigResolverInterface) map[str
 
 // GetConfigHtml renders the configuration dialog HTML using the provided settings.
 // The IDE extension must inject JavaScript functions on the window object:
-// - window.__saveIdeConfig__(jsonString): Save configuration
-// - window.__ideExecuteCommand__(cmd, args, callback): Execute an LSP command (e.g. "snyk.login", "snyk.logout")
-// - window.__onFormDirtyChange__(isDirty): [Optional] Called when form dirty state changes
-// - window.__ideConfirmationDialog__(message, callback): [Optional] Show a native confirmation modal.
-//   The callback MUST be invoked with a boolean (true = confirmed, false = cancelled).
-//   Required in sandboxed webviews (e.g. VSCode) where window.confirm is blocked.
-//   If not injected, ideBridge.confirm falls back to window.confirm automatically.
+//   - window.__saveIdeConfig__(jsonString): Save configuration
+//   - window.__ideExecuteCommand__(cmd, args, callback): Execute an LSP command (e.g. "snyk.login", "snyk.logout")
+//   - window.__onFormDirtyChange__(isDirty): [Optional] Called when form dirty state changes
+//   - window.__ideConfirmationDialog__(message, callback): [Optional] Show a native confirmation modal.
+//     The callback MUST be invoked with a boolean (true = confirmed, false = canceled).
+//     Required in sandboxed webviews (e.g. VSCode) where window.confirm is blocked.
+//     If not injected, ideBridge.confirm falls back to window.confirm automatically.
+//
 // The IDE can optionally set window.__IS_IDE_AUTOSAVE_ENABLED__ = true to enable auto-save on form changes.
 // The IDE can also call window.getAndSaveIdeConfig() to retrieve and save current form values.
 // The IDE can call window.setAuthToken(token, apiUrl) to inject an authentication token and optional API URL.
