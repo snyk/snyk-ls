@@ -27,6 +27,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -120,4 +121,61 @@ func Test_AddAndRemoveFoldersAndReturnFolderList(t *testing.T) {
 	assert.Nil(t, w.GetFolderContaining(toBeRemoved))
 
 	assert.Len(t, folderList, 2)
+}
+
+// Test_Folders_ReturnsSortedOrder verifies that Workspace.Folders() always returns a deterministically
+// ordered slice sorted by folder.Path() ascending, regardless of Go map iteration order.
+//
+// Root cause (IDE-2149 follow-up): Workspace.Folders() ranges over a map, so the returned slice
+// order is randomized per call. Any consumer that compares two consecutive results — notably the
+// reflect.DeepEqual guard that suppresses the $/snyk.configuration infinite refresh loop — can see
+// a spurious difference and misfire. Fixing at the source makes every Folders() consumer deterministic.
+//
+// This test adds 8 folders in intentionally non-sorted path order and asserts:
+//  1. The returned slice is sorted by Path() ascending on every call.
+//  2. Fifty consecutive calls all produce a reflect.DeepEqual result.
+func Test_Folders_ReturnsSortedOrder(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	sc := &scanner.TestScanner{}
+	scanNotifier := scanner.NewMockScanNotifier()
+	notifier := notification.NewNotifier()
+	scanStateAggregator := scanstates.NewNoopStateAggregator()
+
+	w := New(conf, logger, performance.NewInstrumentor(), sc, nil, scanNotifier, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine)
+
+	// Insert paths in intentionally non-sorted order so randomized map iteration is likely to
+	// expose a different ordering on repeated calls if the source is not sorted.
+	paths := []types.FilePath{
+		"/workspace/h",
+		"/workspace/a",
+		"/workspace/f",
+		"/workspace/b",
+		"/workspace/g",
+		"/workspace/c",
+		"/workspace/e",
+		"/workspace/d",
+	}
+	for _, p := range paths {
+		w.AddFolder(NewFolder(conf, logger, p, string(p), sc, nil, scanNotifier, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine))
+	}
+
+	first := w.Folders()
+	require.Len(t, first, len(paths), "all folders must be returned")
+
+	// Assert sorted ascending order.
+	for i := 1; i < len(first); i++ {
+		assert.LessOrEqual(t, string(first[i-1].Path()), string(first[i].Path()),
+			"Folders()[%d].Path() (%q) must be <= Folders()[%d].Path() (%q)",
+			i-1, first[i-1].Path(), i, first[i].Path())
+	}
+
+	// 50 consecutive calls must all be reflect.DeepEqual to the first call.
+	for iter := 0; iter < 50; iter++ {
+		got := w.Folders()
+		require.Equal(t, first, got,
+			"iteration %d: Folders() result must be identical to the first call (path order mismatch)",
+			iter)
+	}
 }
