@@ -105,7 +105,7 @@ func registerNotifier(conf configuration.Configuration, engine workflow.Engine, 
 		case types.AuthenticationParams:
 			notifyClient(logger, srv, "$/snyk.hasAuthenticated", params)
 			l.Debug().Msg("sending token")
-			lspConfig := command.BuildLspConfiguration(conf, engine, logger, nil, configResolver)
+			lspConfig := command.BuildLspConfiguration(conf, engine, logger, configResolver)
 			notifyClient(logger, srv, "$/snyk.configuration", lspConfig)
 			l.Debug().Msg("sending configuration after authentication")
 		case types.SnykIsAvailableCli:
