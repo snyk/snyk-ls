@@ -736,6 +736,38 @@ button.secondary[disabled] {
     color: var(--background-color);
 }
 
+/* Lay out the fallbacks-pane Reset-overrides info-box as a single row so the
+   "Reset overrides" button sits inline at the right of the description paragraph
+   instead of wrapping to a second line (the default .info-box uses
+   flex-direction: column). The child combinator (>) targets only the direct-child
+   info-box at the top of #fallbacks-pane (the Reset-overrides row) and leaves
+   the nested info-box inside the "Advanced" collapsible unaffected. */
+#fallbacks-pane > .info-box {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.reset-global-overrides-btn {
+    flex-shrink: 0;
+    padding: 4px 12px;
+    white-space: nowrap;
+    font-size: var(--tiny-font-size);
+    background-color: transparent;
+    border: 1px solid var(--error-foreground);
+    color: var(--error-foreground);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.reset-global-overrides-btn:hover {
+    background-color: var(--error-foreground);
+    border-color: var(--error-foreground);
+    color: var(--background-color);
+}
+
 /* - - - Settings Tabs - - - */
 .settings-tabs {
     border-bottom: 1px solid var(--border-color);

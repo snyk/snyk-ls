@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  prodsec: snyk/prodsec-orb@1.2.20
+  prodsec: snyk/prodsec-orb@1
 
 jobs:
   security-scans:

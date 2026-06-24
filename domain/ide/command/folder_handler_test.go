@@ -82,7 +82,7 @@ func Test_sendFolderConfigs_SendsNotification(t *testing.T) {
 	setAutoDeterminedOrg(engineConfig, folderPaths[0], expectedOrgId)
 
 	resolver := newConfigResolverForTest(engine)
-	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, featureflag.NewFakeService(), resolver)
+	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, resolver)
 
 	messages := notifier.SentMessages()
 	require.Len(t, messages, 1)
@@ -103,7 +103,7 @@ func Test_sendFolderConfigs_NoFolders_NoNotification(t *testing.T) {
 	// Setup workspace with no folders
 	_, notifier := workspaceutil.SetupWorkspace(t, engine)
 
-	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, featureflag.NewFakeService(), types.NewConfigResolver(engine.GetLogger()))
+	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, types.NewConfigResolver(engine.GetLogger()))
 
 	messages := notifier.SentMessages()
 	require.Len(t, messages, 1)
@@ -157,7 +157,7 @@ func Test_sendFolderConfigs_EmptyCache_AutoDeterminedOrgEmpty(t *testing.T) {
 
 	// Don't populate cache - AutoDeterminedOrg should remain empty
 	resolver := newConfigResolverForTest(engine)
-	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, featureflag.NewFakeService(), resolver)
+	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, resolver)
 
 	messages := notifier.SentMessages()
 	require.Len(t, messages, 1)
@@ -184,7 +184,7 @@ func Test_sendFolderConfigs_CachePopulated_AutoDeterminedOrgSet(t *testing.T) {
 	setAutoDeterminedOrg(engineConfig, folderPaths[0], expectedOrgId)
 
 	resolver := newConfigResolverForTest(mockEngine)
-	sendFolderConfigs(engineConfig, mockEngine, mockEngine.GetLogger(), notifier, featureflag.NewFakeService(), resolver)
+	sendFolderConfigs(engineConfig, mockEngine, mockEngine.GetLogger(), notifier, resolver)
 
 	messages := notifier.SentMessages()
 	require.Len(t, messages, 1)
@@ -218,7 +218,7 @@ func Test_sendFolderConfigs_MultipleFolders_DifferentOrgConfigs(t *testing.T) {
 	setAutoDeterminedOrg(engineConfig, folderPaths[1], "org-id-for-folder-1")
 
 	resolver := newConfigResolverForTest(engine)
-	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, featureflag.NewFakeService(), resolver)
+	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, resolver)
 
 	messages := notifier.SentMessages()
 	require.Len(t, messages, 1)
@@ -278,7 +278,7 @@ func Test_buildLspFolderConfigs_DetectsUserOverrideChanges(t *testing.T) {
 	resolver := newConfigResolverForTest(engine)
 
 	// First call to build baseline
-	_ = buildLspFolderConfigs(engineConfig, engine, logger, featureflag.NewFakeService(), resolver)
+	_ = buildLspFolderConfigs(engineConfig, engine, logger, resolver)
 
 	// Now set a user override for an org-scoped setting
 	types.SetFolderUserSetting(engineConfig, folderPaths[0], types.SettingSnykCodeEnabled, true)
@@ -298,7 +298,7 @@ func Test_BuildLspConfiguration_MachineScopeSettings(t *testing.T) {
 	resolver := newConfigResolverForTestWithGaf(engine, engineConfig)
 	engineConfig.Set(configresolver.UserGlobalKey(types.SettingApiEndpoint), "https://custom.api")
 
-	lspConfig := BuildLspConfiguration(engine.GetConfiguration(), engine, engine.GetLogger(), nil, resolver)
+	lspConfig := BuildLspConfiguration(engine.GetConfiguration(), engine, engine.GetLogger(), resolver)
 
 	require.NotNil(t, lspConfig.Settings)
 	require.NotNil(t, lspConfig.Settings[types.SettingApiEndpoint])
@@ -339,7 +339,7 @@ func Test_BuildLspConfiguration_SkipsWriteOnlySettings(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	_, engineConfig := testutil.SetUpEngineMock(t, engine)
 	resolver := newConfigResolverForTestWithGaf(engine, engineConfig)
-	lspConfig := BuildLspConfiguration(engine.GetConfiguration(), engine, engine.GetLogger(), nil, resolver)
+	lspConfig := BuildLspConfiguration(engine.GetConfiguration(), engine, engine.GetLogger(), resolver)
 
 	// Write-only settings must not appear in LS→IDE notification
 	require.NotNil(t, lspConfig.Settings)
@@ -368,7 +368,7 @@ func Test_BuildLspConfiguration_PopulatesSourceFromResolver(t *testing.T) {
 	prefixKeyResolver := configresolver.New(engineConfig, fm)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, engineConfig, fm)
 
-	lspConfig := BuildLspConfiguration(engine.GetConfiguration(), engine, engine.GetLogger(), nil, resolver)
+	lspConfig := BuildLspConfiguration(engine.GetConfiguration(), engine, engine.GetLogger(), resolver)
 
 	require.NotNil(t, lspConfig.Settings[types.SettingApiEndpoint])
 	assert.Equal(t, "https://locked.api", lspConfig.Settings[types.SettingApiEndpoint].Value)
