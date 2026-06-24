@@ -657,6 +657,22 @@ func SetOrganization(conf configuration.Configuration, organization string) {
 	types.SetGlobalUser(conf, types.SettingLastSetOrganization, organization)
 }
 
+// ResetOrganization clears a user-set global organization so the effective org
+// reverts to GAF's resolution chain (the web-account preferred org via
+// /rest/self). It is the organization-specific arm of the global "Reset to
+// defaults" flow: organization is not stored at UserGlobalKey(SettingOrganization)
+// like the other org-scope settings, so it cannot be reset with
+// types.UnsetGlobalUser and needs this dedicated path.
+//
+// Unsetting SettingLastSetOrganization is required so SetOrganization's no-op
+// guard does not block a later re-set, and so folder_config.go's
+// globalOrgSetByUser check (GetGlobalString(SettingLastSetOrganization) != "")
+// correctly reads "not set by user" again.
+func ResetOrganization(conf configuration.Configuration) {
+	conf.Unset(configuration.ORGANIZATION)
+	types.UnsetGlobalUser(conf, types.SettingLastSetOrganization)
+}
+
 // AuthenticationMethodMatchesCredentials returns true if the token matches the configured authentication method.
 func AuthenticationMethodMatchesCredentials(token string, method types.AuthenticationMethod, logger *zerolog.Logger) bool {
 	if method == types.FakeAuthentication {

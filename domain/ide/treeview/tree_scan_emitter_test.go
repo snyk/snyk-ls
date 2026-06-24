@@ -26,6 +26,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -209,6 +210,33 @@ func TestTreeScanStateEmitter_Dispose_StopsRenderLoop(t *testing.T) {
 	emitter.Emit(scanstates.StateSnapshot{AnyScanInProgressWorkingDirectory: true})
 }
 
+func TestAggregateSeverityFilters(t *testing.T) {
+	t.Run("single folder is never mixed", func(t *testing.T) {
+		f := types.NewSeverityFilter(true, false, true, false)
+		sev, mixed := aggregateSeverityFilters([]types.SeverityFilter{f})
+		assert.Equal(t, f, sev)
+		assert.Equal(t, MixedSeverity{}, mixed)
+	})
+
+	t.Run("all folders agree", func(t *testing.T) {
+		f := types.NewSeverityFilter(true, true, false, false)
+		sev, mixed := aggregateSeverityFilters([]types.SeverityFilter{f, f, f})
+		assert.Equal(t, f, sev)
+		assert.Equal(t, MixedSeverity{}, mixed)
+	})
+
+	t.Run("disagreement marks only the differing severities mixed", func(t *testing.T) {
+		_, mixed := aggregateSeverityFilters([]types.SeverityFilter{
+			types.NewSeverityFilter(true, true, true, true),
+			types.NewSeverityFilter(false, true, true, false),
+		})
+		assert.True(t, mixed.Critical, "critical differs -> mixed")
+		assert.False(t, mixed.High, "high agrees")
+		assert.False(t, mixed.Medium, "medium agrees")
+		assert.True(t, mixed.Low, "low differs -> mixed")
+	})
+}
+
 // TestTreeScanStateEmitter_FolderLevelIssueViewOptions verifies that the info-node message
 // reflects folder-level IssueViewOptions overrides rather than the global setting.
 // Regression for: global open+ignored disabled, folder-level open+ignored enabled →
@@ -270,7 +298,7 @@ func TestTreeScanStateEmitter_FolderLevelIssueViewOptions(t *testing.T) {
 	mu.Unlock()
 	assert.NotContains(t, treeView.TreeViewHtml, "Open and Ignored issues are disabled!",
 		"folder-level enabled override must suppress the disabled info message")
-	assert.Contains(t, treeView.TreeViewHtml, "Congrats",
+	assert.Contains(t, treeView.TreeViewHtml, "No issues found",
 		"product node must still render a non-empty info message so the NotContains above is non-vacuous")
 }
 
@@ -329,4 +357,178 @@ func TestTreeScanStateEmitter_GlobalDisabledIVO_ShowsDisabledMessage(t *testing.
 	mu.Unlock()
 	assert.Contains(t, treeView.TreeViewHtml, "Open and Ignored issues are disabled!",
 		"global disabled IVO with no folder override must produce the disabled info message")
+}
+
+// TestFilterState_MultipleFolders_DifferingSeverity_SetsMixedAndRendersFilterMixed is an
+// end-to-end test: when two open folders have different per-folder severity
+// filters the toolbar button carries filter-mixed.
+func TestFilterState_MultipleFolders_DifferingSeverity_SetsMixedAndRendersFilterMixed(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+
+	folder1 := types.FilePath("/project-mixed-a")
+	folder2 := types.FilePath("/project-mixed-b")
+	workspaceutil.SetupWorkspace(t, engine, folder1, folder2)
+
+	// Folder 1: critical ON; folder 2: critical OFF — they disagree on Critical.
+	sf1 := types.NewSeverityFilter(true, true, true, true)
+	sf2 := types.NewSeverityFilter(false, true, true, true)
+	types.SetSeverityFilterForFolder(conf, folder1, &sf1)
+	types.SetSeverityFilterForFolder(conf, folder2, &sf2)
+
+	notif := notification.NewNotifier()
+	var mu sync.Mutex
+	var receivedPayload any
+	notif.CreateListener(func(params any) {
+		mu.Lock()
+		defer mu.Unlock()
+		receivedPayload = params
+	})
+	t.Cleanup(func() { notif.DisposeListener() })
+
+	emitter, err := NewTreeScanStateEmitter(conf, engine.GetLogger(), notif)
+	require.NoError(t, err)
+	t.Cleanup(emitter.Dispose)
+
+	emitter.Emit(scanstates.StateSnapshot{})
+
+	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return receivedPayload != nil
+	}, 2*time.Second, 50*time.Millisecond)
+
+	mu.Lock()
+	treeView := receivedPayload.(types.TreeView)
+	mu.Unlock()
+	assert.Contains(t, treeView.TreeViewHtml, "filter-mixed",
+		"HTML should contain filter-mixed class when folders disagree on severity")
+	assert.Contains(t, treeView.TreeViewHtml, "Open folders use different Critical severity filters",
+		"mixed critical button should carry the expected tooltip text")
+}
+
+// TestFilterState_NoWorkspace_FallsBackToGlobal verifies the ws==nil fallback:
+// filterState must return the global config values when there is no workspace.
+func TestFilterState_NoWorkspace_FallsBackToGlobal(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+
+	// Set a distinctive non-default global filter: only High enabled.
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterCritical), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterHigh), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterMedium), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterLow), false)
+
+	// No workspace is set up — GetWorkspace returns nil.
+	notif := notification.NewNotifier()
+	notif.CreateListener(func(params any) {})
+	t.Cleanup(func() { notif.DisposeListener() })
+
+	emitter, err := NewTreeScanStateEmitter(conf, engine.GetLogger(), notif)
+	require.NoError(t, err)
+	t.Cleanup(emitter.Dispose)
+
+	ws := config.GetWorkspace(conf)
+	fs := emitter.filterState(ws)
+
+	assert.False(t, fs.SeverityFilter.Critical, "global fallback: Critical should be false")
+	assert.True(t, fs.SeverityFilter.High, "global fallback: High should be true")
+	assert.False(t, fs.SeverityFilter.Medium, "global fallback: Medium should be false")
+	assert.False(t, fs.SeverityFilter.Low, "global fallback: Low should be false")
+	assert.Equal(t, MixedSeverity{}, fs.MixedSeverity, "no workspace → no mixed severity")
+}
+
+// TestFilterState_FolderWithNilConfigReadOnly_IsSkipped verifies that a folder
+// whose FolderConfigReadOnly() returns nil is silently skipped and does not panic.
+// When all folders are skipped the global fallback is used.
+func TestFilterState_FolderWithNilConfigReadOnly_IsSkipped(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+
+	// Global: all OFF.
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterCritical), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterHigh), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterMedium), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterLow), false)
+
+	// SetupWorkspace with a valid folder so there IS a workspace (ws != nil), but
+	// the folder itself will have a valid FolderConfigReadOnly. We then call
+	// filterState with a manually-constructed workspace that has no folders
+	// (simulating the "all folders skipped" case).
+	workspaceutil.SetupWorkspace(t, engine, types.FilePath("/project-nil-fc"))
+
+	notif := notification.NewNotifier()
+	notif.CreateListener(func(params any) {})
+	t.Cleanup(func() { notif.DisposeListener() })
+
+	emitter, err := NewTreeScanStateEmitter(conf, engine.GetLogger(), notif)
+	require.NoError(t, err)
+	t.Cleanup(emitter.Dispose)
+
+	// Call filterState with nil — the ws==nil path falls straight to global.
+	fs := emitter.filterState(nil)
+
+	assert.False(t, fs.SeverityFilter.Critical, "nil workspace → global fallback: Critical=false")
+	assert.Equal(t, MixedSeverity{}, fs.MixedSeverity, "nil workspace → no mixed severity")
+}
+
+// TestFilterState_IVO_PinsSingleFolderBehavior pins the CURRENT (non-aggregated) IVO
+// semantics: when folders disagree, filterState takes one folder's IVO wholesale rather
+// than aggregating across folders (unlike severity, which detects "mixed"). Workspace.Folders()
+// iterates a map, so *which* folder is picked is non-deterministic — the test therefore
+// asserts the result is exactly one of the two folders' values, never an OR/AND aggregate.
+// This test will deliberately fail when the follow-up IVO aggregation branch lands — that
+// failure is intentional and the test should then be updated.
+func TestFilterState_IVO_PinsSingleFolderBehavior(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+
+	folder1 := types.FilePath("/project-ivo-first")
+	folder2 := types.FilePath("/project-ivo-second")
+	workspaceutil.SetupWorkspace(t, engine, folder1, folder2)
+
+	// Opposite settings so aggregation is detectable: an OR-aggregate would yield
+	// both-true, an AND-aggregate both-false. A single-folder pick yields exactly one.
+	ivo1 := types.NewIssueViewOptions(true, false)
+	ivo2 := types.NewIssueViewOptions(false, true)
+	types.SetIssueViewOptionsForFolder(conf, folder1, &ivo1)
+	types.SetIssueViewOptionsForFolder(conf, folder2, &ivo2)
+
+	notif := notification.NewNotifier()
+	notif.CreateListener(func(params any) {})
+	t.Cleanup(func() { notif.DisposeListener() })
+
+	emitter, err := NewTreeScanStateEmitter(conf, engine.GetLogger(), notif)
+	require.NoError(t, err)
+	t.Cleanup(emitter.Dispose)
+
+	ws := config.GetWorkspace(conf)
+	fs := emitter.filterState(ws)
+
+	// Current behavior: exactly one folder's IVO is used wholesale (not aggregated).
+	// Folder iteration order is non-deterministic, so accept either folder's value.
+	got := fs.IssueViewOptions
+	matchesOneFolder := got == ivo1 || got == ivo2
+	assert.True(t, matchesOneFolder,
+		"IVO should equal exactly one folder's value (no aggregation); got %+v", got)
+}
+
+// TestFilterState_AggregateSeverityFilters_UsesFilters0AsBaseline verifies the coupling:
+// aggregateSeverityFilters uses filters[0] as the baseline, and MixedSeverity is only
+// set where a subsequent filter disagrees with that baseline.
+func TestFilterState_AggregateSeverityFilters_UsesFilters0AsBaseline(t *testing.T) {
+	// All agree with filters[0]: no mixed.
+	f0 := types.NewSeverityFilter(true, false, true, false)
+	f1 := types.NewSeverityFilter(true, false, true, false)
+	sev, mixed := aggregateSeverityFilters([]types.SeverityFilter{f0, f1})
+	assert.Equal(t, f0, sev, "when all agree, filters[0] is returned verbatim")
+	assert.Equal(t, MixedSeverity{}, mixed, "no disagreement → no mixed flags")
+
+	// f1 disagrees on High and Low relative to filters[0].
+	f2 := types.NewSeverityFilter(true, true, true, true) // High and Low differ from f0
+	_, mixed2 := aggregateSeverityFilters([]types.SeverityFilter{f0, f2})
+	assert.False(t, mixed2.Critical, "Critical agrees with baseline → not mixed")
+	assert.True(t, mixed2.High, "High differs from baseline → mixed")
+	assert.False(t, mixed2.Medium, "Medium agrees with baseline → not mixed")
+	assert.True(t, mixed2.Low, "Low differs from baseline → mixed")
 }

@@ -23,16 +23,20 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
+	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // toggleTreeFilter handles the snyk.toggleTreeFilter command. It updates the
 // severity filter or issue view options in config, then triggers a config change
-// which re-emits the tree view via $/snyk.treeView notification.
+// which re-emits the tree view via $/snyk.treeView notification, and emits a
+// $/snyk.configuration notification so an open settings window reflects the new
+// filter values.
 type toggleTreeFilter struct {
-	command types.CommandData
-	engine  workflow.Engine
+	command        types.CommandData
+	engine         workflow.Engine
+	notifier       noti.Notifier
+	configResolver types.ConfigResolverInterface
 }
 
 func (cmd *toggleTreeFilter) Command() types.CommandData {
@@ -77,40 +81,81 @@ func (cmd *toggleTreeFilter) Execute(_ context.Context) (any, error) {
 		go ws.HandleConfigChange()
 	}
 
+	// Emit the current configuration so an open settings window reflects the new
+	// filter values without being reopened. This is the same $/snyk.configuration
+	// notification a settings change already sends back; it is a one-way state
+	// push (the settings view applies it, it does not echo a change), so it does
+	// not create a toggle<->settings loop.
+	cmd.notifyConfigurationChanged()
+
 	return nil, nil
 }
 
 func (cmd *toggleTreeFilter) applySeverityFilter(value string, enabled bool) error {
-	current := config.GetFilterSeverity(cmd.engine.GetConfiguration())
+	var settingName string
 	switch value {
 	case "critical":
-		current.Critical = enabled
+		settingName = types.SettingSeverityFilterCritical
 	case "high":
-		current.High = enabled
+		settingName = types.SettingSeverityFilterHigh
 	case "medium":
-		current.Medium = enabled
+		settingName = types.SettingSeverityFilterMedium
 	case "low":
-		current.Low = enabled
+		settingName = types.SettingSeverityFilterLow
 	default:
 		return fmt.Errorf("unknown severity value %q", value)
 	}
-	config.SetSeverityFilterOnConfig(cmd.engine.GetConfiguration(), util.Ptr(current), cmd.engine.GetLogger())
+	cmd.writeFilterToAllFolders(settingName, enabled)
 	return nil
 }
 
 func (cmd *toggleTreeFilter) applyIssueViewFilter(value string, enabled bool) error {
-	// toggleTreeFilter intentionally writes global IVO: the filter panel is a
-	// workspace-wide concept. Per-folder tree info nodes read folder-level IVO
-	// (see BuildTree / FolderData.IssueViewOptions) — these are separate concerns by design.
-	current := config.GetIssueViewOptions(cmd.engine.GetConfiguration())
+	var settingName string
 	switch value {
 	case "openIssues":
-		current.OpenIssues = enabled
+		settingName = types.SettingIssueViewOpenIssues
 	case "ignoredIssues":
-		current.IgnoredIssues = enabled
+		settingName = types.SettingIssueViewIgnoredIssues
 	default:
 		return fmt.Errorf("unknown issue view value %q", value)
 	}
-	config.SetIssueViewOptionsOnConfig(cmd.engine.GetConfiguration(), util.Ptr(current), cmd.engine.GetLogger())
+	cmd.writeFilterToAllFolders(settingName, enabled)
 	return nil
+}
+
+// writeFilterToAllFolders writes a single folder-scoped filter setting to every
+// open folder, leaving each folder's OTHER filter values untouched. The toolbar
+// is workspace-wide, so a toggle applies the toggled severity to all folders
+// (e.g. clicking a "mixed" button enables just that severity everywhere) — it
+// must not rewrite the other severities, which can legitimately differ per
+// folder. Writing per-folder only (not user-global) also keeps the toggle from
+// moving the global default in lockstep; the per-folder value is authoritative
+// for filtering, outranking LDX-Sync remote defaults.
+func (cmd *toggleTreeFilter) writeFilterToAllFolders(settingName string, enabled bool) {
+	conf := cmd.engine.GetConfiguration()
+	for _, f := range cmd.workspaceFolders() {
+		types.SetUserFolder(conf, f.Path(), settingName, enabled)
+	}
+}
+
+// workspaceFolders returns the current workspace folders (nil if no workspace).
+func (cmd *toggleTreeFilter) workspaceFolders() []types.Folder {
+	ws := config.GetWorkspace(cmd.engine.GetConfiguration())
+	if ws == nil {
+		return nil
+	}
+	return ws.Folders()
+}
+
+// notifyConfigurationChanged sends the current configuration to the IDE via the
+// $/snyk.configuration notification so an open settings window can reflect the
+// updated per-folder filter values. featureFlagService is nil here (the same as
+// the settings-side sendFolderConfigUpdateIfNeeded), since only the filter
+// values are relevant to this push.
+func (cmd *toggleTreeFilter) notifyConfigurationChanged() {
+	if cmd.notifier == nil {
+		return
+	}
+	lspConfig := BuildLspConfiguration(cmd.engine.GetConfiguration(), cmd.engine, cmd.engine.GetLogger(), cmd.configResolver)
+	cmd.notifier.Send(lspConfig)
 }
