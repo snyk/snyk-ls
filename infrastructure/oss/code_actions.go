@@ -51,12 +51,32 @@ func GetCodeActions(engine workflow.Engine, configResolver types.ConfigResolverI
 	if issueDepNode.Tree != nil && issueDepNode.Value == "" {
 		fixNode := issueDepNode.LinkedParentDependencyNode
 		if fixNode != nil {
+			fixFilePath := types.FilePath(fixNode.Tree.Document)
+			fixRange := getRangeFromNode(fixNode)
+			fixContent := []byte(fixNode.Tree.Root.Value)
+
+			// The version lives in the parent pom, but that <version> can itself
+			// be a ${property} reference. Hardcoding the upgraded version into the
+			// parent's <version> would orphan the property and corrupt the file on
+			// re-apply — the same corruption the direct-version branch below already
+			// prevents. When the property resolves, redirect the edit (and its guard
+			// snapshot) to the matching <properties> entry, which may live further up
+			// the hierarchy. (This branch guards re-apply via addQuickFixAction's
+			// single-shot latch; it does not re-read the file from disk.)
+			if ossIssueData.PackageManager == "maven" {
+				if propNode := resolveMavenPropertyNode(fixNode); propNode != nil {
+					fixFilePath = types.FilePath(propNode.Tree.Document)
+					fixRange = getRangeFromNode(propNode)
+					fixContent = []byte(propNode.Tree.Root.Value)
+				}
+			}
+
 			quickFixAction = addQuickFixAction(
 				engine,
 				configResolver,
-				types.FilePath(fixNode.Tree.Document),
-				getRangeFromNode(fixNode),
-				[]byte(fixNode.Tree.Root.Value),
+				fixFilePath,
+				fixRange,
+				fixContent,
 				nil,
 				true,
 				ossIssueData.PackageManager,

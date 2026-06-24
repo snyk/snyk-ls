@@ -151,6 +151,90 @@ func Test_GetCodeActions_MavenPropertyInParentPom_RedirectsToParent(t *testing.T
 	assert.Equal(t, propStart+len("9.0.5"), edits[0].Range.End.Character)
 }
 
+// childPomVersionlessDep declares the dependency without a <version>; the version
+// is inherited from the parent pom, so the child dependency node resolves with an
+// empty Value and a LinkedParentDependencyNode.
+const childPomVersionlessDep = `<?xml version="1.0" encoding="UTF-8"?>
+<project>
+    <parent>
+        <relativePath>../parent/pom.xml</relativePath>
+    </parent>
+    <dependencies>
+        <dependency>
+            <groupId>org.cyclonedx</groupId>
+            <artifactId>cyclonedx-core-java</artifactId>
+        </dependency>
+    </dependencies>
+</project>
+`
+
+// parentPomDepWithProperty declares the dependency WITH a version, but that version
+// is itself a ${property} reference resolved from the parent's own <properties>.
+const parentPomDepWithProperty = `<?xml version="1.0" encoding="UTF-8"?>
+<project>
+    <properties>
+        <foo.version>9.0.5</foo.version>
+    </properties>
+    <dependencies>
+        <dependency>
+            <groupId>org.cyclonedx</groupId>
+            <artifactId>cyclonedx-core-java</artifactId>
+            <version>${foo.version}</version>
+        </dependency>
+    </dependencies>
+</project>
+`
+
+// When the dependency version lives in a PARENT pom and that parent's <version> is
+// itself a ${property} reference, the quickfix must follow the LinkedParentDependencyNode
+// into the parent and redirect the edit to the parent's <properties> entry — not
+// hardcode the upgraded version into the parent's <version>, which would orphan the
+// property and corrupt the file on re-apply.
+func Test_GetCodeActions_MavenParentPomPropertyVersion_RedirectsToParentProperty(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingEnableSnykOssQuickFixActions), true)
+
+	dir := t.TempDir()
+	childDir := filepath.Join(dir, "child")
+	parentDir := filepath.Join(dir, "parent")
+	require.NoError(t, os.MkdirAll(childDir, 0755))
+	require.NoError(t, os.MkdirAll(parentDir, 0755))
+	childPath := filepath.Join(childDir, "pom.xml")
+	parentPath := filepath.Join(parentDir, "pom.xml")
+	require.NoError(t, os.WriteFile(childPath, []byte(childPomVersionlessDep), 0600))
+	require.NoError(t, os.WriteFile(parentPath, []byte(parentPomDepWithProperty), 0600))
+
+	from := []string{"root@1.0.0", "org.cyclonedx:cyclonedx-core-java@9.0.5"}
+	depNode := getDependencyNode(engine.GetLogger(), types.FilePath(childPath), "maven", from, []byte(childPomVersionlessDep), types.FilePath(dir))
+	require.NotNil(t, depNode)
+	// The child has no version, so the version is inherited from the parent.
+	require.Empty(t, depNode.Value, "child dependency must have no inline version")
+	require.NotNil(t, depNode.LinkedParentDependencyNode, "version should be linked from the parent pom")
+	require.Equal(t, "${foo.version}", depNode.LinkedParentDependencyNode.Value)
+
+	issue := mavenTestIssue()
+	issue.From = from
+	issue.UpgradePath = []any{"false", "org.cyclonedx:cyclonedx-core-java@11.0.1"}
+
+	snykIssue := toIssue(engine, defaultResolver(t, engine), types.FilePath(dir), types.FilePath(childPath), issue,
+		&scanResult{}, nil, depNode, getLearnMock(t), error_reporting.NewTestErrorReporter(engine), "", nil)
+
+	quickFix := findUpgradeAction(t, snykIssue.CodeActions)
+	edit := (*quickFix.GetDeferredEdit())()
+
+	// The edit must target the parent pom's <properties> entry, not its <version>,
+	// and the child pom must be untouched.
+	require.Empty(t, edit.Changes[childPath], "child pom must not be edited")
+	edits := edit.Changes[parentPath]
+	require.Len(t, edits, 1)
+	assert.Equal(t, "11.0.1", edits[0].NewText)
+
+	propLine, propStart := locate(t, parentPomDepWithProperty, "<foo.version>", "9.0.5")
+	assert.Equal(t, propLine, edits[0].Range.Start.Line, "edit should target the parent <properties> line, not <version>")
+	assert.Equal(t, propStart, edits[0].Range.Start.Character)
+	assert.Equal(t, propStart+len("9.0.5"), edits[0].Range.End.Character)
+}
+
 const indirectPropertyPom = `<?xml version="1.0" encoding="UTF-8"?>
 <project>
     <properties>
