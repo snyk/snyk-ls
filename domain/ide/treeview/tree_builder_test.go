@@ -918,6 +918,62 @@ func TestBuildTree_MixedTrust_BannerPlusTrustedBody(t *testing.T) {
 	assert.Empty(t, untrustedNode.Children, "untrusted folder must have no children (no chevron)")
 }
 
+// TestBuildTree_MultipleUntrustedFolders_BannerListsAllAndOneNodeEach verifies
+// the builder handles 2+ untrusted folders correctly:
+//   - the banner's FolderPaths slice contains every untrusted path (for the
+//     per-folder Trust buttons in the template)
+//   - buildUntrustedFolderNodes emits exactly one dimmed, non-expandable node
+//     per folder in the same order they were returned by GetFolderTrust
+//
+// (IDE-1882)
+func TestBuildTree_MultipleUntrustedFolders_BannerListsAllAndOneNodeEach(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	u1 := mock_types.NewMockFolder(ctrl)
+	u1.EXPECT().Path().Return(types.FilePath("/repo/alpha")).AnyTimes()
+	u1.EXPECT().Name().Return("alpha").AnyTimes()
+
+	u2 := mock_types.NewMockFolder(ctrl)
+	u2.EXPECT().Path().Return(types.FilePath("/repo/beta")).AnyTimes()
+	u2.EXPECT().Name().Return("beta").AnyTimes()
+
+	u3 := mock_types.NewMockFolder(ctrl)
+	u3.EXPECT().Path().Return(types.FilePath("/repo/gamma")).AnyTimes()
+	u3.EXPECT().Name().Return("gamma").AnyTimes()
+
+	ws := mock_types.NewMockWorkspace(ctrl)
+	ws.EXPECT().Folders().Return([]types.Folder{u1, u2, u3}).AnyTimes()
+	ws.EXPECT().GetFolderTrust().Return(nil, []types.Folder{u1, u2, u3}).AnyTimes()
+
+	// NewTreeBuilder suffices — all folders are untrusted and bypass scan-state logic.
+	data := NewTreeBuilder().BuildTree(ws)
+
+	// Layout: banner at index 0, then one dimmed node per folder in order.
+	require.Len(t, data.Nodes, 4, "banner + one node per untrusted folder (3)")
+
+	banner := data.Nodes[0]
+	assert.Equal(t, NodeTypeInfo, banner.Type)
+	assert.Equal(t, "untrusted-folder", banner.InfoVariant)
+	// All three paths must appear in the banner so the template renders three Trust buttons.
+	assert.Equal(t, []string{"/repo/alpha", "/repo/beta", "/repo/gamma"}, banner.FolderPaths,
+		"banner FolderPaths must list all untrusted folders in order")
+
+	// Each untrusted folder gets its own dimmed, non-expandable node in the same order.
+	for i, want := range []struct{ label, path string }{
+		{"alpha", "/repo/alpha"},
+		{"beta", "/repo/beta"},
+		{"gamma", "/repo/gamma"},
+	} {
+		node := data.Nodes[i+1]
+		assert.Equal(t, NodeTypeFolder, node.Type, "node[%d] must be a folder node", i+1)
+		assert.Equal(t, want.label, node.Label, "node[%d] label must match folder name", i+1)
+		assert.True(t, node.Untrusted, "node[%d] must be flagged untrusted for dimming", i+1)
+		assert.Empty(t, node.Children, "node[%d] must have no children (no chevron)", i+1)
+		assert.Equal(t, types.FilePath(want.path), node.FilePath,
+			"node[%d] must carry the correct folder path for future trust resolution", i+1)
+	}
+}
+
 func TestBuildTree_EmptyProduct_ShowsCongratsInfoChild(t *testing.T) {
 	builder := newBuilderWithCompletedScans()
 
