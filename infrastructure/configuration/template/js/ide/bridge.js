@@ -103,17 +103,33 @@
 
 	/**
 	 * Show a confirmation dialog via the IDE native UI.
-	 * In VSCode the sandboxed webview blocks window.confirm(), so this routes through
-	 * the executeCommand bridge to show a native modal. Falls back to window.confirm()
-	 * in IDEs that inject no bridge (JetBrains, Eclipse, etc.).
+	 * In VSCode the sandboxed webview blocks window.confirm(), so this uses the
+	 * dedicated window.__ideConfirmationDialog__(message, callback) bridge injected
+	 * by the IDE. Falls back to window.confirm() in IDEs that do not inject the
+	 * dedicated bridge (JetBrains, Eclipse, etc.).
+	 *
+	 * The callback is always invoked with a strict boolean: only a literal true
+	 * confirms (fail-closed). Non-boolean results are logged as an error and treated
+	 * as cancel.
+	 *
 	 * @param {string} message - Message to display
-	 * @param {function} callback - Called with true if confirmed, false if cancelled
+	 * @param {function} callback - Required. Called with true if confirmed, false if cancelled.
+	 * @throws {TypeError} If callback is missing or not a function (programmer error — fail fast).
 	 */
 	ideBridge.confirm = function (message, callback) {
-		if (typeof window.__ideExecuteCommand__ === "function") {
-			window.__ideExecuteCommand__("snyk.showConfirmationDialog", [message], callback);
-		} else if (typeof callback === "function") {
-			callback(window.confirm(message));
+		if (typeof callback !== "function") {
+			throw new TypeError("ideBridge.confirm: callback is required and must be a function");
+		}
+		function done(result) {
+			if (typeof result !== "boolean" && window.console && console.error) {
+				console.error("ideBridge.confirm: expected boolean result, got", result);
+			}
+			callback(result === true); // fail closed: only literal true confirms
+		}
+		if (typeof window.__ideConfirmationDialog__ === "function") {
+			window.__ideConfirmationDialog__(message, done);
+		} else {
+			done(window.confirm(message));
 		}
 	};
 

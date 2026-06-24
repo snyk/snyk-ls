@@ -92,12 +92,14 @@ The HTML does **not** use `__ideLogin__` / `__ideLogout__` — authentication an
 | `window.__IS_IDE_AUTOSAVE_ENABLED__` | If `true`, form changes trigger save via `auto-save.js` | No (default false) |
 | `window.__onFormDirtyChange__(isDirty)` | Dirty-state callback for tab chrome | No |
 | `window.__ideSaveAttemptFinished__(status)` | Save outcome: `success`, `validation_error`, `bridge_missing`, `error` | No |
+| `window.__ideConfirmationDialog__(message, callback)` | Show a native confirmation modal (VSCode sandboxed webview blocks `window.confirm`). The `callback` **must** be invoked with a boolean (`true` = confirmed, `false` = cancelled). Hosts that do not inject this function fall back to `window.confirm`. | No (optional; falls back to `window.confirm`) |
 
 **Calls from `ide/bridge.js`:**
 
 - Login: `__ideExecuteCommand__('snyk.login', [authMethod, endpoint, insecure])`
 - Logout: `__ideExecuteCommand__('snyk.logout', [])`
 - Save: `__saveIdeConfig__(jsonString)` where `jsonString` is **`JSON.stringify`** of the object from `form-handler.collectData()` (not `workspace/didChangeConfiguration` — the IDE maps into LSP config).
+- Confirm: `__ideConfirmationDialog__(message, callback)` — called by `ideBridge.confirm()`; `callback` is always invoked with a strict boolean (fail-closed: non-boolean results are logged as errors and treated as cancel).
 
 **IDE-callable helpers (on `window`):**
 
@@ -117,6 +119,12 @@ webview.window.__saveIdeConfig__ = async (jsonString: string) => {
 };
 webview.window.__IS_IDE_AUTOSAVE_ENABLED__ = true;
 webview.window.__onFormDirtyChange__ = (isDirty: boolean) => { /* update tab title */ };
+webview.window.__ideConfirmationDialog__ = (message: string, callback: (confirmed: boolean) => void) => {
+  // Show a native modal and invoke callback with a boolean.
+  // Only needed in sandboxed environments (e.g. VSCode) where window.confirm is blocked.
+  const confirmed = await vscode.window.showWarningMessage(message, "Yes", "No") === "Yes";
+  callback(confirmed);
+};
 ```
 
 See [Function Injection Flow](#function-injection-flow) for the detailed sequence.
@@ -445,7 +453,7 @@ sequenceDiagram
 - [ ] Execute `snyk.workspace.configuration` command
 - [ ] Use returned string as webview HTML
 - [ ] Create webview/browser component for display
-- [ ] Expose `window.__ideExecuteCommand__`, `window.__saveIdeConfig__`, and optional `__onFormDirtyChange__` / `__ideSaveAttemptFinished__`
+- [ ] Expose `window.__ideExecuteCommand__`, `window.__saveIdeConfig__`, and optional `__onFormDirtyChange__` / `__ideSaveAttemptFinished__` / `__ideConfirmationDialog__`
 - [ ] Display HTML content in webview
 
 ### Configuration Management
@@ -478,6 +486,11 @@ sequenceDiagram
 - [ ] Warn user before closing dialog with unsaved changes using `window.__isFormDirty__()`
 - [ ] Disable save button when form is clean
 - [ ] Enable save button when form is dirty
+
+### Native Confirmation Dialog (Optional, recommended for sandboxed webviews)
+- [ ] Implement `window.__ideConfirmationDialog__(message, callback)` for sandboxed environments (e.g. VSCode) where `window.confirm` is blocked
+- [ ] Invoke `callback` with a **boolean** (`true` = confirmed, `false` = cancelled) — non-boolean results are logged as errors and treated as cancel (fail-closed)
+- [ ] If not implemented, `ideBridge.confirm` falls back to `window.confirm` automatically
 
 ### Auto-Save (Optional)
 - [ ] Set `window.__IS_IDE_AUTOSAVE_ENABLED__ = true` before loading HTML
