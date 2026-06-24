@@ -750,22 +750,22 @@ button.secondary[disabled] {
 }
 
 .reset-global-overrides-btn {
-    display: inline-block;
     flex-shrink: 0;
     padding: 4px 12px;
+    white-space: nowrap;
     font-size: var(--tiny-font-size);
-    background-color: var(--error-background);
-    border: 1px solid var(--error-background);
-    color: var(--input-foreground);
+    background-color: transparent;
+    border: 1px solid var(--error-foreground);
+    color: var(--error-foreground);
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .reset-global-overrides-btn:hover {
-    color: var(--editor-foreground);
-    background-color: var(--error-background);
-    border-color: var(--error-background);
+    background-color: var(--error-foreground);
+    border-color: var(--error-foreground);
+    color: var(--background-color);
 }
 
 /* - - - Settings Tabs - - - */
