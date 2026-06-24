@@ -77,15 +77,13 @@ func (p *Parser) Parse(content string, path types.FilePath) *ast.Tree {
 	return p.parse(content, path, map[string]bool{}, 0)
 }
 
-// parse is the recursive worker behind Parse. visited holds the absolute paths of
-// POMs already parsed in this parent chain (cycle detection) and depth bounds the
-// chain length (see maxParentDepth).
+// parse is the recursive worker behind Parse. visited holds the canonical
+// (absolute, symlink-resolved) paths of POMs already parsed in this parent chain
+// (cycle detection) and depth bounds the chain length (see maxParentDepth).
 func (p *Parser) parse(content string, path types.FilePath, visited map[string]bool, depth int) *ast.Tree {
 	content = strings.ReplaceAll(content, "\r", "")
 	tree := p.initTree(path, content)
-	if absPath, err := filepath.Abs(string(path)); err == nil {
-		visited[absPath] = true
-	}
+	visited[canonicalPath(string(path))] = true
 	d := xml.NewDecoder(strings.NewReader(content))
 	var offset int64
 	pomDir := filepath.Dir(string(path))
@@ -168,7 +166,7 @@ func (p *Parser) handleParent(d *xml.Decoder, tree *ast.Tree, pomDir string, ele
 		p.logger.Warn().Str("path", parentAbsPath).Int("depth", depth).Msg("Maximum parent POM depth reached, skipping")
 		return
 	}
-	if visited[parentAbsPath] {
+	if visited[canonicalPath(parentAbsPath)] {
 		p.logger.Warn().Str("path", parentAbsPath).Msg("Cyclic parent POM reference detected, skipping")
 		return
 	}
@@ -191,6 +189,23 @@ func (p *Parser) handleParent(d *xml.Decoder, tree *ast.Tree, pomDir string, ele
 		return
 	}
 	tree.ParentTree = p.parse(string(content), types.FilePath(parentAbsPath), visited, depth+1)
+}
+
+// canonicalPath returns the absolute, symlink-resolved form of path so the same
+// real file is keyed identically by the visited-set (cycle detection) and the
+// symlink-resolving isWithinRoot check — two distinct symlinks to one real POM
+// would otherwise be treated as different files and re-parsed redundantly. It
+// falls back to the absolute path (or the input) when symlinks cannot be resolved,
+// e.g. the file does not exist.
+func canonicalPath(path string) string {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return path
+	}
+	if resolved, e := filepath.EvalSymlinks(abs); e == nil {
+		return resolved
+	}
+	return abs
 }
 
 // isWithinRoot reports whether parentAbsPath (an absolute path) is the workspace

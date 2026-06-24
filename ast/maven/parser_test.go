@@ -471,6 +471,38 @@ func TestParse_ParentSymlinkEscapesWorkspaceRoot_Skipped(t *testing.T) {
 		"the containment guard must resolve the symlink and refuse the out-of-root target")
 }
 
+func TestParse_CyclicParentViaSymlink_DetectedByCanonicalPath(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	dir := t.TempDir()
+
+	// A symlink pointing back at the POM's own directory, so the parent reference
+	// resolves to the POM itself through a lexically different path.
+	link := filepath.Join(dir, "self")
+	if err := os.Symlink(dir, link); err != nil {
+		t.Skipf("symlinks unsupported on this platform: %v", err)
+	}
+
+	// relativePath self/pom.xml differs lexically from pom.xml but resolves to the
+	// same real file. A visited-set keyed on filepath.Abs alone treats them as
+	// different files and re-parses the parent up to maxParentDepth; only a
+	// symlink-resolved (canonical) visited-set detects the cycle immediately.
+	pomPath := filepath.Join(dir, "pom.xml")
+	content := `<?xml version="1.0" encoding="UTF-8"?>
+<project>
+    <parent>
+        <relativePath>self/pom.xml</relativePath>
+    </parent>
+</project>
+`
+	require.NoError(t, os.WriteFile(pomPath, []byte(content), 0600))
+
+	parser := Parser{logger: engine.GetLogger()}
+	tree := parser.Parse(content, types.FilePath(pomPath))
+
+	assert.Nil(t, tree.ParentTree,
+		"a parent reached via a symlink back to the same real POM must be detected as a cycle by the canonical visited-set, not re-parsed")
+}
+
 func TestCreateHierarchicalDependencyTree(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	var testPath, _ = filepath.Abs("testdata/maven-goof/sub/pom.xml")
