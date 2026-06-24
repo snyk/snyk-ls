@@ -121,7 +121,7 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 				mockFolder2.EXPECT().Path().Return(folder2Path).AnyTimes()
 
 				mockWorkspace := mock_types.NewMockWorkspace(ctrl)
-				// FYI, mock returns deterministic slice order, but real Workspace.Folders() returns the slice in a random order
+				// FYI, both the mock and the real Workspace.Folders() now return a deterministic, ascending path-sorted slice
 				mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder1, mockFolder2}).AnyTimes()
 
 				return mockWorkspace

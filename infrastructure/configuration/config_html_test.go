@@ -112,6 +112,52 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	assert.Contains(t, html, `class="info-box"`)   // Info boxes present
 	assert.Contains(t, html, "These settings apply to all projects unless overridden.")
 	assert.Contains(t, html, "These settings override the project defaults for this specific project.")
+
+	// Project Defaults Advanced section: both fields must appear as global (no folder_ prefix) inputs
+	assert.Contains(t, html, `name="additional_parameters"`)
+	assert.Contains(t, html, `name="additional_environment"`)
+	assert.Contains(t, html, `id="additional_environment-error"`)
+	assert.Contains(t, html, "Additional CLI parameters")
+	assert.Contains(t, html, "Additional environment variables")
+	// Combine message
+	assert.Contains(t, html, "combine with any per-")
+}
+
+func TestConfigHtmlRenderer_ProjectDefaultsAdvancedFieldsRenderValues(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+	mockFolder := mock_types.NewMockFolder(ctrl)
+
+	folderPath := types.FilePath("/path/to/a_folder")
+	mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
+	mockFolder.EXPECT().Name().Return("a_folder").AnyTimes()
+	mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
+	mockWorkspace.EXPECT().GetFolderContaining(folderPath).Return(mockFolder).AnyTimes()
+
+	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
+
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
+	require.NoError(t, err)
+
+	settings := map[string]any{
+		types.SettingAdditionalParameters:  "--debug --all-projects",
+		types.SettingAdditionalEnvironment: "MY_VAR=hello;ANOTHER=world",
+	}
+	folderConfigs := []types.FolderConfig{
+		{FolderPath: folderPath, ConfigResolver: testutil.DefaultConfigResolver(engine)},
+	}
+
+	html := renderer.GetConfigHtml(settings, folderConfigs)
+
+	// Seeded values must appear in the global input fields
+	assert.Contains(t, html, `name="additional_parameters"`)
+	assert.Contains(t, html, `value="--debug --all-projects"`)
+	assert.Contains(t, html, `name="additional_environment"`)
+	assert.Contains(t, html, `value="MY_VAR=hello;ANOTHER=world"`)
 }
 
 func TestConfigHtmlRenderer_LdxSyncConfigAlwaysRendered(t *testing.T) {
@@ -826,9 +872,17 @@ func TestConfigHtml_FormFieldNamesMatchRegisteredSettings(t *testing.T) {
 	html := renderer.GetConfigHtml(settings, folderConfigs)
 	require.NotEmpty(t, html)
 
-	// 3. Parse all name="..." attributes
+	// 3. Parse all name="..." attributes.
+	// Strip <script> and <style> blocks first: form field names live in HTML
+	// elements, not in embedded JS/CSS. Inline JS that builds attribute selectors —
+	// e.g. `input[name="folder_' + index + '_' + field + '"]` in filter-sync.js —
+	// would otherwise be scraped as bogus field names and falsely flagged.
+	scriptRegex := regexp.MustCompile(`(?s)<script\b[^>]*>.*?</script>`)
+	styleRegex := regexp.MustCompile(`(?s)<style\b[^>]*>.*?</style>`)
+	htmlNoScripts := styleRegex.ReplaceAllString(scriptRegex.ReplaceAllString(html, ""), "")
+
 	nameRegex := regexp.MustCompile(`name="([^"]+)"`)
-	matches := nameRegex.FindAllStringSubmatch(html, -1)
+	matches := nameRegex.FindAllStringSubmatch(htmlNoScripts, -1)
 
 	// UI-only helpers and non-form-element name= attributes
 	allowedNonPflag := map[string]bool{

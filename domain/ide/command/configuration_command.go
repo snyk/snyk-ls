@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -101,6 +102,11 @@ func ConstructSettingsFromConfig(engine workflow.Engine, r types.ConfigResolverI
 		types.SettingBinaryBaseUrl:          r.GetString(types.SettingBinaryBaseUrl, nil),
 		types.SettingTrustedFolders:         trustedFoldersAsStrings(r),
 		types.SettingUserSettingsPath:       r.GetString(types.SettingUserSettingsPath, nil),
+		// Pre-populate Project Defaults Advanced fields.
+		// Params are stored as []string under SettingCliAdditionalOssParameters (written by applyCliConfig).
+		// Env is stored as string under SettingAdditionalEnvironment UserGlobalKey (written by applyEnvironment).
+		types.SettingAdditionalParameters:  strings.Join(r.GetStringSlice(types.SettingCliAdditionalOssParameters, nil), " "),
+		types.SettingAdditionalEnvironment: r.GetString(types.SettingAdditionalEnvironment, nil),
 	}
 
 	folderConfigs := collectFolderConfigs(conf, logger, engine, r)

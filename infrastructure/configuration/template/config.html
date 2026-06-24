@@ -200,6 +200,7 @@
             <div class="tab-pane" id="fallbacks-pane" role="tabpanel" aria-labelledby="fallbacks-tab">
                 <div class="info-box">
                     <p>These settings apply to all {{.FolderLabel | toLower}}s unless overridden.</p>
+                    <button type="button" class="reset-global-overrides-btn" title="Reset all Project Defaults overrides">Reset overrides</button>
                 </div>
                 <div class="row">
                     <div class="col-md-6">
@@ -361,6 +362,34 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Advanced project-default settings -->
+                <div class="section">
+                    <div class="form-group">
+                        <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#defaults-advanced" aria-expanded="false" aria-controls="defaults-advanced">
+                            <span data-toggle="tooltip" title="Advanced default settings including CLI parameters and environment variables applied to all {{.FolderLabel | toLower}}s.">Advanced</span>
+                            <span class="collapse-icon">&#9660;</span>
+                        </button>
+                        <div class="collapse ml-1" id="defaults-advanced">
+                            <div class="mt-2">
+                                <div class="info-box">
+                                    <p>These values combine with any per-{{.FolderLabel | toLower}} values rather than replacing them. CLI parameters from both levels are used together; environment variables defined here are overridden by per-{{.FolderLabel | toLower}} values when the same key is set in both.</p>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="additional_parameters"><span data-toggle="tooltip" title="<p>Default CLI parameters for all {{.FolderLabel | toLower}} scans (space-separated).</p><p>Example: <code>--severity-threshold=high --debug</code></p><p>These are combined with any per-{{.FolderLabel | toLower}} parameters.</p>">Additional CLI parameters</span></label>
+                                    <input type="text" id="additional_parameters" name="additional_parameters" value="{{index .Settings "additional_parameters"}}" placeholder="--severity-threshold=high">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="additional_environment"><span data-toggle="tooltip" title="<p>Default environment variables for all {{.FolderLabel | toLower}} scans.</p><p>Format: <code>VAR1=value1;VAR2=value2</code></p><p>Per-{{.FolderLabel | toLower}} values override these on key conflicts.</p>">Additional environment variables</span></label>
+                                    <input type="text" id="additional_environment" name="additional_environment" value="{{index .Settings "additional_environment"}}" placeholder="VAR1=value1;VAR2=value2">
+                                    <div id="additional_environment-error" class="error-message hidden">Invalid format. Use: VAR1=value1;VAR2=value2</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Per-Folder Tab Panes -->
@@ -369,8 +398,9 @@
             <div class="tab-pane folder-pane" id="folder-pane-{{$index}}" role="tabpanel" aria-labelledby="folder-tab-{{$index}}">
                 <input type="hidden" name="folder_{{$index}}_folderPath" value="{{$folder.FolderPath}}">
 
-                <div class="info-box">
+                <div class="info-box folder-disclaimer">
                     <p>These settings override the {{$.FolderLabel | toLower}} defaults for this specific {{$.FolderLabel | toLower}}.</p>
+                    <button type="button" class="reset-overrides-btn" data-folder-index="{{$index}}" title="Reset all overrides for this folder">Reset overrides</button>
                 </div>
 
                 <!-- Row: Scan Configuration + Filters and Views -->
@@ -662,7 +692,6 @@
                         </div>
                     </div>
                 </div>
-                <button type="button" class="reset-overrides-btn" data-folder-index="{{$index}}" title="Reset all overrides for this folder">Reset overrides</button>
             </div>
             {{end}}
             {{end}}
@@ -733,6 +762,9 @@
     </script>
     <script nonce="{{.Nonce}}">
         {{.App}}
+    </script>
+    <script nonce="{{.Nonce}}">
+        {{.FilterSync}}
     </script>
 </body>
 </html>

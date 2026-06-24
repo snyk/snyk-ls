@@ -41,6 +41,12 @@ func userGlobalValue(conf configuration.Configuration, key string) (any, bool) {
 	if v == nil {
 		return nil, false
 	}
+	// Unset (UnsetGlobalUser) marks the key with GAF's deletion sentinel rather
+	// than removing it, so a reset key reads back non-nil. Treat it as absent so
+	// the resolver chain falls through to LDX-Sync / flagset default.
+	if configuration.IsKeyDeleted(v) {
+		return nil, false
+	}
 	if lf, ok := v.(*configresolver.LocalConfigField); ok {
 		if lf == nil || !lf.Changed {
 			return nil, false
@@ -126,6 +132,17 @@ func GetGlobalString(conf configuration.Configuration, key string) string {
 	return conf.GetString(key)
 }
 
+// GetGlobalSliceFilePath reads a slice-of-FilePath setting at the UserGlobalKey.
+// It intentionally does NOT call userGlobalValue (and therefore does NOT carry an
+// IsKeyDeleted guard) because no slice-typed key is in GlobalResettableSettings today:
+// UnsetGlobalUser never writes a deletion tombstone to any key this function reads,
+// so IsKeyDeleted can never be true here in practice.
+//
+// If a slice-typed setting is ever added to GlobalResettableSettings, this function
+// MUST be refactored to call userGlobalValue (which carries the IsKeyDeleted guard)
+// or add an explicit configuration.IsKeyDeleted(v) check before the type-assertions
+// below. Without that guard a deletion tombstone would be type-asserted to nil and
+// silently returned as an empty slice rather than falling through to the flagset default.
 func GetGlobalSliceFilePath(conf configuration.Configuration, key string) []FilePath {
 	v := conf.Get(configresolver.UserGlobalKey(key))
 	if lf, ok := v.(*configresolver.LocalConfigField); ok {
@@ -200,6 +217,31 @@ func SetSeverityFilterOnConfig(conf configuration.Configuration, severityFilter 
 	SetGlobalDeferredFolderScope(conf, SettingSeverityFilterMedium, severityFilter.Medium)
 	SetGlobalDeferredFolderScope(conf, SettingSeverityFilterLow, severityFilter.Low)
 	return filterModified
+}
+
+// SetSeverityFilterForFolder writes the severity filter at the per-folder scope
+// (UserFolderKey, tier "folder value") so it is authoritative for that folder's
+// issue filtering and tree toolbar — outranking LDX-Sync remote defaults and the
+// user-global value (only an org-locked remote value wins). This is what keeps
+// the tree-view toggle and the per-folder settings page in sync.
+func SetSeverityFilterForFolder(conf configuration.Configuration, folderPath FilePath, sf *SeverityFilter) {
+	if sf == nil {
+		return
+	}
+	SetUserFolder(conf, folderPath, SettingSeverityFilterCritical, sf.Critical)
+	SetUserFolder(conf, folderPath, SettingSeverityFilterHigh, sf.High)
+	SetUserFolder(conf, folderPath, SettingSeverityFilterMedium, sf.Medium)
+	SetUserFolder(conf, folderPath, SettingSeverityFilterLow, sf.Low)
+}
+
+// SetIssueViewOptionsForFolder writes the issue view options at the per-folder
+// scope (UserFolderKey). See SetSeverityFilterForFolder for scope rationale.
+func SetIssueViewOptionsForFolder(conf configuration.Configuration, folderPath FilePath, opts *IssueViewOptions) {
+	if opts == nil {
+		return
+	}
+	SetUserFolder(conf, folderPath, SettingIssueViewOpenIssues, opts.OpenIssues)
+	SetUserFolder(conf, folderPath, SettingIssueViewIgnoredIssues, opts.IgnoredIssues)
 }
 
 // GetIssueViewOptionsFromConfig returns the issue view options from the given configuration.
