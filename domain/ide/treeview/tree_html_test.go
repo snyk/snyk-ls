@@ -347,6 +347,7 @@ func TestTreeHtmlRenderer_FilterToolbar_Popover_MixedState(t *testing.T) {
 			SeverityFilter:          types.DefaultSeverityFilter(),
 			RiskScoreEnabled:        true,
 			RiskScoreMixed:          true,
+			RiskScoreThreshold:      800, // highest folder threshold when mixed
 			IssueViewOptionsEnabled: true,
 			IssueViewOptions:        types.NewIssueViewOptions(true, false),
 			MixedIssueViewOptions:   MixedIssueViewOptions{OpenIssues: true},
@@ -355,7 +356,8 @@ func TestTreeHtmlRenderer_FilterToolbar_Popover_MixedState(t *testing.T) {
 	})
 
 	assert.Contains(t, html, `filters-popover-trigger-mixed`, "funnel shows the mixed dot when any control is mixed")
-	assert.Contains(t, html, `Mixed`, "risk-score value reads Mixed when folders disagree")
+	assert.Contains(t, html, `Mixed (≥ 800)`, "mixed risk-score label shows the highest folder threshold")
+	assert.Contains(t, html, `value="800"`, "slider sits at the highest folder threshold when mixed")
 	assert.Contains(t, html, `data-mixed="true"`, "the disagreeing open-issues checkbox carries data-mixed")
 }
 

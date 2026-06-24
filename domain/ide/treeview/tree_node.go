@@ -112,7 +112,8 @@ type TreeViewFilterState struct {
 	IssueViewOptions types.IssueViewOptions `json:"issueViewOptions"`
 	// RiskScoreThreshold is the aggregated minimum-risk-score threshold across
 	// open folders (0 = "All"). When folders disagree, RiskScoreMixed is set and
-	// this value is unspecified (the popover shows "Mixed").
+	// this carries the highest folder's threshold, so the "Mixed" slider sits at a
+	// defined position and the label can show the value.
 	RiskScoreThreshold    int                   `json:"riskScoreThreshold,omitempty"`
 	RiskScoreMixed        bool                  `json:"riskScoreMixed,omitempty"`
 	MixedIssueViewOptions MixedIssueViewOptions `json:"mixedIssueViewOptions,omitempty"`

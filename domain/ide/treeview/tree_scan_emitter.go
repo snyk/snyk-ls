@@ -249,16 +249,22 @@ func aggregateIssueViewOptions(opts []types.IssueViewOptions) (types.IssueViewOp
 	return agg, mixed
 }
 
-// aggregateRiskScores reduces per-folder risk-score thresholds to a single
-// toolbar value plus a "mixed" marker (true when the folders disagree). When
-// mixed, the returned value is the first folder's — rendering shows "Mixed"
-// instead.
+// aggregateRiskScores reduces per-folder risk-score thresholds to the toolbar's
+// value plus a "mixed" marker (true when the folders disagree). When folders
+// disagree it returns the HIGHEST threshold, so the "mixed" slider sits at a
+// meaningful, defined position (and the label can show it) rather than an
+// arbitrary folder's value; the first change re-aligns all folders. When all
+// folders agree the agreed value is returned — which is also the maximum.
 func aggregateRiskScores(scores []int) (int, bool) {
-	agg := scores[0]
+	maxScore := scores[0]
+	mixed := false
 	for _, s := range scores[1:] {
-		if s != agg {
-			return agg, true
+		if s != scores[0] {
+			mixed = true
+		}
+		if s > maxScore {
+			maxScore = s
 		}
 	}
-	return agg, false
+	return maxScore, mixed
 }

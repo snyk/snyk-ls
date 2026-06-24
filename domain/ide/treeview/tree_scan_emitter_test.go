@@ -566,6 +566,7 @@ func TestFilterState_RiskScore_AggregatesAcrossFolders(t *testing.T) {
 		fs := emitter.filterState(config.GetWorkspace(conf))
 		assert.True(t, fs.RiskScoreEnabled, "flag on → section enabled")
 		assert.True(t, fs.RiskScoreMixed, "folders disagree → mixed")
+		assert.Equal(t, 800, fs.RiskScoreThreshold, "mixed → highest folder threshold surfaced")
 	})
 }
 
@@ -612,6 +613,11 @@ func TestAggregateRiskScores(t *testing.T) {
 	assert.Equal(t, 500, got, "all agree → agreed threshold")
 	assert.False(t, mixed, "all agree → not mixed")
 
-	_, mixed2 := aggregateRiskScores([]int{300, 800})
+	got2, mixed2 := aggregateRiskScores([]int{300, 800})
 	assert.True(t, mixed2, "thresholds differ → mixed")
+	assert.Equal(t, 800, got2, "mixed → highest threshold returned")
+
+	got3, mixed3 := aggregateRiskScores([]int{800, 300, 100})
+	assert.True(t, mixed3, "thresholds differ → mixed")
+	assert.Equal(t, 800, got3, "mixed → highest threshold regardless of order")
 }

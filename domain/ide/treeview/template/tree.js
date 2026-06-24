@@ -645,7 +645,7 @@
           chk.removeAttribute('data-mixed');
           chk.checked = (chk.getAttribute('data-filter-value') === 'openIssues');
         }
-        executeCommand('snyk.toggleTreeFilter', ['reset', '', 0]);
+        executeCommand('snyk.toggleTreeFilter', ['reset']);
       });
     }
   }

@@ -47,7 +47,7 @@
         <div class="filters-popover-section">
           <div class="filters-popover-row">
             <label class="filters-popover-label" for="riskScoreSlider">Risk score</label>
-            <span class="filters-popover-value" id="riskScoreValue" aria-live="polite">{{if .FilterState.RiskScoreMixed}}Mixed{{else if eq .FilterState.RiskScoreThreshold 0}}All{{else}}≥ {{.FilterState.RiskScoreThreshold}}{{end}}</span>
+            <span class="filters-popover-value" id="riskScoreValue" aria-live="polite">{{if .FilterState.RiskScoreMixed}}Mixed{{if gt .FilterState.RiskScoreThreshold 0}} (≥ {{.FilterState.RiskScoreThreshold}}){{end}}{{else if eq .FilterState.RiskScoreThreshold 0}}All{{else}}≥ {{.FilterState.RiskScoreThreshold}}{{end}}</span>
           </div>
           <input type="range" id="riskScoreSlider" min="0" max="1000" step="50" value="{{.FilterState.RiskScoreThreshold}}" class="filters-popover-slider"{{if .FilterState.RiskScoreMixed}} data-mixed="true"{{end}} aria-label="Minimum risk score">
         </div>

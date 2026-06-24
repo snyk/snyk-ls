@@ -45,49 +45,48 @@ func (cmd *toggleTreeFilter) Command() types.CommandData {
 
 func (cmd *toggleTreeFilter) Execute(_ context.Context) (any, error) {
 	args := cmd.command.Arguments
-	if len(args) < 3 {
-		return nil, fmt.Errorf("expected 3 arguments [filterType, filterValue, value], got %d", len(args))
+	if len(args) < 1 {
+		return nil, fmt.Errorf("expected at least 1 argument [filterType], got %d", len(args))
 	}
 
 	filterType, ok := args[0].(string)
 	if !ok {
 		return nil, fmt.Errorf("filterType must be a string")
 	}
-	filterValue, ok := args[1].(string)
-	if !ok {
-		return nil, fmt.Errorf("filterValue must be a string")
-	}
 
-	// args[2] is type-dependent: severity/issueView carry a bool (on/off), while
-	// riskScore carries a numeric threshold. It is asserted per branch below.
+	// Each filter type validates only the arguments it uses: severity/issueView
+	// take [filterType, filterValue, enabled]; riskScore takes a numeric threshold
+	// in args[2]; reset takes no further arguments.
 	switch filterType {
 	case "severity":
-		enabled, ok := args[2].(bool)
-		if !ok {
-			return nil, fmt.Errorf("enabled must be a bool")
+		filterValue, enabled, err := toggleArgs(args)
+		if err != nil {
+			return nil, err
 		}
 		if err := cmd.applySeverityFilter(filterValue, enabled); err != nil {
 			return nil, err
 		}
 	case "issueView":
-		enabled, ok := args[2].(bool)
-		if !ok {
-			return nil, fmt.Errorf("enabled must be a bool")
+		filterValue, enabled, err := toggleArgs(args)
+		if err != nil {
+			return nil, err
 		}
 		if err := cmd.applyIssueViewFilter(filterValue, enabled); err != nil {
 			return nil, err
 		}
 	case "riskScore":
+		if len(args) < 3 {
+			return nil, fmt.Errorf("expected 3 arguments [filterType, filterValue, threshold], got %d", len(args))
+		}
 		threshold, err := toInt(args[2])
 		if err != nil {
 			return nil, fmt.Errorf("risk score threshold must be a number: %w", err)
 		}
 		cmd.applyRiskScoreFilter(threshold)
 	case "reset":
-		// filterValue and args[2] are unused; the popover's Reset button restores
-		// all of its filters at once. Batched into one command so the whole reset
-		// triggers a single config-change cycle / tree re-render instead of one per
-		// control (see applyResetFilters).
+		// The popover's Reset button restores all of its filters at once and needs
+		// no further arguments. Batched into one command so the whole reset triggers
+		// a single config-change cycle / tree re-render (see applyResetFilters).
 		cmd.applyResetFilters()
 	default:
 		return nil, fmt.Errorf("unknown filter type %q", filterType)
@@ -184,6 +183,23 @@ func (cmd *toggleTreeFilter) writeFilterToAllFolders(settingName string, value a
 	for _, f := range cmd.workspaceFolders() {
 		types.SetUserFolder(conf, f.Path(), settingName, value)
 	}
+}
+
+// toggleArgs extracts the [filterValue, enabled] pair shared by the severity and
+// issueView toggles, which both require all three command arguments.
+func toggleArgs(args []any) (string, bool, error) {
+	if len(args) < 3 {
+		return "", false, fmt.Errorf("expected 3 arguments [filterType, filterValue, enabled], got %d", len(args))
+	}
+	filterValue, ok := args[1].(string)
+	if !ok {
+		return "", false, fmt.Errorf("filterValue must be a string")
+	}
+	enabled, ok := args[2].(bool)
+	if !ok {
+		return "", false, fmt.Errorf("enabled must be a bool")
+	}
+	return filterValue, enabled, nil
 }
 
 // toInt coerces a command argument to an int. JSON numbers arrive as float64 over

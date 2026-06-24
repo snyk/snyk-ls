@@ -210,7 +210,7 @@ func TestToggleTreeFilter_Execute_Reset_RestoresDefaultsAllFolders(t *testing.T)
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
-			Arguments: []any{"reset", "", 0},
+			Arguments: []any{"reset"},
 		},
 		engine: engine,
 	}
@@ -237,7 +237,7 @@ func TestToggleTreeFilter_Execute_Reset_LeavesSeverityUntouched(t *testing.T) {
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
-			Arguments: []any{"reset", "", 0},
+			Arguments: []any{"reset"},
 		},
 		engine: engine,
 	}
@@ -379,17 +379,26 @@ func TestToggleTreeFilter_Execute_SendsConfigurationNotification(t *testing.T) {
 
 func TestToggleTreeFilter_Execute_MissingArgs_ReturnsError(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	cmd := &toggleTreeFilter{
-		command: types.CommandData{
-			CommandId: types.ToggleTreeFilter,
-			Arguments: []any{},
-		},
-		engine: engine,
-	}
 
-	_, err := cmd.Execute(t.Context())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "expected 3 arguments")
+	t.Run("no args at all", func(t *testing.T) {
+		cmd := &toggleTreeFilter{
+			command: types.CommandData{CommandId: types.ToggleTreeFilter, Arguments: []any{}},
+			engine:  engine,
+		}
+		_, err := cmd.Execute(t.Context())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected at least 1 argument")
+	})
+
+	t.Run("severity missing the value/enabled args", func(t *testing.T) {
+		cmd := &toggleTreeFilter{
+			command: types.CommandData{CommandId: types.ToggleTreeFilter, Arguments: []any{"severity", "high"}},
+			engine:  engine,
+		}
+		_, err := cmd.Execute(t.Context())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected 3 arguments")
+	})
 }
 
 func TestToggleTreeFilter_Execute_InvalidFilterType_ReturnsError(t *testing.T) {
