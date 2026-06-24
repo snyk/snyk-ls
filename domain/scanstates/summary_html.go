@@ -78,6 +78,9 @@ func (renderer *HtmlRenderer) GetSummaryHtml(state StateSnapshot) string {
 		rawAll, rawDelta, orgSlugs = renderer.getIssuesFromFolders()
 		allCounts = deduplicateAndCount(rawAll)
 		deltaCounts = deduplicateAndCount(rawDelta)
+		logger.Debug().Int("rawAll", len(rawAll)).Int("uniqueAll", allCounts.uniqueCount).
+			Int("rawDelta", len(rawDelta)).Int("uniqueDelta", deltaCounts.uniqueCount).
+			Msg("Summary panel dedup counts")
 
 		if isDeltaEnabled {
 			currentIssuesFound = deltaCounts.uniqueCount
