@@ -17,6 +17,7 @@
 package workspace
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -173,4 +174,67 @@ func Test_AddAndRemoveFoldersAndReturnFolderList(t *testing.T) {
 	assert.Nil(t, w.GetFolderContaining(toBeRemoved))
 
 	assert.Len(t, folderList, 2)
+}
+
+// TestGetFolderTrust_ConcurrentAddFolder_NoDataRace guards against the data race
+// between GetFolderTrust (which reads w.folders) and AddFolder (which writes
+// w.folders under w.mutex). The PR added GetFolderTrust to the tree-render path
+// (tree_builder.go), making it reachable concurrently with folder mutations.
+// w.mutex.RLock must be held across the w.folders iteration in GetFolderTrust.
+// (IDE-1882)
+//
+// The loop runs 200 iterations to give the race detector enough scheduling
+// opportunities to reliably surface the bug when the lock is absent. A single
+// goroutine pair is a weak signal; 200 pairs make a missed race effectively
+// impossible in practice.
+//
+// Run with -race to catch the concurrent read/write:
+//
+//	go test -race ./domain/ide/workspace/... -run TestGetFolderTrust_ConcurrentAddFolder_NoDataRace
+func TestGetFolderTrust_ConcurrentAddFolder_NoDataRace(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	sc := &scanner.TestScanner{}
+	scanNotifier := scanner.NewMockScanNotifier()
+	scanStateAggregator := scanstates.NewNoopStateAggregator()
+	resolver := defaultResolver(engine)
+
+	w := New(conf, logger, performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewNotifier(), nil, scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
+
+	// Pre-populate so GetFolderTrust has something to iterate over.
+	existing := NewFolder(conf, logger, types.PathKey("existing-folder"), "existing-folder", sc, nil, scanNotifier, notification.NewNotifier(), nil, scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
+	w.AddFolder(existing)
+
+	for i := 0; i < 200; i++ {
+		// Use a unique key per iteration so that AddFolder always performs a
+		// genuine map write (not a no-op on an already-present key). The
+		// AddFolder guard `if w.folders[f.Path()] == nil` would skip the write
+		// on iterations 2-200 if we reused the same key, leaving the race
+		// window open for only the first iteration.
+		name := fmt.Sprintf("dynamic-folder-%d", i)
+		folderKey := types.PathKey(types.FilePath(name))
+		newF := NewFolder(conf, logger, folderKey, name, sc, nil, scanNotifier, notification.NewNotifier(), nil, scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
+
+		// Race: GetFolderTrust reads w.folders while AddFolder writes it.
+		// Without w.mutex.RLock in GetFolderTrust the race detector reports a
+		// data race here.
+		var start sync.WaitGroup
+		start.Add(1)
+		var done sync.WaitGroup
+		done.Add(2)
+
+		go func() {
+			defer done.Done()
+			start.Wait()
+			w.GetFolderTrust()
+		}()
+		go func() {
+			defer done.Done()
+			start.Wait()
+			w.AddFolder(newF)
+		}()
+		start.Done()
+		done.Wait()
+	}
 }
