@@ -624,7 +624,7 @@ func TestTreeHtmlRenderer_UntrustedFolderPaths_AreHtmlEscapedInBanner(t *testing
 	// data-folder-path attribute and the visible label.
 	assert.Contains(t, html, `&#34;`, "double-quote in folder path must be escaped as &#34; in attributes")
 	assert.NotContains(t, html, `<script>alert(1)`,
-		"script injection via folder path must be neutralised by HTML escaping")
+		"script injection via folder path must be neutralized by HTML escaping")
 }
 
 func TestTreeHtmlRenderer_LocationNode_HasDataAttributesAndClass(t *testing.T) {

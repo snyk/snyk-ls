@@ -49,16 +49,16 @@ import (
 //  2. trustStateMutex — protects trust-specific state (see below). Always
 //     acquired AFTER mutex is released, never while mutex is held.
 type Workspace struct {
-	mutex               sync.RWMutex
-	folders             map[types.FilePath]types.Folder
-	instrumentor        performance.Instrumentor
-	scanner             scanner.Scanner
-	hoverService        hover.Service
-	scanNotifier        scanner.ScanNotifier
+	mutex        sync.RWMutex
+	folders      map[types.FilePath]types.Folder
+	instrumentor performance.Instrumentor
+	scanner      scanner.Scanner
+	hoverService hover.Service
+	scanNotifier scanner.ScanNotifier
 	// trustStateMutex guards two trust-related invariants:
 	//   1. trustRequestOngoing — debounce flag for the UI trust dialog
 	//   2. the addTrustedFolders read-modify-write on SettingTrustedFolders
-	// Both are serialised by the same lock so there is a single mutex ordering
+	// Both are serialized by the same lock so there is a single mutex ordering
 	// between all trust state mutations. (IDE-1882)
 	trustStateMutex     sync.Mutex
 	trustRequestOngoing bool // for debouncing
@@ -328,7 +328,7 @@ func (w *Workspace) TrustFoldersAndScan(ctx context.Context, foldersToBeTrusted 
 	// Guard the read-modify-write in addTrustedFolders: two concurrent calls
 	// (e.g. user clicking "Trust" on two banner buttons simultaneously) would
 	// both read the same old trusted-folder list, append their folder, and the
-	// last writer would drop the other's folder. trustStateMutex serialises the
+	// last writer would drop the other's folder. trustStateMutex serializes the
 	// Get+Set pair so neither call loses its update. (IDE-1882)
 	//
 	// addTrustedFolders returns the full post-write slice so we avoid a

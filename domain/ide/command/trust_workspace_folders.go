@@ -56,7 +56,7 @@ func (cmd *trustWorkspaceFoldersCommand) Execute(ctx context.Context) (any, erro
 	// by the "trust all" flows).
 	// Safety: a present-but-malformed arg (wrong type, empty string) must NOT fall
 	// through to trust-all — it takes the safe path (trust nothing). Only a truly
-	// absent argument (len==0) triggers the trust-all behaviour.
+	// absent argument (len==0) triggers the trust-all behavior.
 	toTrust := untrusted
 	if path, argPresent, ok := folderPathArg(cmd.command.Arguments); argPresent {
 		if !ok {
