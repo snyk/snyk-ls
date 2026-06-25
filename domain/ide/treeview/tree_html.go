@@ -58,6 +58,7 @@ func NewTreeHtmlRenderer(logger *zerolog.Logger) (*TreeHtmlRenderer, error) {
 		"isEnabled":             isEnabledFunc,
 		"joinStrings":           func(s []string, sep string) string { return strings.Join(s, sep) },
 		"untrustedLearnMoreURL": func() string { return untrustedFolderLearnMoreURL },
+		"feedbackBannerURL":     func() string { return feedbackBannerURL },
 	}
 
 	globalTemplate, err := template.New("treeView").Funcs(funcMap).Parse(treeHtmlTemplate)
@@ -77,12 +78,14 @@ func (r *TreeHtmlRenderer) RenderTreeView(data TreeViewData) string {
 	logger := r.logger.With().Str("method", "RenderTreeView").Logger()
 
 	templateData := map[string]interface{}{
-		"Styles":      template.CSS(treeStylesTemplate),
-		"Script":      template.JS(treeJsTemplate),
-		"Nodes":       data.Nodes,
-		"FilterState": data.FilterState,
-		"TotalIssues": data.TotalIssues,
-		"MultiRoot":   data.MultiRoot,
+		"Styles":                   template.CSS(treeStylesTemplate),
+		"Script":                   template.JS(treeJsTemplate),
+		"Nodes":                    data.Nodes,
+		"FilterState":              data.FilterState,
+		"TotalIssues":              data.TotalIssues,
+		"MultiRoot":                data.MultiRoot,
+		"FeedbackBannerDismissed":  data.FeedbackBannerDismissed,
+		"FeedbackBannerInteracted": data.FeedbackBannerInteracted,
 	}
 
 	var buffer bytes.Buffer
@@ -180,6 +183,9 @@ func checkmarkSVG() string {
 //	Visual Studio https://docs.snyk.io/developer-tools/snyk-ide-plugins-and-extensions/visual-studio-extension/visual-studio-workspace-trust
 //	JetBrains     https://docs.snyk.io/developer-tools/snyk-ide-plugins-and-extensions/jetbrains-plugin/jetbrains-plugin-folder-trust
 const untrustedFolderLearnMoreURL = "https://docs.snyk.io/ide-tools/visual-studio-code-extension/workspace-trust"
+
+// feedbackBannerURL is the destination for the tree view feedback banner's "Give feedback" link.
+const feedbackBannerURL = "https://snyksec.typeform.com/to/HWxnu5Ya"
 
 // isEnabledFunc returns true if the Enabled pointer is nil (default=enabled) or points to true.
 func isEnabledFunc(enabled *bool) bool {

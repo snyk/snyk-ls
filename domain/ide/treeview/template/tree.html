@@ -47,6 +47,14 @@
     {{end}}
   </div>
 
+  {{if not .FeedbackBannerDismissed}}
+  <div class="feedback-banner" id="feedbackBanner"{{if not .FeedbackBannerInteracted}} hidden{{end}}>
+    <span class="feedback-banner-text">Snyk has a new look!</span>
+    <a class="feedback-banner-link" href="{{feedbackBannerURL}}" target="_blank" rel="noopener noreferrer">Give feedback</a>
+    <button class="feedback-banner-dismiss" type="button" data-action="dismiss-feedback" aria-label="Dismiss feedback banner">✕</button>
+  </div>
+  {{end}}
+
   <script nonce="${nonce}">{{.Script}}</script>
   ${ideScript}
 </body>

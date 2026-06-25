@@ -118,6 +118,13 @@ type TreeViewData struct {
 	FilterState TreeViewFilterState `json:"filterState"`
 	TotalIssues int                 `json:"totalIssues"`
 	MultiRoot   bool                `json:"multiRoot"`
+	// FeedbackBannerDismissed suppresses the feedback banner. When true the
+	// renderer omits the banner element entirely.
+	FeedbackBannerDismissed bool `json:"feedbackBannerDismissed"`
+	// FeedbackBannerInteracted controls the banner's initial visibility. When
+	// true the banner renders visible; when false it renders hidden and is
+	// revealed client-side after the user's first interaction with the tree.
+	FeedbackBannerInteracted bool `json:"feedbackBannerInteracted"`
 }
 
 // TreeNodeOption is a functional option for configuring a TreeNode.

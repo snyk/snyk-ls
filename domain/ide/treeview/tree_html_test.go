@@ -78,6 +78,39 @@ func TestTreeHtmlRenderer_TreeContainer_HasTotalIssuesAttribute(t *testing.T) {
 	assert.Contains(t, html, `data-total-issues="42"`)
 }
 
+func TestTreeHtmlRenderer_FeedbackBanner_RenderedHiddenWhenNotInteracted(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	html := renderer.RenderTreeView(TreeViewData{})
+
+	assert.Contains(t, html, `id="feedbackBanner"`)
+	assert.Contains(t, html, feedbackBannerURL)
+	assert.Contains(t, html, `id="feedbackBanner" hidden>`)
+}
+
+func TestTreeHtmlRenderer_FeedbackBanner_RenderedVisibleWhenInteracted(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	html := renderer.RenderTreeView(TreeViewData{FeedbackBannerInteracted: true})
+
+	assert.Contains(t, html, `id="feedbackBanner"`)
+	assert.NotContains(t, html, `id="feedbackBanner" hidden>`)
+}
+
+func TestTreeHtmlRenderer_FeedbackBanner_OmittedWhenDismissed(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	html := renderer.RenderTreeView(TreeViewData{FeedbackBannerDismissed: true})
+
+	assert.NotContains(t, html, `id="feedbackBanner"`)
+}
+
 func TestTreeHtmlRenderer_FileNode_HasDataAttributes(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())

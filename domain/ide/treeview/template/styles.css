@@ -59,6 +59,52 @@ body {
   overflow-y: auto;
 }
 
+/* Feedback banner — pinned to the bottom of the view, overlaying the tree,
+   which scrolls behind it. Revealed by tree.js after the first interaction.
+   The background is the Snyk purple→blue brand gradient (the same hues as the
+   product shield icons) at low alpha so it reads as a tint over the sidebar. */
+.feedback-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  /* Right padding reserves room for the absolutely-positioned dismiss button so
+     the centered text does not collide with it. */
+  padding: 8px 36px;
+  background: linear-gradient(135deg, rgba(144, 67, 198, 0.4) 0%, rgba(20, 93, 235, 0.4) 100%), var(--sidebar-background);
+  color: var(--text-color);
+  font-size: 12px;
+  line-height: 1.4;
+  border-top: 1px solid var(--panel-border);
+}
+.feedback-banner[hidden] { display: none; }
+.feedback-banner-text { flex-shrink: 0; }
+.feedback-banner-link {
+  color: var(--button-text-color);
+  font-weight: 600;
+  text-decoration: underline;
+}
+.feedback-banner-link:hover { text-decoration: none; }
+.feedback-banner-dismiss {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: 0;
+  color: var(--description-foreground);
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 14px;
+  line-height: 1;
+}
+.feedback-banner-dismiss:hover { color: var(--text-color); }
+
 /* Tree node base */
 .tree-node {
   cursor: default;

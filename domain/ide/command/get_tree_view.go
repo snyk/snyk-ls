@@ -60,6 +60,8 @@ func (cmd *getTreeViewCommand) Execute(_ context.Context) (any, error) {
 		SeverityFilter:   config.GetFilterSeverity(conf),
 		IssueViewOptions: config.GetIssueViewOptions(conf),
 	}
+	data.FeedbackBannerDismissed = config.GetFeedbackBannerDismissed(conf)
+	data.FeedbackBannerInteracted = config.GetFeedbackBannerInteracted(conf)
 
 	return renderer.RenderTreeView(data), nil
 }
