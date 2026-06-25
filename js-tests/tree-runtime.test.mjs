@@ -254,9 +254,8 @@ test("filter toolbar click calls snyk.toggleTreeFilter via __ideExecuteCommand__
 
   const filterCalls = calls.filter(c => c.cmd === "snyk.toggleTreeFilter");
   assert.equal(filterCalls.length, 1, "one filter call expected");
-  assert.equal(filterCalls[0].args[0], "severity");
-  assert.equal(filterCalls[0].args[1], "high");
-  assert.equal(filterCalls[0].args[2], false, "active button click should pass enabled=false");
+  assert.equal(filterCalls[0].args[0], "severity_high", "combined token in args[0]");
+  assert.equal(filterCalls[0].args[1], false, "active button click should pass enabled=false");
 });
 
 test("filter toolbar click on inactive button passes enabled=true", async () => {
@@ -287,9 +286,8 @@ test("filter toolbar click on inactive button passes enabled=true", async () => 
 
   const filterCalls = calls.filter(c => c.cmd === "snyk.toggleTreeFilter");
   assert.equal(filterCalls.length, 1);
-  assert.equal(filterCalls[0].args[0], "severity");
-  assert.equal(filterCalls[0].args[1], "medium");
-  assert.equal(filterCalls[0].args[2], true, "inactive button click should pass enabled=true");
+  assert.equal(filterCalls[0].args[0], "severity_medium", "combined token in args[0]");
+  assert.equal(filterCalls[0].args[1], true, "inactive button click should pass enabled=true");
 });
 
 test("clicking a per-folder Trust button calls snyk.trustWorkspaceFolders with that folder path", async () => {
@@ -403,9 +401,8 @@ test("clicking SVG inside filter button still triggers filter toggle", async () 
 
   const filterCalls = calls.filter(c => c.cmd === "snyk.toggleTreeFilter");
   assert.equal(filterCalls.length, 1, "filter toggle should fire even when SVG clicked");
-  assert.equal(filterCalls[0].args[0], "severity");
-  assert.equal(filterCalls[0].args[1], "critical");
-  assert.equal(filterCalls[0].args[2], false, "active button should toggle to disabled");
+  assert.equal(filterCalls[0].args[0], "severity_critical", "combined token in args[0]");
+  assert.equal(filterCalls[0].args[1], false, "active button should toggle to disabled");
 });
 
 test("expand all button expands all collapsible nodes", async () => {

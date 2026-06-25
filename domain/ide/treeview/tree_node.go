@@ -101,11 +101,36 @@ type MixedSeverity struct {
 	Low      bool `json:"low,omitempty"`
 }
 
+// MixedIssueViewOptions marks, per issue-view option, whether the open folders
+// disagree on that option. Analogous to MixedSeverity: when folders disagree the
+// corresponding popover toggle renders as indeterminate rather than on/off.
+type MixedIssueViewOptions struct {
+	OpenIssues    bool `json:"openIssues,omitempty"`
+	IgnoredIssues bool `json:"ignoredIssues,omitempty"`
+}
+
 // TreeViewFilterState captures the current filter settings for the tree view.
 type TreeViewFilterState struct {
 	SeverityFilter   types.SeverityFilter   `json:"severityFilter"`
 	MixedSeverity    MixedSeverity          `json:"mixedSeverity,omitempty"`
 	IssueViewOptions types.IssueViewOptions `json:"issueViewOptions"`
+	// RiskScoreThreshold is the aggregated minimum-risk-score threshold across
+	// open folders (0 = "All"). When folders disagree, RiskScoreMixed is set and
+	// this carries the highest folder's threshold, so the "Mixed" slider sits at a
+	// defined position and the label can show the value.
+	RiskScoreThreshold    int                   `json:"riskScoreThreshold,omitempty"`
+	RiskScoreMixed        bool                  `json:"riskScoreMixed,omitempty"`
+	MixedIssueViewOptions MixedIssueViewOptions `json:"mixedIssueViewOptions,omitempty"`
+	// RiskScoreEnabled / IssueViewOptionsEnabled gate the two popover sections to
+	// match the server-side filter's feature flags (UseOsTestWorkflow and
+	// SnykCodeConsistentIgnores respectively). They are true when the flag is on
+	// for at least one open folder, so the UI never offers a control that filters
+	// nothing.
+	RiskScoreEnabled        bool `json:"riskScoreEnabled,omitempty"`
+	IssueViewOptionsEnabled bool `json:"issueViewOptionsEnabled,omitempty"`
+	// ShowFilterPopover gates the whole funnel button: there is no popover to open
+	// when neither section is enabled.
+	ShowFilterPopover bool `json:"showFilterPopover,omitempty"`
 }
 
 // DefaultTreeViewFilterState returns filter state with all filters enabled.

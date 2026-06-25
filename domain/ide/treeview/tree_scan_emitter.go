@@ -25,6 +25,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/scanstates"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -130,50 +131,79 @@ func (e *TreeScanStateEmitter) renderPending() {
 	e.notifier.Send(types.TreeView{TreeViewHtml: html, TotalIssues: data.TotalIssues})
 }
 
-// ResolveFilterState resolves the toolbar's severity + issue-view state. The tree's
-// filter toolbar is workspace-wide but the tree shows every open folder, each
-// filtered by its own per-folder config (UserFolderKey > remote > user-global >
-// default) — the same source the issue filtering uses. So the toolbar reflects
-// the aggregate across all open folders: a severity is shown/hidden when every
-// folder agrees, or marked "mixed" when they disagree. Falls back to the global
-// value when there is no folder or resolver. (IDE-1866 / IDE-1996)
+// filterState resolves the toolbar's filter state for this emitter's config.
+// Thin wrapper over ResolveFilterState so the scan-emitter and the snyk.getTreeView
+// command share one implementation (and therefore render the same toolbar).
+func (e *TreeScanStateEmitter) filterState(ws types.Workspace) TreeViewFilterState {
+	return ResolveFilterState(e.conf, ws)
+}
+
+// ResolveFilterState resolves the toolbar's severity, risk-score and issue-view
+// state. The filter toolbar is workspace-wide but the tree shows every open
+// folder, each filtered by its own per-folder config (UserFolderKey > remote >
+// user-global > default) — the same source the issue filtering uses. So the
+// toolbar reflects the aggregate across all open folders: a value is shown when
+// every folder agrees, or marked "mixed" when they disagree. Falls back to the
+// global value when there is no folder or resolver. (IDE-1866 / IDE-1996)
+//
+// Risk score and issue-view options are each gated by a feature flag — the same
+// flags the server-side filter checks (see folder.buildFilterContext). A folder's
+// value is only folded into the aggregate when its flag is on, so a folder that
+// doesn't filter on that dimension doesn't register as "disagreeing". The section
+// is shown when the flag is on for at least one open folder.
 //
 // Shared by the push path (TreeScanStateEmitter) and the pull path
 // (snyk.getTreeView) so a tree fetched on panel-open matches one pushed on a scan.
 func ResolveFilterState(conf configuration.Configuration, ws types.Workspace) TreeViewFilterState {
 	severity := config.GetFilterSeverity(conf)
 	issueView := config.GetIssueViewOptions(conf)
-	var mixed MixedSeverity
+	var mixedSeverity MixedSeverity
+	var mixedIssueView MixedIssueViewOptions
+	var riskScore int
+	var riskScoreMixed bool
+	var riskScoreEnabled, issueViewEnabled bool
 
 	if ws != nil {
 		var severities []types.SeverityFilter
-		var firstFC *types.FolderConfig
+		var issueViews []types.IssueViewOptions
+		var riskScores []int
 		for _, f := range ws.Folders() {
 			fc := f.FolderConfigReadOnly()
 			if fc == nil || fc.ConfigResolver == nil {
 				continue
 			}
-			if firstFC == nil {
-				firstFC = fc
-			}
 			severities = append(severities, fc.ConfigResolver.FilterSeverityForFolder(fc))
+
+			if featureflag.UseOsTestWorkflow(fc) {
+				riskScoreEnabled = true
+				riskScores = append(riskScores, fc.ConfigResolver.RiskScoreThresholdForFolder(fc))
+			}
+			if fc.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores) {
+				issueViewEnabled = true
+				issueViews = append(issueViews, fc.ConfigResolver.IssueViewOptionsForFolder(fc))
+			}
 		}
 		if len(severities) > 0 {
-			severity, mixed = aggregateSeverityFilters(severities)
+			severity, mixedSeverity = aggregateSeverityFilters(severities)
 		}
-		if firstFC != nil {
-			// TODO: IssueViewOptions currently reads from the first folder only
-			// (firstFC), unlike severity which is aggregated across all folders.
-			// When IVO toolbar buttons land (separate branch, same release),
-			// aggregate into a MixedIssueViewOptions analogous to MixedSeverity.
-			issueView = firstFC.ConfigResolver.IssueViewOptionsForFolder(firstFC)
+		if len(issueViews) > 0 {
+			issueView, mixedIssueView = aggregateIssueViewOptions(issueViews)
+		}
+		if len(riskScores) > 0 {
+			riskScore, riskScoreMixed = aggregateRiskScores(riskScores)
 		}
 	}
 
 	return TreeViewFilterState{
-		SeverityFilter:   severity,
-		MixedSeverity:    mixed,
-		IssueViewOptions: issueView,
+		SeverityFilter:          severity,
+		MixedSeverity:           mixedSeverity,
+		IssueViewOptions:        issueView,
+		RiskScoreThreshold:      riskScore,
+		RiskScoreMixed:          riskScoreMixed,
+		MixedIssueViewOptions:   mixedIssueView,
+		RiskScoreEnabled:        riskScoreEnabled,
+		IssueViewOptionsEnabled: issueViewEnabled,
+		ShowFilterPopover:       riskScoreEnabled || issueViewEnabled,
 	}
 }
 
@@ -200,4 +230,58 @@ func aggregateSeverityFilters(filters []types.SeverityFilter) (types.SeverityFil
 		}
 	}
 	return agg, mixed
+}
+
+// aggregateIssueViewOptions reduces per-folder issue-view options to a single
+// toolbar state plus a per-option "mixed" marker, analogous to
+// aggregateSeverityFilters.
+func aggregateIssueViewOptions(opts []types.IssueViewOptions) (types.IssueViewOptions, MixedIssueViewOptions) {
+	agg := opts[0]
+	var mixed MixedIssueViewOptions
+	for _, o := range opts[1:] {
+		if o.OpenIssues != agg.OpenIssues {
+			mixed.OpenIssues = true
+		}
+		if o.IgnoredIssues != agg.IgnoredIssues {
+			mixed.IgnoredIssues = true
+		}
+	}
+	// For a mixed option the agreed value is undefined, so pin the rendered
+	// (indeterminate) checkbox to false rather than opts[0]'s arbitrary value.
+	// Clicking an indeterminate checkbox clears the indeterminate flag and flips
+	// checked to its opposite (consistent across Chromium/Firefox/WebKit), so a
+	// rendered value of false means the first click resolves to checked/true —
+	// i.e. "enable everywhere". This both makes the direction deterministic and
+	// follows our chosen convention that clicking a dashed checkbox turns it on
+	// for all (rather than each option resolving in its own default direction).
+	// Note this differs from aggregateRiskScores, which pins a mixed slider to
+	// the highest threshold so it sits at a meaningful position; a checkbox has
+	// no equivalent ordering, so we optimize for the first-click direction.
+	if mixed.OpenIssues {
+		agg.OpenIssues = false
+	}
+	if mixed.IgnoredIssues {
+		agg.IgnoredIssues = false
+	}
+	return agg, mixed
+}
+
+// aggregateRiskScores reduces per-folder risk-score thresholds to the toolbar's
+// value plus a "mixed" marker (true when the folders disagree). When folders
+// disagree it returns the HIGHEST threshold, so the "mixed" slider sits at a
+// meaningful, defined position (and the label can show it) rather than an
+// arbitrary folder's value; the first change re-aligns all folders. When all
+// folders agree the agreed value is returned — which is also the maximum.
+func aggregateRiskScores(scores []int) (int, bool) {
+	maxScore := scores[0]
+	mixed := false
+	for _, s := range scores[1:] {
+		if s != scores[0] {
+			mixed = true
+		}
+		if s > maxScore {
+			maxScore = s
+		}
+	}
+	return maxScore, mixed
 }
