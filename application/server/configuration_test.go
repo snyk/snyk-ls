@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -61,6 +62,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 var sampleSettings = map[string]*types.ConfigSetting{
@@ -716,6 +718,152 @@ func Test_UpdateSettings(t *testing.T) {
 	})
 }
 
+// Test_updateFolderConfig_ResetClearsUserOverrides_EndToEnd drives the full HTML-save reset path:
+// the IDE plugin maps each flat-null folder field to {Value:nil, Changed:true}, and UpdateSettings
+// must Unset the user:folder: override so the effective value falls back to org/LDX/default.
+// preferred_org is the special case — its reset also clears org_set_by_user, reverting to auto/global org.
+func Test_updateFolderConfig_ResetClearsUserOverrides_EndToEnd(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	deps := di.TestInit(t, engine, tokenService, nil)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	folderDir := filepath.Join(t.TempDir(), "folder")
+	require.NoError(t, initTestRepo(t, folderDir))
+	folderPath := types.FilePath(folderDir)
+
+	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
+		ctx2.DepNotifier:            deps.Notifier,
+		ctx2.DepAuthService:         deps.AuthenticationService,
+		ctx2.DepConfigResolver:      deps.ConfigResolver,
+		ctx2.DepFeatureFlagService:  deps.FeatureFlagService,
+		ctx2.DepLdxSyncService:      deps.LdxSyncService,
+		ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
+	})
+	resolver := testutil.DefaultConfigResolver(engine)
+
+	// Exercise the production code path: updateFolderOrgIfNeeded is gated on this flag.
+	conf.Set(types.SettingIsLspInitialized, true)
+
+	// Step 1: seed user overrides on the folder (the "user edited overrides" state).
+	seed := []types.LspFolderConfig{{
+		FolderPath: folderPath,
+		Settings: map[string]*types.ConfigSetting{
+			types.SettingSnykCodeEnabled:       {Value: true, Changed: true},
+			types.SettingScanAutomatic:         {Value: true, Changed: true},
+			types.SettingPreferredOrg:          {Value: "my-folder-org", Changed: true},
+			types.SettingAdditionalParameters:  {Value: []string{"--all-projects"}, Changed: true},
+			types.SettingAdditionalEnvironment: {Value: "FOO=bar", Changed: true},
+			types.SettingScanCommandConfig: {Value: map[product.Product]types.ScanCommandConfig{
+				product.ProductOpenSource: {PreScanCommand: "echo pre"},
+			}, Changed: true},
+		},
+	}}
+	UpdateSettings(ctx, conf, engine, logger, map[string]*types.ConfigSetting{}, seed, analytics.TriggerSourceTest, resolver)
+
+	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingSnykCodeEnabled), "snyk_code_enabled override seeded")
+	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingScanAutomatic), "scan_automatic override seeded")
+	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingPreferredOrg), "preferred_org override seeded")
+	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingOrgSetByUser), "org_set_by_user set alongside preferred_org")
+	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingAdditionalParameters), "additional_parameters override seeded")
+	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingAdditionalEnvironment), "additional_environment override seeded")
+	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingScanCommandConfig), "scan_command_config override seeded")
+
+	seededFC := config.GetFolderConfigFromEngine(engine, resolver, folderPath, logger)
+	require.Equal(t, "my-folder-org", seededFC.PreferredOrg(), "seeded preferred_org is effective")
+
+	// Step 2: simulate the HTML-save reset — the IDE maps flat-null to {Value:nil, Changed:true}.
+	reset := []types.LspFolderConfig{{
+		FolderPath: folderPath,
+		Settings: map[string]*types.ConfigSetting{
+			types.SettingSnykCodeEnabled:       {Value: nil, Changed: true},
+			types.SettingScanAutomatic:         {Value: nil, Changed: true},
+			types.SettingPreferredOrg:          {Value: nil, Changed: true},
+			types.SettingAdditionalParameters:  {Value: nil, Changed: true},
+			types.SettingAdditionalEnvironment: {Value: nil, Changed: true},
+			types.SettingScanCommandConfig:     {Value: nil, Changed: true},
+		},
+	}}
+	UpdateSettings(ctx, conf, engine, logger, map[string]*types.ConfigSetting{}, reset, analytics.TriggerSourceTest, resolver)
+
+	// Step 3: every user:folder: override is cleared and the underlying key is no longer set.
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingSnykCodeEnabled), "snyk_code_enabled override cleared")
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingScanAutomatic), "scan_automatic override cleared")
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingPreferredOrg), "preferred_org override cleared")
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingOrgSetByUser), "org_set_by_user cleared by org reset")
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingAdditionalParameters), "additional_parameters override cleared")
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingAdditionalEnvironment), "additional_environment override cleared")
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingScanCommandConfig), "scan_command_config override cleared")
+
+	// After Unset the key no longer holds an active *LocalConfigField override (Unset writes a
+	// tombstone, so conf.IsSet may still report true — HasUserOverride is the real contract).
+	fp := string(types.PathKey(folderPath))
+	for _, key := range []string{types.SettingSnykCodeEnabled, types.SettingPreferredOrg, types.SettingOrgSetByUser} {
+		got := conf.Get(configresolver.UserFolderKey(fp, key))
+		lf, ok := got.(*configresolver.LocalConfigField)
+		assert.False(t, ok && lf != nil && lf.Changed, "no active override should remain for %s after reset", key)
+	}
+
+	// Effective org reverts to auto/global (empty in this unit setup with no global org).
+	resetFC := config.GetFolderConfigFromEngine(engine, resolver, folderPath, logger)
+	assert.False(t, resetFC.OrgSetByUser(), "OrgSetByUser reverts to false after reset")
+	assert.Empty(t, resetFC.PreferredOrg(), "PreferredOrg falls back after reset")
+}
+
+// Test_updateFolderConfig_AutoDeterminedOrgChangeAfterReset guards the else-if branch in
+// updateFolderConfigOrg: after a reset clears both overrides, a subsequent update that
+// changes only AutoDeterminedOrg must not re-add preferred_org / org_set_by_user.
+func Test_updateFolderConfig_AutoDeterminedOrgChangeAfterReset(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	deps := di.TestInit(t, engine, tokenService, nil)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	folderDir := filepath.Join(t.TempDir(), "folder")
+	require.NoError(t, initTestRepo(t, folderDir))
+	folderPath := types.FilePath(folderDir)
+
+	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
+		ctx2.DepNotifier:            deps.Notifier,
+		ctx2.DepAuthService:         deps.AuthenticationService,
+		ctx2.DepConfigResolver:      deps.ConfigResolver,
+		ctx2.DepFeatureFlagService:  deps.FeatureFlagService,
+		ctx2.DepLdxSyncService:      deps.LdxSyncService,
+		ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
+	})
+	resolver := testutil.DefaultConfigResolver(engine)
+	conf.Set(types.SettingIsLspInitialized, true)
+
+	// Seed a folder org override, then reset it.
+	seed := []types.LspFolderConfig{{
+		FolderPath: folderPath,
+		Settings: map[string]*types.ConfigSetting{
+			types.SettingPreferredOrg: {Value: "my-folder-org", Changed: true},
+		},
+	}}
+	UpdateSettings(ctx, conf, engine, logger, map[string]*types.ConfigSetting{}, seed, analytics.TriggerSourceTest, resolver)
+	require.True(t, types.HasUserOverride(conf, folderPath, types.SettingPreferredOrg))
+
+	reset := []types.LspFolderConfig{{
+		FolderPath: folderPath,
+		Settings:   map[string]*types.ConfigSetting{types.SettingPreferredOrg: {Value: nil, Changed: true}},
+	}}
+	UpdateSettings(ctx, conf, engine, logger, map[string]*types.ConfigSetting{}, reset, analytics.TriggerSourceTest, resolver)
+	require.False(t, types.HasUserOverride(conf, folderPath, types.SettingPreferredOrg), "precondition: override cleared")
+	require.False(t, types.HasUserOverride(conf, folderPath, types.SettingOrgSetByUser), "precondition: org_set_by_user cleared")
+
+	// Simulate an AutoDeterminedOrg change (e.g. from LDX-sync) while org-user settings stay empty.
+	// This triggers the else-if !currentSnap.OrgSetByUser branch in updateFolderConfigOrg.
+	types.SetAutoDeterminedOrg(conf, folderPath, "ldx-org")
+
+	noop := []types.LspFolderConfig{{FolderPath: folderPath, Settings: map[string]*types.ConfigSetting{}}}
+	UpdateSettings(ctx, conf, engine, logger, map[string]*types.ConfigSetting{}, noop, analytics.TriggerSourceTest, resolver)
+
+	// The reset keys must remain absent — the AutoDeterminedOrg change must not re-add them.
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingPreferredOrg), "preferred_org must stay absent after AutoDeterminedOrg change")
+	assert.False(t, types.HasUserOverride(conf, folderPath, types.SettingOrgSetByUser), "org_set_by_user must stay absent after AutoDeterminedOrg change")
+}
+
 func initTestRepo(t *testing.T, tempDir string) error {
 	t.Helper()
 	repo1, err := git.PlainInit(tempDir, false)
@@ -916,6 +1064,9 @@ func setupFolderConfigTest(t *testing.T) *folderConfigTestSetup {
 	// Register mock default value functions for org config to avoid API calls in tests
 	engineConfig.AddDefaultValue(configuration.ORGANIZATION, configuration.ImmutableDefaultValueFunction("test-default-org-uuid"))
 	engineConfig.AddDefaultValue(configuration.ORGANIZATION_SLUG, configuration.ImmutableDefaultValueFunction("test-default-org-slug"))
+
+	// Mark as initialized since tests using this setup simulate post-initialization config updates
+	engineConfig.Set(types.SettingIsLspInitialized, true)
 
 	folderPath := types.FilePath(t.TempDir())
 	err := initTestRepo(t, string(folderPath))
@@ -1473,20 +1624,10 @@ func Test_FC105_WriteSettings_OldFormat_ProcessesSettingsStruct(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
 
-	mockLdx := mock_command.NewMockLdxSyncService(ctrl)
-	mockLdx.EXPECT().
-		RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Times(1)
-	deps := di.TestInit(t, engine, tokenService, &di.Dependencies{
-		LdxSyncService: mockLdx,
-	})
+	deps := di.TestInit(t, engine, tokenService, nil)
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
-		ctx2.DepLdxSyncService:      mockLdx,
-		ctx2.DepNotifier:            notification.NewMockNotifier(),
-		ctx2.DepAuthService:         deps.AuthenticationService,
-		ctx2.DepFeatureFlagService:  deps.FeatureFlagService,
-		ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
-		ctx2.DepConfigResolver:      testutil.DefaultConfigResolver(engine),
+		ctx2.DepNotifier:    notification.NewMockNotifier(),
+		ctx2.DepAuthService: deps.AuthenticationService,
 	})
 
 	folderPath := types.FilePath(t.TempDir())
@@ -1744,6 +1885,8 @@ func Test_updateFolderConfig_UserSetOrg_BlankedPreferredOrg_UsesGlobalOrg(t *tes
 	setup.createStoredConfig("user-chosen-org", true)
 	// Store an auto-determined org to confirm it is NOT used after blanking
 	types.SetAutoDeterminedOrg(setup.engine.GetConfiguration(), setup.folderPath, "auto-determined-org")
+	// Set a global org so SettingLastSetOrganization is populated
+	config.SetOrganization(setup.engine.GetConfiguration(), "global-org-id")
 
 	// User blanks the preferred org (clears the field in config dialog)
 	folderConfigs := []types.LspFolderConfig{
@@ -2205,9 +2348,7 @@ func Test_applyOrganization_ResetsSummaryPanelOnOrgChange(t *testing.T) {
 		emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
 		realAgg := scanstates.NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, testutil.DefaultConfigResolver(engine), engine)
 		mockNotifier := notification.NewMockNotifier()
-		mockLdxSync := mock_command.NewMockLdxSyncService(ctrl)
-		mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-		di.TestInit(t, engine, tokenService, &di.Dependencies{ScanStateAggregator: realAgg, Notifier: mockNotifier, LdxSyncService: mockLdxSync})
+		di.TestInit(t, engine, tokenService, &di.Dependencies{ScanStateAggregator: realAgg, Notifier: mockNotifier})
 
 		tmpDir := types.FilePath(t.TempDir())
 		require.NoError(t, initTestRepo(t, string(tmpDir)))
@@ -2228,11 +2369,9 @@ func Test_applyOrganization_ResetsSummaryPanelOnOrgChange(t *testing.T) {
 		config.SetOrganization(engine.GetConfiguration(), oldOrg)
 		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
 			ctx2.DepNotifier:            mockNotifier,
-			ctx2.DepLdxSyncService:      mockLdxSync,
 			ctx2.DepScanStateAggregator: realAgg,
 			ctx2.DepAuthService:         di.AuthenticationService(),
 			ctx2.DepFeatureFlagService:  di.FeatureFlagService(),
-			ctx2.DepConfigResolver:      testutil.DefaultConfigResolver(engine),
 		})
 		return engine, folderPath, realAgg, ctx
 	}
@@ -2809,4 +2948,762 @@ func TestApplyUserSettingsPath_IgnoresUnchanged(t *testing.T) {
 	applyUserSettingsPath(conf, settings)
 
 	assert.Equal(t, "/original", types.GetGlobalString(conf, types.SettingUserSettingsPath))
+}
+
+// Test_ApplyOrganization_LDXSyncRefreshesForGlobalOrgFallback verifies LDX-Sync refresh behavior when global org changes.
+// Tests three scenarios: refresh when folders use global fallback, no refresh when folders have
+// explicit org, and no refresh when org is unchanged.
+func Test_ApplyOrganization_LDXSyncRefreshesForGlobalOrgFallback(t *testing.T) {
+	originalGlobalOrg := "original-global-org"
+	testCases := []struct {
+		name                string
+		preferredOrg        string
+		newGlobalOrg        string
+		expectFolderRefresh bool
+	}{
+		{
+			// When the global org changes and there are folders with OrgSetByUser=true and PreferredOrg="",
+			// LDX-Sync refresh is triggered for those folders.
+			name:                "TriggersRefreshForFoldersUsingGlobalOrgFallback",
+			preferredOrg:        "",
+			newGlobalOrg:        "new-global-org-uuid",
+			expectFolderRefresh: true,
+		},
+		{
+			// When the global org changes but no folders use the global org fallback,
+			// LDX-Sync refresh is NOT triggered.
+			name:                "NoRefreshWhenNoFoldersDependOnGlobalOrg",
+			preferredOrg:        "folder-specific-org",
+			newGlobalOrg:        "new-global-org-uuid",
+			expectFolderRefresh: false,
+		},
+		{
+			// When the org is set to the same value, no refresh is triggered.
+			name:                "NoRefreshWhenOrgUnchanged",
+			preferredOrg:        "",
+			newGlobalOrg:        originalGlobalOrg,
+			expectFolderRefresh: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			setup := setupFolderConfigTest(t)
+
+			// Clear the mock default value function so we can test actual org changes
+			setup.engineConfig.AddDefaultValue(configuration.ORGANIZATION, nil)
+
+			// Setup: Folder config with OrgSetByUser=true, PreferredOrg as specified
+			setup.createStoredConfig(tc.preferredOrg, true)
+
+			// Setup: Mock LDX-Sync service to track refresh calls
+			ctrl := gomock.NewController(t)
+			t.Cleanup(ctrl.Finish)
+			mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
+
+			// Setup: Attach mock LdxSyncService and notifier to a new context
+			ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
+				ctx2.DepLdxSyncService: mockLdxSyncService,
+				ctx2.DepNotifier:       notification.NewMockNotifier(),
+			})
+
+			// Setup: Set initial global org and mark LS as initialized
+			config.SetOrganization(setup.engineConfig, originalGlobalOrg)
+			setup.engineConfig.Set(types.SettingIsLspInitialized, true)
+
+			// Expect: RefreshConfigFromLdxSync should be called as specified
+			mockLdxSyncService.EXPECT().
+				RefreshConfigFromLdxSync(gomock.Any(), setup.engineConfig, setup.engine, setup.logger, gomock.Any(), gomock.Any()).
+				Times(util.Ternary(tc.expectFolderRefresh, 1, 0)).
+				Do(func(_ context.Context, _ configuration.Configuration, _ workflow.Engine, _ *zerolog.Logger, folders []types.Folder, _ any) {
+					assert.Len(t, folders, 1, "Should refresh exactly one folder")
+					assert.Equal(t, setup.folderPath, folders[0].Path(), "Should refresh the folder using global org fallback")
+				})
+
+			// Test: Change global org
+			applyOrganization(ctx, setup.engineConfig, setup.engine, setup.logger, map[string]*types.ConfigSetting{
+				types.SettingOrganization: {Value: tc.newGlobalOrg, Changed: true},
+			}, analytics.TriggerSourceTest, testutil.DefaultConfigResolver(setup.engine))
+		})
+	}
+}
+
+func Test_applyToken_NilEntry(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	ctx := testCtx(t, t.Context(), engine, tokenService)
+	authService := mustAuthenticationServiceFromContext(ctx)
+
+	// Capture the token before the call to detect any unwanted change.
+	tokenBefore := config.GetToken(engine.GetConfiguration())
+
+	// Calling applyToken with a nil map entry must NOT panic.
+	require.NotPanics(t, func() {
+		applyToken(map[string]*types.ConfigSetting{types.SettingToken: nil}, authService)
+	})
+
+	// UpdateCredentials must NOT have been called: the token must remain unchanged.
+	require.Equal(t, tokenBefore, config.GetToken(engine.GetConfiguration()), "token must not change when map entry is nil")
+}
+
+// Test_UpdateSettings_AlwaysSendsLspConfiguration previously verified that
+// UpdateSettings sent $/snyk.configuration unconditionally (IDE-1954).
+// That unconditional send caused an infinite refresh loop: a no-op save (e.g.
+// a write-only token field that never appears in BuildLspConfiguration) would
+// trigger a re-render, which auto-saved again, echo-ing forever (IDE-2149).
+// The test below (Test_UpdateSettings_SendsLspConfigurationOnlyWhenEffectiveConfigChanges)
+// is the corrected version of this assertion.
+//
+// The old assertion — "a token-only change must still emit $/snyk.configuration" —
+// was wrong: the token is a write-only field excluded from BuildLspConfiguration,
+// so before and after are identical and no notification should be sent.
+func Test_UpdateSettings_AlwaysSendsLspConfiguration(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(types.SettingIsLspInitialized, true)
+
+	ctx := testCtx(t, t.Context(), engine, tokenService)
+
+	// A real (non-write-only) machine-scoped setting change must still emit
+	// $/snyk.configuration. SettingProxyInsecure is machine-scoped, defaults to
+	// false, and is NOT write-only, so it appears in BuildLspConfiguration output.
+	settings := map[string]*types.ConfigSetting{
+		types.SettingProxyInsecure: {Value: true, Changed: true},
+	}
+	UpdateSettings(ctx, conf, engine, engine.GetLogger(), settings, nil, analytics.TriggerSourceIDE, testutil.DefaultConfigResolver(engine))
+
+	// Extract the notifier that testCtx placed in context and check sent messages.
+	n, ok := notifierFromContext(ctx)
+	require.True(t, ok, "notifier must be present in context")
+	mockNotifier, ok := n.(*notification.MockNotifier)
+	require.True(t, ok, "notifier must be a *notification.MockNotifier")
+
+	var foundLspConfig bool
+	for _, msg := range mockNotifier.SentMessages() {
+		if _, ok := msg.(types.LspConfigurationParam); ok {
+			foundLspConfig = true
+			break
+		}
+	}
+	require.True(t, foundLspConfig, "UpdateSettings must send a types.LspConfigurationParam when an effective config value changes")
+}
+
+// Test_UpdateSettings_SendsLspConfigurationOnlyWhenEffectiveConfigChanges is the
+// integration test for IDE-2149: guard the $/snyk.configuration echo so that a
+// no-op workspace/didChangeConfiguration (one that results in an identical
+// effective configuration) does NOT send the notification, breaking the
+// infinite-refresh loop in the IDE HTML settings page.
+//
+// The loop was:
+//  1. User clicks Snyk Code checkbox (SAST-gated; effective value stays false).
+//  2. UpdateSettings unconditionally sends $/snyk.configuration.
+//  3. IDE re-renders the HTML page from the notification.
+//  4. Auto-save fires again → another no-op didChangeConfiguration → goto 2.
+func Test_UpdateSettings_SendsLspConfigurationOnlyWhenEffectiveConfigChanges(t *testing.T) {
+	t.Run("no-op change emits zero $/snyk.configuration notifications", func(t *testing.T) {
+		engine, tokenService := testutil.UnitTestWithEngine(t)
+		conf := engine.GetConfiguration()
+		conf.Set(types.SettingIsLspInitialized, true)
+		cr := testutil.DefaultConfigResolver(engine)
+
+		ctx := testCtx(t, t.Context(), engine, tokenService)
+
+		// Token is a write-only setting; it is excluded from BuildLspConfiguration.
+		// Sending only a token change must not echo $/snyk.configuration because
+		// the effective (visible) configuration is identical before and after.
+		settings := map[string]*types.ConfigSetting{
+			types.SettingToken: {Value: "new-token", Changed: true},
+		}
+		UpdateSettings(ctx, conf, engine, engine.GetLogger(), settings, nil, analytics.TriggerSourceIDE, cr)
+
+		n, ok := notifierFromContext(ctx)
+		require.True(t, ok)
+		mockNotifier, ok := n.(*notification.MockNotifier)
+		require.True(t, ok)
+
+		var lspConfigCount int
+		for _, msg := range mockNotifier.SentMessages() {
+			if _, ok := msg.(types.LspConfigurationParam); ok {
+				lspConfigCount++
+			}
+		}
+		require.Equal(t, 0, lspConfigCount,
+			"a no-op save (write-only token field) must not send $/snyk.configuration — "+
+				"sending unconditionally caused the IDE HTML settings page infinite-refresh loop (IDE-2149)")
+	})
+
+	t.Run("real effective-config change emits exactly one $/snyk.configuration notification", func(t *testing.T) {
+		engine, tokenService := testutil.UnitTestWithEngine(t)
+		conf := engine.GetConfiguration()
+		conf.Set(types.SettingIsLspInitialized, true)
+		cr := testutil.DefaultConfigResolver(engine)
+
+		ctx := testCtx(t, t.Context(), engine, tokenService)
+
+		// SettingProxyInsecure is machine-scoped and NOT write-only, so it
+		// appears in the BuildLspConfiguration output. Its default is false;
+		// setting it to true changes the effective LspConfigurationParam that
+		// the IDE receives via $/snyk.configuration.
+		settings := map[string]*types.ConfigSetting{
+			types.SettingProxyInsecure: {Value: true, Changed: true},
+		}
+		UpdateSettings(ctx, conf, engine, engine.GetLogger(), settings, nil, analytics.TriggerSourceIDE, cr)
+
+		n, ok := notifierFromContext(ctx)
+		require.True(t, ok)
+		mockNotifier, ok := n.(*notification.MockNotifier)
+		require.True(t, ok)
+
+		var lspConfigCount int
+		for _, msg := range mockNotifier.SentMessages() {
+			if _, ok := msg.(types.LspConfigurationParam); ok {
+				lspConfigCount++
+			}
+		}
+		require.Equal(t, 1, lspConfigCount,
+			"a real effective-config change must emit exactly one $/snyk.configuration notification")
+	})
+}
+
+// Test_UpdateSettings_FolderConfigChange_EmitsExactlyOneLspConfiguration is the
+// integration test for the double-send bug: when workspace/didChangeConfiguration
+// carries a real folder-config change (e.g. baseBranch), the IDE must receive
+// EXACTLY ONE $/snyk.configuration notification — not two.
+//
+// Before the fix, UpdateSettings emitted two:
+//   - one from sendFolderConfigUpdateIfNeeded (inside processFolderConfigs), and
+//   - one from the outer DeepEqual guard (in UpdateSettings itself).
+//
+// The fix removes sendFolderConfigUpdateIfNeeded, making the outer guard the
+// single emission point. The outer guard is strictly more correct: it sends only
+// when the IDE-visible payload (which already includes folder configs via
+// BuildLspConfiguration) actually changes, and it is gated on lspInitialized
+// (matching the semantics of didChangeConfiguration = post-init).
+func Test_UpdateSettings_FolderConfigChange_EmitsExactlyOneLspConfiguration(t *testing.T) {
+	t.Run("real folder-config change emits exactly one $/snyk.configuration", func(t *testing.T) {
+		engine, tokenService := testutil.UnitTestWithEngine(t)
+		cr := testutil.DefaultConfigResolver(engine)
+		conf := engine.GetConfiguration()
+		conf.Set(types.SettingIsLspInitialized, true)
+
+		mockNotifier := notification.NewMockNotifier()
+		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
+			ctx2.DepNotifier:            mockNotifier,
+			ctx2.DepAuthService:         di.TestInit(t, engine, tokenService, &di.Dependencies{Notifier: mockNotifier}).AuthenticationService,
+			ctx2.DepFeatureFlagService:  di.FeatureFlagService(),
+			ctx2.DepConfigResolver:      cr,
+			ctx2.DepLdxSyncService:      command.NewLdxSyncService(cr),
+			ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
+		})
+
+		folderPath := types.FilePath(t.TempDir())
+		require.NoError(t, initTestRepo(t, string(folderPath)))
+		_, _ = workspaceutil.SetupWorkspace(t, engine, folderPath)
+
+		// Change the base branch — a folder-scoped setting that appears in
+		// buildLspFolderConfigs and therefore in the outer DeepEqual snapshot.
+		folderConfigs := []types.LspFolderConfig{
+			{
+				FolderPath: folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingBaseBranch: {Value: "new-branch", Changed: true},
+				},
+			},
+		}
+		UpdateSettings(ctx, conf, engine, engine.GetLogger(), nil, folderConfigs, analytics.TriggerSourceIDE, cr)
+
+		var lspConfigCount int
+		for _, msg := range mockNotifier.SentMessages() {
+			if _, ok := msg.(types.LspConfigurationParam); ok {
+				lspConfigCount++
+			}
+		}
+		require.Equal(t, 1, lspConfigCount,
+			"a folder-config change must emit EXACTLY ONE $/snyk.configuration — "+
+				"two indicates the double-send bug (inner sendFolderConfigUpdateIfNeeded + outer DeepEqual guard)")
+	})
+
+	t.Run("no-op folder-config change emits zero $/snyk.configuration", func(t *testing.T) {
+		engine, tokenService := testutil.UnitTestWithEngine(t)
+		cr := testutil.DefaultConfigResolver(engine)
+		conf := engine.GetConfiguration()
+		conf.Set(types.SettingIsLspInitialized, true)
+
+		mockNotifier := notification.NewMockNotifier()
+		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
+			ctx2.DepNotifier:            mockNotifier,
+			ctx2.DepAuthService:         di.TestInit(t, engine, tokenService, &di.Dependencies{Notifier: mockNotifier}).AuthenticationService,
+			ctx2.DepFeatureFlagService:  di.FeatureFlagService(),
+			ctx2.DepConfigResolver:      cr,
+			ctx2.DepLdxSyncService:      command.NewLdxSyncService(cr),
+			ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
+		})
+
+		folderPath := types.FilePath(t.TempDir())
+		require.NoError(t, initTestRepo(t, string(folderPath)))
+		_, _ = workspaceutil.SetupWorkspace(t, engine, folderPath)
+
+		// First call: seed the base branch so the config is already stored.
+		UpdateSettings(ctx, conf, engine, engine.GetLogger(), nil, []types.LspFolderConfig{
+			{
+				FolderPath: folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingBaseBranch: {Value: "same-branch", Changed: true},
+				},
+			},
+		}, analytics.TriggerSourceIDE, cr)
+
+		// Reset notifier so we only count what the second (no-op) call sends.
+		mockNotifier2 := notification.NewMockNotifier()
+		ctx2Deps := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
+			ctx2.DepNotifier:            mockNotifier2,
+			ctx2.DepAuthService:         di.AuthenticationService(),
+			ctx2.DepFeatureFlagService:  di.FeatureFlagService(),
+			ctx2.DepConfigResolver:      cr,
+			ctx2.DepLdxSyncService:      command.NewLdxSyncService(cr),
+			ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
+		})
+
+		// Second call: send the exact same baseBranch — no effective change.
+		UpdateSettings(ctx2Deps, conf, engine, engine.GetLogger(), nil, []types.LspFolderConfig{
+			{
+				FolderPath: folderPath,
+				Settings: map[string]*types.ConfigSetting{
+					types.SettingBaseBranch: {Value: "same-branch", Changed: true},
+				},
+			},
+		}, analytics.TriggerSourceIDE, cr)
+
+		var lspConfigCount int
+		for _, msg := range mockNotifier2.SentMessages() {
+			if _, ok := msg.(types.LspConfigurationParam); ok {
+				lspConfigCount++
+			}
+		}
+		require.Equal(t, 0, lspConfigCount,
+			"a no-op folder-config change (same value resent) must not emit $/snyk.configuration")
+	})
+}
+
+func TestApplyEnvironment_PersistsGlobalUser(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	// t.Setenv registers cleanup that restores these to "" on test end, so every key we
+	// os.Setenv inside applyEnvironment is cleaned up without a manual t.Cleanup/Unsetenv.
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_X", "")
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_Y", "")
+
+	settings := map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "SNYK_TEST_ADDITIONAL_ENV_X=hello;SNYK_TEST_ADDITIONAL_ENV_Y=world", Changed: true},
+	}
+	applyEnvironment(conf, logger, settings)
+
+	// os.Setenv side effect
+	assert.Equal(t, "hello", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_X"))
+	assert.Equal(t, "world", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_Y"))
+
+	// Persisted to config for dialog pre-population
+	assert.Equal(t, "SNYK_TEST_ADDITIONAL_ENV_X=hello;SNYK_TEST_ADDITIONAL_ENV_Y=world", types.GetGlobalString(conf, types.SettingAdditionalEnvironment))
+}
+
+func TestApplyEnvironment_ClearsPersistedValue(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_CLEAR", "")
+
+	// Seed a prior value (both persisted and applied to the process env).
+	applyEnvironment(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "SNYK_TEST_ADDITIONAL_ENV_CLEAR=set", Changed: true},
+	})
+	assert.Equal(t, "set", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_CLEAR"))
+	assert.Equal(t, "SNYK_TEST_ADDITIONAL_ENV_CLEAR=set", types.GetGlobalString(conf, types.SettingAdditionalEnvironment))
+
+	// User clears the field: {Value: "", Changed: true}.
+	applyEnvironment(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "", Changed: true},
+	})
+
+	// Persisted value is cleared so the dialog repopulates blank.
+	assert.Equal(t, "", types.GetGlobalString(conf, types.SettingAdditionalEnvironment))
+	// And the previously-applied var is removed from the process env.
+	_, present := os.LookupEnv("SNYK_TEST_ADDITIONAL_ENV_CLEAR")
+	assert.False(t, present, "cleared env var should be unset from the process env")
+}
+
+func TestApplyEnvironment_UnchangedFieldNoOp(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	// Seed a persisted value, then apply settings where the field is absent / not Changed.
+	types.SetGlobalUser(conf, types.SettingAdditionalEnvironment, "PRESERVED=1")
+
+	applyEnvironment(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "ignored", Changed: false},
+	})
+
+	// Not Changed -> settingStr returns ok=false -> persisted value is left untouched.
+	assert.Equal(t, "PRESERVED=1", types.GetGlobalString(conf, types.SettingAdditionalEnvironment))
+}
+
+func TestApplyEnvironment_SequentialApplyUnsetsDroppedKeys(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_A", "")
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_B", "")
+
+	applyEnvironment(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "SNYK_TEST_ADDITIONAL_ENV_A=1;SNYK_TEST_ADDITIONAL_ENV_B=2", Changed: true},
+	})
+	assert.Equal(t, "1", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_A"))
+	assert.Equal(t, "2", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_B"))
+
+	// Re-save dropping B: it must be unset from the process env, not left to leak into CLI subprocesses.
+	applyEnvironment(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "SNYK_TEST_ADDITIONAL_ENV_A=1", Changed: true},
+	})
+	assert.Equal(t, "1", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_A"))
+	_, present := os.LookupEnv("SNYK_TEST_ADDITIONAL_ENV_B")
+	assert.False(t, present, "dropped key B should be unset from the process env")
+}
+
+func TestApplyEnvironment_SkipsMalformedEntries(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_GOOD", "")
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_OK", "")
+
+	applyEnvironment(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "SNYK_TEST_ADDITIONAL_ENV_GOOD=1;BAD;SNYK_TEST_ADDITIONAL_ENV_OK=2", Changed: true},
+	})
+
+	// Well-formed entries are set; the malformed "BAD" segment (no '=') is skipped.
+	assert.Equal(t, "1", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_GOOD"))
+	assert.Equal(t, "2", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_OK"))
+	_, present := os.LookupEnv("BAD")
+	assert.False(t, present, "malformed entry should not be set as an env var")
+}
+
+func TestApplyEnvironment_ValuePreservesEquals(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	t.Setenv("SNYK_TEST_ADDITIONAL_ENV_B64", "")
+
+	// SplitN(..., "=", 2) keeps everything after the first '=' as the value (base64 padding, JWTs, ...).
+	applyEnvironment(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingAdditionalEnvironment: {Value: "SNYK_TEST_ADDITIONAL_ENV_B64=Zm9v==", Changed: true},
+	})
+
+	assert.Equal(t, "Zm9v==", os.Getenv("SNYK_TEST_ADDITIONAL_ENV_B64"))
+}
+
+// Test_ProcessConfigSettings_GlobalReset verifies the global "Project Defaults"
+// reset path: a {changed:true, value:null} payload for an org-scope global setting
+// Unsets the user override (effective value reverts to the flagset default) and
+// the entry is removed from the settings map so the typed appliers do not re-apply
+// it. Mirrors the per-folder reset coverage in TestFolderConfig_ApplyLspUpdate.
+func Test_ProcessConfigSettings_GlobalReset(t *testing.T) {
+	t.Run("reset clears bool + filter overrides and reverts to defaults", func(t *testing.T) {
+		engine, tokenService := testutil.UnitTestWithEngine(t)
+		conf := engine.GetConfiguration()
+		ctx := testCtx(t, t.Context(), engine, tokenService)
+		cr := testutil.DefaultConfigResolver(engine)
+
+		// Seed user overrides that differ from the flagset defaults.
+		types.SetGlobalUser(conf, types.SettingSnykOssEnabled, false) // default true
+		types.SetGlobalUser(conf, types.SettingSeverityFilterLow, false)
+		require.True(t, types.HasGlobalUserOverride(conf, types.SettingSnykOssEnabled))
+		require.True(t, types.HasGlobalUserOverride(conf, types.SettingSeverityFilterLow))
+
+		settings := map[string]*types.ConfigSetting{
+			types.SettingSnykOssEnabled:    {Value: nil, Changed: true},
+			types.SettingSeverityFilterLow: {Value: nil, Changed: true},
+		}
+		processConfigSettings(ctx, conf, engine, engine.GetLogger(), settings, analytics.TriggerSourceTest, cr)
+
+		assert.False(t, types.HasGlobalUserOverride(conf, types.SettingSnykOssEnabled),
+			"oss override cleared")
+		assert.True(t, types.GetGlobalBool(conf, types.SettingSnykOssEnabled),
+			"oss reverts to flagset default true")
+		assert.False(t, types.HasGlobalUserOverride(conf, types.SettingSeverityFilterLow),
+			"severity-low override cleared")
+
+		_, ossStillPresent := settings[types.SettingSnykOssEnabled]
+		_, sevStillPresent := settings[types.SettingSeverityFilterLow]
+		assert.False(t, ossStillPresent, "handled reset removed from settings map")
+		assert.False(t, sevStillPresent, "handled reset removed from settings map")
+	})
+
+	t.Run("reset and set in the same payload are independent", func(t *testing.T) {
+		engine, tokenService := testutil.UnitTestWithEngine(t)
+		conf := engine.GetConfiguration()
+		ctx := testCtx(t, t.Context(), engine, tokenService)
+		cr := testutil.DefaultConfigResolver(engine)
+
+		types.SetGlobalUser(conf, types.SettingSnykOssEnabled, false)
+
+		settings := map[string]*types.ConfigSetting{
+			types.SettingSnykOssEnabled:  {Value: nil, Changed: true},  // reset
+			types.SettingSnykCodeEnabled: {Value: true, Changed: true}, // set
+		}
+		processConfigSettings(ctx, conf, engine, engine.GetLogger(), settings, analytics.TriggerSourceTest, cr)
+
+		assert.False(t, types.HasGlobalUserOverride(conf, types.SettingSnykOssEnabled), "oss reset")
+		assert.True(t, types.GetGlobalBool(conf, types.SettingSnykOssEnabled), "oss back to default true")
+		assert.True(t, conf.GetBool(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled)), "code set to true")
+	})
+
+	t.Run("reset of organization reverts to fallback", func(t *testing.T) {
+		// Use setupFolderConfigTest so we get:
+		//   - SettingIsLspInitialized=true (orgChanged branch fires)
+		//   - registered immutable defaults for ORGANIZATION / ORGANIZATION_SLUG
+		//     so GetGlobalOrganization resolves deterministically to "test-default-org-uuid"
+		setup := setupFolderConfigTest(t)
+		conf := setup.engineConfig
+		ctx := testCtx(t, t.Context(), setup.engine, setup.tokenService)
+		cr := testutil.DefaultConfigResolver(setup.engine)
+
+		config.SetOrganization(conf, "my-custom-org")
+		require.Equal(t, "my-custom-org", types.GetGlobalString(conf, types.SettingLastSetOrganization))
+
+		settings := map[string]*types.ConfigSetting{
+			types.SettingOrganization: {Value: nil, Changed: true},
+		}
+		processConfigSettings(ctx, conf, setup.engine, setup.engine.GetLogger(), settings, analytics.TriggerSourceTest, cr)
+
+		assert.Empty(t, types.GetGlobalString(conf, types.SettingLastSetOrganization),
+			"last_set_organization cleared so a later set is not a no-op")
+		_, present := settings[types.SettingOrganization]
+		assert.False(t, present, "handled org reset removed from settings map")
+
+		// After reset, GetGlobalOrganization must resolve to the registered immutable default.
+		org := types.GetGlobalOrganization(conf)
+		assert.Equal(t, "test-default-org-uuid", org,
+			"org must revert to the registered flagset default after reset")
+	})
+
+	t.Run("reset of product-enablement key triggers HandleConfigChange when value changes", func(t *testing.T) {
+		// Verifies that resetting a product-enablement key (snyk_oss_enabled) when the
+		// effective value changes (override false → default true) with LSP initialized
+		// results in ws.HandleConfigChange() being called via sendDiagnosticsForNewSettings.
+		// Uses a MockWorkspace to observe the call.
+		ctrl := gomock.NewController(t)
+		t.Cleanup(ctrl.Finish)
+
+		setup := setupFolderConfigTest(t)
+		conf := setup.engineConfig
+		ctx := testCtx(t, t.Context(), setup.engine, setup.tokenService)
+		cr := testutil.DefaultConfigResolver(setup.engine)
+
+		// Replace the workspace with a mock so we can assert HandleConfigChange fires.
+		// Use an atomic counter so we can wait on the goroutine reliably without a
+		// fixed sleep (which is flaky on loaded CI runners).
+		var handleConfigChangeCalled int32
+		mockWs := mock_types.NewMockWorkspace(ctrl)
+		mockWs.EXPECT().HandleConfigChange().
+			Do(func() { atomic.AddInt32(&handleConfigChangeCalled, 1) }).
+			MinTimes(1)
+		mockWs.EXPECT().Folders().Return(nil).AnyTimes()
+		config.SetWorkspace(conf, mockWs)
+
+		// Seed an override that differs from the default (snyk_oss_enabled default is true).
+		types.SetGlobalUser(conf, types.SettingSnykOssEnabled, false)
+		require.True(t, types.HasGlobalUserOverride(conf, types.SettingSnykOssEnabled))
+		require.False(t, types.GetGlobalBool(conf, types.SettingSnykOssEnabled), "override is false")
+
+		settings := map[string]*types.ConfigSetting{
+			types.SettingSnykOssEnabled: {Value: nil, Changed: true},
+		}
+		processConfigSettings(ctx, conf, setup.engine, setup.engine.GetLogger(), settings, analytics.TriggerSourceTest, cr)
+
+		assert.False(t, types.HasGlobalUserOverride(conf, types.SettingSnykOssEnabled),
+			"override must be cleared by reset")
+		assert.True(t, types.GetGlobalBool(conf, types.SettingSnykOssEnabled),
+			"oss must revert to true (flagset default) after reset")
+
+		// Wait for the goroutine launched by sendDiagnosticsForNewSettings to call
+		// HandleConfigChange. require.Eventually avoids the flaky fixed-sleep pattern.
+		require.Eventually(t,
+			func() bool { return atomic.LoadInt32(&handleConfigChangeCalled) > 0 },
+			time.Second, time.Millisecond,
+			"HandleConfigChange must be called after resetting a product-enablement key")
+	})
+
+	t.Run("no-op when no override exists", func(t *testing.T) {
+		engine, tokenService := testutil.UnitTestWithEngine(t)
+		conf := engine.GetConfiguration()
+		ctx := testCtx(t, t.Context(), engine, tokenService)
+		cr := testutil.DefaultConfigResolver(engine)
+
+		settings := map[string]*types.ConfigSetting{
+			types.SettingSnykOssEnabled: {Value: nil, Changed: true},
+		}
+		processConfigSettings(ctx, conf, engine, engine.GetLogger(), settings, analytics.TriggerSourceTest, cr)
+
+		assert.False(t, types.HasGlobalUserOverride(conf, types.SettingSnykOssEnabled))
+		assert.True(t, types.GetGlobalBool(conf, types.SettingSnykOssEnabled), "still default true")
+	})
+
+	t.Run("reset of int key (SettingRiskScoreThreshold) uses type-correct reader", func(t *testing.T) {
+		// Verifies that resetting SettingRiskScoreThreshold (int-registered, default 0)
+		// correctly reverts to the flagset default. GetGlobalBool would always return false
+		// for an int-registered key, making oldEffective == newEffective == false and
+		// silently suppressing both analytics and the diagnostics refresh.
+		// Note: SettingScanNetNew is covered by the "globalEffectiveValue reads bool-stored
+		// scan_net_new correctly" sub-test, which uses the production bool storage path.
+		ctrl := gomock.NewController(t)
+		t.Cleanup(ctrl.Finish)
+
+		setup := setupFolderConfigTest(t)
+		conf := setup.engineConfig
+		ctx := testCtx(t, t.Context(), setup.engine, setup.tokenService)
+		cr := testutil.DefaultConfigResolver(setup.engine)
+
+		// Replace the workspace with a mock so we can observe HandleConfigChange.
+		var handleConfigChangeCalled int32
+		mockWs := mock_types.NewMockWorkspace(ctrl)
+		mockWs.EXPECT().HandleConfigChange().
+			Do(func() { atomic.AddInt32(&handleConfigChangeCalled, 1) }).
+			MinTimes(1)
+		mockWs.EXPECT().Folders().Return(nil).AnyTimes()
+		config.SetWorkspace(conf, mockWs)
+
+		// Seed non-default override: risk score threshold 500 (default is 0).
+		types.SetGlobalUser(conf, types.SettingRiskScoreThreshold, 500)
+		require.True(t, types.HasGlobalUserOverride(conf, types.SettingRiskScoreThreshold))
+		require.Equal(t, 500, types.GetGlobalInt(conf, types.SettingRiskScoreThreshold), "override active")
+
+		settings := map[string]*types.ConfigSetting{
+			types.SettingRiskScoreThreshold: {Value: nil, Changed: true},
+		}
+		processConfigSettings(ctx, conf, setup.engine, setup.engine.GetLogger(), settings, analytics.TriggerSourceTest, cr)
+
+		assert.False(t, types.HasGlobalUserOverride(conf, types.SettingRiskScoreThreshold),
+			"int override must be cleared by reset")
+		assert.Equal(t, 0, types.GetGlobalInt(conf, types.SettingRiskScoreThreshold),
+			"risk score must revert to flagset default 0 after reset")
+
+		// SettingRiskScoreThreshold is in globalResetFilterKeys, so sendDiagnosticsForNewSettings
+		// fires. Assert HandleConfigChange is called, proving the analytics + diagnostics path
+		// was exercised (if globalEffectiveValue regresses to GetGlobalBool for int keys,
+		// effectivelyChanged would always be false and the call would never happen).
+		require.Eventually(t,
+			func() bool { return atomic.LoadInt32(&handleConfigChangeCalled) > 0 },
+			time.Second, time.Millisecond,
+			"HandleConfigChange must be called after resetting int key whose effective value changed")
+	})
+
+	t.Run("globalEffectiveValue reads bool-stored scan_net_new correctly", func(t *testing.T) {
+		// Regression test for IDE-2149: applyDeltaFindings stores scan_net_new as a raw bool via
+		// SetGlobalDeferredFolderScope (unwrapped write). globalEffectiveValue must use GetGlobalBool
+		// for this key; using GetGlobalString silently fails the type-assertion and returns "" both
+		// before and after the reset, making effectivelyChanged=false and suppressing analytics.
+		engine, tokenService := testutil.UnitTestWithEngine(t)
+		conf := engine.GetConfiguration()
+		_ = tokenService
+
+		// Store scan_net_new as a bool (true = enabled), matching the production write
+		// path in applyDeltaFindings which calls SetGlobalDeferredFolderScope with a bool.
+		types.SetGlobalDeferredFolderScope(conf, types.SettingScanNetNew, true)
+		require.True(t, types.HasGlobalUserOverride(conf, types.SettingScanNetNew),
+			"bool override must be detected by HasGlobalUserOverride")
+
+		// globalEffectiveValue must return true before reset and false (flagset default) after.
+		// If GetGlobalString is used instead of GetGlobalBool, both calls return "" and
+		// effectivelyChanged is always false — analytics are silently suppressed.
+		beforeReset := globalEffectiveValue(conf, types.SettingScanNetNew)
+		types.UnsetGlobalUser(conf, types.SettingScanNetNew)
+		afterReset := globalEffectiveValue(conf, types.SettingScanNetNew)
+
+		assert.Equal(t, true, beforeReset,
+			"globalEffectiveValue must return the stored bool true before reset")
+		assert.Equal(t, false, afterReset,
+			"globalEffectiveValue must return the flagset default false after reset")
+		assert.NotEqual(t, beforeReset, afterReset,
+			"effectivelyChanged must be true so analytics are emitted on reset")
+	})
+
+	t.Run("scan_net_new reset via processConfigSettings emits analytics event", func(t *testing.T) {
+		// End-to-end regression for IDE-2149: proves the analytics + diagnostics path
+		// is exercised when scan_net_new is reset via processConfigSettings.
+		//
+		// The unit test above verifies globalEffectiveValue returns the correct bool values.
+		// This test proves the full production path all the way to the analytics workflow:
+		//   processConfigSettings → applyGlobalResets
+		//     → analytics.SendConfigChangedAnalytics  (gated on effectivelyChanged)
+		//       → engine.InvokeWithInputAndConfig(WORKFLOWID_REPORT_ANALYTICS, ...)
+		//
+		// RED signal: if globalEffectiveValue regresses to GetGlobalString for scan_net_new,
+		// effectivelyChanged becomes false (both before/after read as ""), and
+		// SendConfigChangedAnalytics short-circuits (oldVal==newVal guard), so the analytics
+		// workflow is never invoked — the counter stays at 0 and the test fails.
+		//
+		// GREEN signal: with GetGlobalBool, effectivelyChanged is true (true→false),
+		// SendConfigChangedAnalytics calls the workflow, counter > 0, test passes.
+		ctrl := gomock.NewController(t)
+		t.Cleanup(ctrl.Finish)
+
+		// setupFolderConfigTest initializes SettingIsLspInitialized=true, which is
+		// required for SendConfigChangedAnalytics to act.
+		setup := setupFolderConfigTest(t)
+		conf := setup.engineConfig
+		ctx := testCtx(t, t.Context(), setup.engine, setup.tokenService)
+		cr := testutil.DefaultConfigResolver(setup.engine)
+
+		// Intercept the analytics workflow with a no-op spy to count invocations and
+		// avoid outbound network calls. DisableOutboundAnalyticsForTest re-registers
+		// WORKFLOWID_REPORT_ANALYTICS with a counter callback.
+		analyticsCalls := testutil.DisableOutboundAnalyticsForTest(t, setup.engine)
+
+		// Replace workspace with a mock. Folders() returns nil (no folder org to use),
+		// so SendConfigChangedAnalytics falls back to the global org path. This also
+		// means HandleConfigChange fires from sendDiagnosticsForNewSettings.
+		var handleConfigChangeCalled int32
+		mockWs := mock_types.NewMockWorkspace(ctrl)
+		mockWs.EXPECT().HandleConfigChange().
+			Do(func() { atomic.AddInt32(&handleConfigChangeCalled, 1) }).
+			MinTimes(0) // may or may not fire; the analytics assertion is the primary gate
+		mockWs.EXPECT().Folders().Return(nil).AnyTimes()
+		config.SetWorkspace(conf, mockWs)
+
+		// Store scan_net_new as a bool via the production write path (same as
+		// applyDeltaFindings → SetGlobalDeferredFolderScope). Override must differ
+		// from the flagset default (false) so effectivelyChanged becomes true.
+		types.SetGlobalDeferredFolderScope(conf, types.SettingScanNetNew, true)
+		require.True(t, types.HasGlobalUserOverride(conf, types.SettingScanNetNew),
+			"bool override must be detectable before reset")
+		require.True(t, types.GetGlobalBool(conf, types.SettingScanNetNew),
+			"scan_net_new override must read as true before reset")
+
+		// Issue a reset payload: {changed:true, value:nil} triggers applyGlobalResets.
+		settings := map[string]*types.ConfigSetting{
+			types.SettingScanNetNew: {Value: nil, Changed: true},
+		}
+		processConfigSettings(ctx, conf, setup.engine, setup.engine.GetLogger(), settings, analytics.TriggerSourceTest, cr)
+
+		// Override must be cleared and value must revert to flagset default (false).
+		assert.False(t, types.HasGlobalUserOverride(conf, types.SettingScanNetNew),
+			"scan_net_new override must be cleared by reset")
+		assert.False(t, types.GetGlobalBool(conf, types.SettingScanNetNew),
+			"scan_net_new must revert to flagset default false after reset")
+
+		// SendConfigChangedAnalytics spawns a goroutine to invoke the analytics workflow.
+		// Wait for it to land. A count of 0 here means effectivelyChanged was false —
+		// the GetGlobalString regression would leave analytics suppressed.
+		require.Eventually(t,
+			func() bool { return analyticsCalls.Load() > 0 },
+			time.Second, time.Millisecond,
+			"analytics workflow must be invoked after resetting bool-stored scan_net_new — "+
+				"count=0 means effectivelyChanged was false (GetGlobalString regression: "+
+				"both before/after read as '' so oldVal==newVal guard short-circuits analytics)")
+	})
 }

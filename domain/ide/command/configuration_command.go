@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -48,7 +49,7 @@ func (cmd *configurationCommand) Execute(ctx context.Context) (any, error) {
 
 	settings, folderConfigs := ConstructSettingsFromConfig(cmd.engine, cmd.configResolver)
 
-	renderer, err := infraconfig.NewConfigHtmlRenderer(cmd.engine)
+	renderer, err := infraconfig.NewConfigHtmlRenderer(cmd.engine, cmd.configResolver)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create config renderer: %w", err)
 	}
@@ -77,17 +78,18 @@ func ConstructSettingsFromConfig(engine workflow.Engine, r types.ConfigResolverI
 	issueView := r.IssueViewOptionsForFolder(nil)
 
 	m := map[string]any{
-		types.SettingToken:                  config.GetToken(conf),
-		types.SettingApiEndpoint:            r.GetString(types.SettingApiEndpoint, nil),
-		types.SettingAuthenticationMethod:   r.GetString(types.SettingAuthenticationMethod, nil),
-		types.SettingProxyInsecure:          r.GetBool(types.SettingProxyInsecure, nil),
-		types.SettingSnykOssEnabled:         r.GetBool(types.SettingSnykOssEnabled, nil),
-		types.SettingSnykCodeEnabled:        r.GetBool(types.SettingSnykCodeEnabled, nil),
-		types.SettingSnykIacEnabled:         r.GetBool(types.SettingSnykIacEnabled, nil),
-		types.SettingSnykSecretsEnabled:     r.GetBool(types.SettingSnykSecretsEnabled, nil),
-		types.SettingScanAutomatic:          r.GetBool(types.SettingScanAutomatic, nil),
-		types.SettingScanNetNew:             r.GetBool(types.SettingScanNetNew, nil),
-		types.SettingOrganization:           r.GetString(types.SettingOrganization, nil),
+		types.SettingToken:                config.GetToken(conf),
+		types.SettingApiEndpoint:          r.GetString(types.SettingApiEndpoint, nil),
+		types.SettingAuthenticationMethod: r.GetString(types.SettingAuthenticationMethod, nil),
+		types.SettingProxyInsecure:        r.GetBool(types.SettingProxyInsecure, nil),
+		types.SettingSnykOssEnabled:       r.GetBool(types.SettingSnykOssEnabled, nil),
+		types.SettingSnykCodeEnabled:      r.GetBool(types.SettingSnykCodeEnabled, nil),
+		types.SettingSnykIacEnabled:       r.GetBool(types.SettingSnykIacEnabled, nil),
+		types.SettingSnykSecretsEnabled:   r.GetBool(types.SettingSnykSecretsEnabled, nil),
+		types.SettingScanAutomatic:        r.GetBool(types.SettingScanAutomatic, nil),
+		types.SettingScanNetNew:           r.GetBool(types.SettingScanNetNew, nil),
+		// Display the org explicitly set by the user (if they set one), not the UUID it resolves to.
+		types.SettingOrganization:           types.GetGlobalString(conf, types.SettingLastSetOrganization),
 		types.SettingSeverityFilterCritical: severity.Critical,
 		types.SettingSeverityFilterHigh:     severity.High,
 		types.SettingSeverityFilterMedium:   severity.Medium,
@@ -100,6 +102,11 @@ func ConstructSettingsFromConfig(engine workflow.Engine, r types.ConfigResolverI
 		types.SettingBinaryBaseUrl:          r.GetString(types.SettingBinaryBaseUrl, nil),
 		types.SettingTrustedFolders:         trustedFoldersAsStrings(r),
 		types.SettingUserSettingsPath:       r.GetString(types.SettingUserSettingsPath, nil),
+		// Pre-populate Project Defaults Advanced fields.
+		// Params are stored as []string under SettingCliAdditionalOssParameters (written by applyCliConfig).
+		// Env is stored as string under SettingAdditionalEnvironment UserGlobalKey (written by applyEnvironment).
+		types.SettingAdditionalParameters:  strings.Join(r.GetStringSlice(types.SettingCliAdditionalOssParameters, nil), " "),
+		types.SettingAdditionalEnvironment: r.GetString(types.SettingAdditionalEnvironment, nil),
 	}
 
 	folderConfigs := collectFolderConfigs(conf, logger, engine, r)
