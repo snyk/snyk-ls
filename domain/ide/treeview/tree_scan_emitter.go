@@ -125,26 +125,26 @@ func (e *TreeScanStateEmitter) renderPending() {
 	if ws != nil {
 		data = e.builder.BuildTree(ws)
 	}
-	data.FilterState = e.filterState(ws)
+	data.FilterState = ResolveFilterState(e.conf, ws)
 
 	html := e.renderer.RenderTreeView(data)
 	e.notifier.Send(types.TreeView{TreeViewHtml: html, TotalIssues: data.TotalIssues})
 }
 
 // filterState resolves the toolbar's filter state for this emitter's config.
-// Thin wrapper over BuildFilterState so the scan-emitter and the snyk.getTreeView
+// Thin wrapper over ResolveFilterState so the scan-emitter and the snyk.getTreeView
 // command share one implementation (and therefore render the same toolbar).
 func (e *TreeScanStateEmitter) filterState(ws types.Workspace) TreeViewFilterState {
-	return BuildFilterState(e.conf, ws)
+	return ResolveFilterState(e.conf, ws)
 }
 
-// BuildFilterState resolves the toolbar's severity, risk-score and issue-view
+// ResolveFilterState resolves the toolbar's severity, risk-score and issue-view
 // state. The filter toolbar is workspace-wide but the tree shows every open
 // folder, each filtered by its own per-folder config (UserFolderKey > remote >
 // user-global > default) — the same source the issue filtering uses. So the
 // toolbar reflects the aggregate across all open folders: a value is shown when
 // every folder agrees, or marked "mixed" when they disagree. Falls back to the
-// global value when there is no folder or resolver.
+// global value when there is no folder or resolver. (IDE-1866 / IDE-1996)
 //
 // Risk score and issue-view options are each gated by a feature flag — the same
 // flags the server-side filter checks (see folder.buildFilterContext). A folder's
@@ -152,9 +152,9 @@ func (e *TreeScanStateEmitter) filterState(ws types.Workspace) TreeViewFilterSta
 // doesn't filter on that dimension doesn't register as "disagreeing". The section
 // is shown when the flag is on for at least one open folder.
 //
-// Shared by TreeScanStateEmitter.filterState and the snyk.getTreeView command;
-// both render paths must produce the same toolbar.
-func BuildFilterState(conf configuration.Configuration, ws types.Workspace) TreeViewFilterState {
+// Shared by the push path (TreeScanStateEmitter) and the pull path
+// (snyk.getTreeView) so a tree fetched on panel-open matches one pushed on a scan.
+func ResolveFilterState(conf configuration.Configuration, ws types.Workspace) TreeViewFilterState {
 	severity := config.GetFilterSeverity(conf)
 	issueView := config.GetIssueViewOptions(conf)
 	var mixedSeverity MixedSeverity

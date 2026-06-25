@@ -103,7 +103,7 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 
 	dependencyPath := extractDependencyPath(introducingFinding)
 	fileContent := getFileContent(affectedFilePath, true, logger)
-	dependencyNode := getDependencyNode(&logger, affectedFilePath, ecosystemStr, dependencyPath, fileContent)
+	dependencyNode := getDependencyNode(&logger, affectedFilePath, ecosystemStr, dependencyPath, fileContent, workDir)
 	myRange := getRangeFromNode(dependencyNode)
 
 	title := trIssue.GetTitle()

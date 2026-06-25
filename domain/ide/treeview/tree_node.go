@@ -72,13 +72,17 @@ type TreeNode struct {
 	// severity filters hide every issue; "untrusted-folder" is the
 	// workspace-trust banner with a folder list + Trust button.
 	InfoVariant string `json:"infoVariant,omitempty"`
-	// UntrustedFolderPaths lists the untrusted folder paths shown in the
-	// "untrusted-folder" info banner.
-	UntrustedFolderPaths []string `json:"untrustedFolderPaths,omitempty"`
-	DeltaEnabled         bool     `json:"deltaEnabled,omitempty"`
-	BaseBranch           string   `json:"baseBranch,omitempty"`
-	LocalBranches        []string `json:"localBranches,omitempty"`
-	ReferenceFolderPath  string   `json:"referenceFolderPath,omitempty"`
+	// FolderPaths lists the untrusted folder paths shown in the "untrusted-folder"
+	// info banner.
+	FolderPaths []string `json:"folderPaths,omitempty"`
+	// Untrusted marks a folder node as not-yet-trusted: it renders dimmed and,
+	// having no children, without a chevron (not expandable). It lets the user see
+	// every open project while the trust banner drives the actual trust action.
+	Untrusted           bool     `json:"untrusted,omitempty"`
+	DeltaEnabled        bool     `json:"deltaEnabled,omitempty"`
+	BaseBranch          string   `json:"baseBranch,omitempty"`
+	LocalBranches       []string `json:"localBranches,omitempty"`
+	ReferenceFolderPath string   `json:"referenceFolderPath,omitempty"`
 	// FileIconHTML holds a pre-rendered HTML fragment (inline SVG or <img> tag)
 	// for the file icon shown on file-type nodes. Empty string falls back to the
 	// generic icon defined in the template.
@@ -234,8 +238,12 @@ func WithInfoVariant(variant string) TreeNodeOption {
 	return func(n *TreeNode) { n.InfoVariant = variant }
 }
 
-func WithUntrustedFolderPaths(paths []string) TreeNodeOption {
-	return func(n *TreeNode) { n.UntrustedFolderPaths = paths }
+func WithFolderPaths(paths []string) TreeNodeOption {
+	return func(n *TreeNode) { n.FolderPaths = paths }
+}
+
+func WithUntrusted(untrusted bool) TreeNodeOption {
+	return func(n *TreeNode) { n.Untrusted = untrusted }
 }
 
 func WithDeltaEnabled(enabled bool) TreeNodeOption {

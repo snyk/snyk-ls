@@ -19,6 +19,7 @@ package command
 import (
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -45,6 +46,29 @@ func TestGetTreeViewCommand_Execute_ReturnsHtml(t *testing.T) {
 	require.True(t, ok, "result should be a string")
 	assert.Contains(t, htmlResult, "<!DOCTYPE html>")
 	assert.Contains(t, htmlResult, "${ideScript}")
+}
+
+// TestGetTreeViewCommand_Execute_UntrustedFolder_IncludesBanner validates the
+// pull contract plugins rely on: fetching the tree on panel-open (after the early
+// startup push may have been missed) returns the trust banner for untrusted
+// folders. (IDE-1882)
+func TestGetTreeViewCommand_Execute_UntrustedFolder_IncludesBanner(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
+	setupToggleWorkspaceFolders(t, engine, types.PathKey("/untrusted-proj"))
+
+	cmd := &getTreeViewCommand{
+		command: types.CommandData{CommandId: types.GetTreeView},
+		engine:  engine,
+	}
+
+	result, err := cmd.Execute(t.Context())
+	require.NoError(t, err)
+
+	html, ok := result.(string)
+	require.True(t, ok)
+	assert.Contains(t, html, "tree-node-info--untrusted-folder",
+		"a tree pulled via snyk.getTreeView must include the trust banner for untrusted folders")
 }
 
 func TestGetTreeViewCommand_Execute_WithScanStates_ShowsFileNodes(t *testing.T) {

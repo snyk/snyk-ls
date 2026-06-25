@@ -37,6 +37,10 @@ type Tree struct {
 	ParentTree *Tree
 	Root       *Node
 	Document   string
+	// Properties holds named values declared in the document (e.g. a Maven
+	// <properties> block), keyed by property name. The node range points at the
+	// property value so it can be edited directly.
+	Properties map[string]*Node
 }
 
 func (t *Tree) String() string {

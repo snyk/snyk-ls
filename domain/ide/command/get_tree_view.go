@@ -57,9 +57,10 @@ func (cmd *getTreeViewCommand) Execute(_ context.Context) (any, error) {
 	if ws != nil {
 		data = builder.BuildTree(ws)
 	}
-
-	// Filter state is an aggregate of the folder configs states for all open folders
-	data.FilterState = treeview.BuildFilterState(conf, ws)
+	// Use the same resolver as the push path so a tree pulled on panel-open (e.g.
+	// to show the trust banner that the early startup push may have missed) matches
+	// one pushed on a scan — including the per-folder aggregate "mixed" toolbar state.
+	data.FilterState = treeview.ResolveFilterState(conf, ws)
 
 	return renderer.RenderTreeView(data), nil
 }
