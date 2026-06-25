@@ -976,6 +976,38 @@ func TestSetupStorage_FlushesPreInitOAuthTokenToNewStorage(t *testing.T) {
 	})
 }
 
+// TestFeedbackBanner_DismissedPersists_InteractedSessionOnly verifies the load-bearing split:
+// the dismissal flag is written to storage (so it survives a restart) while the interacted flag
+// is kept in memory only (so the banner reappears in a later session until dismissed).
+func TestFeedbackBanner_DismissedPersists_InteractedSessionOnly(t *testing.T) {
+	engine, _ := initEngineForConfigTest(t)
+	conf := engine.GetConfiguration()
+	logger := zerolog.Nop()
+
+	storageFile := filepath.Join(t.TempDir(), "ls-config.json")
+	s, err := storage.NewStorageWithCallbacks(storage.WithStorageFile(storageFile))
+	require.NoError(t, err)
+
+	SetupStorage(conf, s, &logger)
+
+	SetFeedbackBannerDismissed(conf)
+	SetFeedbackBannerInteracted(conf)
+
+	// Read the backing file through a fresh configuration to simulate a restart.
+	require.Eventually(t, func() bool {
+		fileConf := configuration.NewWithOpts()
+		if refreshErr := s.Refresh(fileConf, types.SettingFeedbackBannerDismissed); refreshErr != nil {
+			return false
+		}
+		return fileConf.GetBool(types.SettingFeedbackBannerDismissed)
+	}, 5*time.Second, 10*time.Millisecond, "dismissal must persist to storage so it survives a restart")
+
+	fileConf := configuration.NewWithOpts()
+	require.NoError(t, s.Refresh(fileConf, types.SettingFeedbackBannerInteracted))
+	assert.False(t, fileConf.GetBool(types.SettingFeedbackBannerInteracted),
+		"interacted flag must not persist; it resets each session")
+}
+
 // TestSetupStorage_EmptyPreInitToken_LoadsFromFile verifies that when no pre-init refresh
 // occurred (auth.CONFIG_KEY_OAUTH_TOKEN is empty in memory), SetupStorage loads the token
 // from the file as usual — the normal first-start or expired-and-restarted case.

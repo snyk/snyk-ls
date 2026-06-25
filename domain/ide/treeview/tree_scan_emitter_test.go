@@ -21,9 +21,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -68,6 +70,55 @@ func TestTreeScanStateEmitter_Emit_SendsTreeViewNotification(t *testing.T) {
 	mu.Unlock()
 	require.True(t, ok, "payload should be types.TreeView")
 	assert.Contains(t, treeView.TreeViewHtml, "<!DOCTYPE html>")
+}
+
+func TestTreeScanStateEmitter_Emit_FeedbackBannerReflectsConfig(t *testing.T) {
+	t.Run("dismissed omits the banner", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		config.SetFeedbackBannerDismissed(engine.GetConfiguration())
+		html := emitAndCaptureHTML(t, engine.GetConfiguration(), engine.GetLogger())
+		assert.NotContains(t, html, `id="feedbackBanner"`)
+	})
+
+	t.Run("interacted renders the banner visible", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		config.SetFeedbackBannerInteracted(engine.GetConfiguration())
+		html := emitAndCaptureHTML(t, engine.GetConfiguration(), engine.GetLogger())
+		assert.Contains(t, html, `id="feedbackBanner"`)
+		assert.NotContains(t, html, `id="feedbackBanner" hidden>`)
+	})
+}
+
+// emitAndCaptureHTML runs one emit cycle and returns the rendered tree HTML.
+func emitAndCaptureHTML(t *testing.T, conf configuration.Configuration, logger *zerolog.Logger) string {
+	t.Helper()
+	notif := notification.NewNotifier()
+	var mu sync.Mutex
+	var receivedPayload any
+	notif.CreateListener(func(params any) {
+		mu.Lock()
+		defer mu.Unlock()
+		receivedPayload = params
+	})
+	t.Cleanup(func() { notif.DisposeListener() })
+
+	emitter, err := NewTreeScanStateEmitter(conf, logger, notif)
+	require.NoError(t, err)
+	t.Cleanup(emitter.Dispose)
+
+	emitter.Emit(scanstates.StateSnapshot{AnyScanInProgressWorkingDirectory: true})
+
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return receivedPayload != nil
+	}, 2*time.Second, 50*time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+	treeView, ok := receivedPayload.(types.TreeView)
+	require.True(t, ok, "payload should be types.TreeView")
+	return treeView.TreeViewHtml
 }
 
 func TestTreeScanStateEmitter_Emit_ScanInProgress_HasScanningInProductNode(t *testing.T) {

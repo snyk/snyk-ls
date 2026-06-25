@@ -136,9 +136,9 @@ func GetFeedbackBannerDismissed(conf configuration.Configuration) bool {
 	return conf.GetBool(types.SettingFeedbackBannerDismissed)
 }
 
-// SetFeedbackBannerDismissed persists the dismissal of the tree view feedback banner so it survives restarts.
+// SetFeedbackBannerDismissed persists the dismissal of the tree view feedback banner so it survives
+// restarts. The key is registered for storage in SetupStorage, so a plain Set writes through to disk.
 func SetFeedbackBannerDismissed(conf configuration.Configuration) {
-	conf.PersistInStorage(types.SettingFeedbackBannerDismissed)
 	conf.Set(types.SettingFeedbackBannerDismissed, true)
 }
 
