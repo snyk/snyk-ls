@@ -247,16 +247,21 @@ func aggregateIssueViewOptions(opts []types.IssueViewOptions) (types.IssueViewOp
 		}
 	}
 	// For a mixed option the agreed value is undefined, so pin the rendered
-	// (indeterminate) checkbox to that option's default rather than opts[0]'s
-	// arbitrary value. This gives a deterministic first-click direction — the
-	// analog of aggregateRiskScores returning the highest threshold — so two
-	// identical-looking mixed checkboxes always resolve the same way.
-	defaults := types.DefaultIssueViewOptions()
+	// (indeterminate) checkbox to false rather than opts[0]'s arbitrary value.
+	// Clicking an indeterminate checkbox clears the indeterminate flag and flips
+	// checked to its opposite (consistent across Chromium/Firefox/WebKit), so a
+	// rendered value of false means the first click resolves to checked/true —
+	// i.e. "enable everywhere". This both makes the direction deterministic and
+	// follows our chosen convention that clicking a dashed checkbox turns it on
+	// for all (rather than each option resolving in its own default direction).
+	// Note this differs from aggregateRiskScores, which pins a mixed slider to
+	// the highest threshold so it sits at a meaningful position; a checkbox has
+	// no equivalent ordering, so we optimise for the first-click direction.
 	if mixed.OpenIssues {
-		agg.OpenIssues = defaults.OpenIssues
+		agg.OpenIssues = false
 	}
 	if mixed.IgnoredIssues {
-		agg.IgnoredIssues = defaults.IgnoredIssues
+		agg.IgnoredIssues = false
 	}
 	return agg, mixed
 }

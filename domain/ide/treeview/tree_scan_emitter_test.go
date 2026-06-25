@@ -623,20 +623,33 @@ func TestAggregateIssueViewOptions(t *testing.T) {
 	assert.True(t, mixed2.OpenIssues, "OpenIssues differs → mixed")
 	assert.False(t, mixed2.IgnoredIssues, "IgnoredIssues agrees → not mixed")
 
-	// A mixed option is pinned to its default, not opts[0]'s arbitrary value, so
-	// the rendered checkbox has a deterministic first-click direction. Here opts[0]
-	// has OpenIssues=false but the default is true, so the aggregate must report
-	// true; IgnoredIssues agrees (both true) and is preserved as-is.
-	defaults := types.DefaultIssueViewOptions()
+	// A mixed option is pinned to false (not opts[0]'s arbitrary value) so the
+	// rendered indeterminate checkbox has a deterministic first-click direction:
+	// clicking a dashed checkbox flips false→true, i.e. "enable everywhere", per
+	// the platform convention. Here opts[0] has OpenIssues=true, but because the
+	// option is mixed the aggregate must report false; IgnoredIssues agrees (both
+	// true) and is preserved as-is.
 	pinned := []types.IssueViewOptions{
-		types.NewIssueViewOptions(false, true),
 		types.NewIssueViewOptions(true, true),
+		types.NewIssueViewOptions(false, true),
 	}
 	got2, mixed3 := aggregateIssueViewOptions(pinned)
 	assert.True(t, mixed3.OpenIssues, "OpenIssues differs → mixed")
 	assert.False(t, mixed3.IgnoredIssues, "IgnoredIssues agrees → not mixed")
-	assert.Equal(t, defaults.OpenIssues, got2.OpenIssues, "mixed option pinned to default, not opts[0]")
+	assert.False(t, got2.OpenIssues, "mixed option pinned to false so first click enables, not opts[0]")
 	assert.True(t, got2.IgnoredIssues, "agreed option preserved")
+
+	// A mixed IgnoredIssues is also pinned to false. opts[0] has IgnoredIssues=true,
+	// so a false result proves the pin fired rather than passing opts[0] through.
+	pinnedIgnored := []types.IssueViewOptions{
+		types.NewIssueViewOptions(true, true),
+		types.NewIssueViewOptions(true, false),
+	}
+	got3, mixed4 := aggregateIssueViewOptions(pinnedIgnored)
+	assert.False(t, mixed4.OpenIssues, "OpenIssues agrees → not mixed")
+	assert.True(t, mixed4.IgnoredIssues, "IgnoredIssues differs → mixed")
+	assert.False(t, got3.IgnoredIssues, "mixed option pinned to false so first click enables, not opts[0]")
+	assert.True(t, got3.OpenIssues, "agreed option preserved")
 }
 
 func TestAggregateRiskScores(t *testing.T) {

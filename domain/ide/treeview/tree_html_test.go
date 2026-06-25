@@ -349,9 +349,12 @@ func TestTreeHtmlRenderer_FilterToolbar_Popover_MixedState(t *testing.T) {
 			RiskScoreMixed:          true,
 			RiskScoreThreshold:      800, // highest folder threshold when mixed
 			IssueViewOptionsEnabled: true,
-			IssueViewOptions:        types.NewIssueViewOptions(true, false),
-			MixedIssueViewOptions:   MixedIssueViewOptions{OpenIssues: true},
-			ShowFilterPopover:       true,
+			// aggregateIssueViewOptions pins a mixed option to false, so the
+			// rendered open-issues checkbox is unchecked (+ indeterminate). The
+			// native first click then flips it false→true = "enable everywhere".
+			IssueViewOptions:      types.NewIssueViewOptions(false, false),
+			MixedIssueViewOptions: MixedIssueViewOptions{OpenIssues: true},
+			ShowFilterPopover:     true,
 		},
 	})
 
@@ -359,6 +362,11 @@ func TestTreeHtmlRenderer_FilterToolbar_Popover_MixedState(t *testing.T) {
 	assert.Contains(t, html, `Mixed (≥ 800)`, "mixed risk-score label shows the highest folder threshold")
 	assert.Contains(t, html, `value="800"`, "slider sits at the highest folder threshold when mixed")
 	assert.Contains(t, html, `data-mixed="true"`, "the disagreeing open-issues checkbox carries data-mixed")
+	// The mixed open-issues checkbox must render unchecked so the native first
+	// click flips it to checked/true; assert the exact attribute sequence with
+	// no intervening ` checked`.
+	assert.Contains(t, html, `data-filter-value="openIssues" data-mixed="true">`,
+		"mixed open-issues checkbox renders unchecked so first click enables everywhere")
 }
 
 func TestTreeHtmlRenderer_FilterToolbar_ExpandCollapseButtons_NotRendered(t *testing.T) {
