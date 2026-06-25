@@ -31,7 +31,7 @@ import (
 // severity filter or issue view options in config, then triggers a config change
 // which re-emits the tree view via $/snyk.treeView notification, and emits a
 // $/snyk.configuration notification so an open settings window reflects the new
-// filter values (IDE-1866).
+// filter values.
 type toggleTreeFilter struct {
 	command        types.CommandData
 	engine         workflow.Engine
@@ -130,7 +130,7 @@ func (cmd *toggleTreeFilter) applyIssueViewFilter(value string, enabled bool) er
 // must not rewrite the other severities, which can legitimately differ per
 // folder. Writing per-folder only (not user-global) also keeps the toggle from
 // moving the global default in lockstep; the per-folder value is authoritative
-// for filtering, outranking LDX-Sync remote defaults. (IDE-1866 / IDE-1996)
+// for filtering, outranking LDX-Sync remote defaults.
 func (cmd *toggleTreeFilter) writeFilterToAllFolders(settingName string, enabled bool) {
 	conf := cmd.engine.GetConfiguration()
 	for _, f := range cmd.workspaceFolders() {

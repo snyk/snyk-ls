@@ -183,9 +183,9 @@ body {
   left: 58px;
 }
 
-/* IDE-1863: expand/collapse chevron column. Every row reserves a fixed-width
-   chevron slot (the span is always present) so labels stay aligned in a column,
-   and the disclosure glyph is painted on any node that has children
+/* Expand/collapse chevron column. Every row reserves a fixed-width chevron slot
+   (the span is always present) so labels stay aligned in a column, and the
+   disclosure glyph is painted on any node that has children
    (tree-node-has-children) — folders, scanners, files, and multi-location issue
    groups. Leaf rows reserve the slot but draw no glyph. */
 .tree-chevron {
@@ -280,12 +280,12 @@ body {
   vertical-align: middle;
 }
 
-/* IDE-1864: errored scanners no longer paint the row label red. Scanner names
-   stay in the normal foreground regardless of state; only the inline description
-   suffix shifts to the dim --description-foreground (see product-description
-   rules below). Errors are already discoverable via the click-to-open overlay
-   plus the inline "- (Code settings unavailable)" suffix — no need for an
-   additional red-alarm at the row level. */
+/* Errored scanner rows keep neutral label color. Scanner names stay in the
+   normal foreground regardless of state; only the inline description suffix
+   shifts to the dim --description-foreground (see product-description rules
+   below). Errors are surfaced via the click-to-open overlay and the inline
+   "- (Code settings unavailable)" suffix, so no row-level red is applied by
+   design. */
 
 /* Abbreviated product icons (@patchui/icons) carry per-product accent gradients
    inline, so color/fill rules don't apply. Both disabled and errored products
@@ -296,7 +296,7 @@ body {
   opacity: 0.55;
 }
 
-/* IDE-1864: inline description suffix on product rows.
+/* Inline description suffix on product rows.
    - Normal scanner: same foreground colour as the bold scanner name, regular weight.
    - Disabled or errored scanner: dim to --description-foreground (the existing gray)
      so the suffix recedes without ever touching the scanner name's colour or weight. */
@@ -502,16 +502,16 @@ body {
   font-synthesis: none;
 }
 
-/* IDE-1864: disabled scanner rows use targeted dimming on the product icon and
-   the description suffix (rules above) rather than a row-wide opacity drop —
-   the scanner name itself stays at full contrast, since product names are
-   wayfinding and should never look "off". Cursor is `help` so the row signals
-   that hovering reveals the explanatory tooltip. */
+/* Disabled scanner rows use targeted dimming on the product icon and the
+   description suffix (rules above). The scanner name itself stays at full
+   contrast, since product names are wayfinding and should never look "off".
+   Cursor is `help` so the row signals that hovering reveals the explanatory
+   tooltip. */
 .tree-node-disabled .tree-node-row {
   cursor: help;
 }
 
-/* IDE-1882: untrusted-folder info node. Sits on the existing .tree-node-info
+/* Untrusted-folder info node. Sits on the existing .tree-node-info
    foundation (no banner chrome) so it visually belongs in the same family as
    the other inline info rows ("✅ No issues found", "⚡ N fixable…"). Each
    untrusted folder is listed with its own Trust button on the same row, so the
@@ -602,7 +602,7 @@ body {
   background-color: var(--button-hover-background);
 }
 
-/* IDE-1882: an untrusted folder is shown as a dimmed, non-expandable root node
+/* An untrusted folder is shown as a dimmed, non-expandable root node
    (no children -> no chevron via .tree-node-has-children) so the user can see
    every open project. Trusting happens via the banner above, not this node. */
 .tree-node-untrusted > .tree-node-row {

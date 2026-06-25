@@ -566,7 +566,7 @@
       // state updates immediately, rather than waiting for the LS to re-render
       // the tree in response to the command below. A "mixed" button (open folders
       // disagree) counts as not-active, so the first click enables the severity
-      // for every folder, resolving the mismatch (IDE-1866).
+      // for every folder, resolving the mismatch.
       // Note: this optimistic flip does NOT account for org-locked folders. When
       // a folder has the severity org-locked (Locked Remote > User Folder
       // Override), the button flips active here but snaps back to filter-mixed on
@@ -712,9 +712,9 @@
 
   function applyTruncation() {
     retruncatePending = false;
-    // File rows + any opt-in label marked data-truncate-middle (IDE-1882 uses
-    // this for the untrusted-folder path list so each line stays middle-
-    // truncated rather than end-clipped — keeping the folder basename visible).
+    // File rows + any opt-in label marked data-truncate-middle (used by the
+    // untrusted-folder path list so each line stays middle-truncated rather
+    // than end-clipped — keeping the folder basename visible).
     var labels = container.querySelectorAll(
       '.tree-node-file > .tree-node-row > .tree-label, .tree-label[data-truncate-middle]'
     );
@@ -724,7 +724,7 @@
       // Skip labels in collapsed branches — clientWidth is 0 so a measurement
       // round-trip would be wasted, and they'll be re-evaluated on expand.
       if (label.clientWidth === 0) continue;
-      // File rows and the IDE-1882 path list use different font families;
+      // File rows and the untrusted-folder path list use different font families;
       // ensure the canvas font matches each label before measuring. The call
       // short-circuits when the font key hasn't changed, so the only real cost
       // is one getComputedStyle per visible label.
@@ -786,11 +786,11 @@
 
   // Tooltips.
   // Native `title` tooltips render inconsistently inside IDE webviews, so we
-  // draw our own from the same `title` attributes (IDE-1864 disabled/errored
-  // scanner hints, full file paths from the truncation pass above, untrusted
-  // folder paths). While our tooltip is shown the title is moved to
-  // data-tooltip so the native one can't also fire, and restored on mouse-out
-  // so it stays available for accessibility and any non-webview host.
+  // draw our own from the same `title` attributes (disabled/errored scanner
+  // hints, full file paths from the truncation pass above, untrusted folder
+  // paths). While our tooltip is shown the title is moved to data-tooltip so
+  // the native one can't also fire, and restored on mouse-out so it stays
+  // available for accessibility and any non-webview host.
   var tooltipEl = null;
   var tooltipTarget = null;
 

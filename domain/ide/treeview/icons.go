@@ -10,10 +10,10 @@ const svgSeverityMedium = `<svg width="16" height="16" viewBox="0 0 16 16" fill=
 
 const svgSeverityLow = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="16" rx="8" fill="#8F8FB3"/><rect width="16" height="16" rx="8" fill="url(#paint0_linear_17_8)" fill-opacity="0.1"/><path d="M5.73975 11.6364V4.36365H7.05722V10.532H10.2603V11.6364H5.73975Z" fill="white"/><defs><linearGradient id="paint0_linear_17_8" x1="8" y1="0" x2="8" y2="16" gradientUnits="userSpaceOnUse"><stop stop-opacity="0"/><stop offset="1"/></linearGradient></defs></svg>`
 
-// IDE-1862: product scanner icons use the @patchui/icons abbreviated glyphs
-// (single-path marks carrying the per-product brand accent gradient) rather than
-// the older gradient shields. Rendered with the `product-icon--abbreviated` class
-// so disabled/errored rows can dim them (see template/styles.css). Source:
+// Product scanner icons use the @patchui/icons abbreviated glyphs
+// (single-path marks carrying the per-product brand accent gradient). Rendered
+// with the `product-icon--abbreviated` class so disabled/errored rows can dim
+// them (see template/styles.css). Source:
 // https://github.com/snyk/patchui-icons/tree/main/product/*Abbreviated.vue
 const svgProductCode = `<svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="snyk-abbr-code" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse"><stop stop-color="#14B7EB"/><stop offset="1" stop-color="#145DEB"/></linearGradient></defs><path fill="url(#snyk-abbr-code)" fill-rule="evenodd" clip-rule="evenodd" d="M3.384 2C2.62 2 2 2.62 2 3.384v17.232C2 21.38 2.62 22 3.384 22h17.232C21.38 22 22 21.38 22 20.616V3.384C22 2.62 21.38 2 20.616 2H3.384Zm9.984 5.076a.969.969 0 0 0-1.182.693l-2.118 8.126a.969.969 0 1 0 1.875.489l2.118-8.126a.969.969 0 0 0-.693-1.182Zm1.82 1.132a.969.969 0 0 1 1.364-.12l3.114 2.614a.969.969 0 0 1 .092 1.396l-2.642 3.15A.969.969 0 0 1 15.632 14l2.046-2.438-2.372-1.99a.969.969 0 0 1-.119-1.365Zm-6.943-.12A.969.969 0 1 1 9.49 9.574l-2.37 1.99 2.042 2.435a.969.969 0 1 1-1.484 1.245L5.04 12.1a.969.969 0 0 1 .091-1.397L8.245 8.09Z"/></svg>`
 

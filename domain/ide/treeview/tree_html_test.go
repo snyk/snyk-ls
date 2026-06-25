@@ -373,8 +373,8 @@ func TestTreeHtmlRenderer_FilterToolbar_ExpandCollapseButtons_NotRendered(t *tes
 
 	html := renderer.RenderTreeView(TreeViewData{})
 
-	// IDE-1863: Expand/Collapse All buttons were removed from the toolbar in
-	// favor of per-scanner chevrons.
+	// The toolbar has no Expand/Collapse All buttons; per-scanner chevrons
+	// handle expand/collapse.
 	assert.NotContains(t, html, `id="expandAllBtn"`)
 	assert.NotContains(t, html, `id="collapseAllBtn"`)
 }
@@ -423,9 +423,9 @@ func TestTreeHtmlRenderer_ProductNode_HasChildrenClass_OnlyWhenExpandable(t *tes
 	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
-	// IDE-1863: the chevron glyph is gated on tree-node-has-children, so a product
-	// with children (completed scan with results/info rows) carries the class and
-	// one without (scanning / awaiting first scan / errored) does not.
+	// The chevron glyph is gated on tree-node-has-children, so a product with
+	// children (completed scan with results/info rows) carries the class and one
+	// without (scanning / awaiting first scan / errored) does not.
 	withChildren := NewTreeNode(NodeTypeProduct, "Open Source",
 		WithProduct(product.ProductOpenSource),
 		WithChildren([]TreeNode{NewTreeNode(NodeTypeInfo, "✅ No issues found")}),
