@@ -555,7 +555,7 @@
         btn.classList.remove('filter-active');
       }
 
-      executeCommand('snyk.toggleTreeFilter', [filterType, filterValue, enabled]);
+      executeCommand('snyk.toggleTreeFilter', [filterType + '_' + filterValue, enabled]);
     });
   }
 
@@ -605,7 +605,7 @@
         var chk = e.target;
         chk.indeterminate = false;
         chk.removeAttribute('data-mixed');
-        executeCommand('snyk.toggleTreeFilter', ['issueView', chk.getAttribute('data-filter-value'), chk.checked]);
+        executeCommand('snyk.toggleTreeFilter', ['issueView_' + chk.getAttribute('data-filter-value'), chk.checked]);
       });
     }
 
@@ -618,7 +618,7 @@
     };
     var commitRiskScore = function() {
       slider.removeAttribute('data-mixed');
-      executeCommand('snyk.toggleTreeFilter', ['riskScore', '', parseIntSafe(slider.value, 0)]);
+      executeCommand('snyk.toggleTreeFilter', ['riskScore', parseIntSafe(slider.value, 0)]);
     };
     if (slider) {
       slider.addEventListener('input', function() {

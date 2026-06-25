@@ -105,15 +105,20 @@ func replaceIDEPlaceholders(html string) string {
         alert('IDE would open: ' + filePath + '\nLine ' + range.start.line + ':' + range.start.character +
               ' - ' + range.end.line + ':' + range.end.character);
       } else if (command === 'snyk.toggleTreeFilter') {
-        var filterType = args[0];
-        var filterValue = args[1];
-        var enabled = args[2];
-        var btns = document.querySelectorAll('[data-filter-type="' + filterType + '"][data-filter-value="' + filterValue + '"]');
-        for (var i = 0; i < btns.length; i++) {
-          if (enabled) {
-            btns[i].className = btns[i].className.replace(/\bfilter-active\b/, '').trim() + ' filter-active';
-          } else {
+        // New contract: args[0] is the combined token (e.g. "severity_high"),
+        // args[1] is the value (bool enabled or numeric threshold). "reset" and
+        // the popover-only tokens have no toolbar button; reflect the severity
+        // toggles visually and otherwise just no-op (already logged above).
+        var token = args[0];
+        if (token.indexOf('severity_') === 0) {
+          var severity = token.slice('severity_'.length);
+          var enabled = args.length > 1 && args[1];
+          var btns = document.querySelectorAll('[data-filter-type="severity"][data-filter-value="' + severity + '"]');
+          for (var i = 0; i < btns.length; i++) {
             btns[i].className = btns[i].className.replace(/\bfilter-active\b/, '').trim();
+            if (enabled) {
+              btns[i].className = (btns[i].className + ' filter-active').trim();
+            }
           }
         }
       } else if (command === 'snyk.setNodeExpanded') {

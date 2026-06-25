@@ -44,53 +44,63 @@ func (cmd *toggleTreeFilter) Command() types.CommandData {
 	return cmd.command
 }
 
+// filterTokenToSetting maps a combined filter token (e.g. "severity_high") to its
+// per-folder setting name. Tokens that carry a bool enabled value are listed here;
+// riskScore and reset are handled separately.
+var filterTokenToSetting = map[string]string{
+	"severity_critical":       types.SettingSeverityFilterCritical,
+	"severity_high":           types.SettingSeverityFilterHigh,
+	"severity_medium":         types.SettingSeverityFilterMedium,
+	"severity_low":            types.SettingSeverityFilterLow,
+	"issueView_openIssues":    types.SettingIssueViewOpenIssues,
+	"issueView_ignoredIssues": types.SettingIssueViewIgnoredIssues,
+}
+
+// Execute dispatches the snyk.toggleTreeFilter command. The command contract
+// uses a combined token in args[0] and places the value in args[1]:
+//
+//   - ["severity_critical"|"severity_high"|"severity_medium"|"severity_low", enabled:bool]
+//   - ["issueView_openIssues"|"issueView_ignoredIssues", enabled:bool]
+//   - ["riskScore", threshold:number]  — threshold clamped to [0,1000]
+//   - ["reset"]                        — no further arguments
 func (cmd *toggleTreeFilter) Execute(_ context.Context) (any, error) {
 	args := cmd.command.Arguments
 	if len(args) < 1 {
-		return nil, fmt.Errorf("expected at least 1 argument [filterType], got %d", len(args))
+		return nil, fmt.Errorf("expected at least 1 argument [filter], got %d", len(args))
 	}
 
-	filterType, ok := args[0].(string)
+	filter, ok := args[0].(string)
 	if !ok {
-		return nil, fmt.Errorf("filterType must be a string")
+		return nil, fmt.Errorf("filter must be a string")
 	}
 
-	// Each filter type validates only the arguments it uses: severity/issueView
-	// take [filterType, filterValue, enabled]; riskScore takes a numeric threshold
-	// in args[2]; reset takes no further arguments.
-	switch filterType {
-	case "severity":
-		filterValue, enabled, err := toggleArgs(args)
+	// Dispatch: severity and issueView tokens are looked up in filterTokenToSetting;
+	// riskScore and reset have their own cases.
+	if settingName, found := filterTokenToSetting[filter]; found {
+		enabled, err := boolArg(args)
 		if err != nil {
 			return nil, err
 		}
-		if err := cmd.applySeverityFilter(filterValue, enabled); err != nil {
-			return nil, err
+		cmd.writeFilterToAllFolders(settingName, enabled)
+	} else {
+		switch filter {
+		case "riskScore":
+			if len(args) < 2 {
+				return nil, fmt.Errorf("expected 2 arguments [filter, threshold], got %d", len(args))
+			}
+			threshold, err := toInt(args[1])
+			if err != nil {
+				return nil, fmt.Errorf("risk score threshold must be a number: %w", err)
+			}
+			cmd.applyRiskScoreFilter(threshold)
+		case "reset":
+			// The popover's Reset button restores all of its filters at once and needs
+			// no further arguments. Batched into one command so the whole reset triggers
+			// a single config-change cycle / tree re-render (see applyResetFilters).
+			cmd.applyResetFilters()
+		default:
+			return nil, fmt.Errorf("unknown filter %q", filter)
 		}
-	case "issueView":
-		filterValue, enabled, err := toggleArgs(args)
-		if err != nil {
-			return nil, err
-		}
-		if err := cmd.applyIssueViewFilter(filterValue, enabled); err != nil {
-			return nil, err
-		}
-	case "riskScore":
-		if len(args) < 3 {
-			return nil, fmt.Errorf("expected 3 arguments [filterType, filterValue, threshold], got %d", len(args))
-		}
-		threshold, err := toInt(args[2])
-		if err != nil {
-			return nil, fmt.Errorf("risk score threshold must be a number: %w", err)
-		}
-		cmd.applyRiskScoreFilter(threshold)
-	case "reset":
-		// The popover's Reset button restores all of its filters at once and needs
-		// no further arguments. Batched into one command so the whole reset triggers
-		// a single config-change cycle / tree re-render (see applyResetFilters).
-		cmd.applyResetFilters()
-	default:
-		return nil, fmt.Errorf("unknown filter type %q", filterType)
 	}
 
 	// Trigger the standard config change flow: re-publish diagnostics and
@@ -107,38 +117,6 @@ func (cmd *toggleTreeFilter) Execute(_ context.Context) (any, error) {
 	cmd.notifyConfigurationChanged()
 
 	return nil, nil
-}
-
-func (cmd *toggleTreeFilter) applySeverityFilter(value string, enabled bool) error {
-	var settingName string
-	switch value {
-	case "critical":
-		settingName = types.SettingSeverityFilterCritical
-	case "high":
-		settingName = types.SettingSeverityFilterHigh
-	case "medium":
-		settingName = types.SettingSeverityFilterMedium
-	case "low":
-		settingName = types.SettingSeverityFilterLow
-	default:
-		return fmt.Errorf("unknown severity value %q", value)
-	}
-	cmd.writeFilterToAllFolders(settingName, enabled)
-	return nil
-}
-
-func (cmd *toggleTreeFilter) applyIssueViewFilter(value string, enabled bool) error {
-	var settingName string
-	switch value {
-	case "openIssues":
-		settingName = types.SettingIssueViewOpenIssues
-	case "ignoredIssues":
-		settingName = types.SettingIssueViewIgnoredIssues
-	default:
-		return fmt.Errorf("unknown issue view value %q", value)
-	}
-	cmd.writeFilterToAllFolders(settingName, enabled)
-	return nil
 }
 
 // applyRiskScoreFilter writes the risk-score threshold to every open folder. Like
@@ -198,21 +176,18 @@ func (cmd *toggleTreeFilter) writeFilterToAllFolders(settingName string, value a
 	}
 }
 
-// toggleArgs extracts the [filterValue, enabled] pair shared by the severity and
-// issueView toggles, which both require all three command arguments.
-func toggleArgs(args []any) (string, bool, error) {
-	if len(args) < 3 {
-		return "", false, fmt.Errorf("expected 3 arguments [filterType, filterValue, enabled], got %d", len(args))
+// boolArg extracts the bool enabled value from args[1]. It validates that
+// len(args) >= 2 and that args[1] is a bool. The expected command shape is
+// [filter, enabled] where filter is the combined token (e.g. "severity_high").
+func boolArg(args []any) (bool, error) {
+	if len(args) < 2 {
+		return false, fmt.Errorf("expected [filter, enabled], got %d argument(s)", len(args))
 	}
-	filterValue, ok := args[1].(string)
+	enabled, ok := args[1].(bool)
 	if !ok {
-		return "", false, fmt.Errorf("filterValue must be a string")
+		return false, fmt.Errorf("enabled must be a bool")
 	}
-	enabled, ok := args[2].(bool)
-	if !ok {
-		return "", false, fmt.Errorf("enabled must be a bool")
-	}
-	return filterValue, enabled, nil
+	return enabled, nil
 }
 
 // toInt coerces a command argument to an int. JSON numbers arrive as float64 over

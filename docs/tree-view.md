@@ -73,14 +73,18 @@ Returns the full tree view HTML. Used for initial load or manual refresh.
 
 Toggles a filter setting. The updated tree HTML is pushed via `$/snyk.treeView` notification (not returned directly). Every variant applies the change to **all open folders** (the toolbar is workspace-wide).
 
-**Arguments:** the shape depends on `filterType` (always `args[0]`):
+**Arguments:** `args[0]` is a combined filter token; `args[1]` is always the value (or omitted for `reset`):
 
-| `filterType` | Arguments | Notes |
-|--------------|-----------|-------|
-| `"severity"` | `[filterType, filterValue: string, enabled: boolean]` | `filterValue`: `"critical"`, `"high"`, `"medium"`, `"low"` |
-| `"issueView"` | `[filterType, filterValue: string, enabled: boolean]` | `filterValue`: `"openIssues"`, `"ignoredIssues"` |
-| `"riskScore"` | `[filterType, "", threshold: number]` | `threshold`: minimum risk score, clamped to `0`–`1000`; `filterValue` (`args[1]`) is unused |
-| `"reset"` | `[filterType]` | restores risk score + issue-view options to their defaults; takes no further arguments |
+| `args[0]` token | `args[1]` | Notes |
+|-----------------|-----------|-------|
+| `"severity_critical"` | `enabled: boolean` | enable/disable the Critical severity filter |
+| `"severity_high"` | `enabled: boolean` | enable/disable the High severity filter |
+| `"severity_medium"` | `enabled: boolean` | enable/disable the Medium severity filter |
+| `"severity_low"` | `enabled: boolean` | enable/disable the Low severity filter |
+| `"issueView_openIssues"` | `enabled: boolean` | enable/disable Open Issues in the issue view |
+| `"issueView_ignoredIssues"` | `enabled: boolean` | enable/disable Ignored Issues in the issue view |
+| `"riskScore"` | `threshold: number` | minimum risk score, clamped to `0`–`1000` |
+| `"reset"` | _(none)_ | restores risk score + issue-view options to their defaults; takes no further arguments |
 
 `enabled`: `true` to enable, `false` to disable. JSON numbers arrive as `float64` over LSP; the handler coerces to `int` and rejects non-finite values.
 
@@ -202,7 +206,7 @@ window.__ideExecuteCommand__ = function(command, args, callback) {
 | Call | Command | Args |
 |------|---------|------|
 | Issue click | `snyk.navigateToRange` | `[filePath, { start: { line, character }, end: { line, character } }, issueId, product]` |
-| Filter toggle | `snyk.toggleTreeFilter` | varies by `filterType` — `[filterType, filterValue, enabled]` (severity/issueView), `[filterType, "", threshold]` (riskScore), `[filterType]` (reset) |
+| Filter toggle | `snyk.toggleTreeFilter` | combined token in `args[0]` — `["severity_high", enabled]`, `["issueView_openIssues", enabled]`, `["riskScore", threshold]`, `["reset"]` |
 | Expand/collapse | `snyk.setNodeExpanded` | `[nodeID, expanded]` |
 
 ### Filter Architecture
@@ -215,9 +219,9 @@ sequenceDiagram
     participant LS
 
     User->>WebView: Click severity button "High"
-    WebView->>WebView: JS: read data-filter-type, data-filter-value
-    WebView->>IDE: __ideExecuteCommand__("snyk.toggleTreeFilter", ["severity", "high", false])
-    IDE->>LS: workspace/executeCommand snyk.toggleTreeFilter ["severity", "high", false]
+    WebView->>WebView: JS: build token "severity_" + data-filter-value
+    WebView->>IDE: __ideExecuteCommand__("snyk.toggleTreeFilter", ["severity_high", false])
+    IDE->>LS: workspace/executeCommand snyk.toggleTreeFilter ["severity_high", false]
     LS->>LS: Update Config.SetSeverityFilter
     LS->>LS: HandleConfigChange → CompositeEmitter.Emit
     LS-->>IDE: $/snyk.treeView notification (re-rendered HTML)
