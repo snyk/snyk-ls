@@ -256,7 +256,7 @@ func aggregateIssueViewOptions(opts []types.IssueViewOptions) (types.IssueViewOp
 	// for all (rather than each option resolving in its own default direction).
 	// Note this differs from aggregateRiskScores, which pins a mixed slider to
 	// the highest threshold so it sits at a meaningful position; a checkbox has
-	// no equivalent ordering, so we optimise for the first-click direction.
+	// no equivalent ordering, so we optimize for the first-click direction.
 	if mixed.OpenIssues {
 		agg.OpenIssues = false
 	}
