@@ -38,6 +38,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
 	noti "github.com/snyk/snyk-ls/internal/notification"
@@ -45,6 +46,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/scannercommon"
 	"github.com/snyk/snyk-ls/internal/scans"
 	"github.com/snyk/snyk-ls/internal/sdk"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -72,6 +74,9 @@ var (
 		"--yarn-workspaces":  true,
 		"--docker":           true,
 		"--all-sub-projects": true,
+		// --maven-aggregate-project is mutually exclusive with --all-projects per the Snyk CLI spec:
+		// https://docs.snyk.io/developer-tools/snyk-cli/commands/test#--maven-aggregate-project
+		"--maven-aggregate-project": true,
 	}
 
 	// Make sure CLIScanner implements the desired interfaces
@@ -97,6 +102,7 @@ type CLIScanner struct {
 	supportedFiles          map[string]bool
 	packageIssueCache       map[string][]types.Issue
 	engine                  workflow.Engine
+	logger                  *zerolog.Logger
 	configResolver          types.ConfigResolverInterface
 }
 
@@ -117,6 +123,7 @@ func NewCLIScanner(engine workflow.Engine, instrumentor performance.Instrumentor
 		inlineValues:            make(inlineValueMap),
 		packageIssueCache:       make(map[string][]types.Issue),
 		engine:                  engine,
+		logger:                  engine.GetLogger(),
 		configResolver:          configResolver,
 		supportedFiles: map[string]bool{
 			"yarn.lock":               true,
@@ -168,37 +175,36 @@ func (cliScanner *CLIScanner) Product() product.Product {
 // Scan implements types.ProductScanner.
 // For CLI-based scanners, pathToScan is the target file or folder to scan.
 func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues []types.Issue, err error) {
-	workspaceFolderConfig, ok := ctx2.FolderConfigFromContext(ctx)
-	if !ok || workspaceFolderConfig == nil {
-		return nil, errors.New("FolderConfig not found in context")
+	baseLogger := cliScanner.logger
+	workspaceFolderConfig, scanType, workspaceFolder, err := scannercommon.ResolveFolderAndScanType(ctx)
+	if err != nil {
+		return nil, err
 	}
-
-	// Log scan type and paths
-	scanType := "WorkingDirectory"
-	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
-		scanType = deltaScanType.String()
-	}
-	workspaceFolder := workspaceFolderConfig.FolderPath
-	logger := cliScanner.getLogger(ctx).With().
-		Str("pathToScan", string(pathToScan)).
-		Str("workspaceFolder", string(workspaceFolder)).
-		Str("scanType", scanType).
-		Logger()
+	logger := scannercommon.LoggerWithProductScanFields(baseLogger, "oss.Scan", pathToScan, workspaceFolder, scanType)
 
 	logger.Debug().Msg("OSS scanner: starting scan")
+
+	if err = scannercommon.RequireProductEnabled(
+		cliScanner.getConfigResolver(ctx).IsProductEnabledForFolder(product.ProductOpenSource, workspaceFolderConfig),
+		utils.ErrSnykOssNotEnabledForFolder,
+	); err != nil {
+		return nil, err
+	}
+
+	if err = scannercommon.RequireAuthToken(cliScanner.engine.GetConfiguration(), logger); err != nil {
+		return nil, err
+	}
 
 	// Ensure path is in context for scanInternal (when called directly, e.g. from tests)
 	ctx = ctx2.NewContextWithWorkDirAndFilePath(ctx, workspaceFolder, pathToScan)
 	ctx = cliScanner.enrichContext(ctx)
 
-	if config.GetToken(cliScanner.engine.GetConfiguration()) == "" {
-		logger.Info().Msg("not authenticated, not scanning")
-		return issues, err
-	}
 	cliPathScan := cliScanner.isSupported(pathToScan)
 	if !cliPathScan {
-		logger.Debug().Msg("OSS scanner: skipping unsupported file/directory")
-		return issues, nil
+		// Unsupported paths are normal for on-save / background scans (e.g. non-manifest files).
+		// Skip quietly without error so parents do not treat this as a failed scan.
+		logger.Debug().Msg("Open Source scan skipped: path is not a supported manifest, lockfile, or directory")
+		return []types.Issue{}, nil
 	}
 	return cliScanner.scanInternal(ctx, cliScanner.prepareScanCommand)
 }
@@ -220,9 +226,8 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	path := ctx2.FilePathFromContext(ctx)
 	folderConfig, ok := ctx2.FolderConfigFromContext(ctx)
 	if !ok || folderConfig == nil {
-		const msg = "FolderConfig not found in context"
-		logger.Error().Msg(msg)
-		return []types.Issue{}, errors.New(msg)
+		logger.Error().Msg(utils.ErrFolderConfigNotInContext)
+		return []types.Issue{}, errors.New(utils.ErrFolderConfigNotInContext)
 	}
 
 	// now start the scanning
@@ -337,6 +342,20 @@ func (cliScanner *CLIScanner) updateArgs(workDir types.FilePath, commandLineArgs
 
 	// this asks the client for the current SDK and blocks on it
 	additionalParameters, env := cliScanner.updateSDKs(folderConfig.FolderPath)
+	// Global (Project Defaults) additional_environment is NOT read here. It reaches `env` via
+	// applyEnvironment -> os.Setenv -> os.Environ() -> updateSDKs(env). The folder-level value
+	// below is merged on top, so the precedence is global < folder (folder wins on key conflict).
+	// If updateSDKs ever stops seeding from the process environment, the global tier silently
+	// drops out — keep that contract intact, or read GetGlobalString(SettingAdditionalEnvironment)
+	// here explicitly.
+	// merge folder-level additional_environment into env map (additive: folder wins on key conflict)
+	if ae := folderConfig.AdditionalEnv(); ae != "" {
+		for _, pair := range strings.Split(ae, ";") {
+			if k, v, ok := strings.Cut(pair, "="); ok && k != "" {
+				env[k] = v
+			}
+		}
+	}
 	// process folder config additional env
 	if len(folderConfigArgs) > 0 {
 		additionalParameters = append(additionalParameters, folderConfigArgs...)
@@ -456,6 +475,34 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(
 	return issues
 }
 
+// resolveNonRelativePath tries stat-based heuristics to turn a non-relative
+// displayTargetFile into an absolute path. Falls back to the context `path`
+// when its basename matches (covers transient stat failures on file-save scans).
+func resolveNonRelativePath(logger *zerolog.Logger, resultPath, displayTargetFile string, workDir, path types.FilePath) types.FilePath {
+	basePath := filepath.Base(displayTargetFile)
+	candidates := []string{
+		filepath.Join(resultPath, displayTargetFile),
+		filepath.Join(resultPath, basePath),
+		filepath.Join(string(workDir), displayTargetFile),
+		filepath.Join(string(workDir), basePath),
+	}
+	for i, candidate := range candidates {
+		_, err := os.Stat(candidate)
+		if err == nil {
+			return types.FilePath(candidate)
+		}
+		logger.Trace().Err(err).Msgf("candidate[%d] %s not found", i, candidate)
+	}
+	// All stat heuristics failed. Use context path when its basename matches
+	// displayTargetFile — prevents mis-attribution in --all-projects scans where
+	// `path` is the workspace root, not the specific result file.
+	if path != "" && filepath.Base(string(path)) == basePath {
+		return path
+	}
+	logger.Error().Msgf("couldn't determine absolute file path for: %s", displayTargetFile)
+	return ""
+}
+
 func getAbsTargetFilePath(logger *zerolog.Logger, resultPath, displayTargetFile string, workDir, path types.FilePath) types.FilePath {
 	if displayTargetFile == "" && path != "" {
 		return path
@@ -470,39 +517,7 @@ func getAbsTargetFilePath(logger *zerolog.Logger, resultPath, displayTargetFile 
 
 	relative, err := filepath.Rel(string(workDir), newDisplayTargetFile)
 	if err != nil || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		logger.Trace().Err(err).Msgf("path is not relative to %s", workDir)
-		// now we try out stuff
-		// if displayTargetFile is not relative, let's try to join path with basename
-		basePath := filepath.Base(newDisplayTargetFile)
-		scanResultPath := resultPath
-		tryOutPath := filepath.Join(scanResultPath, newDisplayTargetFile)
-		_, tryOutErr := os.Stat(tryOutPath)
-		if tryOutErr != nil {
-			logger.Trace().Err(err).Msgf("joining displayTargetFile: %s to path: %s failed", newDisplayTargetFile, scanResultPath)
-			tryOutPath = filepath.Join(scanResultPath, basePath)
-			_, tryOutErr := os.Stat(tryOutPath)
-			if tryOutErr != nil {
-				logger.Trace().Err(err).Msgf("joining basePath: %s to path: %s failed", basePath, scanResultPath)
-				// if that doesn't work, let's try full path and full display target file
-				tryOutPath = filepath.Join(string(workDir), newDisplayTargetFile)
-				_, tryOutErr = os.Stat(tryOutPath)
-				if tryOutErr != nil {
-					logger.Trace().Err(err).Msgf("joining displayTargetFile: %s to workDir: %s failed.", newDisplayTargetFile, workDir)
-					tryOutPath = filepath.Join(string(workDir), basePath)
-					_, tryOutErr = os.Stat(tryOutPath)
-					if tryOutErr != nil {
-						logger.Trace().Err(err).Msgf("joining displayTargetFile: %s to workDir: %s failed. Falling back to returning: %s", newDisplayTargetFile, workDir, newDisplayTargetFile)
-						tryOutPath = newDisplayTargetFile // we give up and return the display target file
-					}
-				}
-			}
-		}
-		isAbs = filepath.IsAbs(tryOutPath)
-		if !isAbs {
-			logger.Error().Msgf("couldn't determine absolute file path for: %s", newDisplayTargetFile)
-			return ""
-		}
-		return types.FilePath(tryOutPath)
+		return resolveNonRelativePath(logger, resultPath, newDisplayTargetFile, workDir, path)
 	}
 
 	// it's relative, we can now just return it!
@@ -521,8 +536,7 @@ func getAbsTargetFilePath(logger *zerolog.Logger, resultPath, displayTargetFile 
 
 		return types.FilePath(abs)
 	}
-	// we really can't figure it out, we return empty
-	return ""
+	return types.FilePath(joinedRelative)
 }
 
 func (cliScanner *CLIScanner) unmarshallOssJson(res []byte) (scanResults []scanResult, err error) {
@@ -701,14 +715,14 @@ func findNewFeature(folderConfig *types.FolderConfig, cmd []string) string {
 }
 
 func (cliScanner *CLIScanner) enrichContext(ctx context.Context) context.Context {
-	dependenciesFromContext, found := ctx2.DependenciesFromContext(ctx)
-	if !found {
-		dependenciesFromContext = map[string]any{}
-	}
-	dependenciesFromContext[ctx2.DepLearnService] = cliScanner.learnService
-	dependenciesFromContext[ctx2.DepErrorReporter] = cliScanner.errorReporter
-	dependenciesFromContext[ctx2.DepCLIExecutor] = cliScanner.cli
-	dependenciesFromContext[ctx2.DepEngine] = cliScanner.engine
+	// CopyDependenciesFromContext returns a fresh map so we never mutate the
+	// shared map in the parent context — concurrent scans from the same parent
+	// context would otherwise race on the same map.
+	deps := ctx2.CopyDependenciesFromContext(ctx)
+	deps[ctx2.DepLearnService] = cliScanner.learnService
+	deps[ctx2.DepErrorReporter] = cliScanner.errorReporter
+	deps[ctx2.DepCLIExecutor] = cliScanner.cli
+	deps[ctx2.DepEngine] = cliScanner.engine
 
-	return ctx2.NewContextWithDependencies(ctx, dependenciesFromContext)
+	return ctx2.NewContextWithDependencies(ctx, deps)
 }

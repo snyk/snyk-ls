@@ -51,6 +51,21 @@
     }
   }
 
+  function scrollRowIntoViewVerticalOnly(row) {
+    if (!row) return;
+    if (!row.scrollIntoView) return;
+    // Preserve horizontal scroll — scrollIntoView may shift it even with inline:'nearest'
+    // if the row is horizontally out of view. Capture and restore unconditionally.
+    var savedScrollLeft = container.scrollLeft;
+    // block:'nearest' is a no-op when the row is already fully visible, so manual clicks
+    // that trigger a programmatic __selectTreeNode__ round-trip don't cause any scroll jump.
+    // inline:'nearest' minimises horizontal movement, but we restore scrollLeft anyway.
+    row.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    // scroll-behavior: smooth on #treeContainer would run after this line and overwrite
+    // the restored value. tree.css must not set scroll-behavior: smooth on this element.
+    container.scrollLeft = savedScrollLeft;
+  }
+
   window.__selectTreeNode__ = function(issueId) {
     if (!issueId) return;
     var row = container.querySelector('[data-issue-id="' + issueId + '"]');
@@ -68,13 +83,16 @@
       parent = parent.parentElement;
     }
     selectNodeRow(row);
-    if (row.scrollIntoView) row.scrollIntoView(false);
+    scrollRowIntoViewVerticalOnly(row);
   };
 
   // Scan error overlay for product error nodes.
   var activeErrorOverlay = null;
   var activeErrorKeyDown = null;
   var activeErrorOutsideClick = null;
+  var activeErrorResize = null;
+  var activeErrorScroll = null;
+  var activeErrorRow = null;
 
   function dismissErrorOverlay() {
     if (activeErrorOverlay && activeErrorOverlay.parentNode) {
@@ -88,7 +106,66 @@
       document.removeEventListener('click', activeErrorOutsideClick);
       activeErrorOutsideClick = null;
     }
+    if (activeErrorResize) {
+      window.removeEventListener('resize', activeErrorResize);
+      activeErrorResize = null;
+    }
+    if (activeErrorScroll) {
+      // Match the `capture: true` used when adding the listener.
+      document.removeEventListener('scroll', activeErrorScroll, true);
+      activeErrorScroll = null;
+    }
     activeErrorOverlay = null;
+    activeErrorRow = null;
+  }
+
+  // Computes and applies the final overlay position using its measured height,
+  // so a tall overlay against a row at the bottom of the viewport flips above
+  // the row instead of being clipped (IDE-1808). Prefers above whenever there
+  // is room above: tree views in IDEs typically have more chrome below them
+  // (status bars, help panels) than above, so above is the safer default and
+  // matches the behavior of the previous VS Code-side shim.
+  // Clears `bottom` and `transform` defensively so future style sources can't
+  // stretch the overlay between opposing anchors.
+  function positionErrorOverlay(overlay, row) {
+    if (!overlay || !row) return;
+    var rect = row.getBoundingClientRect();
+    // 600 = sensible fallback viewport width when neither window.innerWidth
+    // nor documentElement.clientWidth is reported (very old WebViews / tests).
+    var vw = window.innerWidth || document.documentElement.clientWidth || 600;
+
+    // 520 = preferred max overlay width (keeps error text at a comfortable
+    // reading width); 16 = total horizontal viewport padding (8px each side)
+    // so a narrow viewport still leaves a small margin.
+    var overlayW = Math.min(520, vw - 16);
+
+    // Apply width and clear stale top/bottom before measuring height: the
+    // <pre> message wraps, so width determines height. Measuring height first
+    // would use the pre-wrap layout and place the overlay incorrectly once
+    // the width is applied.
+    overlay.style.position = 'fixed';
+    overlay.style.bottom = '';
+    overlay.style.transform = '';
+    overlay.style.width = overlayW + 'px';
+
+    var overlayH = overlay.getBoundingClientRect().height;
+    if (overlayH <= 0) return;
+
+    // 4 = gap in px between the row and the overlay (and a minimum margin
+    // from the viewport edge).
+    var gap = 4;
+    var topPos = rect.bottom + gap;
+    if (rect.top - overlayH - gap >= gap) {
+      topPos = rect.top - overlayH - gap;
+    }
+    topPos = Math.max(gap, topPos);
+
+    // 8 = right-edge margin: when the row is far right, pin the overlay so
+    // there is still ~8px between its right edge and the viewport.
+    var leftPos = Math.max(gap, Math.min(rect.left, vw - overlayW - 8));
+
+    overlay.style.top = topPos + 'px';
+    overlay.style.left = leftPos + 'px';
   }
 
   function showErrorOverlay(row, productLabel, errorMessage) {
@@ -118,23 +195,18 @@
     });
     overlay.appendChild(closeBtn);
 
-    // Position below the clicked row using fixed positioning so the overlay is
-    // viewport-relative and not clipped by the scrollable tree container.
-    var rect = row.getBoundingClientRect();
-    var vw = window.innerWidth || document.documentElement.clientWidth || 600;
-    var vh = window.innerHeight || document.documentElement.clientHeight || 400;
-    var overlayW = Math.min(520, vw - 16);
-    var topPos = rect.bottom + 4;
-    // Flip above the row if not enough space below
-    if (topPos + 200 > vh) { topPos = Math.max(4, rect.top - 4); }
-    var leftPos = Math.max(4, Math.min(rect.left, vw - overlayW - 8));
+    // Insert offscreen so we can measure the real height without a visible
+    // flash, then reposition correctly using `positionErrorOverlay`.
     overlay.style.position = 'fixed';
-    overlay.style.top = topPos + 'px';
-    overlay.style.left = leftPos + 'px';
-    overlay.style.width = overlayW + 'px';
-
+    overlay.style.top = '0px';
+    overlay.style.left = '0px';
+    overlay.style.visibility = 'hidden';
     document.body.appendChild(overlay);
+    positionErrorOverlay(overlay, row);
+    overlay.style.visibility = '';
+
     activeErrorOverlay = overlay;
+    activeErrorRow = row;
 
     activeErrorKeyDown = function(ev) {
       if (ev.key === 'Escape' || ev.key === 'Esc' || ev.keyCode === 27) {
@@ -142,6 +214,24 @@
       }
     };
     document.addEventListener('keydown', activeErrorKeyDown);
+
+    activeErrorResize = function() {
+      if (activeErrorOverlay && activeErrorRow) {
+        positionErrorOverlay(activeErrorOverlay, activeErrorRow);
+      }
+    };
+    window.addEventListener('resize', activeErrorResize);
+
+    // Reposition on scroll so the overlay tracks its row when any scrollable
+    // ancestor (e.g. the tree container) scrolls. `capture: true` is required
+    // because scroll events do not bubble; capturing on the document catches
+    // them from any element.
+    activeErrorScroll = function() {
+      if (activeErrorOverlay && activeErrorRow) {
+        positionErrorOverlay(activeErrorOverlay, activeErrorRow);
+      }
+    };
+    document.addEventListener('scroll', activeErrorScroll, true);
 
     setTimeout(function() {
       if (!activeErrorOverlay) return;
@@ -448,6 +538,23 @@
       var isActive = hasClass(btn, 'filter-active');
       var enabled = !isActive;
 
+      // Optimistically reflect the toggle in the button's class so the active
+      // state updates immediately, rather than waiting for the LS to re-render
+      // the tree in response to the command below. A "mixed" button (open folders
+      // disagree) counts as not-active, so the first click enables the severity
+      // for every folder, resolving the mismatch.
+      // Note: this optimistic flip does NOT account for org-locked folders. When
+      // a folder has the severity org-locked (Locked Remote > User Folder
+      // Override), the button flips active here but snaps back to filter-mixed on
+      // the next LS re-render (a brief flicker). The resolved state is always
+      // correct — only the transient optimistic state may be wrong.
+      btn.classList.remove('filter-mixed');
+      if (enabled) {
+        btn.classList.add('filter-active');
+      } else {
+        btn.classList.remove('filter-active');
+      }
+
       executeCommand('snyk.toggleTreeFilter', [filterType, filterValue, enabled]);
     });
   }
@@ -495,4 +602,253 @@
   if (collapseAllBtn) {
     collapseAllBtn.addEventListener('click', function() { collapseAllNodes(); });
   }
+
+  // File-path middle truncation.
+  // File rows show the full project-relative path as the label
+  // (e.g. "frontend/src/app/app.component.ts"). When the sidebar narrows, the
+  // CSS fallback clips the right edge — hiding the filename, which is usually
+  // the most informative part. This block measures the label's available
+  // width and rewrites the text into a middle-truncated form that keeps the
+  // filename intact: "frontend/…/app.component.ts". The companion flex
+  // layout in styles.css gives us label.clientWidth directly.
+  var measureCanvas = null;
+  var measureCtx = null;
+  var measureFontKey = '';
+  var retruncatePending = false;
+
+  function getMeasureCtx() {
+    if (!measureCtx) {
+      measureCanvas = document.createElement('canvas');
+      measureCtx = measureCanvas.getContext('2d');
+    }
+    return measureCtx;
+  }
+
+  function ensureMeasureFont(labelEl) {
+    if (!labelEl) return;
+    var cs = window.getComputedStyle(labelEl);
+    // `cs.font` returns "" in Firefox when longhand values diverge from the
+    // shorthand defaults, so compose the shorthand by hand for portability.
+    var font = (cs.fontStyle || 'normal') + ' ' +
+               (cs.fontVariant || 'normal') + ' ' +
+               (cs.fontWeight || 'normal') + ' ' +
+               (cs.fontSize || '13px') + ' ' +
+               (cs.fontFamily || 'sans-serif');
+    if (font !== measureFontKey) {
+      var ctx = getMeasureCtx();
+      if (!ctx) return; // canvas 2d unavailable (restricted webview) — skip
+      measureFontKey = font;
+      ctx.font = font;
+    }
+  }
+
+  function measureWidth(text) {
+    var ctx = getMeasureCtx();
+    // No 2d context (canvas disabled in some webview hosts): report 0 so callers
+    // treat everything as "fits" and middle-truncation no-ops, leaving CSS
+    // end-truncation in charge rather than throwing.
+    if (!ctx) return 0;
+    return ctx.measureText(text).width;
+  }
+
+  function truncateMiddleByWidth(text, maxWidth) {
+    if (maxWidth <= 0) return text;
+    if (measureWidth(text) <= maxWidth) return text;
+
+    var lastSlash = text.lastIndexOf('/');
+    if (lastSlash < 0) return text; // no path structure — let CSS end-truncate
+    // Filename includes the leading slash so the ellipsis sits flush:
+    // "foo/…/bar.ts" rather than "foo…/bar.ts".
+    var filename = text.substring(lastSlash);
+    var prefix = text.substring(0, lastSlash);
+    var ellipsis = '…';
+    var reserved = measureWidth(filename) + measureWidth(ellipsis);
+    if (reserved >= maxWidth) return text;
+
+    var availForPrefix = maxWidth - reserved;
+    var lo = 0;
+    var hi = prefix.length;
+    var best = 0;
+    while (lo <= hi) {
+      var mid = (lo + hi) >> 1;
+      if (measureWidth(prefix.substring(0, mid)) <= availForPrefix) {
+        best = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    if (best === prefix.length) return text;
+    // When best === 0 no prefix character fits: swapping nothing for an "…"
+    // saves nothing — the string is still too long. Fall back and let CSS
+    // end-truncate rather than producing "…/bar.ts" with no useful context.
+    if (best === 0) return text;
+    return prefix.substring(0, best) + ellipsis + filename;
+  }
+
+  function applyTruncation() {
+    retruncatePending = false;
+    // File rows + any opt-in label marked data-truncate-middle (used by the
+    // untrusted-folder path list so each line stays middle-truncated rather
+    // than end-clipped — keeping the folder basename visible).
+    var labels = container.querySelectorAll(
+      '.tree-node-file > .tree-node-row > .tree-label, .tree-label[data-truncate-middle]'
+    );
+    if (!labels.length) return;
+    for (var i = 0; i < labels.length; i++) {
+      var label = labels[i];
+      // Skip labels in collapsed branches — clientWidth is 0 so a measurement
+      // round-trip would be wasted, and they'll be re-evaluated on expand.
+      if (label.clientWidth === 0) continue;
+      // File rows and the untrusted-folder path list use different font families;
+      // ensure the canvas font matches each label before measuring. The call
+      // short-circuits when the font key hasn't changed, so the only real cost
+      // is one getComputedStyle per visible label.
+      ensureMeasureFont(label);
+      var full = label.getAttribute('data-full-label');
+      if (full === null) {
+        full = label.textContent;
+        label.setAttribute('data-full-label', full);
+        label.setAttribute('title', full);
+      }
+      var next = truncateMiddleByWidth(full, label.clientWidth);
+      if (label.textContent !== next) {
+        label.textContent = next;
+      }
+    }
+  }
+
+  function scheduleRetruncate() {
+    if (retruncatePending) return;
+    retruncatePending = true;
+    if (window.requestAnimationFrame) {
+      window.requestAnimationFrame(applyTruncation);
+    } else {
+      setTimeout(applyTruncation, 16);
+    }
+  }
+
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(scheduleRetruncate).observe(container);
+  } else {
+    window.addEventListener('resize', scheduleRetruncate);
+  }
+
+  // Expand/collapse mutates .expanded on .tree-node elements, which changes
+  // which file rows are laid out. Watch class changes on tree-node elements
+  // and re-run; selection toggling on .tree-node-row is filtered out below.
+  // Note: there is no fallback when MutationObserver is unavailable. Unlike
+  // ResizeObserver (which falls back to the 'resize' event), there is no DOM
+  // event for "a node's class changed", so expand/collapse re-truncation is
+  // simply skipped in environments that do not support MutationObserver.
+  if (typeof MutationObserver !== 'undefined') {
+    new MutationObserver(function(records) {
+      for (var i = 0; i < records.length; i++) {
+        var t = records[i].target;
+        if (t && t.classList && t.classList.contains('tree-node')) {
+          scheduleRetruncate();
+          return;
+        }
+      }
+    }).observe(container, { attributes: true, attributeFilter: ['class'], subtree: true });
+  }
+
+  // Re-run once webfonts settle so measurements aren't off by a few pixels.
+  if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
+    document.fonts.ready.then(scheduleRetruncate);
+  }
+
+  scheduleRetruncate();
+
+  // Tooltips.
+  // Native `title` tooltips render inconsistently inside IDE webviews, so we
+  // draw our own from the same `title` attributes (disabled/errored scanner
+  // hints, full file paths from the truncation pass above, untrusted folder
+  // paths). While our tooltip is shown the title is moved to data-tooltip so
+  // the native one can't also fire, and restored on mouse-out so it stays
+  // available for accessibility and any non-webview host.
+  var tooltipEl = null;
+  var tooltipTarget = null;
+
+  function findTitledAncestor(el) {
+    while (el && el !== document.body) {
+      if (el.getAttribute && el.getAttribute('title')) return el;
+      el = el.parentElement;
+    }
+    return null;
+  }
+
+  function positionTooltip(tip, target) {
+    var rect = target.getBoundingClientRect();
+    var vw = window.innerWidth || document.documentElement.clientWidth || 600;
+    var vh = window.innerHeight || document.documentElement.clientHeight || 600;
+    var gap = 4;
+    var tw = tip.offsetWidth;
+    var th = tip.offsetHeight;
+    // Prefer below the row; flip above if there isn't room.
+    var top = rect.bottom + gap;
+    if (top + th > vh - gap) {
+      top = rect.top - th - gap;
+    }
+    top = Math.max(gap, top);
+    var left = Math.max(gap, Math.min(rect.left, vw - tw - gap));
+    tip.style.top = top + 'px';
+    tip.style.left = left + 'px';
+  }
+
+  function showTooltip(target) {
+    var text = target.getAttribute('title');
+    if (!text) return;
+    // Stash + remove title so the native tooltip can't also appear.
+    target.setAttribute('data-tooltip', text);
+    target.removeAttribute('title');
+    tooltipTarget = target;
+
+    if (!tooltipEl) {
+      tooltipEl = document.createElement('div');
+      tooltipEl.className = 'tree-tooltip';
+      tooltipEl.setAttribute('role', 'tooltip');
+      document.body.appendChild(tooltipEl);
+    }
+    tooltipEl.textContent = text;
+    // Measure with content + max-width applied, then position, then reveal.
+    tooltipEl.style.visibility = 'hidden';
+    tooltipEl.style.display = 'block';
+    positionTooltip(tooltipEl, target);
+    tooltipEl.style.visibility = '';
+  }
+
+  function hideTooltip() {
+    if (tooltipTarget) {
+      var stored = tooltipTarget.getAttribute('data-tooltip');
+      if (stored !== null) {
+        tooltipTarget.setAttribute('title', stored);
+        tooltipTarget.removeAttribute('data-tooltip');
+      }
+      tooltipTarget = null;
+    }
+    if (tooltipEl) tooltipEl.style.display = 'none';
+  }
+
+  // Bound to document so it also covers titled elements outside the tree
+  // container (e.g. the severity filter-toolbar buttons).
+  document.addEventListener('mouseover', function(e) {
+    // Still hovering within the current target (e.g. moved onto a child) — keep it.
+    if (tooltipTarget && tooltipTarget.contains(e.target)) return;
+    var t = findTitledAncestor(e.target);
+    if (!t) {
+      hideTooltip();
+      return;
+    }
+    if (t !== tooltipTarget) {
+      hideTooltip();
+      showTooltip(t);
+    }
+  });
+  document.addEventListener('mouseout', function(e) {
+    // Ignore moves between descendants of the same titled element.
+    if (tooltipTarget && !tooltipTarget.contains(e.relatedTarget)) {
+      hideTooltip();
+    }
+  });
 })();

@@ -640,20 +640,37 @@ func getCustomEndpointUrlFromSnykApi(snykApi string, subdomain string) (string, 
 }
 
 // SetOrganization sets the organization on the given GAF configuration.
-// Also stores the org under UserGlobalKey(SettingOrganization) so it can be
-// read without triggering GAF's /rest/self auto-determination (which fires
-// on every Get("org") call when the result is a slug or the cache is cleared).
+// Also has checks to ensure the same org set multiple times will be a no-op,
+// and not cause more slug to UUID resolutions.
 func SetOrganization(conf configuration.Configuration, organization string) {
 	organization = strings.TrimSpace(organization)
 
+	// If the last set org is what they are trying to set, skip.
+	// This prevents us overriding a UUID in the GAF cache with the original slug
+	// and needing to resolve it again.
 	lastSet := types.GetGlobalString(conf, types.SettingLastSetOrganization)
 	if organization == lastSet {
 		return
 	}
 
 	conf.Set(configuration.ORGANIZATION, organization)
-	types.SetGlobalUser(conf, types.SettingOrganization, organization)
 	types.SetGlobalUser(conf, types.SettingLastSetOrganization, organization)
+}
+
+// ResetOrganization clears a user-set global organization so the effective org
+// reverts to GAF's resolution chain (the web-account preferred org via
+// /rest/self). It is the organization-specific arm of the global "Reset to
+// defaults" flow: organization is not stored at UserGlobalKey(SettingOrganization)
+// like the other org-scope settings, so it cannot be reset with
+// types.UnsetGlobalUser and needs this dedicated path.
+//
+// Unsetting SettingLastSetOrganization is required so SetOrganization's no-op
+// guard does not block a later re-set, and so folder_config.go's
+// globalOrgSetByUser check (GetGlobalString(SettingLastSetOrganization) != "")
+// correctly reads "not set by user" again.
+func ResetOrganization(conf configuration.Configuration) {
+	conf.Unset(configuration.ORGANIZATION)
+	types.UnsetGlobalUser(conf, types.SettingLastSetOrganization)
 }
 
 // AuthenticationMethodMatchesCredentials returns true if the token matches the configured authentication method.
@@ -696,10 +713,28 @@ func getAsOauthToken(token string, logger *zerolog.Logger) (*oauth2.Token, error
 }
 
 func SetupStorage(conf configuration.Configuration, s storage.StorageWithCallbacks, logger *zerolog.Logger) {
+	// Capture any OAuth token that was refreshed before this storage was mounted.
+	// A background API call (e.g. feature-flag poll) can trigger a GAF token refresh
+	// before initializeHandler installs ls-config.json, storing the new token in viper
+	// memory only — it is never written to ls-config.json. After SetStorage below,
+	// GAF's syncTokenRefresh will lock and read ls-config.json; if that file still holds
+	// the previous-session token, Refresh overwrites the fresh viper value, fires the
+	// bridge with the stale token, then attempts a second refresh with an already-consumed
+	// refresh token — failing with "invalid_grant". Writing the fresh value to the new
+	// file first prevents that second attempt.
+	preInitOAuthToken := conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN)
+
 	conf.SetStorage(s)
 	conf.PersistInStorage(folderconfig.ConfigMainKey)
 	conf.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
 	conf.PersistInStorage(configuration.AUTHENTICATION_TOKEN)
+
+	if preInitOAuthToken != "" {
+		if err := s.Set(auth.CONFIG_KEY_OAUTH_TOKEN, preInitOAuthToken); err != nil {
+			logger.Warn().Err(err).Msg("failed to flush pre-init OAuth token to storage; " +
+				"a stale token may be read on the next sync")
+		}
+	}
 
 	err := s.Refresh(conf, folderconfig.ConfigMainKey)
 	if err != nil {

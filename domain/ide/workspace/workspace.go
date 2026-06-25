@@ -19,6 +19,7 @@ package workspace
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -202,14 +203,19 @@ func (w *Workspace) GetFolderContaining(path types.FilePath) types.Folder {
 	return nil
 }
 
-func (w *Workspace) Folders() (folder []types.Folder) {
-	w.mutex.RLock()
-	defer w.mutex.RUnlock()
-	folders := make([]types.Folder, 0, len(w.folders))
-	for _, folder := range w.folders {
-		folders = append(folders, folder)
-	}
-
+func (w *Workspace) Folders() []types.Folder {
+	folders := func() []types.Folder {
+		w.mutex.RLock()
+		defer w.mutex.RUnlock()
+		result := make([]types.Folder, 0, len(w.folders))
+		for _, folder := range w.folders {
+			result = append(result, folder)
+		}
+		return result
+	}()
+	sort.Slice(folders, func(i, j int) bool {
+		return folders[i].Path() < folders[j].Path()
+	})
 	return folders
 }
 

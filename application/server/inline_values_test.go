@@ -35,7 +35,7 @@ import (
 
 func Test_textDocumentInlineValues_shouldBeServed(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _ := setupServer(t, engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService)
 
 	rsp, err := loc.Client.Call(t.Context(), "textDocument/inlineValue", nil)
 	assert.NoError(t, err)
@@ -63,10 +63,10 @@ func Test_textDocumentInlineValues_InlineValues(t *testing.T) {
 	mockProvider := mock_snyk.NewMockInlineValueProvider(ctrl)
 	mockProvider.EXPECT().GetInlineValues(testFilePath, gomock.Any()).Return([]snyk.InlineValue{mockValue}, nil)
 
-	loc, _, _ := setupCustomServerWithDeps(t, engine, tokenService, nil, func(deps di.Dependencies) di.Dependencies {
-		deps.InlineValueProvider = mockProvider
-		return deps
-	})
+	loc, _, _ := setupServer(t, engine, tokenService,
+		WithDeps(di.Dependencies{
+			InlineValueProvider: mockProvider,
+		}))
 
 	rsp, err := loc.Client.Call(t.Context(), "textDocument/inlineValue", types.InlineValueParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: documentURI},

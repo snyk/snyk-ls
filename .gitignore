@@ -92,3 +92,38 @@ brain/
 # Test-stage cache (local dev only)
 .tests-hash
 .tests-hash.tmp
+*verification-triage-*
+
+# Added by ggshield
+.cache_ggshield
+# Claude Code skill artefacts (local dev only)
+.commit-reviewed
+.commit-progress
+.verify-range
+.verify-agent-progress
+.pr-review-*.md
+.verify-metrics-pending
+.verify-complete
+.verify-precommit-hash
+.verify-agents
+.verify-counts
+.verify-staged-hash
+*_????????_??????_*.log
+.verify-staged-diff
+.verify-branch-diff
+.verify-pr-context
+.verify-oracle.json
+.verify-oracle.log
+.verify-oracle-scope.txt
+.verify-oracle.pid
+.verify-lang-skill
+.verify-chunk-diff
+.verify-triage.json
+.verify-source-map.json
+.verify-dedup-findings.json
+.verify-reranked.json
+.snyk-sca-output.json
+.snyk-sca-output.err
+.snyk-code-output.json
+.snyk-code-output.err
+.verification-result.*

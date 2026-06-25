@@ -233,13 +233,13 @@ For example, clicking an issue calls `__ideExecuteCommand__('snyk.navigateToRang
 where `range` is `{ start: { line, character }, end: { line, character } }`. When `issueId` and `product` are provided,
 the command also opens the issue detail panel via a `snyk://` URI constructed from `uri.PathToUri`.
 
-### IE11 Compatibility (Visual Studio)
+### Browser Compatibility
+
+Visual Studio's webview has migrated to Chromium; IE11 is no longer a supported target.
 
 - ES5 JavaScript only (no `const`, `let`, arrow functions, template literals)
 - No `<details>`/`<summary>` — uses `div` + class toggling
-- `document.createEvent('Event')` fallback for event dispatching
-- CSS compatible with IE11 (no CSS variables, no grid)
-- `scrollIntoView(false)` instead of `scrollIntoView({ block: 'nearest' })` (options object not supported in IE11)
+- CSS compatible with Chromium-based webviews (no CSS variables, no grid)
 
 ### Filtering
 

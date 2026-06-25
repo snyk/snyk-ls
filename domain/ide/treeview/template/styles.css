@@ -16,11 +16,13 @@
   --panel-border: var(--vscode-panel-border, #80808033);
   --widget-shadow: var(--vscode-widget-shadow, #00000026);
   --focus-border: var(--vscode-focusBorder, #0066cc);
+  --link-color: var(--vscode-textLink-foreground, #4daafc);
   --info-background: var(--vscode-inputValidation-infoBackground, #e6f3ff);
 
   --list-hover-background: var(--vscode-list-hoverBackground, #8080801a);
+  --list-hover-foreground: var(--vscode-list-hoverForeground, var(--list-active-selection-foreground));
   --list-active-selection-background: var(--vscode-list-activeSelectionBackground, #0066cc1f);
-  --list-active-selection-foreground: var(--vscode-list-activeSelectionForeground, #0066cc);
+  --list-active-selection-foreground: var(--vscode-list-activeSelectionForeground, inherit);
 
   --tree-indent-guides-stroke: var(--vscode-tree-indentGuidesStroke, #80808099);
 
@@ -77,6 +79,7 @@ body {
 
 .tree-node-row:hover {
   background-color: var(--list-hover-background);
+  color: var(--list-hover-foreground);
 }
 
 .tree-node-row.selected {
@@ -180,10 +183,36 @@ body {
   left: 58px;
 }
 
-/* Chevron: hidden — the tree guide lines indicate structure.
-   Kept in the DOM for click handling and screen-reader state. */
+/* Expand/collapse chevron column. Every row reserves a fixed-width chevron slot
+   (the span is always present) so labels stay aligned in a column, and the
+   disclosure glyph is painted on any node that has children
+   (tree-node-has-children) — folders, scanners, files, and multi-location issue
+   groups. Leaf rows reserve the slot but draw no glyph. */
 .tree-chevron {
-  display: none;
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  vertical-align: middle;
+  margin-right: 2px;
+  position: relative;
+  opacity: 0.7;
+  color: var(--text-color);
+}
+/* The glyph itself: rotated border corners that follow currentColor. Points
+   down when expanded, right when collapsed. Only drawn for expandable rows. */
+.tree-node-has-children > .tree-node-row > .tree-chevron::before {
+  content: "";
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -75%) rotate(45deg);
+}
+.tree-node-has-children:not(.expanded) > .tree-node-row > .tree-chevron::before {
+  transform: translate(-75%, -50%) rotate(-45deg);
 }
 
 /* Node label */
@@ -251,9 +280,33 @@ body {
   vertical-align: middle;
 }
 
-/* Error state for product nodes */
-.tree-node-error > .tree-node-row .tree-label {
-  color: var(--error-foreground);
+/* Errored scanner rows keep neutral label color. Scanner names stay in the
+   normal foreground regardless of state; only the inline description suffix
+   shifts to the dim --description-foreground (see product-description rules
+   below). Errors are surfaced via the click-to-open overlay and the inline
+   "- (Code settings unavailable)" suffix, so no row-level red is applied by
+   design. */
+
+/* Abbreviated product icons (@patchui/icons) carry per-product accent gradients
+   inline, so color/fill rules don't apply. Both disabled and errored products
+   dim the icon via opacity so the gradient/colour-rich scanner glyph recedes
+   visually without affecting the scanner-name typography next to it. */
+.tree-node-disabled > .tree-node-row .product-icon--abbreviated,
+.tree-node-error > .tree-node-row .product-icon--abbreviated {
+  opacity: 0.55;
+}
+
+/* Inline description suffix on product rows.
+   - Normal scanner: same foreground colour as the bold scanner name, regular weight.
+   - Disabled or errored scanner: dim to --description-foreground (the existing gray)
+     so the suffix recedes without ever touching the scanner name's colour or weight. */
+[data-product-id] > .tree-node-row > .tree-description-product {
+  color: var(--text-color);
+  font-weight: normal;
+}
+.tree-node-disabled > .tree-node-row > .tree-description-product,
+.tree-node-error > .tree-node-row > .tree-description-product {
+  color: var(--description-foreground);
 }
 
 /* File icon */
@@ -278,10 +331,6 @@ body {
   cursor: pointer;
 }
 
-.tree-node-issue .tree-node-row:hover {
-  background-color: var(--list-hover-background);
-}
-
 /* Issue group node (multi-location container) — expand/collapse like file node */
 .tree-node-issue-group .tree-node-row {
   cursor: pointer;
@@ -290,10 +339,6 @@ body {
 /* Location node — clickable like issue leaf */
 .tree-node-location .tree-node-row {
   cursor: pointer;
-}
-
-.tree-node-location .tree-node-row:hover {
-  background-color: var(--list-hover-background);
 }
 
 /* Filter toolbar */
@@ -363,15 +408,31 @@ body {
   vertical-align: middle;
 }
 
-.filter-btn-icon:not(.filter-active) {
-  opacity: 0.4;
-}
-
+/* The filter icons have three states:
+  - Enabled for all folders (solid colour)
+  - Mixed (some folders enabled, some disabled) (dimmed colour)
+  - Disabled for all folders (greyed-out colour)
+ */
 .filter-btn-icon.filter-active {
+  opacity: 1;
+  filter: none;
   background-color: transparent;
   border-color: transparent;
   color: inherit;
-  opacity: 1;
+}
+
+.filter-btn-icon.filter-mixed {
+  opacity: 0.7;
+  filter: none;
+  background-color: transparent;
+  border-color: transparent;
+}
+
+.filter-btn-icon:not(.filter-active):not(.filter-mixed) {
+  opacity: 0.3;
+  filter: grayscale(1);
+  background-color: transparent;
+  border-color: transparent;
 }
 
 /* Action buttons (expand/collapse all) */
@@ -414,12 +475,133 @@ body {
 
 .tree-node-row-info:hover {
   background-color: transparent;
+  color: inherit;
 }
 
-/* Disabled product nodes — greyed out */
-.tree-node-disabled .tree-node-row {
-  opacity: 0.5;
+/* Info-row label reads as an annotation rather than a sibling of the file
+   labels below it. Italic alone (no color/weight shift) sits the row a half-step
+   above filepaths without competing with the bold scanner name above. Scoped to
+   .tree-label so action elements inside variants (e.g. the untrusted-folder
+   Trust button) keep their upright type.
+   font-synthesis: none stops the browser from faking an oblique on the leading
+   status emoji (✅ ⚡ ✋) — the emoji font has no italic face, so without this it
+   gets a synthetic skew and looks tilted. Real text fonts keep their true italic. */
+.tree-node-row-info .tree-label {
+  font-style: italic;
+  font-synthesis: none;
 }
+
+/* Disabled scanner rows use targeted dimming on the product icon and the
+   description suffix (rules above). The scanner name itself stays at full
+   contrast, since product names are wayfinding and should never look "off".
+   Cursor is `help` so the row signals that hovering reveals the explanatory
+   tooltip. */
+.tree-node-disabled .tree-node-row {
+  cursor: help;
+}
+
+/* Untrusted-folder info node. Sits on the existing .tree-node-info foundation
+   (no banner chrome) so it visually belongs in the same family as the other
+   inline info rows ("✅ No issues found", "⚡ N fixable…"). The action row is
+   stacked under the message so the Trust button is always visible at the
+   sidebar's natural width. Button styling reuses --vscode-button-* tokens,
+   matching the IDE's primary-button look. */
+.tree-node-info--untrusted-folder .tree-label {
+  color: var(--text-color);
+  font-weight: normal;
+}
+/* Wrap the rationale paragraph instead of clipping it. The global
+   .tree-node-row rule sets `white-space: nowrap; overflow: hidden;
+   text-overflow: ellipsis` for filename rows, which cuts the rationale
+   off at narrow sidebar widths. The path-list and action rows keep the
+   global behavior — only this row gets multi-line wrap. */
+.tree-node-info--untrusted-folder .untrusted-rationale-row {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.4;
+}
+/* Strip the `.tree-label` 4px margin inside the banner. That margin
+   exists to clear the chevron/icon on filename rows; the banner has
+   no icon, so it just floats — and on wrapped lines only the first
+   line picks it up (inline margin-left applies at the element's start
+   edge), making the first line look indented relative to the rest. */
+.tree-node-info--untrusted-folder .untrusted-rationale-row .tree-label,
+.tree-node-info--untrusted-folder .untrusted-folder-path > .tree-label {
+  margin-left: 0;
+}
+/* Inline "Learn more" link at the end of the rationale. Uses VS Code's
+   textLink-foreground token so it tracks the theme. Italic comes from
+   the parent .tree-node-row-info .tree-label rule above, so the link
+   matches the body copy's slant. */
+.tree-node-info--untrusted-folder .untrusted-learn-more {
+  color: var(--link-color);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.tree-node-info--untrusted-folder .untrusted-learn-more:hover {
+  text-decoration: underline;
+}
+.tree-node-info--untrusted-folder .untrusted-folder-list-row {
+  display: flex; /* Override display:block from .tree-node-row; flex props are inert without this. */
+  flex-direction: column;
+  align-items: flex-start;
+  padding-top: 4px;
+  gap: 2px;
+}
+.tree-node-info--untrusted-folder .untrusted-folder-list-heading {
+  color: var(--text-color);
+  font-weight: 600;
+}
+.tree-node-info--untrusted-folder .untrusted-folder-paths {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+.tree-node-info--untrusted-folder .untrusted-folder-path {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.tree-node-info--untrusted-folder .untrusted-folder-path > .tree-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--vscode-editor-font-family, ui-monospace, monospace);
+  font-size: 12px;
+  opacity: 0.85;
+}
+.tree-node-info--untrusted-folder .untrusted-action-row {
+  padding-top: 4px;
+}
+.tree-node-info--untrusted-folder .untrusted-trust-btn {
+  background-color: var(--button-background-color);
+  color: var(--button-text-color);
+  border: none;
+  border-radius: 2px;
+  padding: 4px 12px;
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+.tree-node-info--untrusted-folder .untrusted-trust-btn:hover {
+  background-color: var(--button-hover-background);
+}
+
+/* Native-IDE scrollbars. Maps to VS Code's --vscode-scrollbarSlider-* webview
+   theme tokens. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--vscode-scrollbarSlider-background); }
+::-webkit-scrollbar-thumb:hover { background: var(--vscode-scrollbarSlider-hoverBackground); }
+::-webkit-scrollbar-thumb:active { background: var(--vscode-scrollbarSlider-activeBackground); }
+::-webkit-scrollbar-corner { background: transparent; }
 
 /* Delta reference picker overlay — inline dropdown on folder node click */
 .ref-picker-overlay {
@@ -536,7 +718,31 @@ body {
 
 /* Scan error overlay — viewport-fixed popup shown when a product error node is clicked.
    Width and position are set by JS; max-height limits the scrollable message area. */
+/* Custom tooltip drawn by tree.js from `title` attributes (native title
+   tooltips are unreliable inside IDE webviews). pointer-events: none so it
+   never intercepts hover/click on the row beneath it. */
+.tree-tooltip {
+  position: fixed;
+  z-index: 300;
+  display: none;
+  max-width: 320px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: var(--font-size);
+  line-height: 1.4;
+  white-space: normal;
+  pointer-events: none;
+  background-color: var(--vscode-editorHoverWidget-background, #252526);
+  color: var(--vscode-editorHoverWidget-foreground, var(--text-color));
+  border: 1px solid var(--vscode-editorHoverWidget-border, var(--panel-border));
+  box-shadow: 0 2px 8px var(--widget-shadow);
+}
+
 .error-overlay {
+  /* JS sets style.width to fit the viewport (Math.min(520, vw - 16)); border-box
+     makes that the total rendered width incl. padding + border, otherwise the
+     overlay overflows the right edge in narrow sidebars (~14px clipped at 384px). */
+  box-sizing: border-box;
   z-index: 200;
   max-height: 60vh;
   overflow-y: auto;
@@ -586,4 +792,24 @@ body {
 .error-overlay-close:hover {
   background-color: var(--warning-background);
   opacity: 0.8;
+}
+
+/* File-row middle truncation.
+ * tree.js rewrites .tree-label textContent into a middle-truncated string
+ * (filename always intact, ellipsis replacing interior segments) once it has
+ * measured the available width. Flex layout below exposes that width via
+ * label.clientWidth; the text-overflow rule on the label is a graceful
+ * fallback for the brief window before the script runs. */
+.tree-node-file > .tree-node-row {
+  display: flex;
+  align-items: center;
+}
+.tree-node-file > .tree-node-row > .tree-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tree-node-file > .tree-node-row > .tree-description {
+  flex: 0 0 auto;
 }

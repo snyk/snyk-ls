@@ -30,6 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -65,8 +66,9 @@ func Test_Scan_UsesConfigResolverFromContext(t *testing.T) {
 
 	issues, err := scanner.Scan(ctx, "fake.yml")
 
-	assert.NoError(t, err)
-	assert.Empty(t, issues)
+	assert.Error(t, err)
+	assert.Equal(t, utils.ErrSnykIacNotEnabledForFolder, err.Error())
+	assert.Nil(t, issues)
 }
 
 // Test_Scan_FallsBackToStructFieldWhenNoResolverInContext FC-064: IaC scanner falls back to struct field when context has no resolver
@@ -87,8 +89,9 @@ func Test_Scan_FallsBackToStructFieldWhenNoResolverInContext(t *testing.T) {
 
 	issues, err := scanner.Scan(ctx, "fake.yml")
 
-	assert.NoError(t, err)
-	assert.Empty(t, issues)
+	assert.Error(t, err)
+	assert.Equal(t, utils.ErrSnykIacNotEnabledForFolder, err.Error())
+	assert.Nil(t, issues)
 }
 
 func Test_Scan_IsInstrumented(t *testing.T) {
@@ -151,6 +154,26 @@ func Test_Scan_CancelledContext_DoesNotScan(t *testing.T) {
 
 	// Assert
 	assert.False(t, cliMock.WasExecuted())
+}
+
+// Test_Scan_EmptyCliOutput_ReturnsNoIssues verifies that when the CLI exits 0 with empty
+// stdout (e.g. the scanned directory contains no IaC files), Scan returns an empty issue
+// list rather than a "Cannot unmarshal: unexpected end of JSON input" error.
+// Regression test for IDE-2105.
+func Test_Scan_EmptyCliOutput_ReturnsNoIssues(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	dir := t.TempDir()
+
+	cliMock := cli.NewTestExecutorWithResponse(engine, "")
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))
+	ctx := ctx2.NewContextWithFolderConfig(t.Context(), &types.FolderConfig{FolderPath: types.FilePath(dir)})
+
+	issues, err := scanner.Scan(ctx, types.FilePath(dir))
+
+	assert.NoError(t, err)
+	assert.NotNil(t, issues)
+	assert.Empty(t, issues)
+	assert.True(t, cliMock.WasExecuted(), "CLI should be invoked before the empty-output guard fires")
 }
 
 func Test_Scan_FileScan_UsesFolderConfigOrganization(t *testing.T) {

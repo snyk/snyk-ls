@@ -259,8 +259,15 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 			logger.Debug().Msgf("Skipping scan with %T because it is not enabled", scanner)
 			continue
 		}
+		// Register in-progress BEFORE Add so a panic inside SetScanInProgress
+		// leaves the WaitGroup untouched. Must still precede the goroutine so
+		// waitForDeltaScan never observes an "all done" snapshot during scheduling.
+		sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), false)
 		waitGroup.Add(1)
-		referenceBranchScanWaitGroup.Add(1)
+		// referenceBranchScanWaitGroup.Add is intentionally deferred until just before
+		// the inner goroutine is launched. If processResults panics before the inner
+		// goroutine starts, Done() would never be called, causing a permanent deadlock
+		// in referenceBranchScanWaitGroup.Wait().
 		go func(s types.ProductScanner) {
 			defer waitGroup.Done()
 			enrichedContext, scanLogger := sc.enrichContextAndLogger(ctx, logger, folderPath, pathToScan)
@@ -269,15 +276,26 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 			scanLogger.Info().
 				Str("product", string(s.Product())).
 				Msgf("Scanning %s with %T: STARTED", pathToScan, s)
-			sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), false)
 
 			scanSpan := sc.instrumentor.StartSpan(span.Context(), "scan")
 
+			preScanStart := time.Now()
 			err := sc.executePreScanCommand(span.Context(), sc.engine, s.Product(), workspaceFolderConfig, folderPath, true)
 			if err != nil {
 				scanLogger.Err(err).Send()
 				sc.scanNotifier.SendError(scanner.Product(), folderPath, err.Error())
 				sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), false, err)
+				// Route through processResults purely for failure analytics; UserNotified
+				// suppresses the duplicate SendError that sendScanError would otherwise emit.
+				processResults(span.Context(), types.ScanData{
+					Product:           s.Product(),
+					Err:               err,
+					Duration:          time.Since(preScanStart),
+					TimestampFinished: time.Now().UTC(),
+					Path:              folderPath,
+					SendAnalytics:     true,
+					UserNotified:      true,
+				})
 				return
 			}
 
@@ -302,6 +320,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 			processResults(span.Context(), data)
 
 			// trigger base scan in background
+			referenceBranchScanWaitGroup.Add(1)
 			go func() {
 				defer referenceBranchScanWaitGroup.Done()
 				isSingleFileScan := pathToScan != folderPath

@@ -17,6 +17,7 @@
 package command
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -37,6 +38,7 @@ import (
 // CreateFromCommandData gets a command based on the given parameters that can be passed to the CommandService
 // nolint: gocyclo, nolintlint // this is a factory, it's ok to have high cyclomatic complexity here
 func CreateFromCommandData(
+	ctx context.Context,
 	engine workflow.Engine,
 	commandData types.CommandData,
 	srv types.Server,
@@ -129,13 +131,14 @@ func CreateFromCommandData(
 			engine:             engine,
 		}, nil
 	case types.SubmitIgnoreRequest:
-		return &submitIgnoreRequest{command: commandData, issueProvider: issueProvider, notifier: notifier, srv: srv, engine: engine, configResolver: configResolver}, nil
+		te, _ := treeEmitterFromContext(ctx)
+		return &submitIgnoreRequest{command: commandData, issueProvider: issueProvider, notifier: notifier, srv: srv, engine: engine, configResolver: configResolver, treeEmitter: te, scanStateFunc: scanStateFunc}, nil
 	case types.WorkspaceConfigurationCommand:
 		return &configurationCommand{command: commandData, srv: srv, logger: logger, engine: engine, configResolver: configResolver}, nil
 	case types.GetTreeView:
 		return &getTreeViewCommand{command: commandData, engine: engine, scanStateFunc: scanStateFunc}, nil
 	case types.ToggleTreeFilter:
-		return &toggleTreeFilter{command: commandData, engine: engine}, nil
+		return &toggleTreeFilter{command: commandData, engine: engine, notifier: notifier, configResolver: configResolver}, nil
 	case types.SetNodeExpanded:
 		return &setNodeExpanded{command: commandData, expandState: treeview.GlobalExpandState()}, nil
 	case types.ShowScanErrorDetails:

@@ -1,21 +1,25 @@
 package configuration
 
 import (
+	"fmt"
 	"html/template"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	gafconfiguration "github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
-	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
@@ -36,24 +40,24 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 	assert.NotNil(t, renderer)
 
-	settings := types.Settings{
-		Token:                  "test-token",
-		Endpoint:               "https://test.snyk.io",
-		Organization:           util.Ptr("test-org"),
-		Insecure:               "true",
-		ActivateSnykOpenSource: "true",
-		ActivateSnykCode:       "true",
-		AuthenticationMethod:   "oauth",
-		StoredFolderConfigs: []types.FolderConfig{
-			{FolderPath: folderPath},
-		},
+	settings := map[string]any{
+		types.SettingToken:                "test-token",
+		types.SettingApiEndpoint:          "https://test.snyk.io",
+		types.SettingOrganization:         "test-org",
+		types.SettingProxyInsecure:        true,
+		types.SettingSnykOssEnabled:       true,
+		types.SettingSnykCodeEnabled:      true,
+		types.SettingAuthenticationMethod: "oauth",
+	}
+	folderConfigs := []types.FolderConfig{
+		{FolderPath: folderPath, ConfigResolver: testutil.DefaultConfigResolver(engine)},
 	}
 
-	html := renderer.GetConfigHtml(settings)
+	html := renderer.GetConfigHtml(settings, folderConfigs)
 
 	// Verify visible fields in simplified UI
 	assert.Contains(t, html, "test-token")
@@ -67,10 +71,10 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 		"snyk_code_enabled",
 		"snyk_iac_enabled",
 		"scan_automatic",
-		"enabled_severities_critical",
-		"enabled_severities_high",
-		"enabled_severities_medium",
-		"enabled_severities_low",
+		"severity_filter_critical",
+		"severity_filter_high",
+		"severity_filter_medium",
+		"severity_filter_low",
 		"issue_view_open_issues",
 		"issue_view_ignored_issues",
 		"risk_score_threshold",
@@ -108,6 +112,52 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	assert.Contains(t, html, `class="info-box"`)   // Info boxes present
 	assert.Contains(t, html, "These settings apply to all projects unless overridden.")
 	assert.Contains(t, html, "These settings override the project defaults for this specific project.")
+
+	// Project Defaults Advanced section: both fields must appear as global (no folder_ prefix) inputs
+	assert.Contains(t, html, `name="additional_parameters"`)
+	assert.Contains(t, html, `name="additional_environment"`)
+	assert.Contains(t, html, `id="additional_environment-error"`)
+	assert.Contains(t, html, "Additional CLI parameters")
+	assert.Contains(t, html, "Additional environment variables")
+	// Combine message
+	assert.Contains(t, html, "combine with any per-")
+}
+
+func TestConfigHtmlRenderer_ProjectDefaultsAdvancedFieldsRenderValues(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+	mockFolder := mock_types.NewMockFolder(ctrl)
+
+	folderPath := types.FilePath("/path/to/a_folder")
+	mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
+	mockFolder.EXPECT().Name().Return("a_folder").AnyTimes()
+	mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
+	mockWorkspace.EXPECT().GetFolderContaining(folderPath).Return(mockFolder).AnyTimes()
+
+	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
+
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
+	require.NoError(t, err)
+
+	settings := map[string]any{
+		types.SettingAdditionalParameters:  "--debug --all-projects",
+		types.SettingAdditionalEnvironment: "MY_VAR=hello;ANOTHER=world",
+	}
+	folderConfigs := []types.FolderConfig{
+		{FolderPath: folderPath, ConfigResolver: testutil.DefaultConfigResolver(engine)},
+	}
+
+	html := renderer.GetConfigHtml(settings, folderConfigs)
+
+	// Seeded values must appear in the global input fields
+	assert.Contains(t, html, `name="additional_parameters"`)
+	assert.Contains(t, html, `value="--debug --all-projects"`)
+	assert.Contains(t, html, `name="additional_environment"`)
+	assert.Contains(t, html, `value="MY_VAR=hello;ANOTHER=world"`)
 }
 
 func TestConfigHtmlRenderer_LdxSyncConfigAlwaysRendered(t *testing.T) {
@@ -127,21 +177,21 @@ func TestConfigHtmlRenderer_LdxSyncConfigAlwaysRendered(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
-	settings := types.Settings{
-		StoredFolderConfigs: []types.FolderConfig{
-			{
-				FolderPath: folderPath,
-				EffectiveConfig: map[string]types.EffectiveValue{
-					"scan_automatic": {Value: "auto", Source: "global"},
-				},
+	settings := map[string]any{}
+	folderConfigs := []types.FolderConfig{
+		{
+			FolderPath:     folderPath,
+			ConfigResolver: testutil.DefaultConfigResolver(engine),
+			EffectiveConfig: map[string]types.EffectiveValue{
+				"scan_automatic": {Value: "auto", Source: "global"},
 			},
 		},
 	}
 
-	html := renderer.GetConfigHtml(settings)
+	html := renderer.GetConfigHtml(settings, folderConfigs)
 
 	// Scan Configuration and Filtering sections should always be rendered for folder settings
 	assert.Contains(t, html, "Scan configuration")
@@ -175,15 +225,15 @@ func TestConfigHtmlRenderer_SecretsHiddenWhenFeatureFlagOff(t *testing.T) {
 		},
 	}
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
-	settings := types.Settings{
-		ActivateSnykSecrets: "true",
-		StoredFolderConfigs: []types.FolderConfig{fc},
+	settings := map[string]any{
+		types.SettingSnykSecretsEnabled: true,
 	}
+	folderConfigs := []types.FolderConfig{fc}
 
-	html := renderer.GetConfigHtml(settings)
+	html := renderer.GetConfigHtml(settings, folderConfigs)
 
 	// Global Snyk Secrets checkbox should NOT appear when feature flag is off
 	assert.NotContains(t, html, `name="snyk_secrets_enabled"`)
@@ -221,15 +271,15 @@ func TestConfigHtmlRenderer_SecretsShownWhenFeatureFlagOn(t *testing.T) {
 	ffKey := configresolver.FolderMetadataKey(string(types.PathKey(folderPath)), types.FeatureFlagPrefix+featureflag.SnykSecretsEnabled)
 	engine.GetConfiguration().Set(ffKey, true)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
-	settings := types.Settings{
-		ActivateSnykSecrets: "true",
-		StoredFolderConfigs: []types.FolderConfig{fc},
+	settings := map[string]any{
+		types.SettingSnykSecretsEnabled: true,
 	}
+	folderConfigs := []types.FolderConfig{fc}
 
-	html := renderer.GetConfigHtml(settings)
+	html := renderer.GetConfigHtml(settings, folderConfigs)
 
 	// Global Snyk Secrets checkbox SHOULD appear when feature flag is on
 	assert.Contains(t, html, `name="snyk_secrets_enabled"`)
@@ -248,16 +298,16 @@ func TestConfigHtmlRenderer_NoFoldersShowsDisabledTab(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
-	settings := types.Settings{
-		Token:    "test-token",
-		Endpoint: "https://test.snyk.io",
-		// No StoredFolderConfigs
+	settings := map[string]any{
+		types.SettingToken:       "test-token",
+		types.SettingApiEndpoint: "https://test.snyk.io",
 	}
+	// No folder configs
 
-	html := renderer.GetConfigHtml(settings)
+	html := renderer.GetConfigHtml(settings, nil)
 
 	// Should show disabled "No projects open" tab
 	assert.Contains(t, html, "No projects open")
@@ -286,18 +336,18 @@ func TestConfigHtmlRenderer_SingleFolderShowsDirectTab(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
-	settings := types.Settings{
-		Token:    "test-token",
-		Endpoint: "https://test.snyk.io",
-		StoredFolderConfigs: []types.FolderConfig{
-			{FolderPath: folderPath},
-		},
+	settings := map[string]any{
+		types.SettingToken:       "test-token",
+		types.SettingApiEndpoint: "https://test.snyk.io",
+	}
+	folderConfigs := []types.FolderConfig{
+		{FolderPath: folderPath, ConfigResolver: testutil.DefaultConfigResolver(engine)},
 	}
 
-	html := renderer.GetConfigHtml(settings)
+	html := renderer.GetConfigHtml(settings, folderConfigs)
 
 	// Should show a direct tab with folder name and "- Project" label
 	assert.Contains(t, html, "folder-tab-label")
@@ -327,16 +377,15 @@ func TestConfigHtmlRenderer_FolderNameDiffersFromBasename(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
-	settings := types.Settings{
-		StoredFolderConfigs: []types.FolderConfig{
-			{FolderPath: folderPath},
-		},
+	settings := map[string]any{}
+	folderConfigs := []types.FolderConfig{
+		{FolderPath: folderPath, ConfigResolver: testutil.DefaultConfigResolver(engine)},
 	}
 
-	html := renderer.GetConfigHtml(settings)
+	html := renderer.GetConfigHtml(settings, folderConfigs)
 
 	// Should use the workspace folder Name(), not the path basename
 	assert.Contains(t, html, "Custom Workspace Name")
@@ -360,16 +409,15 @@ func TestConfigHtmlRenderer_EmptyNameFallsBackToBasename(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
-	settings := types.Settings{
-		StoredFolderConfigs: []types.FolderConfig{
-			{FolderPath: folderPath},
-		},
+	settings := map[string]any{}
+	folderConfigs := []types.FolderConfig{
+		{FolderPath: folderPath, ConfigResolver: testutil.DefaultConfigResolver(engine)},
 	}
 
-	html := renderer.GetConfigHtml(settings)
+	html := renderer.GetConfigHtml(settings, folderConfigs)
 
 	// When Name() is empty, should fall back to filepath.Base of the path
 	assert.Contains(t, html, "my-project")
@@ -397,19 +445,19 @@ func TestConfigHtmlRenderer_MultiFolderShowsDropdown(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
-	settings := types.Settings{
-		Token:    "test-token",
-		Endpoint: "https://test.snyk.io",
-		StoredFolderConfigs: []types.FolderConfig{
-			{FolderPath: folderPath1},
-			{FolderPath: folderPath2},
-		},
+	settings := map[string]any{
+		types.SettingToken:       "test-token",
+		types.SettingApiEndpoint: "https://test.snyk.io",
+	}
+	folderConfigs := []types.FolderConfig{
+		{FolderPath: folderPath1, ConfigResolver: testutil.DefaultConfigResolver(engine)},
+		{FolderPath: folderPath2, ConfigResolver: testutil.DefaultConfigResolver(engine)},
 	}
 
-	html := renderer.GetConfigHtml(settings)
+	html := renderer.GetConfigHtml(settings, folderConfigs)
 
 	// Should show the folder dropdown
 	assert.Contains(t, html, "folder-dropdown")
@@ -455,25 +503,24 @@ func TestConfigHtmlRenderer_FolderNamesAlignWithStoredFolderConfigs(t *testing.T
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
-	// StoredFolderConfigs in REVERSED order: beta first, alpha second
-	settings := types.Settings{
-		StoredFolderConfigs: []types.FolderConfig{
-			{FolderPath: betaPath},
-			{FolderPath: alphaPath},
-		},
+	// folderConfigs in REVERSED order: beta first, alpha second
+	settings := map[string]any{}
+	folderConfigs := []types.FolderConfig{
+		{FolderPath: betaPath, ConfigResolver: testutil.DefaultConfigResolver(engine)},
+		{FolderPath: alphaPath, ConfigResolver: testutil.DefaultConfigResolver(engine)},
 	}
 
-	html := renderer.GetConfigHtml(settings)
+	html := renderer.GetConfigHtml(settings, folderConfigs)
 
-	// Verify names appear in StoredFolderConfigs order (beta, alpha), not Folders() order (alpha, beta)
+	// Verify names appear in folderConfigs order (beta, alpha), not Folders() order (alpha, beta)
 	betaPos := strings.Index(html, "Beta Workspace")
 	alphaPos := strings.Index(html, "Alpha Workspace")
 	assert.Greater(t, betaPos, -1, "Beta Workspace should appear in HTML")
 	assert.Greater(t, alphaPos, -1, "Alpha Workspace should appear in HTML")
-	assert.Less(t, betaPos, alphaPos, "Beta Workspace should appear before Alpha Workspace (matching StoredFolderConfigs order)")
+	assert.Less(t, betaPos, alphaPos, "Beta Workspace should appear before Alpha Workspace (matching folderConfigs order)")
 
 	// Verify basenames are NOT used as display names
 	assert.NotContains(t, html, ">alpha<")
@@ -497,28 +544,53 @@ func TestConfigHtmlRenderer_EclipseShowsProjectSettings(t *testing.T) {
 	mockWorkspace.EXPECT().GetFolderContaining(folderPath).Return(mockFolder).AnyTimes()
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
+	engine.GetConfiguration().Set(gafconfiguration.INTEGRATION_ENVIRONMENT, "ECLIPSE")
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 	assert.NotNil(t, renderer)
 
-	settings := types.Settings{
-		IntegrationName:  "ECLIPSE",
-		Token:            "test-token",
-		Endpoint:         "https://test.snyk.io",
-		ActivateSnykCode: "true",
-		StoredFolderConfigs: []types.FolderConfig{
-			{
-				FolderPath: folderPath,
-			},
-		},
+	settings := map[string]any{
+		types.SettingToken:           "test-token",
+		types.SettingApiEndpoint:     "https://test.snyk.io",
+		types.SettingSnykCodeEnabled: true,
+	}
+	folderConfigs := []types.FolderConfig{
+		{FolderPath: folderPath, ConfigResolver: testutil.DefaultConfigResolver(engine)},
 	}
 
-	html := renderer.GetConfigHtml(settings)
+	html := renderer.GetConfigHtml(settings, folderConfigs)
 
 	// Verify Eclipse shows "Project" tab label instead of "Folder"
 	assert.Contains(t, html, "project")
 	assert.Contains(t, html, "- Project")
+}
+
+func TestConfigHtmlRenderer_EclipsePathField(t *testing.T) {
+	renderForIntegration := func(t *testing.T, integrationName string) string {
+		t.Helper()
+		engine := testutil.UnitTest(t)
+		engine.GetConfiguration().Set(gafconfiguration.INTEGRATION_NAME, integrationName)
+		renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
+		require.NoError(t, err)
+		settings := map[string]any{
+			types.SettingUserSettingsPath: "/usr/local/bin",
+		}
+		return renderer.GetConfigHtml(settings, nil)
+	}
+
+	t.Run("ECLIPSE shows path field", func(t *testing.T) {
+		html := renderForIntegration(t, "ECLIPSE")
+		assert.Contains(t, html, `id="user_settings_path"`)
+		assert.Contains(t, html, `/usr/local/bin`)
+	})
+
+	for _, name := range []string{"VS_CODE", "VISUAL_STUDIO", "JETBRAINS_IDE"} {
+		t.Run(name+" hides path field", func(t *testing.T) {
+			html := renderForIntegration(t, name)
+			assert.NotContains(t, html, `id="user_settings_path"`)
+		})
+	}
 }
 
 func TestTmplSourceIndicator(t *testing.T) {
@@ -558,13 +630,32 @@ func TestTmplSourceIndicator(t *testing.T) {
 			},
 		},
 		{
-			name: "user-override returns empty (indicated by CSS border)",
+			name: "user-override returns per-project indicator",
 			effectiveConfig: map[string]types.EffectiveValue{
 				"test_setting": {Value: "true", Source: "user-override"},
 			},
-			settingName:   "test_setting",
-			expectedHTML:  "",
-			shouldContain: []string{},
+			settingName:  "test_setting",
+			expectedHTML: `<span class="source-indicator" data-toggle="tooltip" title="Set by you at project level">👤</span>`,
+			shouldContain: []string{
+				`class="source-indicator"`,
+				`data-toggle="tooltip"`,
+				`title="Set by you at project level"`,
+				"👤",
+			},
+		},
+		{
+			name: "user-override-defaults returns project-defaults indicator",
+			effectiveConfig: map[string]types.EffectiveValue{
+				"test_setting": {Value: "true", Source: "user-override-defaults"},
+			},
+			settingName:  "test_setting",
+			expectedHTML: `<span class="source-indicator" data-toggle="tooltip" title="Set by you at project defaults level">👤</span>`,
+			shouldContain: []string{
+				`class="source-indicator"`,
+				`data-toggle="tooltip"`,
+				`title="Set by you at project defaults level"`,
+				"👤",
+			},
 		},
 		{
 			name: "global source returns empty",
@@ -633,24 +724,24 @@ func TestConfigHtmlRenderer_SourceIndicatorsInOutput(t *testing.T) {
 
 	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
 
-	renderer, err := NewConfigHtmlRenderer(engine)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	assert.NoError(t, err)
 
-	settings := types.Settings{
-		StoredFolderConfigs: []types.FolderConfig{
-			{
-				FolderPath: folderPath,
-				EffectiveConfig: map[string]types.EffectiveValue{
-					"snyk_oss_enabled":     {Value: true, Source: "ldx-sync-locked"},
-					"snyk_code_enabled":    {Value: true, Source: "ldx-sync"},
-					"snyk_iac_enabled":     {Value: true, Source: "user-override"},
-					"snyk_secrets_enabled": {Value: true, Source: "global"},
-				},
+	settings := map[string]any{}
+	folderConfigs := []types.FolderConfig{
+		{
+			FolderPath:     folderPath,
+			ConfigResolver: testutil.DefaultConfigResolver(engine),
+			EffectiveConfig: map[string]types.EffectiveValue{
+				"snyk_oss_enabled":     {Value: true, Source: "ldx-sync-locked"},
+				"snyk_code_enabled":    {Value: true, Source: "ldx-sync"},
+				"snyk_iac_enabled":     {Value: true, Source: "user-override"},
+				"snyk_secrets_enabled": {Value: true, Source: "global"},
 			},
 		},
 	}
 
-	html := renderer.GetConfigHtml(settings)
+	html := renderer.GetConfigHtml(settings, folderConfigs)
 
 	// Verify locked indicator (🏢🔒) appears for ldx-sync-locked
 	assert.Contains(t, html, "🏢🔒")
@@ -661,6 +752,10 @@ func TestConfigHtmlRenderer_SourceIndicatorsInOutput(t *testing.T) {
 	orgIndicatorCount := strings.Count(html, `title="Set by your organization settings"`)
 	assert.Greater(t, orgIndicatorCount, 0, "Organization indicator should appear in HTML")
 
+	// Verify per-project override indicator (👤) appears for user-override
+	assert.Contains(t, html, "👤")
+	assert.Contains(t, html, `title="Set by you at project level"`)
+
 	// Verify HTML is not empty (basic sanity check)
 	assert.NotEmpty(t, html, "HTML output should not be empty")
 }
@@ -668,7 +763,7 @@ func TestConfigHtmlRenderer_SourceIndicatorsInOutput(t *testing.T) {
 func TestComputeProjectDefaultScopes(t *testing.T) {
 	engine := testutil.UnitTest(t)
 
-	result := computeProjectDefaultScopes(engine)
+	result := computeProjectDefaultScopes(testutil.DefaultConfigResolver(engine))
 
 	// Should return a map with entries for all org-scope settings
 	assert.Equal(t, 14, len(result), "Should have entries for all 14 org-scope settings")
@@ -695,5 +790,153 @@ func TestComputeProjectDefaultScopes(t *testing.T) {
 		assert.Contains(t, result, setting, "Result should contain setting: %s", setting)
 		// Source should be a non-empty string
 		assert.NotEmpty(t, result[setting], "Source for %s should not be empty", setting)
+	}
+}
+
+// TestConfigHtml_FormFieldNamesMatchRegisteredSettings enforces that every HTML form
+// field name= attribute corresponds to a registered pflag setting constant. This prevents
+// typos and mismatches between the HTML form and the LS wire protocol.
+func TestConfigHtml_FormFieldNamesMatchRegisteredSettings(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	// 1. Get all registered pflag flag names
+	fs := pflag.NewFlagSet("enforcement-test", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+
+	registeredFlags := make(map[string]bool)
+	fs.VisitAll(func(f *pflag.Flag) {
+		registeredFlags[f.Name] = true
+	})
+
+	// 2. Render HTML with all sections enabled
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+	mockFolder := mock_types.NewMockFolder(ctrl)
+	mockFolder.EXPECT().Path().Return(types.FilePath("/path/to/folder")).AnyTimes()
+	mockFolder.EXPECT().Name().Return("folder").AnyTimes()
+	mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
+	mockWorkspace.EXPECT().GetFolderContaining(types.FilePath("/path/to/folder")).Return(mockFolder).AnyTimes()
+	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
+
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
+	require.NoError(t, err)
+
+	settings := map[string]any{
+		types.SettingSnykOssEnabled:         true,
+		types.SettingSnykCodeEnabled:        true,
+		types.SettingSnykIacEnabled:         true,
+		types.SettingSnykSecretsEnabled:     true,
+		types.SettingScanAutomatic:          true,
+		types.SettingScanNetNew:             false,
+		types.SettingOrganization:           "test-org",
+		types.SettingSeverityFilterCritical: true,
+		types.SettingSeverityFilterHigh:     true,
+		types.SettingSeverityFilterMedium:   true,
+		types.SettingSeverityFilterLow:      true,
+		types.SettingIssueViewOpenIssues:    true,
+		types.SettingIssueViewIgnoredIssues: false,
+		types.SettingRiskScoreThreshold:     0,
+		types.SettingApiEndpoint:            "https://api.snyk.io",
+		types.SettingProxyInsecure:          false,
+		types.SettingAuthenticationMethod:   "oauth",
+		types.SettingToken:                  "test-token",
+		types.SettingCliPath:                "/usr/bin/snyk",
+		types.SettingAutomaticDownload:      true,
+		types.SettingCliReleaseChannel:      "",
+		types.SettingBinaryBaseUrl:          "",
+		types.SettingTrustedFolders:         []string{"/path/a"},
+	}
+	folderConfigs := []types.FolderConfig{
+		{
+			FolderPath:     "/path/to/folder",
+			ConfigResolver: testutil.DefaultConfigResolver(engine),
+			EffectiveConfig: map[string]types.EffectiveValue{
+				types.SettingScanAutomatic:          {Value: true, Source: "global"},
+				types.SettingScanNetNew:             {Value: false, Source: "global"},
+				types.SettingSeverityFilterCritical: {Value: true, Source: "global"},
+				types.SettingSeverityFilterHigh:     {Value: true, Source: "global"},
+				types.SettingSeverityFilterMedium:   {Value: true, Source: "global"},
+				types.SettingSeverityFilterLow:      {Value: true, Source: "global"},
+				types.SettingSnykOssEnabled:         {Value: true, Source: "global"},
+				types.SettingSnykCodeEnabled:        {Value: true, Source: "global"},
+				types.SettingSnykIacEnabled:         {Value: true, Source: "global"},
+				types.SettingSnykSecretsEnabled:     {Value: true, Source: "global"},
+				types.SettingIssueViewOpenIssues:    {Value: true, Source: "global"},
+				types.SettingIssueViewIgnoredIssues: {Value: false, Source: "global"},
+				types.SettingRiskScoreThreshold:     {Value: 0, Source: "global"},
+			},
+		},
+	}
+
+	html := renderer.GetConfigHtml(settings, folderConfigs)
+	require.NotEmpty(t, html)
+
+	// 3. Parse all name="..." attributes.
+	// Strip <script> and <style> blocks first: form field names live in HTML
+	// elements, not in embedded JS/CSS. Inline JS that builds attribute selectors —
+	// e.g. `input[name="folder_' + index + '_' + field + '"]` in filter-sync.js —
+	// would otherwise be scraped as bogus field names and falsely flagged.
+	scriptRegex := regexp.MustCompile(`(?s)<script\b[^>]*>.*?</script>`)
+	styleRegex := regexp.MustCompile(`(?s)<style\b[^>]*>.*?</style>`)
+	htmlNoScripts := styleRegex.ReplaceAllString(scriptRegex.ReplaceAllString(html, ""), "")
+
+	nameRegex := regexp.MustCompile(`name="([^"]+)"`)
+	matches := nameRegex.FindAllStringSubmatch(htmlNoScripts, -1)
+
+	// UI-only helpers and non-form-element name= attributes
+	allowedNonPflag := map[string]bool{
+		"cli_release_channel_custom": true,
+		"viewport":                   true, // <meta name="viewport"> — not a form field
+	}
+
+	trustedFolderPattern := regexp.MustCompile(`^trustedFolder_\d+$`)
+	folderFieldPattern := regexp.MustCompile(`^folder_\d+_(.+)$`)
+
+	// Known folder-level fields that are not pflag settings
+	folderNonPflagFields := map[string]bool{
+		"folderPath": true,
+	}
+
+	var violations []string
+	for _, match := range matches {
+		fieldName := match[1]
+
+		if allowedNonPflag[fieldName] {
+			continue
+		}
+		if trustedFolderPattern.MatchString(fieldName) {
+			continue
+		}
+
+		if folderFieldPattern.MatchString(fieldName) {
+			submatches := folderFieldPattern.FindStringSubmatch(fieldName)
+			field := submatches[1]
+
+			// scanConfig fields are part of scan_command_config
+			if strings.HasPrefix(field, "scanConfig_") {
+				continue
+			}
+
+			if registeredFlags[field] || folderNonPflagFields[field] {
+				continue
+			}
+
+			violations = append(violations, fmt.Sprintf(
+				"folder field %q (from name=%q) is not a registered pflag setting",
+				field, fieldName))
+			continue
+		}
+
+		// Global field: must be a registered pflag
+		if !registeredFlags[fieldName] {
+			violations = append(violations, fmt.Sprintf(
+				"global field name=%q is not a registered pflag setting", fieldName))
+		}
+	}
+
+	if len(violations) > 0 {
+		t.Errorf("Found %d HTML form field name(s) that don't match registered pflag settings:\n%s",
+			len(violations), strings.Join(violations, "\n"))
 	}
 }

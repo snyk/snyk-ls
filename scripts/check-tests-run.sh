@@ -4,12 +4,15 @@
 #
 # Stage list coupling: REQUIRED_STAGES and ADVISORY_STAGES here must stay in sync
 # with the stages written by the Makefile _save-test-hash target (make test,
-# make test-integ, make test-smoke). Update both files when adding a new stage.
+# make test-all). Update both files when adding a new stage.
 set -e
 
 HASH_FILE=".tests-hash"
-REQUIRED_STAGES=("test" "test-integ")   # block push if stale
-ADVISORY_STAGES=("test-smoke")          # warn only — takes 30-90 min
+REQUIRED_STAGES=("test")   # block push if stale
+# test-integ and test-smoke are advisory locally (each takes 30-90 min) and warn only.
+# The blocking quality gate for these stages is CI, which always runs them on every PR;
+# the pre-push hook intentionally stays out of the way so contributors can iterate fast.
+ADVISORY_STAGES=("test-integ" "test-smoke")                                   # warn only — takes 30-90 min
 
 # Determine upstream ref; default to origin/<current-branch> if the tracking branch is unset.
 UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo "origin/$(git branch --show-current)")
@@ -34,7 +37,7 @@ if [ ! -f "$HASH_FILE" ]; then
     echo "❌ No test stages have been recorded for the current commit."
     echo "   Run the following before pushing:"
     echo "   make test"
-    echo "   INTEG_TESTS=1 make test   (or: make test-integ)"
+    echo "   INTEG_TESTS=1 make test   (or: make test-all)"
     exit 1
 fi
 
@@ -55,21 +58,25 @@ blocked=0
 
 if [ ${#missing[@]} -gt 0 ]; then
     echo "❌ Test stages not yet run at current commit:"
-    for s in "${missing[@]}"; do echo "   make $s"; done
+    for s in "${missing[@]}"; do
+        echo "   make $s"
+    done
     blocked=1
 fi
 
 if [ ${#outdated[@]} -gt 0 ]; then
     echo "❌ Commits since these stages last ran:"
-    for s in "${outdated[@]}"; do echo "   make $s"; done
+    for s in "${outdated[@]}"; do
+        echo "   make $s"
+    done
     blocked=1
 fi
 
 for stage in "${ADVISORY_STAGES[@]}"; do
     stored=$(grep "^${stage}=" "$HASH_FILE" 2>/dev/null | cut -d'=' -f2 | head -1 || true)
     if [ -z "$stored" ] || [ "$stored" != "$current_hash" ]; then
-        echo "⚠️  Smoke tests not recorded for current commit (advisory — not blocking)."
-        echo "   To record: SMOKE_TESTS=1 make test   (or: make test-smoke)"
+        echo "⚠️  $stage not recorded for current commit (advisory — not blocking)."
+        echo "   To record: make $stage"
     fi
 done
 

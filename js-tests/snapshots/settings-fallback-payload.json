@@ -1,0 +1,5 @@
+{
+  "cli_path": "/test/snyk-cli",
+  "isFallbackForm": true,
+  "proxy_insecure": true
+}

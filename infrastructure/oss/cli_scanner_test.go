@@ -171,9 +171,9 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 		},
 	}
 
+	engine := testutil.UnitTest(t)
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			engine := testutil.UnitTest(t)
 			skipReason := "filepath is os dependent"
 			prefix := "C:"
 			if strings.HasPrefix(tc.workDir, prefix) {
@@ -205,6 +205,34 @@ func TestCLIScanner_getAbsTargetFilePathForPackageManagers(t *testing.T) {
 			assert.Equal(t, expected, actual)
 		})
 	}
+}
+
+func TestGetAbsTargetFilePath_FallbackAndNonFallbackCases(t *testing.T) {
+	testsupport.NotOnWindows(t, "filepath is os dependent")
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
+
+	t.Run("falls back to context path when basename matches and all stats fail", func(t *testing.T) {
+		// workDir has no package.json → all stat heuristics fail.
+		// context path has matching basename → should be returned.
+		workDir := t.TempDir()
+		contextPath := types.FilePath(filepath.Join(t.TempDir(), "package.json"))
+
+		actual := getAbsTargetFilePath(logger, "", "package.json", types.FilePath(workDir), contextPath)
+
+		assert.Equal(t, contextPath, actual)
+	})
+
+	t.Run("does not fall back to context path when basenames differ", func(t *testing.T) {
+		// context path basename ("goof") differs from displayTargetFile ("package.json").
+		// Must not mis-attribute the issue to the workspace root.
+		workDir := t.TempDir()
+		contextPath := types.FilePath(filepath.Join(t.TempDir(), "goof"))
+
+		actual := getAbsTargetFilePath(logger, "", "package.json", types.FilePath(workDir), contextPath)
+
+		assert.Equal(t, types.FilePath(""), actual)
+	})
 }
 
 func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
@@ -327,6 +355,12 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 				parameter:       "--all-sub-projects",
 				expectedInCmd:   "--all-sub-projects",
 				expectedMessage: "--all-projects should not be present when --all-sub-projects is present",
+			},
+			{
+				name:            "--maven-aggregate-project",
+				parameter:       "--maven-aggregate-project",
+				expectedInCmd:   "--maven-aggregate-project",
+				expectedMessage: "--all-projects should not be present when --maven-aggregate-project is also present",
 			},
 		}
 
@@ -515,5 +549,93 @@ func Test_shouldUseLegacyScan(t *testing.T) {
 		fc := folderConfigWithFlags(map[string]bool{featureflag.UseOsTest: true})
 		useLegacy, _ := shouldUseLegacyScan(fc, []string{"snyk", "test", "--print-graph"})
 		assert.True(t, useLegacy)
+	})
+}
+
+func TestCLIScanner_updateArgs_folderAdditionalEnv(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	notifier := notification.NewMockNotifier()
+	cliScanner := &CLIScanner{
+		engine:            engine,
+		cli:               cli.NewTestExecutorWithResponse(engine, "{}"),
+		instrumentor:      performance.NewInstrumentor(),
+		errorReporter:     error_reporting.NewTestErrorReporter(engine),
+		notifier:          notifier,
+		configResolver:    defaultResolver(t, engine),
+		mutex:             &sync.RWMutex{},
+		inlineValueMutex:  &sync.RWMutex{},
+		packageScanMutex:  &sync.Mutex{},
+		runningScans:      make(map[types.FilePath]*scans.ScanProgress),
+		supportedFiles:    make(map[string]bool),
+		packageIssueCache: make(map[string][]types.Issue),
+	}
+
+	folderPath := types.FilePath("/test")
+
+	setFolderEnv := func(fc *types.FolderConfig, val string) {
+		key := configresolver.UserFolderKey(string(types.PathKey(folderPath)), types.SettingAdditionalEnvironment)
+		engine.GetConfiguration().Set(key, &configresolver.LocalConfigField{Value: val, Changed: true})
+	}
+
+	newFC := func() *types.FolderConfig {
+		return &types.FolderConfig{FolderPath: folderPath, ConfigResolver: defaultResolver(t, engine)}
+	}
+
+	t.Run("folder env keys added to env map", func(t *testing.T) {
+		fc := newFC()
+		setFolderEnv(fc, "MY_VAR=hello;ANOTHER=world")
+
+		_, env := cliScanner.updateArgs(folderPath, nil, fc)
+
+		assert.Equal(t, "hello", env["MY_VAR"])
+		assert.Equal(t, "world", env["ANOTHER"])
+	})
+
+	t.Run("existing env keys not removed when folder env set", func(t *testing.T) {
+		fc := newFC()
+		setFolderEnv(fc, "NEW_VAR=new")
+
+		_, env := cliScanner.updateArgs(folderPath, nil, fc)
+
+		assert.NotEmpty(t, env["PATH"])
+		assert.Equal(t, "new", env["NEW_VAR"])
+	})
+
+	t.Run("folder env overrides global env for same key", func(t *testing.T) {
+		t.Setenv("CONFLICT_KEY", "global_value")
+		fc := newFC()
+		setFolderEnv(fc, "CONFLICT_KEY=folder_value")
+
+		_, env := cliScanner.updateArgs(folderPath, nil, fc)
+
+		assert.Equal(t, "folder_value", env["CONFLICT_KEY"])
+	})
+
+	t.Run("no folder env is a no-op", func(t *testing.T) {
+		fc := newFC()
+
+		_, env := cliScanner.updateArgs(folderPath, nil, fc)
+
+		assert.NotEmpty(t, env["PATH"])
+	})
+
+	t.Run("malformed entry without equals sign is skipped", func(t *testing.T) {
+		fc := newFC()
+		setFolderEnv(fc, "GOOD=val;BADENTRY;ALSO_GOOD=ok")
+
+		_, env := cliScanner.updateArgs(folderPath, nil, fc)
+
+		assert.Equal(t, "val", env["GOOD"])
+		assert.Equal(t, "ok", env["ALSO_GOOD"])
+		assert.Empty(t, env["BADENTRY"])
+	})
+
+	t.Run("value containing equals sign preserved", func(t *testing.T) {
+		fc := newFC()
+		setFolderEnv(fc, "MY_KEY=val=with=equals")
+
+		_, env := cliScanner.updateArgs(folderPath, nil, fc)
+
+		assert.Equal(t, "val=with=equals", env["MY_KEY"])
 	})
 }

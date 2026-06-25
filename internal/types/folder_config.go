@@ -128,30 +128,24 @@ func (fc *FolderConfig) GetFeatureFlag(flag string) bool {
 	if fc == nil {
 		return false
 	}
-	conf := fc.Conf()
-	if conf == nil {
-		return false
-	}
 	key := configresolver.FolderMetadataKey(string(PathKey(fc.FolderPath)), FeatureFlagPrefix+flag)
-	return conf.GetBool(key)
+	return fc.Conf().GetBool(key)
 }
 
 // SetFeatureFlag writes a feature flag value to configuration under the folder metadata prefix.
+// Feature flags are re-fetched from the API on every initialized call; they must not be persisted
+// to disk because PersistInStorage triggers a full JSON re-serialization on every Set, which is
+// O(N²) across N folders × M flags per folder.
 func (fc *FolderConfig) SetFeatureFlag(flag string, value bool) {
 	if fc == nil {
 		return
 	}
-	conf := fc.Conf()
-	if conf == nil {
-		return
-	}
 	key := configresolver.FolderMetadataKey(string(PathKey(fc.FolderPath)), FeatureFlagPrefix+flag)
-	conf.PersistInStorage(key)
-	conf.Set(key, value)
+	fc.Conf().Set(key, value)
 }
 
 // Conf returns the configuration for prefix key access.
-// Delegates to ConfigResolver.Configuration() when available.
+// Returns nil if the ConfigResolver is nil.
 func (fc *FolderConfig) Conf() configuration.Configuration {
 	if fc.ConfigResolver != nil {
 		return fc.ConfigResolver.Configuration()
@@ -457,7 +451,28 @@ func (fc *FolderConfig) applyLocalBranches(update *LspFolderConfig, conf configu
 	return true
 }
 
+// isFolderReset reports whether a setting carries a {Changed:true, Value:nil}
+// reset marker. getSettingValue treats a nil value as "not present", so basic
+// folder-field handlers must check this explicitly to clear their override
+// (mirrors the generic reset path in applyGenericFolderOverrides).
+func isFolderReset(settings map[string]*ConfigSetting, name string) bool {
+	cs := settings[name]
+	return cs != nil && cs.Changed && cs.Value == nil
+}
+
+// unsetFolderOverride clears the user:folder: override for name if one exists.
+func (fc *FolderConfig) unsetFolderOverride(conf configuration.Configuration, fp, name string) bool {
+	if !HasUserOverride(conf, fc.FolderPath, name) {
+		return false
+	}
+	conf.Unset(configresolver.UserFolderKey(fp, name))
+	return true
+}
+
 func (fc *FolderConfig) applyStringField(update *LspFolderConfig, conf configuration.Configuration, fp, name string, setUser func(string, any)) bool {
+	if isFolderReset(update.Settings, name) {
+		return fc.unsetFolderOverride(conf, fp, name)
+	}
 	val, ok := getSettingValue[string](update.Settings, name)
 	if !ok {
 		return false
@@ -470,6 +485,9 @@ func (fc *FolderConfig) applyStringField(update *LspFolderConfig, conf configura
 }
 
 func (fc *FolderConfig) applyStringSliceField(update *LspFolderConfig, conf configuration.Configuration, fp, name string, setUser func(string, any)) bool {
+	if isFolderReset(update.Settings, name) {
+		return fc.unsetFolderOverride(conf, fp, name)
+	}
 	val, ok := getStringSliceFromSetting(update.Settings, name)
 	if !ok {
 		return false
@@ -482,6 +500,9 @@ func (fc *FolderConfig) applyStringSliceField(update *LspFolderConfig, conf conf
 }
 
 func (fc *FolderConfig) applyScanCommandConfig(update *LspFolderConfig, conf configuration.Configuration, fp string, setUser func(string, any)) bool {
+	if isFolderReset(update.Settings, SettingScanCommandConfig) {
+		return fc.unsetFolderOverride(conf, fp, SettingScanCommandConfig)
+	}
 	scanCmdConfig, ok := getScanCommandConfigFromSetting(update.Settings, SettingScanCommandConfig)
 	if !ok || len(scanCmdConfig) == 0 {
 		return false
@@ -577,6 +598,17 @@ func (fc *FolderConfig) applyPreferredOrg(update *LspFolderConfig, handled map[s
 		return false
 	}
 
+	// Reset: a {Changed:true, Value:nil} on preferred_org clears the folder org override.
+	// getSettingValue below treats a nil value as "not present", so the reset must be
+	// handled explicitly first. Unset both preferred_org and org_set_by_user so the folder
+	// reverts to its auto-determined (LDX) / global org. Mirrors the generic reset path in
+	// applyGenericFolderOverrides.
+	if isFolderReset(update.Settings, SettingPreferredOrg) {
+		preferredOrgChanged := fc.unsetFolderOverride(conf, fp, SettingPreferredOrg)
+		orgSetByUserChanged := fc.unsetFolderOverride(conf, fp, SettingOrgSetByUser)
+		return preferredOrgChanged || orgSetByUserChanged
+	}
+
 	preferredOrg, ok := getSettingValue[string](update.Settings, SettingPreferredOrg)
 	if !ok {
 		return false
@@ -588,7 +620,15 @@ func (fc *FolderConfig) applyPreferredOrg(update *LspFolderConfig, handled map[s
 
 	keyPreferred := configresolver.UserFolderKey(fp, SettingPreferredOrg)
 	keyOrgSetByUser := configresolver.UserFolderKey(fp, SettingOrgSetByUser)
-	orgSetByUser := preferredOrg != ""
+	// Blanking preferredOrg means "use global org" (not auto-org), so preserve
+	// curOrgSetByUser — unless the global org is also blank, in which case revert
+	// to auto-org mode (orgSetByUser=false at all levels).
+	// SettingLastSetOrganization is written by SetOrganization via SetGlobalUser
+	// and lives at UserGlobalKey — no GAF default function, no /rest/self call.
+	// Returns "" when the user never called SetOrganization or explicitly cleared it.
+	curOrgSetByUser := getBoolFromConfig(conf, fp, SettingOrgSetByUser)
+	globalOrgSetByUser := GetGlobalString(conf, SettingLastSetOrganization) != ""
+	orgSetByUser := preferredOrg != "" || (curOrgSetByUser && globalOrgSetByUser)
 	conf.PersistInStorage(keyPreferred)
 	conf.PersistInStorage(keyOrgSetByUser)
 	conf.Set(keyPreferred, &configresolver.LocalConfigField{Value: preferredOrg, Changed: true})

@@ -99,7 +99,6 @@ const (
 	SettingSeverityFilterMedium   = "severity_filter_medium"
 	SettingSeverityFilterLow      = "severity_filter_low"
 	SettingSnykAdvisorEnabled     = "snyk_advisor_enabled"
-	SettingEnabledSeverities      = "enabled_severities"
 	SettingRiskScoreThreshold     = "risk_score_threshold"
 	SettingCweIds                 = "cwe_ids"
 	SettingCveIds                 = "cve_ids"
@@ -146,6 +145,7 @@ const (
 	SettingOffline                    = "offline"
 	SettingWorkspace                  = "workspace"
 	SettingDefaultEnvReadyChannel     = "default_env_ready_channel"
+	SettingLspInitializedChannel      = "lsp_initialized_channel"
 	// SettingConfigFileLegacy is the GAF-internal key for the config file path.
 	// GAF reads this key natively; we also write to UserGlobalKey(SettingConfigFile) for precedence.
 	SettingConfigFileLegacy = "configfile"

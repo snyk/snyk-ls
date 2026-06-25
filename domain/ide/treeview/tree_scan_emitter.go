@@ -118,18 +118,83 @@ func (e *TreeScanStateEmitter) renderPending() {
 
 	e.builder.SetProductScanStates(state.ProductScanStates)
 	e.builder.SetProductScanErrors(state.ProductScanErrors)
-	e.builder.SetIssueViewOptions(config.GetIssueViewOptions(e.conf))
 
 	ws := config.GetWorkspace(e.conf)
 	var data TreeViewData
 	if ws != nil {
 		data = e.builder.BuildTree(ws)
 	}
-	data.FilterState = TreeViewFilterState{
-		SeverityFilter:   config.GetFilterSeverity(e.conf),
-		IssueViewOptions: config.GetIssueViewOptions(e.conf),
-	}
+	data.FilterState = e.filterState(ws)
 
 	html := e.renderer.RenderTreeView(data)
 	e.notifier.Send(types.TreeView{TreeViewHtml: html, TotalIssues: data.TotalIssues})
+}
+
+// filterState resolves the toolbar's severity + issue-view state. The tree's
+// filter toolbar is workspace-wide but the tree shows every open folder, each
+// filtered by its own per-folder config (UserFolderKey > remote > user-global >
+// default) — the same source the issue filtering uses. So the toolbar reflects
+// the aggregate across all open folders: a severity is shown/hidden when every
+// folder agrees, or marked "mixed" when they disagree. Falls back to the global
+// value when there is no folder or resolver.
+func (e *TreeScanStateEmitter) filterState(ws types.Workspace) TreeViewFilterState {
+	severity := config.GetFilterSeverity(e.conf)
+	issueView := config.GetIssueViewOptions(e.conf)
+	var mixed MixedSeverity
+
+	if ws != nil {
+		var severities []types.SeverityFilter
+		var firstFC *types.FolderConfig
+		for _, f := range ws.Folders() {
+			fc := f.FolderConfigReadOnly()
+			if fc == nil || fc.ConfigResolver == nil {
+				continue
+			}
+			if firstFC == nil {
+				firstFC = fc
+			}
+			severities = append(severities, fc.ConfigResolver.FilterSeverityForFolder(fc))
+		}
+		if len(severities) > 0 {
+			severity, mixed = aggregateSeverityFilters(severities)
+		}
+		if firstFC != nil {
+			// TODO: IssueViewOptions currently reads from the first folder only
+			// (firstFC), unlike severity which is aggregated across all folders.
+			// When IVO toolbar buttons land (separate branch, same release),
+			// aggregate into a MixedIssueViewOptions analogous to MixedSeverity.
+			issueView = firstFC.ConfigResolver.IssueViewOptionsForFolder(firstFC)
+		}
+	}
+
+	return TreeViewFilterState{
+		SeverityFilter:   severity,
+		MixedSeverity:    mixed,
+		IssueViewOptions: issueView,
+	}
+}
+
+// aggregateSeverityFilters reduces per-folder severity filters to a single
+// toolbar state plus a per-severity "mixed" marker. When all folders agree the
+// agreed value is returned; where they disagree the severity is marked mixed
+// (the returned bool for that severity is unspecified — the mixed marker wins in
+// rendering).
+func aggregateSeverityFilters(filters []types.SeverityFilter) (types.SeverityFilter, MixedSeverity) {
+	agg := filters[0]
+	var mixed MixedSeverity
+	for _, f := range filters[1:] {
+		if f.Critical != agg.Critical {
+			mixed.Critical = true
+		}
+		if f.High != agg.High {
+			mixed.High = true
+		}
+		if f.Medium != agg.Medium {
+			mixed.Medium = true
+		}
+		if f.Low != agg.Low {
+			mixed.Low = true
+		}
+	}
+	return agg, mixed
 }

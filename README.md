@@ -174,7 +174,10 @@ Right now the language server supports the following actions:
               "base_branch": { "value": "main", "source": "folder" },
               "preferred_org": { "value": "org-id", "source": "folder" },
               "snyk_code_enabled": { "value": false, "source": "ldx-sync-locked", "originScope": "group", "isLocked": true },
-              "enabled_severities": { "value": ["critical", "high"], "source": "ldx-sync", "originScope": "organization" }
+              "severity_filter_critical": { "value": true, "source": "ldx-sync", "originScope": "organization" },
+              "severity_filter_high": { "value": true, "source": "ldx-sync", "originScope": "organization" },
+              "severity_filter_medium": { "value": false, "source": "ldx-sync", "originScope": "organization" },
+              "severity_filter_low": { "value": false, "source": "ldx-sync", "originScope": "organization" }
           }
         }
       ]
@@ -519,8 +522,8 @@ synchronization. For further information please see [CONTRIBUTING.md](CONTRIBUTI
 `-f <FILE>` allows you to specify a log file instead of logging to the console
 
 `-l <LOGLEVEL>` <allows to specify the log level (`trace`, `debug`, `info`, `warn`, `error`, `fatal`). The default log
-level is `info`. This can be overruled by setting the env variable `SNYK_DEBUG_LEVEL`,
-e.g. `export SNYK_DEBUG_LEVEL=debug`
+level is `info`. This can be overruled by setting the env variable `SNYK_LOG_LEVEL`,
+e.g. `export SNYK_LOG_LEVEL=debug`
 
 `-licenses` (running standalone) displays the [licenses](https://github.com/snyk/snyk-ls/tree/main/licenses) used by
 Language Server\
@@ -561,10 +564,10 @@ Example shape:
     "proxy_insecure": { "value": false, "changed": true },
     "authentication_method": { "value": "oauth", "changed": true },
     "scan_automatic": { "value": true, "changed": true },
-    "enabled_severities": {
-      "value": { "critical": true, "high": true, "medium": true, "low": true },
-      "changed": true
-    },
+    "severity_filter_critical": { "value": true, "changed": true },
+    "severity_filter_high": { "value": true, "changed": true },
+    "severity_filter_medium": { "value": true, "changed": true },
+    "severity_filter_low": { "value": true, "changed": true },
     "issue_view_open_issues": { "value": true, "changed": true },
     "issue_view_ignored_issues": { "value": false, "changed": true },
     "scan_net_new": { "value": false, "changed": true },

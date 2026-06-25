@@ -107,6 +107,8 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 	// Use context.Background() so this is not canceled if the LSP request context is
 	// canceled (e.g. when the IDE cancels the snyk.login request after auth completes).
 	cmd.authService.SetPostCredentialUpdateHook(func() {
+		// Flush stale cached 401 errors so fresh calls use the new token.
+		cmd.featureFlagService.FlushCache()
 		cmd.ldxSyncService.RefreshConfigFromLdxSync(context.Background(), conf, cmd.engine, logger, config.GetWorkspace(conf).Folders(), cmd.notifier)
 		populateFolderFeatureFlagsAndSastSettings(conf, cmd.engine, logger, cmd.featureFlagService, cmd.configResolver)
 	})
@@ -122,7 +124,7 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 			Str("hashed token", util.Hash([]byte(token))[0:16]).
 			Msgf("authentication successful, received token")
 
-		go sendFolderConfigs(conf, cmd.engine, logger, cmd.notifier, cmd.featureFlagService, cmd.configResolver)
+		go sendFolderConfigs(conf, cmd.engine, logger, cmd.notifier, cmd.configResolver)
 
 		return token, nil
 	}

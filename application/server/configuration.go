@@ -20,10 +20,11 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -39,9 +40,10 @@ import (
 	mcpWorkflow "github.com/snyk/snyk-ls/internal/mcp"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
+	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -85,23 +87,27 @@ func workspaceDidChangeConfiguration(conf configuration.Configuration, srv *jrpc
 		defer logger.Info().Str("method", "WorkspaceDidChangeConfiguration").Msg("DONE")
 
 		if len(params.Settings.Settings) > 0 || len(params.Settings.FolderConfigs) > 0 {
-			return handlePushModel(conf, engine, logger, params.Settings)
+			return handlePushModel(ctx, conf, engine, logger, params.Settings)
 		}
 
-		return handlePullModel(conf, engine, logger, srv, ctx)
+		return handlePullModel(ctx, conf, engine, logger, srv)
 	})
 }
 
-func handlePushModel(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, params types.LspConfigurationParam) (bool, error) {
+func handlePushModel(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, params types.LspConfigurationParam) (bool, error) {
 	triggerSource := analytics.TriggerSourceIDE
 	if !conf.GetBool(types.SettingIsLspInitialized) {
 		triggerSource = analytics.TriggerSourceInitialize
 	}
-	UpdateSettings(conf, engine, logger, params.Settings, params.FolderConfigs, triggerSource, di.ConfigResolver())
+	configResolver, ok := ctx2.ConfigResolverFromContext(ctx)
+	if !ok {
+		return false, errors.New("config resolver missing from context")
+	}
+	UpdateSettings(ctx, conf, engine, logger, params.Settings, params.FolderConfigs, triggerSource, configResolver)
 	return true, nil
 }
 
-func handlePullModel(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, srv *jrpc2.Server, ctx context.Context) (bool, error) {
+func handlePullModel(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, srv *jrpc2.Server) (bool, error) {
 	key := types.SettingClientCapabilities
 	capabilities, ok := conf.Get(key).(types.ClientCapabilities)
 	if !ok {
@@ -141,7 +147,11 @@ func handlePullModel(conf configuration.Configuration, engine workflow.Engine, l
 	if !conf.GetBool(types.SettingIsLspInitialized) {
 		triggerSource = analytics.TriggerSourceInitialize
 	}
-	UpdateSettings(conf, engine, logger, fetched.Settings.Settings, fetched.Settings.FolderConfigs, triggerSource, di.ConfigResolver())
+	configResolver, ok := ctx2.ConfigResolverFromContext(ctx)
+	if !ok {
+		return false, errors.New("config resolver missing from context")
+	}
+	UpdateSettings(ctx, conf, engine, logger, fetched.Settings.Settings, fetched.Settings.FolderConfigs, triggerSource, configResolver)
 	return true, nil
 }
 
@@ -186,18 +196,28 @@ func processInitMetadata(conf configuration.Configuration, engine workflow.Engin
 // InitializeSettings processes settings from the LSP initialize request.
 // Only settings explicitly marked Changed by the IDE are applied; IDE defaults
 // (Changed=false) are left alone so they don't override ldx-sync or GAF defaults.
-func InitializeSettings(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, opts types.InitializationOptions) {
-	resolver := di.ConfigResolver()
+func InitializeSettings(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, opts types.InitializationOptions) error {
+	resolver, ok := ctx2.ConfigResolverFromContext(ctx)
+	if !ok {
+		return errors.New("config resolver missing from context")
+	}
 
 	processInitMetadata(conf, engine, logger, opts)
 	// global
-	processConfigSettings(conf, engine, logger, opts.Settings, analytics.TriggerSourceInitialize, resolver)
+	globalOrgChanged, lockedMachineFields := processConfigSettings(ctx, conf, engine, logger, opts.Settings, analytics.TriggerSourceInitialize, resolver)
 	// folder
-	processFolderConfigs(conf, engine, logger, opts.FolderConfigs, analytics.TriggerSourceInitialize, resolver)
+	lockedFolderFields := processFolderConfigs(ctx, conf, engine, logger, opts.FolderConfigs, analytics.TriggerSourceInitialize, resolver, globalOrgChanged)
+
+	var fm workflow.ConfigurationOptionsMetaData
+	if resolver != nil {
+		fm = resolver.ConfigurationOptionsMetaData()
+	}
+	notifyLockedFieldsRejected(mustNotifierFromContext(ctx), fm, lockedMachineFields, lockedFolderFields)
+	return nil
 }
 
 // UpdateSettings processes settings from workspace/didChangeConfiguration.
-func UpdateSettings(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, folderConfigs []types.LspFolderConfig, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
+func UpdateSettings(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, folderConfigs []types.LspFolderConfig, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
 	ws := config.GetWorkspace(conf)
 	oldToken := config.GetToken(conf)
 
@@ -208,8 +228,46 @@ func UpdateSettings(conf configuration.Configuration, engine workflow.Engine, lo
 		}
 	}
 
-	processConfigSettings(conf, engine, logger, settings, triggerSource, configResolver)
-	processFolderConfigs(conf, engine, logger, folderConfigs, triggerSource, configResolver)
+	// Snapshot the effective configuration BEFORE any settings are applied so
+	// we can compare after. This straddles both processConfigSettings and
+	// processFolderConfigs because folder configs also mutate the effective
+	// LspConfigurationParam. Gated on SettingIsLspInitialized because
+	// BuildLspConfiguration is only meaningful after initialization.
+	var beforeLspConfig types.LspConfigurationParam
+	lspInitialized := conf.GetBool(types.SettingIsLspInitialized)
+	if lspInitialized {
+		beforeLspConfig = command.BuildLspConfiguration(conf, engine, logger, configResolver)
+	}
+
+	globalOrgChanged, lockedMachineFields := processConfigSettings(ctx, conf, engine, logger, settings, triggerSource, configResolver)
+
+	// Flush stale cached errors (e.g. 401s from a previous token) before
+	// PopulateFolderConfig runs inside processFolderConfigs. Flushing here
+	// ensures every folder sees fresh results with the new token.
+	if newToken := config.GetToken(conf); newToken != "" && newToken != oldToken {
+		mustFeatureFlagServiceFromContext(ctx).FlushCache()
+	}
+
+	lockedFolderFields := processFolderConfigs(ctx, conf, engine, logger, folderConfigs, triggerSource, configResolver, globalOrgChanged)
+
+	var fm workflow.ConfigurationOptionsMetaData
+	if configResolver != nil {
+		fm = configResolver.ConfigurationOptionsMetaData()
+	}
+	n := mustNotifierFromContext(ctx)
+	notifyLockedFieldsRejected(n, fm, lockedMachineFields, lockedFolderFields)
+
+	// Only send $/snyk.configuration when the EFFECTIVE configuration actually
+	// changed. Sending unconditionally caused an infinite refresh loop in the
+	// IDE HTML settings page (IDE-2149): a no-op save (e.g. a SAST-gated
+	// checkbox whose effective value stays false) would trigger a re-render,
+	// which auto-saved again, echoing forever.
+	if lspInitialized {
+		afterLspConfig := command.BuildLspConfiguration(conf, engine, logger, configResolver)
+		if !reflect.DeepEqual(beforeLspConfig, afterLspConfig) {
+			n.Send(afterLspConfig)
+		}
+	}
 
 	if ws != nil {
 		for _, folder := range ws.Folders() {
@@ -222,12 +280,17 @@ func UpdateSettings(conf configuration.Configuration, engine workflow.Engine, lo
 		}
 	}
 
-	refreshLdxSyncOnTokenChange(conf, engine, logger, ws, oldToken)
+	refreshLdxSyncOnTokenChange(ctx, conf, engine, logger, ws, oldToken, n)
 }
 
-func refreshLdxSyncOnTokenChange(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, ws types.Workspace, oldToken string) {
+// refreshLdxSyncOnTokenChange triggers an LDX-Sync refresh when the token changes.
+// ldxSyncService is read from ctx via mustLdxSyncServiceFromContext; notifier is passed by the caller.
+func refreshLdxSyncOnTokenChange(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, ws types.Workspace, oldToken string, notifier notification.Notifier) {
 	newToken := config.GetToken(conf)
-	if newToken == oldToken || newToken == "" || ws == nil {
+	if newToken == oldToken || newToken == "" {
+		return
+	}
+	if ws == nil {
 		return
 	}
 	folders := ws.Folders()
@@ -235,7 +298,7 @@ func refreshLdxSyncOnTokenChange(conf configuration.Configuration, engine workfl
 		return
 	}
 	logger.Info().Msg("token changed via settings, refreshing LDX-Sync configuration")
-	di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, folders, di.Notifier())
+	mustLdxSyncServiceFromContext(ctx).RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, folders, notifier)
 }
 
 // validateLockedMachineFields rejects user PATCH attempts for machine-scope settings
@@ -248,11 +311,14 @@ func refreshLdxSyncOnTokenChange(conf configuration.Configuration, engine workfl
 //
 // Without rejection, locked PATCHes are silently shadowed by phase 1 but persist as
 // ghost entries at UserGlobalKey — load-bearing if the admin later lifts the lock.
-func validateLockedMachineFields(settings map[string]*types.ConfigSetting, configResolver types.ConfigResolverInterface, fm workflow.ConfigurationOptionsMetaData, subLogger *zerolog.Logger) bool {
+//
+// Returns the names of rejected settings so the caller can fold them into a single
+// deduplicated notification for the triggering event (see [IDE-1970]).
+func validateLockedMachineFields(settings map[string]*types.ConfigSetting, configResolver types.ConfigResolverInterface, fm workflow.ConfigurationOptionsMetaData, subLogger *zerolog.Logger) []string {
 	if configResolver == nil || len(settings) == 0 {
-		return false
+		return nil
 	}
-	rejected := false
+	var locked []string
 	for name, cs := range settings {
 		if cs == nil || !cs.Changed {
 			continue
@@ -267,18 +333,77 @@ func validateLockedMachineFields(settings map[string]*types.ConfigSetting, confi
 			Str("setting", name).
 			Msg("Rejecting machine-scope change to locked setting - locked by organization policy")
 		delete(settings, name)
-		rejected = true
+		locked = append(locked, name)
 	}
-	return rejected
+	return locked
+}
+
+// notifyLockedFieldsRejected emits at most one notification for the triggering
+// event (LSP initialize / didChangeConfiguration), summarizing every locked
+// field that was rejected across machine-scope and folder-scope updates. Field
+// names are deduplicated so that a setting locked in multiple folders only
+// appears once, and each name is rendered with its registered display name
+// (e.g. "Snyk Code Enabled") rather than the internal snake_case identifier.
+// See [IDE-1970].
+func notifyLockedFieldsRejected(notifier notification.Notifier, fm workflow.ConfigurationOptionsMetaData, lockedFieldGroups ...[]string) {
+	// Dedup on the resolved display name rather than the raw identifier so two
+	// distinct raw keys that resolve to the same display name (e.g. legacy and
+	// canonical identifiers for the same setting) collapse to a single entry
+	// in the user-facing message. Raw-name dedup is still handled because
+	// displayNameFor falls back to the raw identifier when no annotation is
+	// registered.
+	seenDisplay := make(map[string]struct{})
+	var displayNames []string
+	for _, group := range lockedFieldGroups {
+		for _, name := range group {
+			dn := displayNameFor(fm, name)
+			if _, ok := seenDisplay[dn]; ok {
+				continue
+			}
+			seenDisplay[dn] = struct{}{}
+			displayNames = append(displayNames, dn)
+		}
+	}
+	if len(displayNames) == 0 {
+		return
+	}
+	// Sort the display names so the notification is deterministic regardless of
+	// map iteration order upstream; otherwise the same triggering event could
+	// surface fields in different orders across runs, which would confuse users
+	// and test fixtures.
+	sort.Strings(displayNames)
+	notifier.SendShowMessage(sglsp.MTWarning,
+		fmt.Sprintf("Failed to update some settings: locked by your organization's policy (%s)",
+			strings.Join(displayNames, ", ")))
+}
+
+// displayNameFor resolves a setting's user-facing display name from its
+// registered config.displayName annotation, falling back to the raw setting
+// identifier when no metadata is available (e.g. in tests that don't register
+// flags, or for settings without a display-name annotation).
+func displayNameFor(fm workflow.ConfigurationOptionsMetaData, name string) string {
+	if fm == nil {
+		return name
+	}
+	if dn, ok := fm.GetConfigurationOptionAnnotation(name, configresolver.AnnotationDisplayName); ok && dn != "" {
+		return dn
+	}
+	return name
 }
 
 // processConfigSettings writes incoming settings to configuration and applies side effects.
 // This replaces the old writeSettings + update* functions.
-func processConfigSettings(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
+// Returns globalOrgChanged so the caller (processFolderConfigs) can fold the
+// global reset into the single resetSummaryPanelForOrgChange call that covers
+// per-folder org changes, plus the names of any machine-scope settings rejected
+// for being locked. The caller is responsible for emitting a single
+// deduplicated locked-fields notification for the triggering event (see
+// [IDE-1970]).
+func processConfigSettings(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) (bool, []string) {
 	conf.ClearCache()
 
 	if len(settings) == 0 {
-		return
+		return false, nil
 	}
 
 	subLogger := logger.With().Str("method", "processConfigSettings").Logger()
@@ -286,14 +411,20 @@ func processConfigSettings(conf configuration.Configuration, engine workflow.Eng
 	if configResolver != nil {
 		fm = configResolver.ConfigurationOptionsMetaData()
 	}
-	if validateLockedMachineFields(settings, configResolver, fm, &subLogger) {
-		di.Notifier().SendShowMessage(sglsp.MTWarning,
-			"Failed to update some settings: locked by your organization's policy")
-	}
+	lockedMachineFields := validateLockedMachineFields(settings, configResolver, fm, &subLogger)
 
-	applyApiEndpoints(conf, engine, logger, settings, triggerSource, configResolver)
-	applyAuthenticationMethod(conf, engine, logger, settings, triggerSource, configResolver)
-	applyToken(settings)
+	// Global "Project Defaults" reset: honor {changed:true, value:null} for the
+	// org-scope global settings by Unsetting the user override so the resolver
+	// falls back to LDX-Sync / flagset default. Runs BEFORE the typed appliers and
+	// deletes handled keys from settings, so a reset never double-applies (the
+	// typed appliers' read helpers skip a nil value anyway, but deleting keeps the
+	// intent explicit and avoids spurious analytics).
+	globalResetOrgChanged := applyGlobalResets(ctx, conf, engine, logger, settings, triggerSource, configResolver)
+
+	authService := mustAuthenticationServiceFromContext(ctx)
+	applyApiEndpoints(conf, engine, logger, settings, triggerSource, configResolver, authService)
+	applyAuthenticationMethod(conf, engine, logger, settings, triggerSource, configResolver, authService)
+	applyToken(settings, authService)
 	applyAutomaticAuthentication(conf, settings)
 	applyProductEnablement(conf, engine, logger, settings, triggerSource, configResolver)
 	applySeverityFilter(conf, engine, logger, settings, triggerSource, configResolver)
@@ -301,8 +432,9 @@ func processConfigSettings(conf configuration.Configuration, engine workflow.Eng
 	applyIssueViewOptions(conf, engine, logger, settings, triggerSource, configResolver)
 	applyDeltaFindings(conf, engine, logger, settings, triggerSource, configResolver)
 	applyAutoScan(conf, settings)
-	applyOrganization(conf, engine, logger, settings, triggerSource, configResolver)
+	globalOrgChanged := applyOrganization(ctx, conf, engine, logger, settings, triggerSource, configResolver) || globalResetOrgChanged
 	applyCliConfig(conf, settings)
+	applyUserSettingsPath(conf, settings)
 	applyEnvironment(conf, logger, settings)
 	applyCliBaseDownloadURL(conf, engine, logger, settings, triggerSource, configResolver)
 	applyErrorReporting(conf, engine, logger, settings, triggerSource, configResolver)
@@ -312,12 +444,14 @@ func processConfigSettings(conf configuration.Configuration, engine workflow.Eng
 	applySnykLearnCodeActions(conf, engine, logger, settings, triggerSource, configResolver)
 	applySnykOssQuickFixCodeActions(conf, engine, logger, settings, triggerSource, configResolver)
 	applySnykOpenBrowserActions(conf, settings)
-	applyMcpConfiguration(conf, engine, logger, settings, triggerSource, configResolver)
+	applyMcpConfiguration(mustNotifierFromContext(ctx), conf, engine, logger, settings, triggerSource, configResolver)
 	applyPublishSecurityAtInceptionRules(conf, settings)
 	// this is without function right now, we do not use/distribute proxy settings from/to IDEs
 	applyProxyConfig(conf, settings)
 	applyCodeEndpoint(conf, settings)
 	applyCliReleaseChannel(conf, settings)
+
+	return globalOrgChanged, lockedMachineFields
 }
 
 // hasFilterChangesInLspConfig detects if any filter settings are marked as Changed in the incoming LspFolderConfig.
@@ -348,8 +482,17 @@ func hasFilterChangesInLspConfig(lspConfig *types.LspFolderConfig) bool {
 }
 
 // processFolderConfigs handles the folder configuration portion of incoming settings.
-func processFolderConfigs(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, folderConfigs []types.LspFolderConfig, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
-	notifier := di.Notifier()
+// When globalOrgChanged is true, every workspace folder is treated as having an
+// org change so the Summary Panel reset is folded into the single
+// resetSummaryPanelForOrgChange call below (avoiding the double-flash that used
+// to occur when applyOrganization reset separately from processFolderConfigs).
+//
+// Returns the union of all folder-scope setting names rejected for being locked
+// across every processed folder. The caller is responsible for folding this
+// list (together with machine-scope rejections) into a single deduplicated
+// locked-fields notification per triggering event — see [IDE-1970].
+func processFolderConfigs(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, folderConfigs []types.LspFolderConfig, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface, globalOrgChanged bool) []string {
+	notifier := mustNotifierFromContext(ctx)
 	incomingMap := buildIncomingLspConfigMap(folderConfigs)
 	allPaths := gatherAllFolderPathsFromLspConfigs(incomingMap, config.GetWorkspace(conf))
 
@@ -357,18 +500,35 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 		Int("incomingFolderConfigCount", len(folderConfigs)).
 		Int("incomingMapCount", len(incomingMap)).
 		Int("allPathsCount", len(allPaths)).
+		Bool("globalOrgChanged", globalOrgChanged).
 		Msg("processFolderConfigs - processing folder configs")
 
-	var processedConfigs []types.FolderConfig
 	var changedConfigs []*types.FolderConfig
+	var lockedFields []string
 	filterChanged := false
+	orgChangedFolderPaths := make(map[types.FilePath]struct{})
+
+	// If the global org changed, every workspace folder needs a Summary Panel
+	// reset so we seed the set up front. Per-folder org changes (e.g. PreferredOrg
+	// via folderConfigs) get unioned in below.
+	if globalOrgChanged {
+		for _, p := range workspaceFolderPaths(conf) {
+			orgChangedFolderPaths[p] = struct{}{}
+		}
+	}
 
 	for path := range allPaths {
-		folderConfig, oldSnapshot, newSnapshot, configChanged := processSingleLspFolderConfig(conf, engine, logger, path, incomingMap, notifier)
-
-		if configChanged {
-			changedConfigs = append(changedConfigs, &folderConfig)
+		result := processSingleLspFolderConfig(ctx, conf, engine, logger, path, incomingMap, notifier, configResolver)
+		if result.orgSettingsChanged {
+			orgChangedFolderPaths[path] = struct{}{}
 		}
+
+		if result.configChanged {
+			cfg := result.config
+			changedConfigs = append(changedConfigs, &cfg)
+		}
+
+		lockedFields = append(lockedFields, result.lockedFields...)
 
 		// Check for filter changes INDEPENDENTLY of configChanged
 		// Filter changes are folder-scope settings, so we need to detect them separately
@@ -378,8 +538,7 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 			}
 		}
 
-		handleFolderCacheClearing(conf, engine, logger, path, oldSnapshot, newSnapshot, triggerSource, configResolver)
-		processedConfigs = append(processedConfigs, folderConfig)
+		handleFolderCacheClearing(conf, engine, logger, path, result.oldSnapshot, result.newSnapshot, triggerSource, configResolver)
 	}
 
 	if len(changedConfigs) > 0 {
@@ -389,11 +548,19 @@ func processFolderConfigs(conf configuration.Configuration, engine workflow.Engi
 	}
 
 	// Trigger diagnostics republishing if filter changes detected
-	if filterChanged {
+	if filterChanged && conf.GetBool(types.SettingIsLspInitialized) {
 		sendDiagnosticsForNewSettings(conf, logger)
 	}
 
-	sendFolderConfigUpdateIfNeeded(conf, engine, logger, notifier, processedConfigs, len(changedConfigs) > 0, triggerSource, configResolver)
+	if conf.GetBool(types.SettingIsLspInitialized) && len(orgChangedFolderPaths) > 0 {
+		paths := make([]types.FilePath, 0, len(orgChangedFolderPaths))
+		for p := range orgChangedFolderPaths {
+			paths = append(paths, p)
+		}
+		resetSummaryPanelForOrgChange(mustScanStateAggregatorFromContext(ctx), paths)
+	}
+
+	return lockedFields
 }
 
 // --- Value extraction helpers ---
@@ -471,36 +638,37 @@ func settingPresent(settings map[string]*types.ConfigSetting, name string) bool 
 
 // --- Side-effect handlers ---
 
-func applyApiEndpoints(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
+func applyApiEndpoints(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface, authService authentication.AuthenticationService) {
 	v, ok := settingStr(settings, types.SettingApiEndpoint)
 	if !ok {
 		return
 	}
 	snykApiUrl := strings.TrimSpace(v)
 	oldEndpoint := types.GetGlobalString(conf, types.SettingApiEndpoint)
-	endpointsUpdated := command.ApplyEndpointChange(context.Background(), conf, di.AuthenticationService(), logger, snykApiUrl)
+	endpointsUpdated := command.ApplyEndpointChange(context.Background(), conf, authService, logger, snykApiUrl)
 	if endpointsUpdated && conf.GetBool(types.SettingIsLspInitialized) {
 		analytics.SendConfigChangedAnalytics(conf, engine, logger, configEndpoint, oldEndpoint, snykApiUrl, triggerSource, configResolver)
 	}
 }
 
-func applyToken(settings map[string]*types.ConfigSetting) {
+func applyToken(settings map[string]*types.ConfigSetting, authService authentication.AuthenticationService) {
 	tokenFromIde, tokenExistsInMap := settings[types.SettingToken]
-	if tokenExistsInMap {
-		tokenAsString, parsable := tokenFromIde.Value.(string)
-		if parsable {
-			di.AuthenticationService().UpdateCredentials(tokenAsString, false, false)
-		}
+	if !tokenExistsInMap || tokenFromIde == nil {
+		return
+	}
+	tokenAsString, parsable := tokenFromIde.Value.(string)
+	if parsable && authService != nil {
+		authService.UpdateCredentials(tokenAsString, false, false)
 	}
 }
 
-func applyAuthenticationMethod(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
+func applyAuthenticationMethod(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface, authService authentication.AuthenticationService) {
 	v, ok := settingStr(settings, types.SettingAuthenticationMethod)
 	if !ok || types.AuthenticationMethod(v) == types.EmptyAuthenticationMethod {
 		return
 	}
 	oldValue := config.GetAuthenticationMethodFromConfig(conf)
-	command.ApplyAuthMethodChange(conf, di.AuthenticationService(), logger, types.AuthenticationMethod(v))
+	command.ApplyAuthMethodChange(conf, authService, logger, types.AuthenticationMethod(v))
 	if oldValue != types.AuthenticationMethod(v) && conf.GetBool(types.SettingIsLspInitialized) {
 		analytics.SendConfigChangedAnalytics(conf, engine, logger, configAuthenticationMethod, oldValue, types.AuthenticationMethod(v), triggerSource, configResolver)
 	}
@@ -582,8 +750,8 @@ func applySeverityFilter(conf configuration.Configuration, engine workflow.Engin
 	if !modified {
 		return
 	}
-	sendDiagnosticsForNewSettings(conf, logger)
 	if conf.GetBool(types.SettingIsLspInitialized) {
+		sendDiagnosticsForNewSettings(conf, logger)
 		analytics.SendAnalyticsForFields(conf, engine, logger, "filterSeverity", &oldValue, sf, triggerSource, map[string]func(*types.SeverityFilter) any{
 			"Critical": func(s *types.SeverityFilter) any { return s.Critical },
 			"High":     func(s *types.SeverityFilter) any { return s.High },
@@ -641,8 +809,8 @@ func applyRiskScoreThreshold(conf configuration.Configuration, engine workflow.E
 	if !modified {
 		return
 	}
-	sendDiagnosticsForNewSettings(conf, logger)
 	if conf.GetBool(types.SettingIsLspInitialized) {
+		sendDiagnosticsForNewSettings(conf, logger)
 		analytics.SendConfigChangedAnalytics(conf, engine, logger, "riskScoreThreshold", oldValue, *riskScore, triggerSource, configResolver)
 	}
 }
@@ -667,8 +835,8 @@ func applyIssueViewOptions(conf configuration.Configuration, engine workflow.Eng
 	if !modified {
 		return
 	}
-	sendDiagnosticsForNewSettings(conf, logger)
 	if conf.GetBool(types.SettingIsLspInitialized) {
+		sendDiagnosticsForNewSettings(conf, logger)
 		analytics.SendAnalyticsForFields(conf, engine, logger, "issueViewOptions", &oldValue, &ivo, triggerSource, map[string]func(*types.IssueViewOptions) any{
 			"OpenIssues":    func(s *types.IssueViewOptions) any { return s.OpenIssues },
 			"IgnoredIssues": func(s *types.IssueViewOptions) any { return s.IgnoredIssues },
@@ -706,18 +874,219 @@ func applyAutoScan(conf configuration.Configuration, settings map[string]*types.
 	types.SetGlobalDeferredFolderScope(conf, types.SettingScanAutomatic, autoScan)
 }
 
-func applyOrganization(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
+// isReset reports whether an incoming ConfigSetting is a reset marker:
+// {changed:true, value:null}. This is the global-scope analog of
+// folder_config.go::isFolderReset.
+func isReset(cs *types.ConfigSetting) bool {
+	return cs != nil && cs.Changed && cs.Value == nil
+}
+
+// globalEffectiveValue returns the effective global value for a resettable key
+// using the type-correct reader for the shape in which the value is stored.
+//
+// SettingRiskScoreThreshold is int-registered (flagset default 0); use GetGlobalInt.
+//
+// SettingScanNetNew is string-registered in the flagset (default ""), but
+// applyDeltaFindings writes it as a raw bool via SetGlobalDeferredFolderScope.
+// GetGlobalString would silently fail the bool→string type assertion and return ""
+// both before and after a reset, making effectivelyChanged always false and
+// suppressing analytics. GetGlobalBool correctly reads the stored bool value.
+//
+// All other GlobalResettableSettings are written as bools; they use GetGlobalBool.
+func globalEffectiveValue(conf configuration.Configuration, name string) any {
+	switch name {
+	case types.SettingRiskScoreThreshold:
+		return types.GetGlobalInt(conf, name)
+	default:
+		return types.GetGlobalBool(conf, name)
+	}
+}
+
+// globalResetFilterKeys is the subset of GlobalResettableSettings whose reset
+// must trigger a diagnostics refresh, mirroring applyProductEnablement /
+// applySeverityFilter / applyIssueViewOptions / applyDeltaFindings.
+var globalResetFilterKeys = map[string]bool{
+	types.SettingSnykOssEnabled:         true,
+	types.SettingSnykCodeEnabled:        true,
+	types.SettingSnykIacEnabled:         true,
+	types.SettingSnykSecretsEnabled:     true,
+	types.SettingScanNetNew:             true,
+	types.SettingSeverityFilterCritical: true,
+	types.SettingSeverityFilterHigh:     true,
+	types.SettingSeverityFilterMedium:   true,
+	types.SettingSeverityFilterLow:      true,
+	types.SettingIssueViewOpenIssues:    true,
+	types.SettingIssueViewIgnoredIssues: true,
+	types.SettingRiskScoreThreshold:     true,
+}
+
+// applyGlobalResets clears user overrides for org-scope global ("Project Defaults")
+// settings sent as {changed:true, value:null}. For each handled key it Unsets the
+// user override (so the value falls back through the resolver chain) and deletes the
+// entry from settings so the downstream typed appliers do not also act on it.
+// organization is handled specially via config.ResetOrganization because it is not
+// stored at UserGlobalKey. Returns true if the effective global org changed, so the
+// caller can fold the summary-panel reset into the single org-change path.
+//
+// Locked fields: validateLockedMachineFields runs first and strips locked
+// machine-scope entries (incl. a locked organization), so they never reach here.
+// For locked folder-scope LDX-Sync values, the user override is still cleared but
+// GetGlobal* phase-1 keeps the locked remote value winning — correct.
+func applyGlobalResets(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) bool {
+	orgChanged := false
+	filterReset := false
+	for _, name := range types.GlobalResettableSettings {
+		cs, ok := settings[name]
+		if !ok || !isReset(cs) {
+			continue
+		}
+
+		if name == types.SettingOrganization {
+			oldOrgId := types.GetGlobalOrganization(conf)
+			// Capture folders BEFORE resetting. GetGlobalOrganization has a
+			// write-on-read side effect (conf.Set(ORGANIZATION, org)) that could
+			// produce unexpected state if called after ResetOrganization has cleared
+			// the explicit-set marker. Pre-capturing the list eliminates any order
+			// dependency on that side effect.
+			//
+			// Initialize to a non-nil empty slice (not nil) so that
+			// refreshFoldersForGlobalOrgChange routes through the pre-captured path
+			// (preCaptured != nil) even when there is no workspace. A nil slice
+			// would be treated as "no capture taken — query after reset", defeating
+			// the ordering guarantee this pre-capture provides.
+			foldersToRefresh := []types.Folder{}
+			if ws := config.GetWorkspace(conf); ws != nil {
+				foldersToRefresh = findFoldersUsingGlobalOrgFallback(conf, ws.Folders())
+			}
+			config.ResetOrganization(conf)
+			newOrgId := types.GetGlobalOrganization(conf)
+			if oldOrgId != newOrgId && conf.GetBool(types.SettingIsLspInitialized) {
+				analytics.SendConfigChangedAnalytics(conf, engine, logger, configOrganization, oldOrgId, newOrgId, triggerSource, configResolver)
+				refreshFoldersForGlobalOrgChange(ctx, conf, engine, logger, oldOrgId, newOrgId, foldersToRefresh)
+				orgChanged = true
+			}
+		} else if types.HasGlobalUserOverride(conf, name) {
+			// Read the effective value BEFORE and AFTER unset using the type-correct
+			// reader for this key. GetGlobalBool is wrong for int/string-registered keys
+			// (e.g. SettingRiskScoreThreshold, SettingScanNetNew) — the type assertion
+			// always fails, making oldEffective == newEffective == false and silently
+			// suppressing both analytics and the diagnostics refresh.
+			oldEffective := globalEffectiveValue(conf, name)
+			types.UnsetGlobalUser(conf, name)
+			newEffective := globalEffectiveValue(conf, name)
+			effectivelyChanged := oldEffective != newEffective
+			// filterReset: trigger diagnostics for any globalResetFilterKey whose
+			// user override is being removed — regardless of whether the effective
+			// value changes (the user had an intentional override; clearing it is
+			// always meaningful for the filter pipeline). This mirrors the pre-analytics
+			// behavior where filterReset was set unconditionally for keys in the map.
+			if globalResetFilterKeys[name] {
+				filterReset = true
+			}
+			if conf.GetBool(types.SettingIsLspInitialized) && effectivelyChanged {
+				analytics.SendConfigChangedAnalytics(conf, engine, logger, name, oldEffective, newEffective, triggerSource, configResolver)
+			}
+		}
+
+		// Remove the handled reset so the typed appliers below skip it.
+		delete(settings, name)
+	}
+
+	if filterReset && conf.GetBool(types.SettingIsLspInitialized) {
+		sendDiagnosticsForNewSettings(conf, logger)
+	}
+
+	return orgChanged
+}
+
+// applyOrganization persists the global org change and emits analytics.
+// Returns true when the global org actually changed and the LSP is initialized
+// so the caller (processConfigSettings → processFolderConfigs) can union the
+// affected workspace folders into the single resetSummaryPanelForOrgChange call.
+func applyOrganization(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) bool {
 	v, ok := settingStr(settings, types.SettingOrganization)
 	if !ok {
-		return
+		return false
 	}
 	newOrg := strings.TrimSpace(v)
 	oldOrgId := types.GetGlobalOrganization(conf)
 	config.SetOrganization(conf, newOrg)
 	newOrgId := types.GetGlobalOrganization(conf)
-	if oldOrgId != newOrgId && conf.GetBool(types.SettingIsLspInitialized) {
-		analytics.SendConfigChangedAnalytics(conf, engine, logger, configOrganization, oldOrgId, newOrgId, triggerSource, configResolver)
+	if oldOrgId == newOrgId || !conf.GetBool(types.SettingIsLspInitialized) {
+		return false
 	}
+	analytics.SendConfigChangedAnalytics(conf, engine, logger, configOrganization, oldOrgId, newOrgId, triggerSource, configResolver)
+	refreshFoldersForGlobalOrgChange(ctx, conf, engine, logger, oldOrgId, newOrgId, nil)
+
+	return true
+}
+
+// refreshFoldersForGlobalOrgChange triggers an LDX-Sync refresh for folders that
+// depend on the global org fallback (OrgSetByUser && PreferredOrg=="").
+//
+// Used by both applyOrganization (org explicitly set) and applyGlobalResets (org
+// reset to fallback). The reset path pre-captures the folder list before calling
+// ResetOrganization to avoid any ordering dependency on GetGlobalOrganization's
+// write-on-read side effect; it passes that list in preCaptured. The set path
+// passes nil, and the function queries the workspace itself.
+func refreshFoldersForGlobalOrgChange(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, oldOrgId, newOrgId string, preCaptured []types.Folder) {
+	var foldersNeedingRefresh []types.Folder
+	if preCaptured != nil {
+		foldersNeedingRefresh = preCaptured
+	} else {
+		ws := config.GetWorkspace(conf)
+		if ws == nil {
+			return
+		}
+		foldersNeedingRefresh = findFoldersUsingGlobalOrgFallback(conf, ws.Folders())
+	}
+	if len(foldersNeedingRefresh) == 0 {
+		return
+	}
+	logger.Info().
+		Int("folderCount", len(foldersNeedingRefresh)).
+		Str("oldOrg", oldOrgId).
+		Str("newOrg", newOrgId).
+		Msg("global org changed, refreshing LDX-Sync for folders using global org fallback")
+	ldxSyncService := mustLdxSyncServiceFromContext(ctx)
+	notifier := mustNotifierFromContext(ctx)
+	ldxSyncService.RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, foldersNeedingRefresh, notifier)
+}
+
+// findFoldersUsingGlobalOrgFallback identifies folders that use the global org fallback.
+// A folder uses global org fallback if: OrgSetByUser=true AND PreferredOrg=""
+func findFoldersUsingGlobalOrgFallback(conf configuration.Configuration, folders []types.Folder) []types.Folder {
+	var result []types.Folder
+	for _, folder := range folders {
+		s := types.ReadFolderConfigSnapshot(conf, folder.Path())
+		if s.OrgSetByUser && s.PreferredOrg == "" {
+			result = append(result, folder)
+		}
+	}
+	return result
+}
+
+// resetSummaryPanelForOrgChange clears scan state for the given folders so the
+// Summary Panel returns to its initial "no scans yet" state. The aggregator's
+// Init re-emits a fresh snapshot, which IDE clients render as the empty summary panel.
+func resetSummaryPanelForOrgChange(scanAgg scanstates.Aggregator, folderPaths []types.FilePath) {
+	if scanAgg == nil || len(folderPaths) == 0 {
+		return
+	}
+	scanAgg.Init(folderPaths)
+}
+
+func workspaceFolderPaths(conf configuration.Configuration) []types.FilePath {
+	ws := config.GetWorkspace(conf)
+	if ws == nil {
+		return nil
+	}
+	folders := ws.Folders()
+	folderPaths := make([]types.FilePath, 0, len(folders))
+	for _, f := range folders {
+		folderPaths = append(folderPaths, f.Path())
+	}
+	return folderPaths
 }
 
 func applyCliConfig(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
@@ -829,6 +1198,14 @@ func applyPathToEnv(conf configuration.Configuration, logger *zerolog.Logger, pa
 	subLogger.Debug().Msgf("new PATH is '%s'", os.Getenv("PATH"))
 }
 
+func applyUserSettingsPath(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
+	v, ok := settingStr(settings, types.SettingUserSettingsPath)
+	if !ok {
+		return
+	}
+	types.SetGlobalUser(conf, types.SettingUserSettingsPath, v)
+}
+
 func applySnykLearnCodeActions(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
 	v, ok := settingBool(settings, types.SettingEnableSnykLearnCodeActions)
 	if !ok {
@@ -859,8 +1236,7 @@ func applySnykOpenBrowserActions(conf configuration.Configuration, settings map[
 	}
 }
 
-func applyMcpConfiguration(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
-	n := di.Notifier()
+func applyMcpConfiguration(n notification.Notifier, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
 	if v, ok := settingBool(settings, types.SettingAutoConfigureMcpServer); ok {
 		oldValue := types.GetGlobalBool(conf, types.SettingAutoConfigureMcpServer)
 		types.SetGlobalUser(conf, types.SettingAutoConfigureMcpServer, v)
@@ -868,7 +1244,7 @@ func applyMcpConfiguration(conf configuration.Configuration, engine workflow.Eng
 			if conf.GetBool(types.SettingIsLspInitialized) {
 				go analytics.SendConfigChangedAnalytics(conf, engine, logger, configAutoConfigureSnykMcpServer, oldValue, v, triggerSource, configResolver)
 			}
-			mcpWorkflow.CallMcpConfigWorkflow(conf, di.ConfigResolver(), engine, logger, n, true, false)
+			mcpWorkflow.CallMcpConfigWorkflow(conf, configResolver, engine, logger, n, true, false)
 		}
 	}
 
@@ -879,7 +1255,7 @@ func applyMcpConfiguration(conf configuration.Configuration, engine workflow.Eng
 			if conf.GetBool(types.SettingIsLspInitialized) {
 				go analytics.SendConfigChangedAnalytics(conf, engine, logger, configSecureAtInceptionExecutionFrequency, oldValue, v, triggerSource, configResolver)
 			}
-			mcpWorkflow.CallMcpConfigWorkflow(conf, di.ConfigResolver(), engine, logger, n, false, true)
+			mcpWorkflow.CallMcpConfigWorkflow(conf, configResolver, engine, logger, n, false, true)
 		}
 	}
 }
@@ -898,20 +1274,63 @@ func applyProxyConfig(conf configuration.Configuration, settings map[string]*typ
 
 func applyEnvironment(conf configuration.Configuration, logger *zerolog.Logger, settings map[string]*types.ConfigSetting) {
 	v, ok := settingStr(settings, types.SettingAdditionalEnvironment)
-	if !ok || v == "" {
+	if !ok {
+		// Field absent or unchanged: leave both the process env and the persisted value alone.
+		// An empty-but-changed value (user cleared the field) has ok==true and falls through,
+		// so the clear path below runs.
 		return
 	}
-	envVars := strings.Split(v, ";")
-	for _, envVar := range envVars {
+
+	// Diff against the previously-persisted value so keys the user removed get unset from the
+	// process env. os.Setenv is one-way; without this, a re-save that drops a key would leave it
+	// live in os.Environ() and leak into every subsequent CLI subprocess (updateSDKs seeds the
+	// scan env from the process environment).
+	oldKeys := parseEnvKeys(types.GetGlobalString(conf, types.SettingAdditionalEnvironment))
+	newKeys := make(map[string]bool)
+
+	for _, envVar := range strings.Split(v, ";") {
 		parts := strings.SplitN(envVar, "=", 2)
 		if len(parts) != 2 {
 			continue
 		}
-		err := os.Setenv(parts[0], parts[1])
-		if err != nil {
+		key := parts[0]
+		newKeys[key] = true
+		if err := os.Setenv(key, parts[1]); err != nil {
 			logger.Err(err).Msgf("couldn't set env variable %s", envVar)
 		}
 	}
+
+	// Unset keys that were applied previously but are absent from the new value.
+	for key := range oldKeys {
+		if !newKeys[key] {
+			if err := os.Unsetenv(key); err != nil {
+				logger.Err(err).Msgf("couldn't unset env variable %s", key)
+			}
+		}
+	}
+
+	// Persist the raw string so the settings dialog can repopulate this field on reopen.
+	// On an empty value this writes "", clearing the persisted state so the field comes back blank.
+	// os.Setenv alone is not readable back from config; SetGlobalUser writes to UserGlobalKey
+	// which r.GetString(SettingAdditionalEnvironment, nil) resolves via the folder-scope chain.
+	types.SetGlobalUser(conf, types.SettingAdditionalEnvironment, v)
+}
+
+// parseEnvKeys extracts the set of variable names from a "KEY=VAL;KEY2=VAL2" string.
+// Malformed segments (no "=") are skipped, matching applyEnvironment's apply loop.
+func parseEnvKeys(raw string) map[string]bool {
+	keys := make(map[string]bool)
+	if raw == "" {
+		return keys
+	}
+	for _, envVar := range strings.Split(raw, ";") {
+		parts := strings.SplitN(envVar, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		keys[parts[0]] = true
+	}
+	return keys
 }
 
 func applyCodeEndpoint(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
@@ -960,16 +1379,25 @@ func gatherAllFolderPathsFromLspConfigs(incomingMap map[types.FilePath]types.Lsp
 	return allPaths
 }
 
+// singleFolderResult is the structured return value of processSingleLspFolderConfig.
+// Fields are exposed by name so callers don't have to positionally destructure a tuple.
+type singleFolderResult struct {
+	config             types.FolderConfig
+	oldSnapshot        types.FolderConfigSnapshot
+	newSnapshot        types.FolderConfigSnapshot
+	configChanged      bool
+	orgSettingsChanged bool
+	lockedFields       []string
+}
+
 // processSingleLspFolderConfig processes an incoming LspFolderConfig from the IDE using PATCH semantics:
 // - For pointer fields: nil = don't change, non-nil = set value
 // - For *LocalConfigField: nil = don't change, Changed+Value = set, Changed+nil = reset
 // It loads the existing FolderConfig (unenriched), applies the LspFolderConfig updates, and returns
 // the processed config without persisting. The caller is responsible for batch-persisting all changes.
-// Returns: (processedConfig, oldSnapshot, newSnapshot, configChanged)
-func processSingleLspFolderConfig(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path types.FilePath, incomingMap map[types.FilePath]types.LspFolderConfig, notifier notification.Notifier) (types.FolderConfig, types.FolderConfigSnapshot, types.FolderConfigSnapshot, bool) {
+func processSingleLspFolderConfig(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path types.FilePath, incomingMap map[types.FilePath]types.LspFolderConfig, notifier notification.Notifier, configResolver types.ConfigResolverInterface) singleFolderResult {
 	subLogger := logger.With().Str("method", "processSingleLspFolderConfig").Str("path", string(path)).Logger()
-	resolver := di.ConfigResolver()
-	fc := config.GetUnenrichedFolderConfigFromEngine(engine, resolver, path, logger)
+	fc := config.GetUnenrichedFolderConfigFromEngine(engine, configResolver, path, logger)
 
 	// Capture old snapshot BEFORE applying updates
 	oldSnapshot := types.ReadFolderConfigSnapshot(conf, types.PathKey(path))
@@ -977,34 +1405,46 @@ func processSingleLspFolderConfig(conf configuration.Configuration, engine workf
 	// Validate that the changes are allowed, then apply the new config.
 	normalizedPath := fc.FolderPath
 	applyChanged := false
+	var lockedFields []string
 	if incoming, hasIncoming := incomingMap[normalizedPath]; hasIncoming {
-		hasLockedFieldRejections := validateLockedFields(conf, fc, &incoming, &subLogger)
-		if hasLockedFieldRejections {
-			folderName := filepath.Base(string(fc.FolderPath))
-			notifier.SendShowMessage(sglsp.MTWarning,
-				fmt.Sprintf("Failed to update %s: Some settings are locked by your organization's policy", folderName))
-		}
-
+		lockedFields = validateLockedFields(configResolver, conf, fc, &incoming, &subLogger)
 		applyChanged = fc.ApplyLspUpdate(&incoming)
 	}
 
-	updateFolderOrgIfNeeded(conf, engine, logger, fc, fc, oldSnapshot, notifier)
-	di.FeatureFlagService().PopulateFolderConfig(fc)
+	// Skip calls to LDX-Sync and feature flag population here during LS init,
+	// will be handled explicitly later on during init.
+	orgSettingsChanged := false
+	if conf.GetBool(types.SettingIsLspInitialized) {
+		orgSettingsChanged = updateFolderOrgIfNeeded(ctx, conf, engine, logger, fc, fc, oldSnapshot, notifier)
+		mustFeatureFlagServiceFromContext(ctx).PopulateFolderConfig(fc)
+	}
 
 	newSnapshot := types.ReadFolderConfigSnapshot(conf, normalizedPath)
-	configChanged := applyChanged
 
-	return *fc, oldSnapshot, newSnapshot, configChanged
+	return singleFolderResult{
+		config:             *fc,
+		oldSnapshot:        oldSnapshot,
+		newSnapshot:        newSnapshot,
+		configChanged:      applyChanged,
+		orgSettingsChanged: orgSettingsChanged,
+		lockedFields:       lockedFields,
+	}
 }
 
 // validateLockedFields checks if any fields in the incoming LspFolderConfig are locked by LDX-Sync.
-// Returns true if any fields were rejected due to being locked.
+// Returns the names of rejected (locked) settings so the caller can fold them
+// into the single deduplicated locked-fields notification per triggering event
+// (see [IDE-1970]).
+//
+// The resolver is passed in (not fetched via di.ConfigResolver()) so that
+// machine-scope and folder-scope validation share the same resolver instance
+// when a caller injects one through UpdateSettings/InitializeSettings.
+//
 // If the incoming update changes PreferredOrg, locks are evaluated against the NEW org's policies
 // to prevent bypassing stricter locks during an org switch.
-func validateLockedFields(conf configuration.Configuration, folderConfig *types.FolderConfig, incoming *types.LspFolderConfig, subLogger *zerolog.Logger) bool {
-	resolver := di.ConfigResolver()
+func validateLockedFields(resolver types.ConfigResolverInterface, conf configuration.Configuration, folderConfig *types.FolderConfig, incoming *types.LspFolderConfig, subLogger *zerolog.Logger) []string {
 	if resolver == nil || incoming.Settings == nil {
-		return false
+		return nil
 	}
 
 	restoreOldOrg := temporarilyApplyNewOrgForValidation(conf, folderConfig, incoming)
@@ -1014,7 +1454,7 @@ func validateLockedFields(conf configuration.Configuration, folderConfig *types.
 		}
 	}()
 
-	updatesRejected := false
+	var locked []string
 	for settingName, cs := range incoming.Settings {
 		if cs == nil || !cs.Changed {
 			continue
@@ -1026,12 +1466,12 @@ func validateLockedFields(conf configuration.Configuration, folderConfig *types.
 			subLogger.Info().
 				Str("setting", settingName).
 				Msg("Rejecting change to locked setting - locked by organization policy")
-			updatesRejected = true
+			locked = append(locked, settingName)
 			delete(incoming.Settings, settingName)
 		}
 	}
 
-	return updatesRejected
+	return locked
 }
 
 // temporarilyApplyNewOrgForValidation sets the new org in conf so ConfigResolver
@@ -1073,7 +1513,7 @@ func temporarilyApplyNewOrgForValidation(conf configuration.Configuration, folde
 	}
 }
 
-func updateFolderOrgIfNeeded(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, fc *types.FolderConfig, folderConfig *types.FolderConfig, oldSnapshot types.FolderConfigSnapshot, notifier notification.Notifier) {
+func updateFolderOrgIfNeeded(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, fc *types.FolderConfig, folderConfig *types.FolderConfig, oldSnapshot types.FolderConfigSnapshot, notifier notification.Notifier) bool {
 	orgSettingsChanged := fc != nil && !folderConfigsOrgSettingsEqual(oldSnapshot, *folderConfig)
 
 	if orgSettingsChanged {
@@ -1081,9 +1521,10 @@ func updateFolderOrgIfNeeded(conf configuration.Configuration, engine workflow.E
 		ws := config.GetWorkspace(conf)
 		folder := ws.GetFolderContaining(folderConfig.FolderPath)
 		if folder != nil {
-			di.LdxSyncService().RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, []types.Folder{folder}, notifier)
+			mustLdxSyncServiceFromContext(ctx).RefreshConfigFromLdxSync(context.Background(), conf, engine, logger, []types.Folder{folder}, notifier)
 		}
 	}
+	return orgSettingsChanged
 }
 
 func handleFolderCacheClearing(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path types.FilePath, oldSnapshot, newSnapshot types.FolderConfigSnapshot, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
@@ -1106,14 +1547,6 @@ func handleFolderCacheClearing(conf configuration.Configuration, engine workflow
 	}
 
 	sendFolderConfigAnalytics(conf, engine, logger, path, triggerSource, oldSnapshot, newSnapshot, configResolver)
-}
-
-func sendFolderConfigUpdateIfNeeded(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, notifier notification.Notifier, folderConfigs []types.FolderConfig, needsToSendUpdate bool, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
-	// Don't send folder configs on initialize, since initialized will always send them.
-	if needsToSendUpdate && triggerSource != analytics.TriggerSourceInitialize {
-		lspConfig := command.BuildLspConfiguration(conf, engine, logger, nil, di.ConfigResolver())
-		notifier.Send(lspConfig)
-	}
 }
 
 func sendFolderConfigAnalytics(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, path types.FilePath, triggerSource analytics.TriggerSource, oldSnapshot, newSnapshot types.FolderConfigSnapshot, configResolver types.ConfigResolverInterface) {
@@ -1180,12 +1613,25 @@ func updateFolderConfigOrg(conf configuration.Configuration, logger *zerolog.Log
 	orgHasJustChanged := currentSnap.PreferredOrg != oldSnapshot.PreferredOrg
 	if orgSetByUserJustChanged {
 		if !currentSnap.OrgSetByUser {
-			types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "", false)
+			// Only normalise to {"","false"} if the keys are still present. A reset via
+			// applyPreferredOrg already Unset both; re-writing them here would turn the
+			// clean absence into an explicit {Value:""/false, Changed:true} entry that
+			// HasUserOverride treats as an active override.
+			if types.HasUserOverride(conf, folderConfig.FolderPath, types.SettingPreferredOrg) ||
+				types.HasUserOverride(conf, folderConfig.FolderPath, types.SettingOrgSetByUser) {
+				types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "", false)
+			}
 		}
 	} else if orgHasJustChanged {
 		types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, currentSnap.PreferredOrg, true)
 	} else if !currentSnap.OrgSetByUser {
-		types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "", false)
+		// Same guard as above: applyPreferredOrg runs before this function in the same
+		// update cycle and has already Unset both keys on a reset. Skip normalisation
+		// when both are absent so we don't re-create them as active overrides.
+		if types.HasUserOverride(conf, folderConfig.FolderPath, types.SettingPreferredOrg) ||
+			types.HasUserOverride(conf, folderConfig.FolderPath, types.SettingOrgSetByUser) {
+			types.SetPreferredOrgAndOrgSetByUser(conf, folderConfig.FolderPath, "", false)
+		}
 	}
 }
 

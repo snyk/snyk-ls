@@ -27,6 +27,7 @@ import (
 	"github.com/erni27/imcache"
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -134,6 +135,37 @@ func TestUploadAndAnalyze(t *testing.T) {
 	cancelChannel := make(chan bool, 1)
 	testTracker := progress.NewTestTracker(channel, cancelChannel, engine.GetLogger())
 
+	t.Run("should not send a user-facing popup when repository URL cannot be determined during scan", func(t *testing.T) {
+		mockNotifier := notification.NewMockNotifier()
+		scanner := New(engine,
+			performance.NewInstrumentor(),
+			&snyk_api.FakeApiClient{CodeEnabled: true},
+			newTestCodeErrorReporter(),
+			setupMockLearnServiceNoLessons(t),
+			featureflag.NewFakeService(),
+			mockNotifier,
+			NewCodeInstrumentor(),
+			newTestCodeErrorReporter(),
+			NewFakeCodeScannerClient,
+			defaultResolver(engine))
+
+		// Use a non-git temp dir so NewRepositoryTarget fails to determine the repo URL.
+		nonGitPath := types.FilePath(t.TempDir())
+		engineConfig := engine.GetConfiguration()
+		types.SetPreferredOrgAndOrgSetByUser(engineConfig, nonGitPath, "test-org", true)
+		folderConfig := &types.FolderConfig{FolderPath: nonGitPath}
+		folderConfig.ConfigResolver = types.NewMinimalConfigResolver(engineConfig)
+
+		_, _ = scanner.UploadAndAnalyze(t.Context(), nonGitPath, folderConfig, sliceToChannel([]string{}), map[types.FilePath]bool{}, false, testTracker)
+
+		for _, msg := range mockNotifier.SentMessages() {
+			if params, ok := msg.(sglsp.ShowMessageParams); ok {
+				assert.NotEqual(t, sglsp.MTWarning, params.Type,
+					"scan path must not send a warning popup when repo URL cannot be determined; got: %v", params.Message)
+			}
+		}
+	})
+
 	t.Run(
 		"should retrieve from backend", func(t *testing.T) {
 			scanner := New(engine,
@@ -236,8 +268,9 @@ func Test_Scan_UsesConfigResolverFromContext(t *testing.T) {
 
 	issues, err := scanner.Scan(ctx, "")
 
-	assert.NoError(t, err)
-	assert.Empty(t, issues)
+	require.Error(t, err)
+	assert.Equal(t, utils.ErrSnykCodeNotEnabledForFolder, err.Error())
+	assert.Nil(t, issues)
 }
 
 // Test_Scan_FallsBackToStructFieldWhenNoResolverInContext FC-064: Code scanner falls back to struct field when context has no resolver
@@ -258,8 +291,9 @@ func Test_Scan_FallsBackToStructFieldWhenNoResolverInContext(t *testing.T) {
 
 	issues, err := scanner.Scan(ctx, "")
 
-	assert.NoError(t, err)
-	assert.Empty(t, issues)
+	require.Error(t, err)
+	assert.Equal(t, utils.ErrSnykCodeNotEnabledForFolder, err.Error())
+	assert.Nil(t, issues)
 }
 
 func Test_Scan(t *testing.T) {
@@ -288,6 +322,7 @@ func Test_Scan(t *testing.T) {
 	t.Run("Shouldn't run if Sast is disabled", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
 		_, realConfig := testutil.SetUpEngineMock(t, engine)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 
 		resolver := testutil.DefaultConfigResolver(engine)
 
@@ -324,6 +359,8 @@ func Test_Scan(t *testing.T) {
 			mockEngine := mocks.NewMockEngine(ctrl)
 			realConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 			realConfig.Set(code.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true})
+			realConfig.Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+			realConfig.Set(configresolver.UserGlobalKey(types.SettingToken), "test-token")
 			mockEngine.EXPECT().GetConfiguration().Return(realConfig).AnyTimes()
 			mockEngine.EXPECT().GetLogger().Return(engine.GetLogger()).AnyTimes()
 

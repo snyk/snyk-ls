@@ -26,7 +26,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -40,12 +39,11 @@ import (
 // 4. Generated HTML includes ALL sub-fields from FolderConfig
 // 5. Includes authentication and logout triggers
 func Test_SmokeConfigurationDialog(t *testing.T) {
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
 	testutil.CreateDummyProgressListener(t)
 
 	// Setup server with LSP client
-	loc, _ := setupServer(t, engine, tokenService)
-	di.Init(engine, tokenService)
+	loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
 
 	// Create workspace folder and initialize git repository
 	workspaceFolder := types.FilePath(t.TempDir())
@@ -135,10 +133,10 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			assertFieldPresent(t, html, "scan_automatic", "ScanningMode field")
 
 			// Filter and display settings
-			assertFieldPresent(t, html, "enabled_severities_critical", "FilterSeverity Critical field")
-			assertFieldPresent(t, html, "enabled_severities_high", "FilterSeverity High field")
-			assertFieldPresent(t, html, "enabled_severities_medium", "FilterSeverity Medium field")
-			assertFieldPresent(t, html, "enabled_severities_low", "FilterSeverity Low field")
+			assertFieldPresent(t, html, "severity_filter_critical", "FilterSeverity Critical field")
+			assertFieldPresent(t, html, "severity_filter_high", "FilterSeverity High field")
+			assertFieldPresent(t, html, "severity_filter_medium", "FilterSeverity Medium field")
+			assertFieldPresent(t, html, "severity_filter_low", "FilterSeverity Low field")
 			assertFieldPresent(t, html, "issue_view_open_issues", "IssueViewOptions field")
 			assertFieldPresent(t, html, "scan_net_new", "EnableDeltaFindings field")
 		})

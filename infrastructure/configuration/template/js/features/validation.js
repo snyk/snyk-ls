@@ -138,9 +138,11 @@
 			return true; // Empty is valid
 		}
 
-		// Pattern: KEY=VALUE where KEY is valid env var name [A-Za-z_][A-Za-z0-9_]*
-		// VALUE cannot contain ; or = characters (exactly one = per segment)
-		var envVarPattern = /^\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*[^;=]*\s*$/;
+		// Pattern: KEY=VALUE where KEY is a valid env var name [A-Za-z_][A-Za-z0-9_]*
+		// VALUE may contain '=' (matches the Go backend's strings.Cut on the first '=',
+		// see infrastructure/oss/cli_scanner.go) but not ';' (the segment separator).
+		// This allows base64-padded values, JWTs, query strings, etc.
+		var envVarPattern = /^\s*[A-Za-z_][A-Za-z0-9_]*\s*=[^;]*$/;
 
 		return value.split(";")
 			.filter(function(segment) { return segment.trim() !== ""; })
@@ -200,7 +202,7 @@
 
 	// Validate per-folder risk score on input
 	validation.validateFolderRiskScoreOnInput = function(folderIndex) {
-		var fieldId = "folder_" + folderIndex + "_override_risk_score_threshold";
+		var fieldId = "folder_" + folderIndex + "_risk_score_threshold";
 		var errorId = fieldId + "-error";
 		validation.validateAndShowError(fieldId, errorId, validation.validateRiskScore);
 	};
@@ -263,15 +265,29 @@
 	// Initialize validation event listeners for all per-folder risk score override fields
 	validation.initializeFolderRiskScoreValidation = function() {
 		var dom = window.ConfigApp.dom;
-		var folderRiskScoreInputs = document.querySelectorAll('[id^="folder_"][id$="_override_risk_score_threshold"]');
+		var folderRiskScoreInputs = document.querySelectorAll('[id^="folder_"][id$="_risk_score_threshold"]');
 
 		for (var i = 0; i < folderRiskScoreInputs.length; i++) {
 			(function(input) {
-				var folderIndex = (input.id.match(/folder_(\d+)_override_risk_score_threshold/) || [])[1];
+				var folderIndex = (input.id.match(/folder_(\d+)_risk_score_threshold/) || [])[1];
 				dom.addEvent(input, "input", function() {
 					validation.validateFolderRiskScoreOnInput(folderIndex);
 				});
 			})(folderRiskScoreInputs[i]);
+		}
+	};
+
+	// Validate global (Project Defaults) additional environment variables on input
+	validation.validateGlobalAdditionalEnvOnInput = function() {
+		validation.validateAndShowError("additional_environment", "additional_environment-error", validation.validateAdditionalEnv);
+	};
+
+	// Initialize validation event listener for the global additional environment field
+	validation.initializeGlobalAdditionalEnvValidation = function() {
+		var dom = window.ConfigApp.dom;
+		var input = dom.get("additional_environment");
+		if (input) {
+			dom.addEvent(input, "input", validation.validateGlobalAdditionalEnvOnInput);
 		}
 	};
 
@@ -308,6 +324,9 @@
 		if (cliVersionInput) {
 			dom.addEvent(cliVersionInput, "input", validation.validateCliVersionOnInput);
 		}
+
+		// Global (Project Defaults) additional env validation
+		validation.initializeGlobalAdditionalEnvValidation();
 
 		// Per-folder additional env validation
 		validation.initializeFolderAdditionalEnvValidation();

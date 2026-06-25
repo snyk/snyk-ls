@@ -48,6 +48,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/scannercommon"
 	"github.com/snyk/snyk-ls/internal/scans"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -116,38 +117,32 @@ func (iac *Scanner) SupportedCommands() []types.CommandName {
 // Scan implements types.ProductScanner.
 // For CLI-based scanners, pathToScan is the target file or folder to scan.
 func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues []types.Issue, err error) {
-	workspaceFolderConfig, ok := ctx2.FolderConfigFromContext(ctx)
-	if !ok || workspaceFolderConfig == nil {
-		return nil, errors.New("FolderConfig not found in context")
+	baseLogger := iac.logger
+	workspaceFolderConfig, scanType, workspaceFolder, err := scannercommon.ResolveFolderAndScanType(ctx)
+	if err != nil {
+		return nil, err
 	}
+	logger := scannercommon.LoggerWithProductScanFields(baseLogger, "iac.Scan", pathToScan, workspaceFolder, scanType)
 
-	// Log scan type and paths
-	scanType := "WorkingDirectory"
-	if deltaScanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok {
-		scanType = deltaScanType.String()
-	}
-	workspaceFolder := workspaceFolderConfig.FolderPath
-	logger := iac.logger.With().
-		Str("method", "iac.Scan").
-		Str("pathToScan", string(pathToScan)).
-		Str("workspaceFolder", string(workspaceFolder)).
-		Str("scanType", scanType).
-		Logger()
+	//returning nil, when no scan has executed. Will return []types.Issue{} when a scan has executed, but no issues were found.
 
 	logger.Debug().Msg("IAC scanner: starting scan")
 
-	if !iac.getConfigResolver(ctx).IsProductEnabledForFolder(product.ProductInfrastructureAsCode, workspaceFolderConfig) {
-		return issues, nil
+	if err = scannercommon.RequireProductEnabled(
+		iac.getConfigResolver(ctx).IsProductEnabledForFolder(product.ProductInfrastructureAsCode, workspaceFolderConfig),
+		utils.ErrSnykIacNotEnabledForFolder,
+	); err != nil {
+		return nil, err
 	}
 
-	if config.GetToken(iac.conf) == "" {
-		logger.Info().Msg("not authenticated, not scanning")
-		return issues, err
+	if err = scannercommon.RequireAuthToken(iac.conf, logger); err != nil {
+		return nil, err
 	}
 
+	//A cancellation signal was received, so we do not return an error!
 	if ctx.Err() != nil {
 		logger.Info().Msg("Canceling IAC scan - IAC scanner received cancellation signal")
-		return issues, nil
+		return []types.Issue{}, nil
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -155,8 +150,9 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 
 	documentURI := uri.PathToUri(pathToScan) // todo get rid of lsp dep
 	if !iac.isSupported(documentURI) {
-		logger.Debug().Msg("IAC scanner: skipping unsupported file/directory")
-		return issues, nil
+		// Unsupported paths are normal for background scans; skip without error (see OSS CLIScanner).
+		logger.Debug().Msg("IaC scan skipped: path is not a supported IaC file or directory")
+		return []types.Issue{}, nil
 	}
 	p := progress.NewTracker(true, iac.logger)
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
@@ -187,17 +183,21 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 		if noCancellation { // Only reports errors that are not intentional cancellations
 			iac.errorReporter.CaptureErrorAndReportAsIssue(pathToScan, err)
 		} else { // If the scan was canceled, return empty results
-			return issues, nil
+			return []types.Issue{}, nil
 		}
 	}
 
 	if err != nil {
-		return issues, err
+		return []types.Issue{}, err
 	}
 
 	issues, err = iac.retrieveIssues(scanResults, issues, workspaceFolder, workspaceFolderConfig)
 	if err != nil {
 		return nil, pkgerrors.Wrap(err, "unable to retrieve IaC issues")
+	}
+
+	if issues == nil {
+		issues = []types.Issue{}
 	}
 
 	return issues, nil
@@ -273,6 +273,13 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, w
 		}
 	}
 
+	if err == nil && len(res) == 0 {
+		// CLI exited 0 with no output (most commonly: no IaC files in the directory).
+		// Return empty results rather than a misleading unmarshal error.
+		iac.logger.Debug().Str("method", method).Msg("CLI exited 0 with empty stdout; returning empty results")
+		return []iacScanResult{}, nil
+	}
+
 	return iac.unmarshal(res)
 }
 
@@ -308,6 +315,11 @@ func (iac *Scanner) cliCmd(u sglsp.DocumentURI, workspaceFolderConfig *types.Fol
 	}
 	if uri.IsUriDirectory(u) {
 		path = ""
+	} else if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		// On macOS /var/folders is a symlink to /private/var/folders. The IaC CLI
+		// resolves its CWD via os.Getwd() (returning the real path) but receives the
+		// unresolved absolute path, causing a false "path outside CWD" error (code 1012).
+		path = resolved
 	}
 
 	cliPath := iac.configResolver.GetString(types.SettingCliPath, nil)

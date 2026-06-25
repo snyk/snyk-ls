@@ -53,6 +53,20 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
+// NewMinimalEngine creates a minimal standalone workflow engine that does not require
+// *testing.T, making it safe to call from TestMain or other non-test entry points.
+// Caller is responsible for any cleanup needed.
+func NewMinimalEngine() (workflow.Engine, error) {
+	preConf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	preConf.Set(cli_constants.EXECUTION_MODE_KEY, cli_constants.EXECUTION_MODE_VALUE_STANDALONE)
+	engine := app.CreateAppEngineWithOptions(app.WithConfiguration(preConf))
+	if err := config.InitWorkflows(engine); err != nil {
+		return nil, err
+	}
+	_ = engine.Init()
+	return engine, nil
+}
+
 func IntegTest(t *testing.T) workflow.Engine {
 	t.Helper()
 	engine, _ := prepareTestHelper(t, testsupport.IntegTestEnvVar, "")
@@ -64,16 +78,30 @@ func IntegTestWithEngine(t *testing.T) (workflow.Engine, *config.TokenServiceImp
 	return prepareTestHelper(t, testsupport.IntegTestEnvVar, "")
 }
 
-// TODO: remove useConsistentIgnores once we have fully rolled out the feature
-func SmokeTest(t *testing.T, tokenSecretName string) workflow.Engine {
+// SmokeTest skips unless SMOKE_TESTS=1 and shardEnvVar is set. shardEnvVar is the CI env var
+// that enables this test's shard (e.g. "SMOKE_SHARD_4"). Every smoke test must declare its shard.
+func SmokeTest(t *testing.T, tokenSecretName string, shardEnvVar string) workflow.Engine {
 	t.Helper()
+	if os.Getenv(testsupport.SmokeTestEnvVar) == "" {
+		t.Skipf("%s is not set", testsupport.SmokeTestEnvVar)
+	}
+	if os.Getenv(shardEnvVar) == "" {
+		t.Skipf("shard env var %s is not set", shardEnvVar)
+	}
 	engine, _ := prepareTestHelper(t, testsupport.SmokeTestEnvVar, tokenSecretName)
 	return engine
 }
 
-// SmokeTestWithEngine returns both engine and tokenService for smoke tests that need to call setupServer.
-func SmokeTestWithEngine(t *testing.T, tokenSecretName string) (workflow.Engine, *config.TokenServiceImpl) {
+// SmokeTestWithEngine returns both engine and tokenService. shardEnvVar is the CI env var that
+// enables this test's shard (e.g. "SMOKE_SHARD_1"). Every smoke test must declare its shard.
+func SmokeTestWithEngine(t *testing.T, tokenSecretName string, shardEnvVar string) (workflow.Engine, *config.TokenServiceImpl) {
 	t.Helper()
+	if os.Getenv(testsupport.SmokeTestEnvVar) == "" {
+		t.Skipf("%s is not set", testsupport.SmokeTestEnvVar)
+	}
+	if os.Getenv(shardEnvVar) == "" {
+		t.Skipf("shard env var %s is not set", shardEnvVar)
+	}
 	return prepareTestHelper(t, testsupport.SmokeTestEnvVar, tokenSecretName)
 }
 

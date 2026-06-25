@@ -147,6 +147,7 @@ form > .section {
 
 /* Direct tab-pane children miss the 10px col-md-* gutter; offset them so all blocks share one edge. */
 .tab-pane > .info-box,
+.tab-pane > .section,
 .folder-pane > .section,
 .folder-pane > .reset-overrides-btn {
     margin-left: 10px;
@@ -250,6 +251,14 @@ h3 {
     color: var(--text-color);
     font-size: var(--base-font-size);
     line-height: 1.5;
+}
+
+/* Folder override disclaimer: text on the left, "Reset overrides" button top-right. */
+.folder-disclaimer {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--container-padding);
 }
 
 .folder-config {
@@ -731,22 +740,56 @@ button.secondary[disabled] {
     cursor: not-allowed;
 }
 
+/* Outlined (ghost) danger button: red text + border on a transparent fill reads clearly on the
+   dark panel. A solid --error-background fill is a subtle marker color and washes out light text. */
 .reset-overrides-btn {
-    display: none;
     padding: 4px 12px;
+    white-space: nowrap;
     font-size: var(--tiny-font-size);
-    background-color: var(--error-background);
-    border: 1px solid var(--error-background);
-    color: var(--input-foreground);
+    background-color: transparent;
+    border: 1px solid var(--error-foreground);
+    color: var(--error-foreground);
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .reset-overrides-btn:hover {
-    color: var(--editor-foreground);
-    background-color: var(--error-background);
-    border-color: var(--error-background);
+    background-color: var(--error-foreground);
+    border-color: var(--error-foreground);
+    color: var(--background-color);
+}
+
+/* Lay out the fallbacks-pane Reset-overrides info-box as a single row so the
+   "Reset overrides" button sits inline at the right of the description paragraph
+   instead of wrapping to a second line (the default .info-box uses
+   flex-direction: column). The child combinator (>) targets only the direct-child
+   info-box at the top of #fallbacks-pane (the Reset-overrides row) and leaves
+   the nested info-box inside the "Advanced" collapsible unaffected. */
+#fallbacks-pane > .info-box {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.reset-global-overrides-btn {
+    flex-shrink: 0;
+    padding: 4px 12px;
+    white-space: nowrap;
+    font-size: var(--tiny-font-size);
+    background-color: transparent;
+    border: 1px solid var(--error-foreground);
+    color: var(--error-foreground);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.reset-global-overrides-btn:hover {
+    background-color: var(--error-foreground);
+    border-color: var(--error-foreground);
+    color: var(--background-color);
 }
 
 /* - - - Settings Tabs - - - */
@@ -942,6 +985,8 @@ button.secondary[disabled] {
                                 <input type="text" id="cli_path" name="cli_path" value="" placeholder="/path/to/snyk-cli">
                             </div>
 
+                            
+
                             <div class="form-group">
                                 <label class="checkbox-label">
                                     <input type="checkbox" name="automatic_download" >
@@ -1018,6 +1063,7 @@ button.secondary[disabled] {
             <div class="tab-pane" id="fallbacks-pane" role="tabpanel" aria-labelledby="fallbacks-tab">
                 <div class="info-box">
                     <p>These settings apply to all projects unless overridden.</p>
+                    <button type="button" class="reset-global-overrides-btn" title="Reset all Project Defaults overrides">Reset overrides</button>
                 </div>
                 <div class="row">
                     <div class="col-md-6">
@@ -1030,25 +1076,28 @@ button.secondary[disabled] {
                             <div class="form-group">
                                 <h3>Scanners</h3>
                                 <div class="checkbox-group">
-                                    <div class="override-indicator-wrapper ">
+                                    <div class="override-indicator-wrapper source-user-override">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="snyk_oss_enabled" checked>
                                             <span data-toggle="tooltip" title="Find and fix open source dependency issues.">Snyk Open Source</span>
                                             <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_oss_enabled"></span>
+                                            <span class="source-indicator" data-toggle="tooltip" title="Set by you at project defaults level">👤</span>
                                         </label>
                                     </div>
-                                    <div class="override-indicator-wrapper ">
+                                    <div class="override-indicator-wrapper source-user-override">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="snyk_code_enabled" checked>
                                             <span data-toggle="tooltip" title="<p>Find and fix security issues in your application code.</p><p><strong>Note: </strong>Snyk Code must be enabled for your organization.</p>">Snyk Code</span>
                                             <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_code_enabled"></span>
+                                            <span class="source-indicator" data-toggle="tooltip" title="Set by you at project defaults level">👤</span>
                                         </label>
                                     </div>
-                                    <div class="override-indicator-wrapper ">
+                                    <div class="override-indicator-wrapper source-user-override">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="snyk_iac_enabled" >
                                             <span data-toggle="tooltip" title="Find and fix your IaC misconfigurations.">Snyk Infrastructure as Code</span>
                                             <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="snyk_iac_enabled"></span>
+                                            <span class="source-indicator" data-toggle="tooltip" title="Set by you at project defaults level">👤</span>
                                         </label>
                                     </div>
                                     
@@ -1057,17 +1106,17 @@ button.secondary[disabled] {
 
                             <div class="override-indicator-wrapper ">
                                 <div class="form-group half-width">
-                                    <label for="scan_automatic"><span data-toggle="tooltip" title="Choose whether to run Snyk scans in the background (auto), or only when you run the Scan command (manual).">Scanning mode</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_automatic"></span></label>
-                                    <select id="scan_automatic" name="scan_automatic">
+                                    <label for="scan_automatic"><span data-toggle="tooltip" title="Choose whether to run Snyk scans in the background (auto), or only when you run the Scan command (manual).">Scanning mode</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_automatic"></span> </label>
+                                    <select id="scan_automatic" name="scan_automatic" data-bool="1">
                                         <option value="true" selected>Auto</option>
                                         <option value="false" >Manual</option>
                                     </select>
                                 </div>
                             </div>
 
-                            <div class="override-indicator-wrapper ">
+                            <div class="override-indicator-wrapper source-user-override">
                                 <div class="form-group half-width">
-                                    <label for="organization"><span data-toggle="tooltip" title="<p>Specify the organization (ID or name) for Snyk to run scans against.</p><p>Organization selection follows this order:</p><ol><li>Project-specific settings (if configured)</li><li>This global setting (if the project-specific setting is empty)</li><li>Your web account's preferred organization (if both above are empty)</li></ol>">Organization</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="organization"></span></label>
+                                    <label for="organization"><span data-toggle="tooltip" title="<p>Specify the organization (ID or name) for Snyk to run scans against.</p><p>Organization selection follows this order:</p><ol><li>Project-specific settings (if configured)</li><li>This global setting (if the project-specific setting is empty)</li><li>Your web account's preferred organization (if both above are empty)</li></ol>">Organization</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="organization"></span> <span class="source-indicator" data-toggle="tooltip" title="Set by you at project defaults level">👤</span></label>
                                     <input type="text" id="organization" name="organization" value="manual-org-uuid-global" placeholder="Organization UUID or Slug">
                                 </div>
                             </div>
@@ -1086,32 +1135,36 @@ button.secondary[disabled] {
                                     <div class="form-group">
                                         <label><span data-toggle="tooltip" title="Select which severity levels to display in the results.">Filter by severity</span></label>
                                         <div class="checkbox-group">
-                                            <div class="override-indicator-wrapper ">
+                                            <div class="override-indicator-wrapper source-user-override">
                                                 <label class="checkbox-label">
-                                                    <input type="checkbox" name="enabled_severities_critical" checked>
+                                                    <input type="checkbox" name="severity_filter_critical" checked>
                                                     Critical
-                                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enabled_severities_critical"></span>
+                                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="severity_filter_critical"></span>
+                                                    <span class="source-indicator" data-toggle="tooltip" title="Set by you at project defaults level">👤</span>
                                                 </label>
                                             </div>
-                                            <div class="override-indicator-wrapper ">
+                                            <div class="override-indicator-wrapper source-user-override">
                                                 <label class="checkbox-label">
-                                                    <input type="checkbox" name="enabled_severities_high" >
+                                                    <input type="checkbox" name="severity_filter_high" >
                                                     High
-                                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enabled_severities_high"></span>
+                                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="severity_filter_high"></span>
+                                                    <span class="source-indicator" data-toggle="tooltip" title="Set by you at project defaults level">👤</span>
                                                 </label>
                                             </div>
                                             <div class="override-indicator-wrapper ">
                                                 <label class="checkbox-label">
-                                                    <input type="checkbox" name="enabled_severities_medium" checked>
+                                                    <input type="checkbox" name="severity_filter_medium" checked>
                                                     Medium
-                                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enabled_severities_medium"></span>
+                                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="severity_filter_medium"></span>
+                                                    
                                                 </label>
                                             </div>
                                             <div class="override-indicator-wrapper ">
                                                 <label class="checkbox-label">
-                                                    <input type="checkbox" name="enabled_severities_low" checked>
+                                                    <input type="checkbox" name="severity_filter_low" checked>
                                                     Low
-                                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="enabled_severities_low"></span>
+                                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="severity_filter_low"></span>
+                                                    
                                                 </label>
                                             </div>
                                         </div>
@@ -1127,13 +1180,15 @@ button.secondary[disabled] {
                                                     <input type="checkbox" name="issue_view_open_issues" checked>
                                                     Show open issues
                                                     <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="issue_view_open_issues"></span>
+                                                    
                                                 </label>
                                             </div>
-                                            <div class="override-indicator-wrapper ">
+                                            <div class="override-indicator-wrapper source-user-override">
                                                 <label class="checkbox-label">
                                                     <input type="checkbox" name="issue_view_ignored_issues" checked>
                                                     Show ignored issues
                                                     <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="issue_view_ignored_issues"></span>
+                                                    <span class="source-indicator" data-toggle="tooltip" title="Set by you at project defaults level">👤</span>
                                                 </label>
                                             </div>
                                         </div>
@@ -1143,7 +1198,7 @@ button.secondary[disabled] {
 
                             <div class="override-indicator-wrapper ">
                                 <div class="form-group half-width">
-                                    <label for="risk_score_threshold"><span data-toggle="tooltip" title="<p>Minimum risk score to display issues.</p><p>Valid range: 0 to 1000 (0 = show all issues).</p>">Filter by risk score<span class="deprecated-label">Closed Beta</span></span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="risk_score_threshold"></span></label>
+                                    <label for="risk_score_threshold"><span data-toggle="tooltip" title="<p>Minimum risk score to display issues.</p><p>Valid range: 0 to 1000 (0 = show all issues).</p>">Filter by risk score<span class="deprecated-label">Closed Beta</span></span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="risk_score_threshold"></span> </label>
                                     <input type="number" id="risk_score_threshold" name="risk_score_threshold" min="0" max="1000" value="" placeholder="0">
                                     <span id="riskScore-error" class="error-message hidden">Risk score must be between 0 and 1000</span>
                                 </div>
@@ -1151,11 +1206,39 @@ button.secondary[disabled] {
 
                             <div class="override-indicator-wrapper ">
                                 <div class="form-group half-width">
-                                    <label for="scan_net_new"><span data-toggle="tooltip" title="Choose to see all issues or only those newly introduced by your code changes.">Delta findings</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_net_new"></span></label>
-                                    <select id="scan_net_new" name="scan_net_new">
+                                    <label for="scan_net_new"><span data-toggle="tooltip" title="Choose to see all issues or only those newly introduced by your code changes.">Delta findings</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="scan_net_new"></span> </label>
+                                    <select id="scan_net_new" name="scan_net_new" data-bool="1">
                                         <option value="false" selected>All issues</option>
                                         <option value="true" >Net new issues</option>
                                     </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                
+                <div class="section">
+                    <div class="form-group">
+                        <button class="collapsible-header text-start w-100 d-flex justify-content-between align-items-center p-0" type="button" data-toggle="collapse" data-target="#defaults-advanced" aria-expanded="false" aria-controls="defaults-advanced">
+                            <span data-toggle="tooltip" title="Advanced default settings including CLI parameters and environment variables applied to all projects.">Advanced</span>
+                            <span class="collapse-icon">&#9660;</span>
+                        </button>
+                        <div class="collapse ml-1" id="defaults-advanced">
+                            <div class="mt-2">
+                                <div class="info-box">
+                                    <p>These values combine with any per-project values rather than replacing them. CLI parameters from both levels are used together; environment variables defined here are overridden by per-project values when the same key is set in both.</p>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="additional_parameters"><span data-toggle="tooltip" title="<p>Default CLI parameters for all project scans (space-separated).</p><p>Example: <code>--severity-threshold=high --debug</code></p><p>These are combined with any per-project parameters.</p>">Additional CLI parameters</span></label>
+                                    <input type="text" id="additional_parameters" name="additional_parameters" value="" placeholder="--severity-threshold=high">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="additional_environment"><span data-toggle="tooltip" title="<p>Default environment variables for all project scans.</p><p>Format: <code>VAR1=value1;VAR2=value2</code></p><p>Per-project values override these on key conflicts.</p>">Additional environment variables</span></label>
+                                    <input type="text" id="additional_environment" name="additional_environment" value="" placeholder="VAR1=value1;VAR2=value2">
+                                    <div id="additional_environment-error" class="error-message hidden">Invalid format. Use: VAR1=value1;VAR2=value2</div>
                                 </div>
                             </div>
                         </div>
@@ -2088,7 +2171,9 @@ if (window.cssVars) {
 			}
 		}
 
-		// Folder configs: per-folder, only include changed fields
+		// Folder configs: per-folder, only include changed fields.
+		// applyFolderResets() handles force-including reset-only folders that
+		// collectChangedData's diff would otherwise drop.
 		if (current.folderConfigs) {
 			var changedFolders = [];
 			var origFolders = original.folderConfigs || [];
@@ -2097,6 +2182,7 @@ if (window.cssVars) {
 				var origFc = origFolders[fi] || {};
 				var changedFc = null;
 				var fcKeys = window.FormUtils.getKeys(curFc);
+				var fcPath = curFc.folderPath || "";
 
 				for (var ki = 0; ki < fcKeys.length; ki++) {
 					var fk = fcKeys[ki];
@@ -2109,8 +2195,8 @@ if (window.cssVars) {
 					}
 				}
 
-				if (changedFc && curFc.folderPath) {
-					changedFc.folderPath = curFc.folderPath;
+				if (changedFc && fcPath) {
+					changedFc.folderPath = fcPath;
 					changedFolders.push(changedFc);
 				}
 			}
@@ -2139,15 +2225,8 @@ if (window.cssVars) {
 		processElements(inputs, data);
 		processElements(selects, data);
 
-		// Process complex global objects
-		processFilterSeverity(data);
-		processIssueViewOptions(data);
-
 		// Resolve cli_release_channel: use custom text input value when "Specify version" is selected
 		resolveCliReleaseChannel(data);
-
-		// Process per-folder org-scope overrides into LspFolderConfig-shaped fields
-		processFolderOverrides(data);
 
 		// Remove UI-only helper field
 		delete data.cli_release_channel_custom;
@@ -2162,14 +2241,6 @@ if (window.cssVars) {
 
 			if (!name) continue;
 
-			// Skip complex object fields (handled separately)
-			if (
-				name.indexOf("enabled_severities_") === 0 ||
-				name.indexOf("issue_view_") === 0
-			) {
-				continue;
-			}
-
 			// Trusted folder logic: trustedFolder_INDEX
 			if (name.indexOf("trustedFolder_") === 0) {
 				// Only add non-empty values
@@ -2183,15 +2254,13 @@ if (window.cssVars) {
 			if (name.indexOf("folder_") === 0) {
 				var parts = name.split("_");
 				if (parts.length >= 3) {
-					var index = parseInt(parts[1]);
+					var index = parseInt(parts[1], 10);
+					if (!isFinite(index) || index < 0) {
+						continue;
+					}
 
 					if (!data.folderConfigs[index]) {
 						data.folderConfigs[index] = {};
-					}
-
-					// Skip override fields — handled by processFolderOverrides()
-					if (parts[2] === "override") {
-						continue;
 					}
 
 					// Check if this is a scanConfig field: folder_INDEX_scanConfig_PRODUCT_PARTS_FIELD
@@ -2224,13 +2293,22 @@ if (window.cssVars) {
 						var field = parts.slice(2).join("_");
 						if (field === "additional_parameters") {
 							// Split by whitespace and filter out empty strings
-							data.folderConfigs[index][field] = el.value ? el.value.trim().split(/\s+/).filter(function(item) { return item.length > 0; }) : [];
+							data.folderConfigs[index][field] = el.value
+								? el.value
+										.trim()
+										.split(/\s+/)
+										.filter(function (item) {
+											return item.length > 0;
+										})
+								: [];
 							continue;
 						}
 
 						// Skip preferredOrg if orgSetByUser is false (auto-org is enabled)
 						if (field === "preferred_org") {
-							var orgSetByUserInput = dom.get("folder_" + index + "_org_set_by_user");
+							var orgSetByUserInput = dom.get(
+								"folder_" + index + "_org_set_by_user"
+							);
 							if (orgSetByUserInput && orgSetByUserInput.value === "false") {
 								continue;
 							}
@@ -2255,16 +2333,11 @@ if (window.cssVars) {
 		if (el.type === "checkbox") {
 			obj[field] = el.checked;
 		} else if (el.type === "number") {
-			obj[field] = el.value ? parseInt(el.value) : null;
+			obj[field] = el.value ? parseInt(el.value, 10) : null;
+		} else if (el.dataset && el.dataset.bool === "1") {
+			obj[field] = el.value === "true";
 		} else {
-			// Convert string boolean values to actual booleans
-			if (el.value === "true") {
-				obj[field] = true;
-			} else if (el.value === "false") {
-				obj[field] = false;
-			} else {
-				obj[field] = el.value;
-			}
+			obj[field] = el.value;
 		}
 	}
 
@@ -2278,136 +2351,126 @@ if (window.cssVars) {
 		}
 	}
 
-	function processFilterSeverity(data) {
-		var critical = dom.getByName("enabled_severities_critical")[0];
-		var high = dom.getByName("enabled_severities_high")[0];
-		var medium = dom.getByName("enabled_severities_medium")[0];
-		var low = dom.getByName("enabled_severities_low")[0];
+	// Folder override fields cleared by a folder reset. Emitting flat null for each
+	// tells the IDE plugin to send {value:null, changed:true}, which makes snyk-ls
+	// Unset the user:folder: override so the value falls back to org/LDX/default.
+	// preferred_org is included: snyk-ls special-cases its null-reset to also unset
+	// org_set_by_user, reverting the folder to its auto-determined / global org.
+	// additional_parameters / additional_environment / scan_command_config are
+	// non-scalar overrides; snyk-ls's basic folder-field handlers honor the null reset.
+	var FOLDER_RESET_FIELDS = [
+		"scan_automatic",
+		"scan_net_new",
+		"severity_filter_critical",
+		"severity_filter_high",
+		"severity_filter_medium",
+		"severity_filter_low",
+		"snyk_oss_enabled",
+		"snyk_code_enabled",
+		"snyk_iac_enabled",
+		"snyk_secrets_enabled",
+		"issue_view_open_issues",
+		"issue_view_ignored_issues",
+		"risk_score_threshold",
+		"preferred_org",
+		"additional_parameters",
+		"additional_environment",
+		"scan_command_config",
+	];
 
-		if (critical || high || medium || low) {
-			data.severity_filter_critical = critical ? critical.checked : false;
-      data.severity_filter_high = high ? high.checked : false;
-      data.severity_filter_medium = medium ? medium.checked : false;
-      data.severity_filter_low = low ? low.checked : false;
-		}
-	}
-
-	function processIssueViewOptions(data) {
-		var openIssues = dom.getByName("issue_view_open_issues")[0];
-		var ignoredIssues = dom.getByName("issue_view_ignored_issues")[0];
-
-		if (openIssues || ignoredIssues) {
-			data.issue_view_open_issues = openIssues ? openIssues.checked : false;
-			data.issue_view_ignored_issues = ignoredIssues ? ignoredIssues.checked : false;
-		}
-	}
-
-	// Collect per-folder org-scope override fields and map them to LspFolderConfig JSON field names.
-	// The HTML form uses "folder_X_override_*" names; this maps them to the LspFolderConfig wire format
-	// so the IDE can treat them identically to $/snyk.folderConfigs notifications.
-	function processFolderOverrides(data) {
-		if (!data.folderConfigs) return;
-
-		for (var i = 0; i < data.folderConfigs.length; i++) {
-			if (!data.folderConfigs[i]) continue;
-			var fc = data.folderConfigs[i];
-			var prefix = "folder_" + i + "_override_";
-
-			// scan_automatic: select with value "auto"/"manual" → bool
-			var scanAutoEl = dom.get(prefix + "scan_automatic");
-			if (scanAutoEl) {
-				fc.scan_automatic = scanAutoEl.value === "auto";
-			}
-
-			// scan_net_new: select with value "true"/"false" → bool
-			var scanNetNewEl = dom.get(prefix + "scan_net_new");
-			if (scanNetNewEl) {
-				fc.scan_net_new = scanNetNewEl.value === "true";
-			}
-
-			// enabled_severities: checkboxes → SeverityFilter object
-			var sevCritical = dom.getByName(prefix + "severity_filter_critical")[0];
-			var sevHigh = dom.getByName(prefix + "severity_filter_high")[0];
-			var sevMedium = dom.getByName(prefix + "severity_filter_medium")[0];
-			var sevLow = dom.getByName(prefix + "severity_filter_low")[0];
-			if (sevCritical || sevHigh || sevMedium || sevLow) {
-				fc.severity_filter_critical = sevCritical ? sevCritical.checked : false;
-				fc.severity_filter_high = sevHigh ? sevHigh.checked : false;
-				fc.severity_filter_medium = sevMedium ? sevMedium.checked : false;
-				fc.severity_filter_low = sevLow ? sevLow.checked : false;
-			}
-
-			// Product enablement: individual checkboxes → individual bool fields
-			var ossEl = dom.getByName(prefix + "snyk_oss_enabled")[0];
-			if (ossEl) {
-				fc.snyk_oss_enabled = ossEl.checked;
-			}
-			var codeEl = dom.getByName(prefix + "snyk_code_enabled")[0];
-			if (codeEl) {
-				fc.snyk_code_enabled = codeEl.checked;
-			}
-			var iacEl = dom.getByName(prefix + "snyk_iac_enabled")[0];
-			if (iacEl) {
-				fc.snyk_iac_enabled = iacEl.checked;
-			}
-			var secretsEl = dom.getByName(prefix + "snyk_secrets_enabled")[0];
-			if (secretsEl) {
-				fc.snyk_secrets_enabled = secretsEl.checked;
-			}
-
-			// issue_view_open_issues: checkbox → bool
-			var issueOpenEl = dom.getByName(prefix + "issue_view_open_issues")[0];
-			if (issueOpenEl) {
-				fc.issue_view_open_issues = issueOpenEl.checked;
-			}
-
-			// issue_view_ignored_issues: checkbox → bool
-			var issueIgnoredEl = dom.getByName(prefix + "issue_view_ignored_issues")[0];
-			if (issueIgnoredEl) {
-				fc.issue_view_ignored_issues = issueIgnoredEl.checked;
-			}
-
-			// risk_score_threshold: number input → int
-			var riskScoreEl = dom.get(prefix + "risk_score_threshold");
-			if (riskScoreEl) {
-				fc.risk_score_threshold = riskScoreEl.value !== "" ? parseInt(riskScoreEl.value, 10) : null;
-			}
-		}
-	}
-
-	// Mark a folder for complete reset (all org-scope overrides will be set to null)
-	formHandler.markFolderForReset = function(folderIndex) {
+	// Mark a folder for complete reset (all org-scope overrides will be set to null).
+	// Keyed by folderPath, not index: collectChangedData() compacts folderConfigs, so an
+	// index captured at click time no longer maps to the same entry in the saved payload.
+	formHandler.markFolderForReset = function (folderPath) {
+		if (!folderPath) return;
 		window.ConfigApp.folderResets = window.ConfigApp.folderResets || {};
-		window.ConfigApp.folderResets[folderIndex] = true;
+		window.ConfigApp.folderResets[folderPath] = true;
 	};
 
 	// Check if a folder is marked for reset
-	formHandler.isFolderMarkedForReset = function(folderIndex) {
-		return window.ConfigApp.folderResets && window.ConfigApp.folderResets[folderIndex];
+	formHandler.isFolderMarkedForReset = function (folderPath) {
+		return !!(
+			window.ConfigApp.folderResets &&
+			window.ConfigApp.folderResets[folderPath]
+		);
 	};
 
-	// Apply reset: set all org-scope fields to null on the folder config
-	formHandler.applyFolderResets = function(data) {
-		if (!data.folderConfigs) return;
+	// Apply reset: set all org-scope fields to null on each reset-marked folder.
+	// A reset-only folder (no other edits) is dropped by collectChangedData's diff, so
+	// add a fresh entry for any marked folderPath missing from data.folderConfigs.
+	formHandler.applyFolderResets = function (data) {
+		var marked = window.ConfigApp.folderResets;
+		if (!marked) return;
+
+		data.folderConfigs = data.folderConfigs || [];
+
+		// Index existing entries by folderPath.
+		var byPath = {};
 		for (var i = 0; i < data.folderConfigs.length; i++) {
-			if (formHandler.isFolderMarkedForReset(i) && data.folderConfigs[i]) {
-				var fc = data.folderConfigs[i];
-				fc.scan_automatic = null;
-				fc.scan_net_new = null;
-				fc.severity_filter_critical = null;
-				fc.severity_filter_high = null;
-				fc.severity_filter_medium = null;
-				fc.severity_filter_low = null;
-				fc.snyk_oss_enabled = null;
-				fc.snyk_code_enabled = null;
-				fc.snyk_iac_enabled = null;
-				fc.snyk_secrets_enabled = null;
-				fc.issue_view_open_issues = null;
-				fc.issue_view_ignored_issues = null;
-				fc.risk_score_threshold = null;
+			var fc = data.folderConfigs[i];
+			if (fc && fc.folderPath) {
+				byPath[fc.folderPath] = fc;
 			}
 		}
+
+		for (var folderPath in marked) {
+			if (!marked.hasOwnProperty(folderPath) || !marked[folderPath]) continue;
+
+			var entry = byPath[folderPath];
+			if (!entry) {
+				entry = { folderPath: folderPath };
+				data.folderConfigs.push(entry);
+				byPath[folderPath] = entry;
+			}
+
+			for (var f = 0; f < FOLDER_RESET_FIELDS.length; f++) {
+				entry[FOLDER_RESET_FIELDS[f]] = null;
+			}
+		}
+
 		window.ConfigApp.folderResets = {};
+	};
+
+	// Org-scope global ("Project Defaults") fields cleared by a global reset.
+	// Mirrors the folder reset list, minus preferred_org (folder-only) plus
+	// organization (global-only). Kept in sync with the Go list
+	// types.GlobalResettableSettings.
+	var GLOBAL_RESET_FIELDS = [
+		"snyk_oss_enabled",
+		"snyk_code_enabled",
+		"snyk_iac_enabled",
+		"snyk_secrets_enabled",
+		"scan_automatic",
+		"scan_net_new",
+		"severity_filter_critical",
+		"severity_filter_high",
+		"severity_filter_medium",
+		"severity_filter_low",
+		"issue_view_open_issues",
+		"issue_view_ignored_issues",
+		"risk_score_threshold",
+		"organization",
+	];
+
+	// Mark the global (Project Defaults) scope for reset — on save,
+	// applyGlobalResets() sets every GLOBAL_RESET_FIELDS to null at the top level.
+	formHandler.markGlobalForReset = function () {
+		window.ConfigApp.globalReset = true;
+	};
+
+	formHandler.isGlobalMarkedForReset = function () {
+		return !!window.ConfigApp.globalReset;
+	};
+
+	// Apply reset: set all org-scope global fields to null at the top level of the
+	// payload (NOT inside folderConfigs). The hosting IDE converts each
+	// top-level key:null into a {changed:true, value:null} ConfigSetting reaching
+	// the LS, which Unsets the user override.
+	formHandler.applyGlobalResets = function (data) {
+		if (!window.ConfigApp.globalReset) return;
+		for (var i = 0; i < GLOBAL_RESET_FIELDS.length; i++) {
+			data[GLOBAL_RESET_FIELDS[i]] = null;
+		}
 	};
 
 	window.ConfigApp.formHandler = formHandler;
@@ -2459,10 +2522,10 @@ if (window.cssVars) {
 			organization: ""
 		},
 		filteringDisplay: {
-			enabled_severities_critical: true,
-			enabled_severities_high: true,
-			enabled_severities_medium: true,
-			enabled_severities_low: true,
+			severity_filter_critical: true,
+			severity_filter_high: true,
+			severity_filter_medium: true,
+			severity_filter_low: true,
 			issue_view_open_issues: true,
 			issue_view_ignored_issues: false,
 			risk_score_threshold: "",
@@ -2497,6 +2560,12 @@ if (window.cssVars) {
 		for (var j = 0; j < overrideResetButtons.length; j++) {
 			overrideResetButtons[j].addEventListener("click", handleFolderOverrideReset);
 		}
+
+		// Attach click handler to the global (Project Defaults) override reset button
+		var globalResetButtons = document.querySelectorAll(".reset-global-overrides-btn");
+		for (var k = 0; k < globalResetButtons.length; k++) {
+			globalResetButtons[k].addEventListener("click", handleGlobalOverrideReset);
+		}
 	};
 
 	// Handle section reset button click
@@ -2507,12 +2576,8 @@ if (window.cssVars) {
 			return;
 		}
 
-		if (!confirm("Reset " + formatSectionName(section) + " to defaults?")) {
-			return;
-		}
-
 		var defaults = sectionDefaults[section];
-		applyDefaults(defaults, section);
+		applyDefaults(defaults);
 
 		// Trigger dirty tracking update
 		if (window.dirtyTracker) {
@@ -2529,21 +2594,70 @@ if (window.cssVars) {
 			return;
 		}
 
-		if (!confirm("Reset all overrides for this folder to defaults? Your custom overrides will be removed.")) {
+		// Resolve the folderPath from the hidden input so resets are keyed by path, not the
+		// (later compacted) index. Without a path we cannot reliably target the folder on save.
+		var folderPath = null;
+		var pathInputs = dom.getByName("folder_" + folderIndex + "_folderPath");
+		if (pathInputs && pathInputs.length > 0) {
+			folderPath = pathInputs[0].value;
+		}
+		if (!folderPath) {
+			console.warn("No folder path for reset; folderIndex=" + folderIndex);
 			return;
 		}
 
-		resetFolderOverrides(parseInt(folderIndex));
+		resetFolderOverrides(folderPath);
+
+		// Keep dirty state in sync (a reset changes no DOM input, so no change/blur event fires).
+		if (window.dirtyTracker) {
+			window.dirtyTracker.runChangeListeners();
+			window.dirtyTracker.checkDirty();
+		}
+
+		// Persist the reset immediately on every IDE. We call getAndSaveIdeConfig() directly rather
+		// than formState.triggerChangeHandlers(), which only saves on auto-save IDEs — a reset must
+		// be a commit point everywhere (incl. OK/Cancel IDEs), since no input event would carry it.
+		if (window.ConfigApp.autoSave && window.ConfigApp.autoSave.getAndSaveIdeConfig) {
+			window.ConfigApp.autoSave.getAndSaveIdeConfig();
+		}
+	}
+
+	// Handle global (Project Defaults) override reset button click
+	function handleGlobalOverrideReset() {
+		// No confirm() — VSCode sandboxed webviews silently return false for
+		// window.confirm, which would prevent the reset from ever firing. The
+		// button's own visual affordance (red destructive-action style) is the
+		// confirmation. This matches the folder-override reset (PR #1344).
+
+		// Mark the global scope for reset — on save, formHandler.applyGlobalResets()
+		// sets all org-scope global fields to null (clear overrides).
+		if (window.ConfigApp.formHandler && window.ConfigApp.formHandler.markGlobalForReset) {
+			window.ConfigApp.formHandler.markGlobalForReset();
+		}
 
 		// Trigger dirty tracking update
 		if (window.dirtyTracker) {
 			window.dirtyTracker.runChangeListeners();
 			window.dirtyTracker.checkDirty();
 		}
+
+		// Persist the reset immediately on every IDE. We call getAndSaveIdeConfig()
+		// directly rather than relying on form-state's triggerChangeHandlers(), which
+		// only saves on auto-save IDEs — a reset must be a commit point everywhere
+		// (incl. OK/Cancel IDEs), since no input event would carry it.
+		if (window.ConfigApp.autoSave && window.ConfigApp.autoSave.getAndSaveIdeConfig) {
+			window.ConfigApp.autoSave.getAndSaveIdeConfig();
+		} else {
+			// getAndSaveIdeConfig will not run, so its finally block will not clear
+			// the reset marks. Clear both defensively here — mirroring the finally —
+			// to prevent any armed marks from leaking into a later unrelated save (IDE-2149).
+			window.ConfigApp.globalReset = false;
+			window.ConfigApp.folderResets = {};
+		}
 	}
 
 	// Apply default values to form fields
-	function applyDefaults(defaults, section) {
+	function applyDefaults(defaults) {
 		for (var fieldName in defaults) {
 			if (!defaults.hasOwnProperty(fieldName)) continue;
 
@@ -2585,24 +2699,12 @@ if (window.cssVars) {
 	}
 
 	// Reset folder overrides - marks the folder so all org-scope fields are set to null on save
-	function resetFolderOverrides(folderIndex) {
+	function resetFolderOverrides(folderPath) {
 		// Mark the folder for reset — on save, formHandler.applyFolderResets() will
 		// set all org-scope LspFolderConfig fields to null (clear overrides)
 		if (window.ConfigApp.formHandler && window.ConfigApp.formHandler.markFolderForReset) {
-			window.ConfigApp.formHandler.markFolderForReset(folderIndex);
+			window.ConfigApp.formHandler.markFolderForReset(folderPath);
 		}
-	}
-
-	// Format section name for display
-	function formatSectionName(section) {
-		var names = {
-			scanConfiguration: "Scan configuration",
-			filteringDisplay: "Filters and views",
-			authentication: "Authentication",
-			cliConfiguration: "CLI configuration",
-			permissions: "Trust settings"
-		};
-		return names[section] || section;
 	}
 
 	// Trigger change event on element
@@ -2764,9 +2866,11 @@ if (window.cssVars) {
 			return true; // Empty is valid
 		}
 
-		// Pattern: KEY=VALUE where KEY is valid env var name [A-Za-z_][A-Za-z0-9_]*
-		// VALUE cannot contain ; or = characters (exactly one = per segment)
-		var envVarPattern = /^\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*[^;=]*\s*$/;
+		// Pattern: KEY=VALUE where KEY is a valid env var name [A-Za-z_][A-Za-z0-9_]*
+		// VALUE may contain '=' (matches the Go backend's strings.Cut on the first '=',
+		// see infrastructure/oss/cli_scanner.go) but not ';' (the segment separator).
+		// This allows base64-padded values, JWTs, query strings, etc.
+		var envVarPattern = /^\s*[A-Za-z_][A-Za-z0-9_]*\s*=[^;]*$/;
 
 		return value.split(";")
 			.filter(function(segment) { return segment.trim() !== ""; })
@@ -2826,7 +2930,7 @@ if (window.cssVars) {
 
 	// Validate per-folder risk score on input
 	validation.validateFolderRiskScoreOnInput = function(folderIndex) {
-		var fieldId = "folder_" + folderIndex + "_override_risk_score_threshold";
+		var fieldId = "folder_" + folderIndex + "_risk_score_threshold";
 		var errorId = fieldId + "-error";
 		validation.validateAndShowError(fieldId, errorId, validation.validateRiskScore);
 	};
@@ -2889,15 +2993,29 @@ if (window.cssVars) {
 	// Initialize validation event listeners for all per-folder risk score override fields
 	validation.initializeFolderRiskScoreValidation = function() {
 		var dom = window.ConfigApp.dom;
-		var folderRiskScoreInputs = document.querySelectorAll('[id^="folder_"][id$="_override_risk_score_threshold"]');
+		var folderRiskScoreInputs = document.querySelectorAll('[id^="folder_"][id$="_risk_score_threshold"]');
 
 		for (var i = 0; i < folderRiskScoreInputs.length; i++) {
 			(function(input) {
-				var folderIndex = (input.id.match(/folder_(\d+)_override_risk_score_threshold/) || [])[1];
+				var folderIndex = (input.id.match(/folder_(\d+)_risk_score_threshold/) || [])[1];
 				dom.addEvent(input, "input", function() {
 					validation.validateFolderRiskScoreOnInput(folderIndex);
 				});
 			})(folderRiskScoreInputs[i]);
+		}
+	};
+
+	// Validate global (Project Defaults) additional environment variables on input
+	validation.validateGlobalAdditionalEnvOnInput = function() {
+		validation.validateAndShowError("additional_environment", "additional_environment-error", validation.validateAdditionalEnv);
+	};
+
+	// Initialize validation event listener for the global additional environment field
+	validation.initializeGlobalAdditionalEnvValidation = function() {
+		var dom = window.ConfigApp.dom;
+		var input = dom.get("additional_environment");
+		if (input) {
+			dom.addEvent(input, "input", validation.validateGlobalAdditionalEnvOnInput);
 		}
 	};
 
@@ -2934,6 +3052,9 @@ if (window.cssVars) {
 		if (cliVersionInput) {
 			dom.addEvent(cliVersionInput, "input", validation.validateCliVersionOnInput);
 		}
+
+		// Global (Project Defaults) additional env validation
+		validation.initializeGlobalAdditionalEnvValidation();
 
 		// Per-folder additional env validation
 		validation.initializeFolderAdditionalEnvValidation();
@@ -3292,55 +3413,86 @@ if (window.cssVars) {
 	var dom = window.ConfigApp.dom;
 	var ideBridge = window.ConfigApp.ideBridge;
 
+	// Guard against re-entrance when triggerChangeHandlers() calls getAndSaveIdeConfig recursively
+	var _isSaving = false;
+
 	// Get current form data, validate, and call __saveIdeConfig__
 	autoSave.getAndSaveIdeConfig = function() {
-		// Check validation state
-		var validationInfo = window.ConfigApp.validation.getFormValidationInfo();
-		if (!validationInfo.isValid) {
-			if (ideBridge) {
-				ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.VALIDATION_ERROR);
-			}
-			return;
-		}
+		if (_isSaving) return;
+		_isSaving = true;
 
-		// Collect form data
-		if (!window.ConfigApp.formHandler || !window.ConfigApp.formHandler.collectChangedData || !window.ConfigApp.formHandler.collectData) {
-			if (ideBridge) {
-				ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.ERROR);
-			}
-			return;
-		}
-
-		var data = window.ConfigApp.formHandler.collectChangedData();
-
-		// Apply folder resets (sets all org-scope fields to null for reset-marked folders)
-		if (window.ConfigApp.formHandler.applyFolderResets) {
-			window.ConfigApp.formHandler.applyFolderResets(data);
-		}
-
-		var jsonString = JSON.stringify(data);
-
-		// Save using IDE bridge
-		var saveSuccess = ideBridge.saveConfig(jsonString);
-
-		// If save was successful
-		if (saveSuccess) {
-			// Discard any saved token state before resetting the dirty tracker baseline.
-			// If the user changed auth-sensitive fields (e.g. auth method), the monitor
-			// holds the pre-change token in savedToken so it can be restored if the user
-			// reverts. But once the save goes through, that token must not be restored —
-			// the save is the commit point.
-			if (window.ConfigApp.authFieldMonitor && window.ConfigApp.authFieldMonitor.resetSavedState) {
-				window.ConfigApp.authFieldMonitor.resetSavedState();
-			}
-			// Reset dirty state after successful save (baseline must be the full form state)
-			if (window.dirtyTracker) {
-				window.dirtyTracker.reset();
+		try {
+			// Run dirty-tracker change listeners (authFieldMonitor etc.) before collecting,
+			// so token/endpoint/authMethod changes are reflected before collectChangedData() reads them.
+			// Closing the panel without blurring would otherwise silently discard the pending change.
+			// triggerChangeHandlers() runs the listeners synchronously; the auto-save re-entrance it can
+			// trigger is blocked by the _isSaving guard. No DOM focus change needed.
+			// SELECT values are always read live from the DOM by collectChangedData(), so no blur
+			// is required to capture a pending SELECT change either.
+			if (window.ConfigApp.formState && typeof window.ConfigApp.formState.triggerChangeHandlers === 'function') {
+				window.ConfigApp.formState.triggerChangeHandlers();
 			}
 
-			if (ideBridge) {
-				ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.SUCCESS);
+			// Check validation state
+			var validationInfo = window.ConfigApp.validation.getFormValidationInfo();
+			if (!validationInfo.isValid) {
+				if (ideBridge) {
+					ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.VALIDATION_ERROR);
+				}
+				return;
 			}
+
+			// Collect form data
+			if (!window.ConfigApp.formHandler || !window.ConfigApp.formHandler.collectChangedData || !window.ConfigApp.formHandler.collectData) {
+				if (ideBridge) {
+					ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.ERROR);
+				}
+				return;
+			}
+
+			var data = window.ConfigApp.formHandler.collectChangedData();
+
+			// Apply folder resets (sets all org-scope fields to null for reset-marked folders)
+			if (window.ConfigApp.formHandler.applyFolderResets) {
+				window.ConfigApp.formHandler.applyFolderResets(data);
+			}
+
+			// Apply global reset (sets all org-scope global fields to null at top level)
+			if (window.ConfigApp.formHandler.applyGlobalResets) {
+				window.ConfigApp.formHandler.applyGlobalResets(data);
+			}
+
+			var jsonString = JSON.stringify(data);
+
+			// Save using IDE bridge
+			var saveSuccess = ideBridge.saveConfig(jsonString);
+
+			// If save was successful
+			if (saveSuccess) {
+				// Discard any saved token state before resetting the dirty tracker baseline.
+				// If the user changed auth-sensitive fields (e.g. auth method), the monitor
+				// holds the pre-change token in savedToken so it can be restored if the user
+				// reverts. But once the save goes through, that token must not be restored —
+				// the save is the commit point.
+				if (window.ConfigApp.authFieldMonitor && window.ConfigApp.authFieldMonitor.resetSavedState) {
+					window.ConfigApp.authFieldMonitor.resetSavedState();
+				}
+				// Reset dirty state after successful save (baseline must be the full form state)
+				if (window.dirtyTracker) {
+					window.dirtyTracker.reset();
+				}
+
+				if (ideBridge) {
+					ideBridge.notifySaveAttempt(ideBridge.SAVE_STATUS.SUCCESS);
+				}
+			}
+		} finally {
+			_isSaving = false;
+			// Authoritative clear: runs on every exit of the try body — validation-fail
+			// return, collectData-guard return, exception, AND happy path — so reset
+			// marks can never survive an invocation (IDE-2149).
+			window.ConfigApp.globalReset = false;
+			window.ConfigApp.folderResets = {};
 		}
 	};
 
@@ -3554,8 +3706,123 @@ if (window.cssVars) {
 
 		// Initialize reset handlers
 		window.ConfigApp.resetHandler.init();
+
+		// Save when the panel becomes hidden (e.g. closed in VS Code) without a prior blur.
+		// Closing a webview does not fire blur on the focused element, so text field changes
+		// typed but not yet blurred would otherwise be silently discarded.
+		// Only fires for auto-save IDEs; non-auto-save IDEs use an explicit OK/Cancel flow.
+		dom.addEvent(document, 'visibilitychange', function() {
+			if (document.visibilityState === 'hidden' && window.ConfigApp.ideBridge.isAutoSaveEnabled()) {
+				window.ConfigApp.autoSave.getAndSaveIdeConfig();
+			}
+		});
 	});
 })();
+
+    </script>
+    <script nonce="ideNonce">
+        // ABOUTME: Applies inbound per-folder filter values (severity + issue view) to the
+// open settings form when they change elsewhere (e.g. the tree-view toolbar),
+// without firing change events (so it can't trigger autosave / a feedback loop)
+// and rebaselining only those fields in the dirty-tracker (so unrelated
+// in-progress edits are preserved). Exposed as window.applyFilterSettings and
+// invoked by the IDE host's message bridge on a $/snyk.configuration update.
+(function (window) {
+	"use strict";
+
+	// Checkbox filter fields that live per folder and can change from outside the
+	// settings window (the tree-view toolbar). Keyed by the setting name used both
+	// in the form control name (folder_<index>_<field>) and the inbound settings map.
+	var FILTER_FIELDS = [
+		"severity_filter_critical",
+		"severity_filter_high",
+		"severity_filter_medium",
+		"severity_filter_low",
+		"issue_view_open_issues",
+		"issue_view_ignored_issues",
+	];
+
+	// Maps each folder path to its form index via the hidden folder_<index>_folderPath inputs.
+	function buildPathToIndex(doc) {
+		var map = {};
+		var inputs = doc.querySelectorAll('input[type="hidden"][name$="_folderPath"]');
+		for (var i = 0; i < inputs.length; i++) {
+			var match = /^folder_(\d+)_folderPath$/.exec(inputs[i].name);
+			if (match) {
+				map[inputs[i].value] = match[1];
+			}
+		}
+		return map;
+	}
+
+	// Reads a boolean from an inbound ConfigSetting ({ value, changed }); returns
+	// undefined when absent or not a boolean (so we only touch provided fields).
+	function settingBool(settings, field) {
+		var setting = settings && settings[field];
+		if (!setting || typeof setting.value !== "boolean") {
+			return undefined;
+		}
+		return setting.value;
+	}
+
+	function rebaselineField(index, field, value) {
+		var tracker = window.dirtyTracker;
+		if (!tracker || !tracker.originalData || !tracker.originalData.folderConfigs) {
+			return;
+		}
+		var baseline = tracker.originalData.folderConfigs[index];
+		if (baseline) {
+			baseline[field] = value;
+		}
+	}
+
+	// applyFilterSettings updates the per-folder filter checkboxes from an inbound
+	// $/snyk.configuration payload. folderConfigs is the LspConfigurationParam
+	// FolderConfigs array: [{ folderPath, settings: { <name>: { value } } }].
+	window.applyFilterSettings = function (folderConfigs) {
+		if (!folderConfigs || !folderConfigs.length) {
+			return;
+		}
+		var doc = window.document;
+		var pathToIndex = buildPathToIndex(doc);
+		var touched = false;
+
+		for (var f = 0; f < folderConfigs.length; f++) {
+			var fc = folderConfigs[f];
+			if (!fc || !fc.folderPath) {
+				continue;
+			}
+			var index = pathToIndex[fc.folderPath];
+			if (index === undefined) {
+				continue;
+			}
+			for (var k = 0; k < FILTER_FIELDS.length; k++) {
+				var field = FILTER_FIELDS[k];
+				var value = settingBool(fc.settings, field);
+				if (value === undefined) {
+					continue;
+				}
+				var el = doc.querySelector('input[name="folder_' + index + "_" + field + '"]');
+				if (!el || el.checked === value) {
+					// Still rebaseline if the control matches, so a prior divergent
+					// baseline doesn't leave the field falsely dirty.
+					if (el) rebaselineField(index, field, value);
+					continue;
+				}
+				// Set without dispatching a change event: no autosave, no echo, no loop.
+				el.checked = value;
+				rebaselineField(index, field, value);
+				touched = true;
+			}
+		}
+
+		// Re-evaluate dirty state so the save/dirty UI reflects that these fields
+		// are now in sync with the baseline (unrelated edits stay dirty).
+		if (touched && window.dirtyTracker && typeof window.dirtyTracker.checkDirty === "function") {
+			window.dirtyTracker.checkDirty();
+		}
+	};
+})(window);
 
     </script>
 

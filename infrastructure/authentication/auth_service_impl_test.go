@@ -121,7 +121,7 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 				mockFolder2.EXPECT().Path().Return(folder2Path).AnyTimes()
 
 				mockWorkspace := mock_types.NewMockWorkspace(ctrl)
-				// FYI, mock returns deterministic slice order, but real Workspace.Folders() returns the slice in a random order
+				// FYI, both the mock and the real Workspace.Folders() now return a deterministic, ascending path-sorted slice
 				mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder1, mockFolder2}).AnyTimes()
 
 				return mockWorkspace
@@ -882,16 +882,18 @@ func Test_extractAudHost(t *testing.T) {
 			expectedHost: ""},
 	}
 
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+
+	defaultRegex := conf.GetString(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP)
+	require.NotEmpty(t, defaultRegex,
+		"GAF default CONFIG_KEY_ALLOWED_HOST_REGEXP must be present in test engine")
+
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			engine := testutil.UnitTest(t)
-			conf := engine.GetConfiguration()
-
-			require.NotEmpty(t, conf.GetString(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP),
-				"GAF default CONFIG_KEY_ALLOWED_HOST_REGEXP must be present in test engine")
-
 			if tt.overrideRgx {
 				conf.Set(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, tt.regexValue)
+				t.Cleanup(func() { conf.Set(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, defaultRegex) })
 			}
 
 			actual := extractAudHost(tt.token, conf, &logger)

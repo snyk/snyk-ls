@@ -35,7 +35,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testsupport"
@@ -74,7 +73,7 @@ func TestUnifiedTestApiSmokeTest(t *testing.T) {
 	})
 
 	t.Run("3. Compare diagnostics from both scans", func(t *testing.T) {
-		_ = testutil.SmokeTest(t, tokenSecretNameForRiskScore)
+		_ = testutil.SmokeTest(t, tokenSecretNameForRiskScore, "SMOKE_SHARD_4")
 
 		if !unifiedTestStarted || !legacyTestStarted {
 			t.Fatalf("One or both of the sub-tests were not run: unifiedTestStarted=%v, legacyTestStarted=%v", unifiedTestStarted, legacyTestStarted)
@@ -164,7 +163,7 @@ func runOSSComparisonTest(t *testing.T, unifiedScan bool, dir string) []types.Di
 
 func setupOSSComparisonTest(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder) {
 	t.Helper()
-	engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretNameForRiskScore)
+	engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretNameForRiskScore, "SMOKE_SHARD_4")
 	testutil.CreateDummyProgressListener(t)
 	endpoint := os.Getenv("SNYK_API")
 	if endpoint == "" {
@@ -174,12 +173,10 @@ func setupOSSComparisonTest(t *testing.T) (workflow.Engine, *config.TokenService
 	if endpoint != "" && endpoint != "/v1" {
 		t.Setenv("SNYK_API", endpoint)
 	}
-	loc, jsonRPCRecorder := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
-	cleanupChannels()
-	di.Init(engine, tokenService)
 	return engine, tokenService, loc, jsonRPCRecorder
 }
 

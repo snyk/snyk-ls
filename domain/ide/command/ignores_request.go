@@ -24,9 +24,11 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/infrastructure/code"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 
@@ -34,8 +36,23 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
+	"github.com/snyk/go-application-framework/pkg/utils/git"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+	sglsp "github.com/sourcegraph/go-lsp"
 )
+
+type TreeEmitter interface {
+	Emit(state scanstates.StateSnapshot)
+}
+
+func treeEmitterFromContext(ctx context.Context) (TreeEmitter, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	te, ok := deps[ctx2.DepTreeEmitter].(TreeEmitter)
+	return te, ok
+}
 
 const (
 	workflowTypeIndex = iota
@@ -53,6 +70,8 @@ type submitIgnoreRequest struct {
 	srv            types.Server
 	engine         workflow.Engine
 	configResolver types.ConfigResolverInterface
+	treeEmitter    TreeEmitter
+	scanStateFunc  func() scanstates.StateSnapshot
 }
 
 func (cmd *submitIgnoreRequest) Command() types.CommandData {
@@ -80,10 +99,14 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		logger.Warn().Str("issueId", issueId).Msg("missing finding id for issue. Please rerun the Code scan to refresh finding IDs.")
 	}
 	contentRoot := issue.GetContentRoot()
+
 	engine := cmd.engine
 
 	switch workflowType {
 	case "create":
+		if err := cmd.validateIgnoreRequest(logger, contentRoot); err != nil {
+			return nil, err
+		}
 		err := cmd.createIgnoreRequest(engine, findingId, contentRoot, issue)
 		if err != nil {
 			return nil, err
@@ -103,6 +126,10 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 
 	default:
 		return nil, fmt.Errorf(`unknown workflow`)
+	}
+
+	if cmd.treeEmitter != nil && cmd.scanStateFunc != nil {
+		cmd.treeEmitter.Emit(cmd.scanStateFunc())
 	}
 
 	SendShowDocumentRequest(ctx, logger, issue, cmd.srv)
@@ -317,6 +344,24 @@ func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, wo
 	err = updateIssueWithIgnoreDetails(cmd.engine.GetLogger(), output, issue)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+const userMsgCannotDetermineRepoURL = "Cannot submit ignore: could not determine the repository URL for this folder. Please ensure the folder is part of a Git repository with a configured remote."
+
+// validateIgnoreRequest checks that a repository URL can be resolved for contentRoot
+// using the same resolver as GAF's ignore workflow (git.RepoUrlFromDir) so the two
+// agree. If not, it sends a user-facing warning notification and returns an error.
+// The raw error from go-git is kept in the structured log only, to avoid leaking
+// filesystem paths.
+func (cmd *submitIgnoreRequest) validateIgnoreRequest(logger zerolog.Logger, contentRoot types.FilePath) error {
+	if _, err := git.RepoUrlFromDir(string(contentRoot)); err != nil {
+		logger.Warn().Err(err).Str("contentRoot", string(contentRoot)).Msg("could not determine repository URL for ignore request")
+		if cmd.notifier != nil {
+			cmd.notifier.SendShowMessage(sglsp.MTWarning, userMsgCannotDetermineRepoURL)
+		}
+		return fmt.Errorf("could not determine repository URL: %w", err)
 	}
 	return nil
 }
