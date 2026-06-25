@@ -841,6 +841,7 @@ func TestBuildTree_ReadsAgentFixEnabledFromSastSettings(t *testing.T) {
 
 			ws := mock_types.NewMockWorkspace(ctrl)
 			ws.EXPECT().Folders().Return([]types.Folder{ff}).AnyTimes()
+			ws.EXPECT().GetFolderTrust().Return([]types.Folder{ff}, nil).AnyTimes()
 
 			builder := newBuilderWithCompletedScans()
 			data := builder.BuildTree(ws)
@@ -856,6 +857,143 @@ func TestBuildTree_ReadsAgentFixEnabledFromSastSettings(t *testing.T) {
 				assert.Nil(t, fixableNode, "Code fixable line should be hidden when SAST autofix is disabled")
 			}
 		})
+	}
+}
+
+func TestBuildTree_AllUntrusted_ShowsBannerAndDimmedFolderNode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	untrusted := mock_types.NewMockFolder(ctrl)
+	untrusted.EXPECT().Path().Return(types.FilePath("/untrusted")).AnyTimes()
+	untrusted.EXPECT().Name().Return("untrusted").AnyTimes()
+
+	ws := mock_types.NewMockWorkspace(ctrl)
+	ws.EXPECT().Folders().Return([]types.Folder{untrusted}).AnyTimes()
+	ws.EXPECT().GetFolderTrust().Return(nil, []types.Folder{untrusted}).AnyTimes()
+
+	data := newBuilderWithCompletedScans().BuildTree(ws)
+
+	require.Len(t, data.Nodes, 2, "banner + the untrusted folder's dimmed node")
+	banner := data.Nodes[0]
+	assert.Equal(t, NodeTypeInfo, banner.Type)
+	assert.Equal(t, "untrusted-folder", banner.InfoVariant)
+	assert.Equal(t, []string{"/untrusted"}, banner.FolderPaths)
+	assert.Contains(t, banner.Label, "You should only scan folders you trust")
+
+	// Untrusted folder renders as a dimmed, non-expandable node: no children means
+	// the template draws no chevron.
+	node := data.Nodes[1]
+	assert.Equal(t, NodeTypeFolder, node.Type)
+	assert.Equal(t, "untrusted", node.Label)
+	assert.True(t, node.Untrusted, "node must be flagged untrusted for dimming")
+	assert.Empty(t, node.Children, "untrusted folder must have no children (no chevron)")
+}
+
+// TestBuildTree_MixedTrust_BannerPlusTrustedBody verifies the banner is prepended,
+// lists only the untrusted folder, and that the untrusted folder is excluded from
+// the scanned tree body while the trusted folder's products still render.
+func TestBuildTree_MixedTrust_BannerPlusTrustedBody(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	trustedIssue := testutil.NewMockIssueWithSeverity("oss-1", "/trusted/go.mod", types.High)
+	trustedIssue.Product = product.ProductOpenSource
+	trusted := mock_types.NewMockFolder(ctrl)
+	trusted.EXPECT().Path().Return(types.FilePath("/trusted")).AnyTimes()
+	trusted.EXPECT().Name().Return("trusted").AnyTimes()
+	trusted.EXPECT().FolderConfigReadOnly().Return(nil).AnyTimes()
+	trusted.EXPECT().DisplayableIssueTypesFromConfig(gomock.Any()).
+		Return(map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true}).AnyTimes()
+	trusted.EXPECT().IsDeltaFindingsEnabledFromConfig(gomock.Any()).Return(false).AnyTimes()
+	trusted.EXPECT().IssueViewOptionsFromConfig(gomock.Any()).Return(types.IssueViewOptions{}).AnyTimes()
+	trustedFF := &fakeFilteringFolder{MockFolder: trusted, issues: snyk.IssuesByFile{"/trusted/go.mod": {trustedIssue}}}
+
+	untrusted := mock_types.NewMockFolder(ctrl)
+	untrusted.EXPECT().Path().Return(types.FilePath("/untrusted")).AnyTimes()
+	untrusted.EXPECT().Name().Return("untrusted").AnyTimes()
+
+	ws := mock_types.NewMockWorkspace(ctrl)
+	ws.EXPECT().Folders().Return([]types.Folder{trustedFF, untrusted}).AnyTimes()
+	ws.EXPECT().GetFolderTrust().Return([]types.Folder{trustedFF}, []types.Folder{untrusted}).AnyTimes()
+
+	data := newBuilderWithCompletedScans().BuildTree(ws)
+
+	// Layout: banner, then the trusted folder's (expandable) root node, then the
+	// untrusted folder's dimmed, non-expandable node.
+	require.Len(t, data.Nodes, 3, "banner + trusted folder node + untrusted folder node")
+
+	banner := data.Nodes[0]
+	assert.Equal(t, "untrusted-folder", banner.InfoVariant, "banner must come first")
+	assert.Equal(t, []string{"/untrusted"}, banner.FolderPaths, "banner lists only untrusted folders")
+
+	// Regression (IDE-1882): the trusted folder must keep its own root node so the
+	// user can tell projects apart.
+	trustedNode := data.Nodes[1]
+	assert.Equal(t, NodeTypeFolder, trustedNode.Type, "trusted folder must keep its root node")
+	assert.Equal(t, "trusted", trustedNode.Label)
+	assert.False(t, trustedNode.Untrusted)
+	ossNode := findChildByProduct(trustedNode.Children, product.ProductOpenSource)
+	require.NotNil(t, ossNode, "trusted folder's products should render under its root node")
+
+	// The untrusted folder is shown dimmed and non-expandable (no children).
+	untrustedNode := data.Nodes[2]
+	assert.Equal(t, NodeTypeFolder, untrustedNode.Type)
+	assert.Equal(t, "untrusted", untrustedNode.Label)
+	assert.True(t, untrustedNode.Untrusted)
+	assert.Empty(t, untrustedNode.Children, "untrusted folder must have no children (no chevron)")
+}
+
+// TestBuildTree_MultipleUntrustedFolders_BannerListsAllAndOneNodeEach verifies
+// the builder handles 2+ untrusted folders correctly:
+//   - the banner's FolderPaths slice contains every untrusted path (for the
+//     per-folder Trust buttons in the template)
+//   - buildUntrustedFolderNodes emits exactly one dimmed, non-expandable node
+//     per folder in the same order they were returned by GetFolderTrust
+//
+// (IDE-1882)
+func TestBuildTree_MultipleUntrustedFolders_BannerListsAllAndOneNodeEach(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	u1 := mock_types.NewMockFolder(ctrl)
+	u1.EXPECT().Path().Return(types.FilePath("/repo/alpha")).AnyTimes()
+	u1.EXPECT().Name().Return("alpha").AnyTimes()
+
+	u2 := mock_types.NewMockFolder(ctrl)
+	u2.EXPECT().Path().Return(types.FilePath("/repo/beta")).AnyTimes()
+	u2.EXPECT().Name().Return("beta").AnyTimes()
+
+	u3 := mock_types.NewMockFolder(ctrl)
+	u3.EXPECT().Path().Return(types.FilePath("/repo/gamma")).AnyTimes()
+	u3.EXPECT().Name().Return("gamma").AnyTimes()
+
+	ws := mock_types.NewMockWorkspace(ctrl)
+	ws.EXPECT().Folders().Return([]types.Folder{u1, u2, u3}).AnyTimes()
+	ws.EXPECT().GetFolderTrust().Return(nil, []types.Folder{u1, u2, u3}).AnyTimes()
+
+	// NewTreeBuilder suffices — all folders are untrusted and bypass scan-state logic.
+	data := NewTreeBuilder().BuildTree(ws)
+
+	// Layout: banner at index 0, then one dimmed node per folder in order.
+	require.Len(t, data.Nodes, 4, "banner + one node per untrusted folder (3)")
+
+	banner := data.Nodes[0]
+	assert.Equal(t, NodeTypeInfo, banner.Type)
+	assert.Equal(t, "untrusted-folder", banner.InfoVariant)
+	// All three paths must appear in the banner so the template renders three Trust buttons.
+	assert.Equal(t, []string{"/repo/alpha", "/repo/beta", "/repo/gamma"}, banner.FolderPaths,
+		"banner FolderPaths must list all untrusted folders in order")
+
+	// Each untrusted folder gets its own dimmed, non-expandable node in the same order.
+	for i, want := range []struct{ label, path string }{
+		{"alpha", "/repo/alpha"},
+		{"beta", "/repo/beta"},
+		{"gamma", "/repo/gamma"},
+	} {
+		node := data.Nodes[i+1]
+		assert.Equal(t, NodeTypeFolder, node.Type, "node[%d] must be a folder node", i+1)
+		assert.Equal(t, want.label, node.Label, "node[%d] label must match folder name", i+1)
+		assert.True(t, node.Untrusted, "node[%d] must be flagged untrusted for dimming", i+1)
+		assert.Empty(t, node.Children, "node[%d] must have no children (no chevron)", i+1)
+		assert.Equal(t, types.FilePath(want.path), node.FilePath,
+			"node[%d] must carry the correct folder path for future trust resolution", i+1)
 	}
 }
 

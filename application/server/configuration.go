@@ -745,6 +745,12 @@ func applySeverityFilter(conf configuration.Configuration, engine workflow.Engin
 		return
 	}
 
+	// This is the user-global settings path: it sets the workspace default only.
+	// Per-folder severity overrides are written independently via the per-folder
+	// folderConfigs channel (processFolderConfigs) for the specific folder being
+	// edited, and via the workspace-wide tree toggle (toggleTreeFilter). Keeping
+	// this path global-only is what stops the global default and per-folder
+	// overrides from moving in lockstep. (IDE-1996)
 	oldValue := config.GetFilterSeverity(conf)
 	modified := config.SetSeverityFilterOnConfig(conf, sf, logger)
 	if !modified {

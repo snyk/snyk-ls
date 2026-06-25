@@ -70,6 +70,47 @@ func TestTreeScanStateEmitter_Emit_SendsTreeViewNotification(t *testing.T) {
 	assert.Contains(t, treeView.TreeViewHtml, "<!DOCTYPE html>")
 }
 
+// TestTreeScanStateEmitter_Emit_UntrustedFolder_ShowsBannerWithoutScan verifies the
+// banner renders on a non-scan emit (the empty snapshot agg.Init sends at startup),
+// not just after a scan — i.e. snyk-ls does emit the trust banner at init time.
+func TestTreeScanStateEmitter_Emit_UntrustedFolder_ShowsBannerWithoutScan(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	// Trust enabled + folder not in trusted_folders -> the folder is untrusted.
+	conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
+	workspaceutil.SetupWorkspace(t, engine, types.FilePath("/untrusted-project"))
+
+	notif := notification.NewNotifier()
+	var mu sync.Mutex
+	var receivedPayload any
+	notif.CreateListener(func(params any) {
+		mu.Lock()
+		defer mu.Unlock()
+		receivedPayload = params
+	})
+	t.Cleanup(func() { notif.DisposeListener() })
+
+	emitter, err := NewTreeScanStateEmitter(conf, engine.GetLogger(), notif)
+	require.NoError(t, err)
+	t.Cleanup(emitter.Dispose)
+
+	// Empty snapshot: no scan in progress, no product scan states — exactly what
+	// ScanStateAggregator.Init emits once at startup before any scan runs.
+	emitter.Emit(scanstates.StateSnapshot{})
+
+	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return receivedPayload != nil
+	}, 2*time.Second, 50*time.Millisecond)
+
+	mu.Lock()
+	treeView := receivedPayload.(types.TreeView)
+	mu.Unlock()
+	assert.Contains(t, treeView.TreeViewHtml, "tree-node-info--untrusted-folder",
+		"trust banner must render on the startup (non-scan) emit, not only after a scan")
+}
+
 func TestTreeScanStateEmitter_Emit_ScanInProgress_HasScanningInProductNode(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()
@@ -429,7 +470,7 @@ func TestFilterState_NoWorkspace_FallsBackToGlobal(t *testing.T) {
 	t.Cleanup(emitter.Dispose)
 
 	ws := config.GetWorkspace(conf)
-	fs := emitter.filterState(ws)
+	fs := ResolveFilterState(conf, ws)
 
 	assert.False(t, fs.SeverityFilter.Critical, "global fallback: Critical should be false")
 	assert.True(t, fs.SeverityFilter.High, "global fallback: High should be true")
@@ -466,7 +507,7 @@ func TestFilterState_FolderWithNilConfigReadOnly_IsSkipped(t *testing.T) {
 	t.Cleanup(emitter.Dispose)
 
 	// Call filterState with nil — the ws==nil path falls straight to global.
-	fs := emitter.filterState(nil)
+	fs := ResolveFilterState(conf, nil)
 
 	assert.False(t, fs.SeverityFilter.Critical, "nil workspace → global fallback: Critical=false")
 	assert.Equal(t, MixedSeverity{}, fs.MixedSeverity, "nil workspace → no mixed severity")
@@ -503,7 +544,7 @@ func TestFilterState_IVO_PinsSingleFolderBehavior(t *testing.T) {
 	t.Cleanup(emitter.Dispose)
 
 	ws := config.GetWorkspace(conf)
-	fs := emitter.filterState(ws)
+	fs := ResolveFilterState(conf, ws)
 
 	// Current behavior: exactly one folder's IVO is used wholesale (not aggregated).
 	// Folder iteration order is non-deterministic, so accept either folder's value.
