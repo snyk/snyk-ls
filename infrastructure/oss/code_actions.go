@@ -19,6 +19,7 @@ package oss
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -50,12 +51,33 @@ func GetCodeActions(engine workflow.Engine, configResolver types.ConfigResolverI
 	if issueDepNode.Tree != nil && issueDepNode.Value == "" {
 		fixNode := issueDepNode.LinkedParentDependencyNode
 		if fixNode != nil {
-			quickFixAction = AddQuickFixAction(
+			fixFilePath := types.FilePath(fixNode.Tree.Document)
+			fixRange := getRangeFromNode(fixNode)
+			fixContent := []byte(fixNode.Tree.Root.Value)
+
+			// The version lives in the parent pom, but that <version> can itself
+			// be a ${property} reference. Hardcoding the upgraded version into the
+			// parent's <version> would orphan the property and corrupt the file on
+			// re-apply — the same corruption the direct-version branch below already
+			// prevents. When the property resolves, redirect the edit (and its guard
+			// snapshot) to the matching <properties> entry, which may live further up
+			// the hierarchy. (This branch guards re-apply via addQuickFixAction's
+			// single-shot latch; it does not re-read the file from disk.)
+			if ossIssueData.PackageManager == "maven" {
+				if propNode := resolveMavenPropertyNode(fixNode); propNode != nil {
+					fixFilePath = types.FilePath(propNode.Tree.Document)
+					fixRange = getRangeFromNode(propNode)
+					fixContent = []byte(propNode.Tree.Root.Value)
+				}
+			}
+
+			quickFixAction = addQuickFixAction(
 				engine,
 				configResolver,
-				types.FilePath(fixNode.Tree.Document),
-				getRangeFromNode(fixNode),
-				[]byte(fixNode.Tree.Root.Value),
+				fixFilePath,
+				fixRange,
+				fixContent,
+				nil,
 				true,
 				ossIssueData.PackageManager,
 				ossIssueData.From,
@@ -64,13 +86,35 @@ func GetCodeActions(engine workflow.Engine, configResolver types.ConfigResolverI
 			)
 		}
 	} else {
-		quickFixAction = AddQuickFixAction(
+		fixFilePath := affectedFilePath
+		fixRange := getRangeFromNode(issueDepNode)
+		var originalContent []byte
+		if issueDepNode.Tree != nil {
+			originalContent = []byte(issueDepNode.Tree.Root.Value)
+		}
+
+		// Maven versions are frequently declared indirectly via a property
+		// reference, e.g. <version>${foo.version}</version>. Hardcoding the
+		// upgraded version into the dependency block leaves the property
+		// orphaned and, on a second apply over the now-shorter text, corrupts
+		// the file. When the property can be resolved, redirect the edit to the
+		// matching <properties> entry instead.
+		if ossIssueData.PackageManager == "maven" {
+			if propNode := resolveMavenPropertyNode(issueDepNode); propNode != nil {
+				fixFilePath = types.FilePath(propNode.Tree.Document)
+				fixRange = getRangeFromNode(propNode)
+				originalContent = []byte(propNode.Tree.Root.Value)
+			}
+		}
+
+		quickFixAction = addQuickFixAction(
 			engine,
 			configResolver,
-			affectedFilePath,
-			getRangeFromNode(issueDepNode),
+			fixFilePath,
+			fixRange,
 			nil,
-			false,
+			originalContent,
+			fixFilePath != affectedFilePath,
 			ossIssueData.PackageManager,
 			ossIssueData.From,
 			ossIssueData.UpgradePath,
@@ -155,8 +199,13 @@ func AddSnykLearnAction(
 	return action
 }
 
-func AddQuickFixAction(engine workflow.Engine, configResolver types.ConfigResolverInterface, affectedFilePath types.FilePath, issueRange types.Range, fileContent []byte, addFileNameToFixTitle bool, packageManager string, dependencyPath []string, upgradePath []any, folderConfig *types.FolderConfig) types.CodeAction {
-	logger := engine.GetLogger().With().Str("method", "oss.AddQuickFixAction").Logger()
+// addQuickFixAction builds a deferred "upgrade" code action. fileContent, when
+// non-nil, is the document content used at apply time (otherwise the file is
+// read from disk on apply). originalContent is a snapshot of the document at
+// action-creation time; it is used to capture the exact text the edit expects
+// to replace so a stale edit can be refused at apply time.
+func addQuickFixAction(engine workflow.Engine, configResolver types.ConfigResolverInterface, affectedFilePath types.FilePath, issueRange types.Range, fileContent []byte, originalContent []byte, addFileNameToFixTitle bool, packageManager string, dependencyPath []string, upgradePath []any, folderConfig *types.FolderConfig) types.CodeAction {
+	logger := engine.GetLogger().With().Str("method", "oss.addQuickFixAction").Logger()
 	if !configResolver.GetBool(types.SettingEnableSnykOssQuickFixActions, folderConfig) {
 		return nil
 	}
@@ -170,13 +219,59 @@ func AddQuickFixAction(engine workflow.Engine, configResolver types.ConfigResolv
 	if addFileNameToFixTitle {
 		upgradeMessage += " [ in file: " + filePathString + " ]"
 	}
+
+	// Snapshot the text the edit is meant to replace, so the deferred edit can
+	// detect that the file has changed (e.g. the fix was already applied) and
+	// refuse to re-apply a stale, absolute-offset edit that would corrupt the
+	// file.
+	snapshot := originalContent
+	if snapshot == nil {
+		snapshot = fileContent
+	}
+	expectedText, haveExpectedText := textAtRange(snapshot, issueRange)
+	// A snapshot was provided but we could not read the text at the fix range
+	// (multi-line range, out-of-bounds, etc.). The snapshot is unreliable for
+	// guarding this edit, so rather than silently creating an unguarded action,
+	// drop it. (When no snapshot is provided at all there is nothing to guard and
+	// legacy callers keep working.)
+	if snapshot != nil && !haveExpectedText {
+		logger.Warn().
+			Str("file", filePathString).
+			Msg("snapshot provided but text at fix range could not be read; refusing to create an unguarded quickfix")
+		return nil
+	}
+
+	// applied latches once this action has produced its edit. The disk-based guard
+	// below only sees on-disk content; when the client applies the edit in-memory
+	// without flushing (the IDE-2139 re-apply scenario), the disk is unchanged and
+	// the guard would pass, letting a second apply over the now-shifted buffer
+	// corrupt the value. The latch makes the deferred action single-shot, which the
+	// disk guard cannot guarantee.
+	var applied bool
 	autofixEditCallback := func() *types.WorkspaceEdit {
 		edit := &types.WorkspaceEdit{}
-		var err error
-		if fileContent == nil {
-			fileContent, err = os.ReadFile(filePathString)
+		if applied {
+			logger.Warn().Str("file", filePathString).Msg("quickfix already applied; refusing to re-apply")
+			return edit
+		}
+		content := fileContent
+		if content == nil {
+			var err error
+			content, err = os.ReadFile(filePathString)
 			if err != nil {
 				logger.Error().Err(err).Str("file", filePathString).Msg("could not open file")
+				return edit
+			}
+		}
+
+		if haveExpectedText {
+			currentText, ok := textAtRange(content, issueRange)
+			if !ok || strings.TrimSpace(currentText) != strings.TrimSpace(expectedText) {
+				logger.Warn().
+					Str("file", filePathString).
+					Str("expected", expectedText).
+					Str("actual", currentText).
+					Msg("file content at the fix range has changed since the quickfix was created; refusing to apply a stale edit")
 				return edit
 			}
 		}
@@ -187,6 +282,7 @@ func AddQuickFixAction(engine workflow.Engine, configResolver types.ConfigResolv
 		}
 		edit.Changes = make(map[string][]types.TextEdit)
 		edit.Changes[filePathString] = []types.TextEdit{singleTextEdit}
+		applied = true
 		return edit
 	}
 
@@ -247,6 +343,90 @@ func getQuickfixEdit(engine workflow.Engine, affectedFilePath types.FilePath, up
 	}
 
 	return ""
+}
+
+var mavenPropertyRefRegexp = regexp.MustCompile(`^\s*\$\{([^}]+)\}\s*$`)
+
+// maxPropertyIndirectionDepth bounds how many property-to-property references are
+// followed when resolving a Maven version, guarding against reference cycles.
+const maxPropertyIndirectionDepth = 16
+
+// resolveMavenPropertyNode returns the <properties> node holding the concrete
+// version a dependency refers to when the version is a property reference (e.g.
+// ${foo.version}), searching the current pom and walking up the parent pom
+// hierarchy. A property whose value is itself a ${other} reference is followed
+// (bounded by maxPropertyIndirectionDepth, with cycle detection) so the edit
+// targets the property that actually holds the version string. It returns nil
+// when the version is not a property reference, the chain cannot be fully
+// resolved to a concrete value, or a cycle/depth limit is hit.
+func resolveMavenPropertyNode(depNode *ast.Node) *ast.Node {
+	if depNode == nil {
+		return nil
+	}
+	matches := mavenPropertyRefRegexp.FindStringSubmatch(depNode.Value)
+	if matches == nil {
+		return nil
+	}
+	// The capture group is everything between ${ and }; trim so a reference
+	// written with padding (e.g. ${ foo.version }) still matches the property key.
+	propertyName := strings.TrimSpace(matches[1])
+
+	seen := map[string]bool{}
+	for range maxPropertyIndirectionDepth {
+		if seen[propertyName] {
+			// reference cycle, e.g. a -> b -> a
+			return nil
+		}
+		seen[propertyName] = true
+
+		node := lookupMavenProperty(depNode.Tree, propertyName)
+		if node == nil {
+			return nil
+		}
+
+		next := mavenPropertyRefRegexp.FindStringSubmatch(node.Value)
+		if next == nil {
+			// concrete (non-reference) value reached
+			return node
+		}
+		propertyName = strings.TrimSpace(next[1])
+	}
+	return nil
+}
+
+// lookupMavenProperty finds a property by name in start's pom and any parent pom
+// in the hierarchy, returning nil when it is not defined.
+func lookupMavenProperty(start *ast.Tree, name string) *ast.Node {
+	for tree := start; tree != nil; tree = tree.ParentTree {
+		if node, ok := tree.Properties[name]; ok && node != nil && node.Tree != nil {
+			return node
+		}
+	}
+	return nil
+}
+
+// textAtRange returns the substring of content covered by the given single-line
+// range. ok is false when content is nil or the range falls outside it (e.g.
+// the file got shorter because the fix was already applied).
+//
+// Carriage returns are stripped before splitting so the line/character offsets
+// line up with those the maven parser produces — it normalizes content with
+// strings.ReplaceAll(content, "\r", "") before computing positions. Without this,
+// a CRLF file read raw from disk at apply time would be indexed inconsistently
+// with the CR-stripped snapshot the range was built from.
+func textAtRange(content []byte, r types.Range) (text string, ok bool) {
+	if content == nil {
+		return "", false
+	}
+	lines := strings.Split(strings.ReplaceAll(string(content), "\r", ""), "\n")
+	if r.Start.Line != r.End.Line || r.Start.Line < 0 || r.Start.Line >= len(lines) {
+		return "", false
+	}
+	line := lines[r.Start.Line]
+	if r.Start.Character < 0 || r.Start.Character > r.End.Character || r.End.Character > len(line) {
+		return "", false
+	}
+	return line[r.Start.Character:r.End.Character], true
 }
 
 func getUpgradedPathParts(upgradePath []any) (string, string, error) {
