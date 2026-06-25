@@ -139,6 +139,60 @@ func TestTreeHtmlRenderer_FileNode_HasDataAttributes(t *testing.T) {
 	assert.Contains(t, html, `data-product="code"`)
 }
 
+func TestTreeHtmlRenderer_UntrustedFolderBanner_HasPerFolderTrustButtons(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	banner := NewTreeNode(NodeTypeInfo, untrustedFolderRationale,
+		WithID("info:untrusted-folder"),
+		WithInfoVariant("untrusted-folder"),
+		WithFolderPaths([]string{"/repo/a", "/repo/b"}),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{Nodes: []TreeNode{banner}})
+
+	assert.Contains(t, html, "tree-node-info--untrusted-folder")
+	assert.Contains(t, html, "You should only scan folders you trust")
+	// One Trust button per folder, each carrying its own folder path so the JS
+	// handler can scope snyk.trustWorkspaceFolders to that folder.
+	assert.Contains(t, html, `data-action="trust-folder" data-folder-path="/repo/a"`)
+	assert.Contains(t, html, `data-action="trust-folder" data-folder-path="/repo/b"`)
+	assert.Equal(t, 2, strings.Count(html, `data-action="trust-folder"`), "expected one Trust button per untrusted folder")
+}
+
+func TestTreeHtmlRenderer_UntrustedFolderNode_DimmedAndNoChevron(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	node := NewTreeNode(NodeTypeFolder, "my-project",
+		WithID("folder:/repo/my-project"),
+		WithFilePath("/repo/my-project"),
+		WithUntrusted(true),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{Nodes: []TreeNode{node}})
+
+	// (a) The node element must carry tree-node-untrusted: this drives opacity:0.5
+	//     dimming in CSS and signals the user that the folder is not yet trusted.
+	assert.Contains(t, html, `class="tree-node tree-node-untrusted"`,
+		"untrusted folder must carry tree-node-untrusted class for dimming")
+
+	// (b) The node element must NOT carry tree-node-has-children in any class
+	//     attribute value. tree-node-has-children drives chevron visibility and
+	//     row expand/collapse in CSS. Its absence means the folder cannot be
+	//     expanded — the banner is the sole trust affordance.
+	//
+	//     The closing-quote anchor `tree-node-has-children"` scopes the match to
+	//     an attribute value, not the CSS stylesheet which references the class
+	//     as a selector (`.tree-node-has-children {`). A bare NotContains on
+	//     the full class name would be a false pass because the selector string
+	//     appears in the embedded <style> block.
+	assert.NotContains(t, html, `tree-node-has-children"`,
+		"untrusted folder must not have tree-node-has-children — no chevron, no expand")
+}
+
 func TestTreeHtmlRenderer_ContainsIE11CompatMeta(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
@@ -569,6 +623,41 @@ func TestTreeHtmlRenderer_NodeLabelsWithHtmlSpecialChars_AreEscaped(t *testing.T
 	assert.NotContains(t, html, `<img src=x`, "img tags in descriptions must be escaped")
 	assert.Contains(t, html, `&lt;script&gt;`, "label should contain escaped HTML entities")
 	assert.Contains(t, html, `&lt;img`, "description should contain escaped img tag")
+}
+
+// TestTreeHtmlRenderer_UntrustedFolderPaths_AreHtmlEscapedInBanner verifies that
+// folder paths rendered inside the untrusted-folder banner are HTML-escaped. The
+// paths appear in data-folder-path="..." attribute values and in the visible label
+// span. A path containing " or < must not produce unescaped HTML that an attacker
+// could inject into the webview. Go's html/template escapes attribute values
+// automatically; this test proves the guarantee holds end-to-end. (IDE-1882)
+func TestTreeHtmlRenderer_UntrustedFolderPaths_AreHtmlEscapedInBanner(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	// A path that contains both HTML-special characters:
+	//   " breaks attribute value quoting
+	//   < could open a tag
+	maliciousPath := `/repo/my"project</script><script>alert(1)`
+
+	banner := NewTreeNode(NodeTypeInfo, untrustedFolderRationale,
+		WithID("info:untrusted-folder"),
+		WithInfoVariant("untrusted-folder"),
+		WithFolderPaths([]string{maliciousPath}),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{Nodes: []TreeNode{banner}})
+
+	// The raw path must never appear verbatim in the HTML output.
+	assert.NotContains(t, html, maliciousPath,
+		"raw malicious path must not appear unescaped in the banner HTML")
+
+	// The double-quote and angle brackets must be escaped as HTML entities in the
+	// data-folder-path attribute and the visible label.
+	assert.Contains(t, html, `&#34;`, "double-quote in folder path must be escaped as &#34; in attributes")
+	assert.NotContains(t, html, `<script>alert(1)`,
+		"script injection via folder path must be neutralized by HTML escaping")
 }
 
 func TestTreeHtmlRenderer_LocationNode_HasDataAttributesAndClass(t *testing.T) {

@@ -62,7 +62,7 @@
 
 {{define "treeNode"}}
   {{if eq .Type "folder"}}
-    <div class="tree-node{{if .Expanded}} expanded{{end}}{{if .Children}} tree-node-has-children{{end}}" data-node-id="{{.ID}}"{{if .DeltaEnabled}} data-delta-enabled="true" data-file-path="{{.FilePath}}"{{if .BaseBranch}} data-base-branch="{{.BaseBranch}}"{{end}}{{if .LocalBranches}} data-local-branches="{{joinStrings .LocalBranches ","}}"{{end}}{{if .ReferenceFolderPath}} data-reference-folder-path="{{.ReferenceFolderPath}}"{{end}}{{end}}>
+    <div class="tree-node{{if .Expanded}} expanded{{end}}{{if .Children}} tree-node-has-children{{end}}{{if .Untrusted}} tree-node-untrusted{{end}}" data-node-id="{{.ID}}"{{if .DeltaEnabled}} data-delta-enabled="true" data-file-path="{{.FilePath}}"{{if .BaseBranch}} data-base-branch="{{.BaseBranch}}"{{end}}{{if .LocalBranches}} data-local-branches="{{joinStrings .LocalBranches ","}}"{{end}}{{if .ReferenceFolderPath}} data-reference-folder-path="{{.ReferenceFolderPath}}"{{end}}{{end}}>
       <div class="tree-node-row">
         <span class="tree-chevron"></span>
         <span class="folder-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" opacity="0.6"><path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h3.88l1.62 2H12.5A1.5 1.5 0 0 1 14 5.5v7A1.5 1.5 0 0 1 12.5 14h-9A1.5 1.5 0 0 1 2 12.5z"/></svg></span>
@@ -160,11 +160,8 @@
       <div class="tree-node-row tree-node-row-info untrusted-folder-list-row">
         <span class="untrusted-folder-list-heading">Untrusted Folders:</span>
         <ul class="untrusted-folder-paths">
-          {{range .UntrustedFolderPaths}}<li class="untrusted-folder-path" title="{{.}}"><span class="tree-label" data-truncate-middle="1" data-full-label="{{.}}">{{.}}</span></li>{{end}}
+          {{range .FolderPaths}}<li class="untrusted-folder-path" title="{{.}}"><span class="tree-label" data-truncate-middle="1" data-full-label="{{.}}">{{.}}</span><button type="button" class="untrusted-trust-btn" data-action="trust-folder" data-folder-path="{{.}}">Trust folder</button></li>{{end}}
         </ul>
-      </div>
-      <div class="tree-node-row tree-node-row-info untrusted-action-row">
-        <button type="button" class="untrusted-trust-btn" data-action="trust-folder">Trust folders and continue</button>
       </div>
     </div>
     {{else}}

@@ -67,9 +67,9 @@ func CreateFromCommandData(
 			featureFlagService: featureFlagService,
 		}, nil
 	case types.WorkspaceScanCommand:
-		return &workspaceScanCommand{command: commandData, srv: srv, engine: engine}, nil
+		return &workspaceScanCommand{command: commandData, engine: engine}, nil
 	case types.WorkspaceFolderScanCommand:
-		return &workspaceFolderScanCommand{command: commandData, srv: srv, engine: engine}, nil
+		return &workspaceFolderScanCommand{command: commandData, engine: engine}, nil
 	case types.OpenBrowserCommand:
 		return &openBrowserCommand{command: commandData, logger: logger}, nil
 	case types.LoginCommand:
@@ -79,7 +79,9 @@ func CreateFromCommandData(
 	case types.LogoutCommand:
 		return &logoutCommand{command: commandData, authService: authService, engine: engine, featureFlagService: featureFlagService}, nil
 	case types.TrustWorkspaceFoldersCommand:
-		return &trustWorkspaceFoldersCommand{command: commandData, notifier: notifier, engine: engine, configResolver: configResolver}, nil
+		// notifier omitted: trust notifications are sent by ws.TrustFoldersAndScan
+		// using the workspace's own notifier — this command needs no separate one.
+		return &trustWorkspaceFoldersCommand{command: commandData, engine: engine, configResolver: configResolver}, nil
 	case types.GetLearnLesson:
 		return &getLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	case types.OpenLearnLesson:

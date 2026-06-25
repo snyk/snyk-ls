@@ -589,7 +589,7 @@ func workspaceDidChangeWorkspaceFoldersHandler(conf configuration.Configuration,
 			ldxSyncSvc.RefreshConfigFromLdxSync(bgCtx, conf, engine, &logger, changedFolders, notifier)
 		}
 
-		command.HandleFolders(conf, engine, &logger, bgCtx, srv, notifier, scanPersister, scanStateAgg, featureFlags, configResolver)
+		command.HandleFolders(conf, engine, &logger, notifier, scanPersister, scanStateAgg, featureFlags, configResolver)
 		for _, f := range changedFolders {
 			if f.IsAutoScanEnabled() {
 				go f.ScanFolder(bgCtx)
@@ -876,7 +876,7 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 		scanPersister := mustScanPersisterFromContext(ctx)
 		scanStateAgg := mustScanStateAggregatorFromContext(ctx)
 		ffService := mustFeatureFlagServiceFromContext(ctx)
-		command.HandleFolders(conf, engine, &logger, context.Background(), srv, notifier, scanPersister, scanStateAgg, ffService, configRes)
+		command.HandleFolders(conf, engine, &logger, notifier, scanPersister, scanStateAgg, ffService, configRes)
 
 		deleteExpiredCache(conf)
 		cacheCtx, cancel := context.WithCancel(context.Background())
