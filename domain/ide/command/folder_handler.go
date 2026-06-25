@@ -39,7 +39,7 @@ func HandleFolders(conf configuration.Configuration, engine workflow.Engine, log
 	initScanStateAggregator(conf, agg)
 	initScanPersister(conf, logger, persister)
 	populateFolderFeatureFlagsAndSastSettings(conf, engine, logger, featureFlagService, configResolver)
-	sendFolderConfigs(conf, engine, logger, notifier, featureFlagService, configResolver)
+	sendFolderConfigs(conf, engine, logger, notifier, configResolver)
 
 	// No modal trust dialog here — removed in favour of the tree-view trust banner (IDE-1882).
 	mcpWorkflow.CallMcpConfigWorkflow(conf, configResolver, engine, logger, notifier, false, true)
@@ -71,8 +71,8 @@ func populateFolderFeatureFlagsAndSastSettings(conf configuration.Configuration,
 	}
 }
 
-func sendFolderConfigs(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) {
-	lspConfig := BuildLspConfiguration(conf, engine, logger, featureFlagService, configResolver)
+func sendFolderConfigs(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, notifier noti.Notifier, configResolver types.ConfigResolverInterface) {
+	lspConfig := BuildLspConfiguration(conf, engine, logger, configResolver)
 	notifier.Send(lspConfig)
 }
 
@@ -80,11 +80,11 @@ func sendFolderConfigs(conf configuration.Configuration, engine workflow.Engine,
 // This is the unified payload for $/snyk.configuration (protocol v25+), containing both
 // global settings and per-folder settings with effective values.
 // Skips write-only settings (token, sendErrorReports, etc.) per config.writeOnly annotation.
-func BuildLspConfiguration(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) types.LspConfigurationParam {
+func BuildLspConfiguration(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, configResolver types.ConfigResolverInterface) types.LspConfigurationParam {
 	settings := buildGlobalSettingsMap(conf, configResolver)
 	return types.LspConfigurationParam{
 		Settings:      settings,
-		FolderConfigs: buildLspFolderConfigs(conf, engine, logger, featureFlagService, configResolver),
+		FolderConfigs: buildLspFolderConfigs(conf, engine, logger, configResolver),
 	}
 }
 
@@ -125,7 +125,7 @@ func buildGlobalSettingsMap(_ configuration.Configuration, configResolver types.
 	return settings
 }
 
-func buildLspFolderConfigs(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) []types.LspFolderConfig {
+func buildLspFolderConfigs(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, configResolver types.ConfigResolverInterface) []types.LspFolderConfig {
 	ws := config.GetWorkspace(conf)
 	if ws == nil {
 		return nil

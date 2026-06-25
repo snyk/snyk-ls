@@ -717,6 +717,29 @@ func TestBuildTree_Code_AgentFixDisabled_NoFixableIssues_HidesNoFixableLine(t *t
 		"Code with Agent Fix disabled must not show the 'no issues automatically fixable' line either")
 }
 
+// TestBuildTree_Code_AgentFixEnabled_ZeroFixable_ShowsNoFixableMessage covers the branch
+// at tree_builder.go where AgentFixEnabled=true but fixableCount==0: the "no issues
+// automatically fixable" message must appear (tree_builder.go:420).
+func TestBuildTree_Code_AgentFixEnabled_ZeroFixable_ShowsNoFixableMessage(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+	issue := codeIssue(t, "code-1", false) // HasAIFix=false → fixableCount stays 0
+	issues := snyk.IssuesByFile{issue.AffectedFilePath: {issue}}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           issues, FilteredIssues: issues,
+		AgentFixEnabled: true,
+	}})
+
+	codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+	require.NotNil(t, codeNode)
+	infoNodes := filterChildrenByType(codeNode.Children, NodeTypeInfo)
+	fixableNode := findInfoNodeContaining(infoNodes, "no issues automatically fixable")
+	require.NotNil(t, fixableNode, "Code with Agent Fix enabled and zero fixable issues should show 'no issues automatically fixable'")
+	assert.Contains(t, fixableNode.Label, "no issues automatically fixable")
+}
+
 func TestBuildTree_IaCAndSecrets_NeverShowFixableLine(t *testing.T) {
 	cases := []struct {
 		name       string

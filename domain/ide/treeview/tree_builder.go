@@ -135,21 +135,21 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 		}
 		if cfg != nil {
 			fd.ConsistentIgnoresEnabled = cfg.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores)
-			// Agent Fix is gated per-folder here (each folder's Code node reflects its
-			// own SAST settings). This intentionally differs from the summary panel,
-			// which is workspace-wide and uses any-folder enablement
-			// (scanstates.HtmlRenderer.isAutofixEnabledInAnyFolder); in a multi-root
-			// workspace with mixed settings the two surfaces can legitimately disagree.
-			// Absent/nil SAST settings deliberately fall through to AgentFixEnabled=false
-			// (unknown == hidden). This is safe: the fixable line only renders after a
-			// completed Code scan (see buildProductNodes' enabled/scanRegistered gate),
-			// which cannot succeed without SAST settings being populated first.
-			if sast := types.GetSastSettings(cfg.Conf(), cfg.FolderPath); sast != nil {
-				fd.AgentFixEnabled = sast.AutofixEnabled
-			}
-			if fd.DeltaEnabled {
-				conf := cfg.Conf()
-				if conf != nil {
+			if conf := cfg.Conf(); conf != nil {
+				// Agent Fix is gated per-folder here (each folder's Code node reflects its
+				// own SAST settings). This intentionally differs from the summary panel,
+				// which is workspace-wide and uses any-folder enablement
+				// (scanstates.HtmlRenderer.isAutofixEnabledInAnyFolder); in a multi-root
+				// workspace with mixed settings the two surfaces can legitimately disagree.
+				// Absent/nil SAST settings deliberately fall through to AgentFixEnabled=false
+				// (unknown == hidden). This is safe: the fixable line only renders after a
+				// completed Code scan (see buildProductNodes' enabled/scanRegistered gate),
+				// which cannot succeed without SAST settings being populated first.
+				if sast := types.GetSastSettings(conf, cfg.FolderPath); sast != nil {
+					fd.AgentFixEnabled = sast.AutofixEnabled
+				}
+
+				if fd.DeltaEnabled {
 					snapshot := types.ReadFolderConfigSnapshot(conf, cfg.FolderPath)
 					fd.BaseBranch = snapshot.BaseBranch
 					fd.LocalBranches = snapshot.LocalBranches
@@ -888,7 +888,10 @@ func computeRelativePath(filePath types.FilePath, folderPath types.FilePath) str
 	if err != nil {
 		return string(filePath)
 	}
-	return rel
+	// relPath is display-only (node label). Convert backslashes to forward
+	// slashes so the JS middle-truncation logic (which scans for '/') works
+	// correctly on Windows.
+	return filepath.ToSlash(rel)
 }
 
 // sortIssuesByPriority sorts issues by descending priority (highest severity first,

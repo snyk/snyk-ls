@@ -124,7 +124,7 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 			Str("hashed token", util.Hash([]byte(token))[0:16]).
 			Msgf("authentication successful, received token")
 
-		go sendFolderConfigs(conf, cmd.engine, logger, cmd.notifier, cmd.featureFlagService, cmd.configResolver)
+		go sendFolderConfigs(conf, cmd.engine, logger, cmd.notifier, cmd.configResolver)
 
 		return token, nil
 	}

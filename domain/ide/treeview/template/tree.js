@@ -567,6 +567,11 @@
       // the tree in response to the command below. A "mixed" button (open folders
       // disagree) counts as not-active, so the first click enables the severity
       // for every folder, resolving the mismatch (IDE-1866).
+      // Note: this optimistic flip does NOT account for org-locked folders. When
+      // a folder has the severity org-locked (Locked Remote > User Folder
+      // Override), the button flips active here but snaps back to filter-mixed on
+      // the next LS re-render (a brief flicker). The resolved state is always
+      // correct — only the transient optimistic state may be wrong.
       btn.classList.remove('filter-mixed');
       if (enabled) {
         btn.classList.add('filter-active');
@@ -654,13 +659,20 @@
                (cs.fontSize || '13px') + ' ' +
                (cs.fontFamily || 'sans-serif');
     if (font !== measureFontKey) {
+      var ctx = getMeasureCtx();
+      if (!ctx) return; // canvas 2d unavailable (restricted webview) — skip
       measureFontKey = font;
-      getMeasureCtx().font = font;
+      ctx.font = font;
     }
   }
 
   function measureWidth(text) {
-    return getMeasureCtx().measureText(text).width;
+    var ctx = getMeasureCtx();
+    // No 2d context (canvas disabled in some webview hosts): report 0 so callers
+    // treat everything as "fits" and middle-truncation no-ops, leaving CSS
+    // end-truncation in charge rather than throwing.
+    if (!ctx) return 0;
+    return ctx.measureText(text).width;
   }
 
   function truncateMiddleByWidth(text, maxWidth) {
@@ -691,6 +703,10 @@
       }
     }
     if (best === prefix.length) return text;
+    // When best === 0 no prefix character fits: swapping nothing for an "…"
+    // saves nothing — the string is still too long. Fall back and let CSS
+    // end-truncate rather than producing "…/bar.ts" with no useful context.
+    if (best === 0) return text;
     return prefix.substring(0, best) + ellipsis + filename;
   }
 
@@ -745,6 +761,10 @@
   // Expand/collapse mutates .expanded on .tree-node elements, which changes
   // which file rows are laid out. Watch class changes on tree-node elements
   // and re-run; selection toggling on .tree-node-row is filtered out below.
+  // Note: there is no fallback when MutationObserver is unavailable. Unlike
+  // ResizeObserver (which falls back to the 'resize' event), there is no DOM
+  // event for "a node's class changed", so expand/collapse re-truncation is
+  // simply skipped in environments that do not support MutationObserver.
   if (typeof MutationObserver !== 'undefined') {
     new MutationObserver(function(records) {
       for (var i = 0; i < records.length; i++) {
