@@ -17,6 +17,7 @@
 package command
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
@@ -133,9 +134,15 @@ func TestTrustWorkspaceFolders_TrailingSlash_MatchesFolder(t *testing.T) {
 	require.NoError(t, err)
 
 	trusted := types.GetGlobalSliceFilePath(conf, types.SettingTrustedFolders)
-	// Use a hardcoded literal (not PathKey) as the oracle so the assertion is
-	// independent of the function under test.
-	assert.Contains(t, trusted, types.FilePath("/repo/my-project"), "trailing-slash argument must match and trust the folder")
+	// Normalise stored separators to forward slashes before comparing so the
+	// assertion holds on Windows too: paths are stored via PathKey, which runs
+	// filepath.Clean and yields backslash separators there. The oracle stays a
+	// hardcoded literal, independent of the function under test.
+	var trustedSlash []types.FilePath
+	for _, p := range trusted {
+		trustedSlash = append(trustedSlash, types.FilePath(filepath.ToSlash(string(p))))
+	}
+	assert.Contains(t, trustedSlash, types.FilePath("/repo/my-project"), "trailing-slash argument must match and trust the folder")
 }
 
 func TestTrustWorkspaceFolders_TrustDisabled_NoOp(t *testing.T) {
