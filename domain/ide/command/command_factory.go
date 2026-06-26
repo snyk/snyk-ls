@@ -147,6 +147,10 @@ func CreateFromCommandData(
 		return &showScanErrorDetails{command: commandData, srv: srv}, nil
 	case types.UpdateFolderConfig:
 		return &updateFolderConfig{command: commandData, engine: engine, configResolver: configResolver}, nil
+	case types.DismissFeedbackBanner:
+		return &dismissFeedbackBanner{command: commandData, engine: engine}, nil
+	case types.FeedbackBannerInteracted:
+		return &feedbackBannerInteracted{command: commandData, engine: engine}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)

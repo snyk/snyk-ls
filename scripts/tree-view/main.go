@@ -125,6 +125,14 @@ func replaceIDEPlaceholders(html string) string {
         // In the real IDE, this persists via workspace/executeCommand on the LS.
         // In the preview, expand/collapse is purely client-side (no LS running).
         console.log('[IDE Bridge] setNodeExpanded: ' + args[0] + ' = ' + args[1]);
+      } else if (command === 'snyk.dismissFeedbackBanner') {
+        // In the real IDE, this persists the dismissal via the LS.
+        // In the preview, the banner is hidden purely client-side (no LS running).
+        console.log('[IDE Bridge] dismissFeedbackBanner');
+      } else if (command === 'snyk.feedbackBannerInteracted') {
+        // In the real IDE, this records the interaction via the LS so the banner
+        // stays visible across re-renders. In the preview there is no LS running.
+        console.log('[IDE Bridge] feedbackBannerInteracted');
       }
     };
   </script>`

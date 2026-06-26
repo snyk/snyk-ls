@@ -61,6 +61,8 @@ func (cmd *getTreeViewCommand) Execute(_ context.Context) (any, error) {
 	// to show the trust banner that the early startup push may have missed) matches
 	// one pushed on a scan — including the per-folder aggregate "mixed" toolbar state.
 	data.FilterState = treeview.ResolveFilterState(conf, ws)
+	data.FeedbackBannerDismissed = config.GetFeedbackBannerDismissed(conf)
+	data.FeedbackBannerInteracted = config.GetFeedbackBannerInteracted(conf)
 
 	return renderer.RenderTreeView(data), nil
 }

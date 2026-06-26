@@ -126,6 +126,8 @@ func (e *TreeScanStateEmitter) renderPending() {
 		data = e.builder.BuildTree(ws)
 	}
 	data.FilterState = ResolveFilterState(e.conf, ws)
+	data.FeedbackBannerDismissed = config.GetFeedbackBannerDismissed(e.conf)
+	data.FeedbackBannerInteracted = config.GetFeedbackBannerInteracted(e.conf)
 
 	html := e.renderer.RenderTreeView(data)
 	e.notifier.Send(types.TreeView{TreeViewHtml: html, TotalIssues: data.TotalIssues})

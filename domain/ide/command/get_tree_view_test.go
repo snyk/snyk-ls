@@ -20,9 +20,11 @@ import (
 	"testing"
 
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/treeview"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -119,6 +121,40 @@ func TestGetTreeViewCommand_Execute_WithScanStateFunc_CallsIt(t *testing.T) {
 	_, err := cmd.Execute(t.Context())
 	require.NoError(t, err)
 	assert.True(t, called, "scanStateFunc should be called during Execute")
+}
+
+func TestGetTreeViewCommand_Execute_FeedbackBannerReflectsConfig(t *testing.T) {
+	execute := func(t *testing.T, engine workflow.Engine) string {
+		t.Helper()
+		cmd := &getTreeViewCommand{
+			command: types.CommandData{CommandId: types.GetTreeView},
+			engine:  engine,
+		}
+		result, err := cmd.Execute(t.Context())
+		require.NoError(t, err)
+		html, ok := result.(string)
+		require.True(t, ok, "result should be a string")
+		return html
+	}
+
+	t.Run("default renders the banner hidden", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		assert.Contains(t, execute(t, engine), `id="feedbackBanner" hidden>`)
+	})
+
+	t.Run("interacted renders the banner visible", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		config.SetFeedbackBannerInteracted(engine.GetConfiguration())
+		html := execute(t, engine)
+		assert.Contains(t, html, `id="feedbackBanner"`)
+		assert.NotContains(t, html, `id="feedbackBanner" hidden>`)
+	})
+
+	t.Run("dismissed omits the banner", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		config.SetFeedbackBannerDismissed(engine.GetConfiguration())
+		assert.NotContains(t, execute(t, engine), `id="feedbackBanner"`)
+	})
 }
 
 // With the risk-score feature flag on, the on-demand render must

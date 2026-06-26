@@ -979,4 +979,45 @@
       hideTooltip();
     }
   });
+
+  // Feedback banner. Dismissal is persisted via snyk.dismissFeedbackBanner so the
+  // banner is omitted from later renders. When the banner renders hidden it is
+  // revealed 5s after the user's first interaction; the reveal is reported via
+  // snyk.feedbackBannerInteracted so the server keeps it visible across re-renders.
+  (function() {
+    var banner = document.getElementById('feedbackBanner');
+    if (!banner) return;
+
+    var dismissed = false;
+
+    var dismissBtn = banner.querySelector('[data-action="dismiss-feedback"]');
+    if (dismissBtn) {
+      dismissBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        banner.hidden = true;
+        dismissed = true;
+        executeCommand('snyk.dismissFeedbackBanner', []);
+      });
+    }
+
+    // Already revealed server-side (the user interacted earlier this session).
+    if (!banner.hidden) return;
+
+    var armed = false;
+
+    function reveal() {
+      if (dismissed) return;
+      banner.hidden = false;
+      executeCommand('snyk.feedbackBannerInteracted', []);
+    }
+
+    function arm() {
+      if (armed || dismissed) return;
+      armed = true;
+      setTimeout(reveal, 5000);
+    }
+
+    document.addEventListener('click', arm);
+    document.addEventListener('keydown', arm);
+  })();
 })();
