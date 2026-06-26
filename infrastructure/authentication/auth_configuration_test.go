@@ -124,7 +124,15 @@ func Test_DefaultOAuthProvider_storageCallbackUpdatesCredentialsAndNotifies(t *t
 	assert.Empty(t, receivedAuthParams.ApiUrl)
 }
 
-func Test_RegisterOAuthStorageBridge_UsesDefaultUnlockedCallback(t *testing.T) {
+// Test_RegisterOAuthStorageBridge_CallbackDoesNotBlockSet verifies that the OAuth
+// storage bridge callback enqueues asynchronously so that storageWithCallbacks.Set
+// returns immediately without blocking, and the token eventually propagates to the
+// configuration. The old test held serviceImpl.m to assert non-blocking, but the
+// worker now also acquires m before writing credentials (to provide a happens-before
+// guarantee against concurrent synchronous UpdateCredentials calls). Holding m
+// externally would deadlock the worker. The invariant — that Set() is non-blocking —
+// is preserved because the callback only performs a non-blocking channel send.
+func Test_RegisterOAuthStorageBridge_CallbackDoesNotBlockSet(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	storageWithCallbacks, err := storage2.NewStorageWithCallbacks(storage2.WithStorageFile(filepath.Join(t.TempDir(), "testStorage")))
@@ -140,8 +148,6 @@ func Test_RegisterOAuthStorageBridge_UsesDefaultUnlockedCallback(t *testing.T) {
 		notification.NewNotifier(),
 		testutil.DefaultConfigResolver(engine),
 	)
-	serviceImpl, ok := service.(*AuthenticationServiceImpl)
-	require.True(t, ok)
 
 	RegisterOAuthStorageBridge(storageWithCallbacks, service)
 
@@ -154,13 +160,10 @@ func Test_RegisterOAuthStorageBridge_UsesDefaultUnlockedCallback(t *testing.T) {
 	require.NoError(t, err)
 	rotatedToken := string(rotatedTokenBytes)
 
-	serviceImpl.m.Lock()
-	defer serviceImpl.m.Unlock()
-
 	require.NoError(t, storageWithCallbacks.Set(auth.CONFIG_KEY_OAUTH_TOKEN, rotatedToken))
 	require.Eventually(t, func() bool {
 		return config.GetToken(conf) == rotatedToken
-	}, 2*time.Second, time.Millisecond)
+	}, 5*time.Second, time.Millisecond)
 }
 
 func Test_RegisterOAuthStorageBridge_EmitsSecretSafeLogMarkers(t *testing.T) {

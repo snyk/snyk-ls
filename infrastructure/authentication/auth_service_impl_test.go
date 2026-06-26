@@ -1546,6 +1546,266 @@ func Test_swapHost(t *testing.T) {
 	}
 }
 
+// Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterSyncWrite verifies that a
+// queued async clear-token update (generation N) is discarded by the worker when
+// a later synchronous UpdateCredentials call has already incremented syncGeneration
+// to N+1. This is the unit-level regression guard for IDE-2106: without the fix
+// the worker would process the stale empty-string update and overwrite the token
+// set by applyToken, making config.GetToken return "".
+//
+// Determinism guarantee (white-box, same package):
+//  1. Hold impl.m.Lock() before enqueueing the stale update. The worker also
+//     acquires impl.m before checking the generation, so it is blocked until the
+//     test releases the lock.
+//  2. Enqueue the stale clear update (generation 0) while holding impl.m.
+//  3. Call UpdateCredentials in a goroutine (it will block waiting for impl.m).
+//  4. Release impl.m — both the UpdateCredentials goroutine and the worker race
+//     for the lock. UpdateCredentials wins the lock first because it was already
+//     waiting; it increments syncGeneration to 1 and sets the real token, then
+//     releases the lock.
+//  5. The worker acquires the lock, sees generation 0 < syncGeneration 1, discards
+//     the stale update.
+//  6. Assert real token survives.
+func Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterSyncWrite(t *testing.T) {
+	t.Parallel()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+	impl := service.(*AuthenticationServiceImpl)
+
+	const realToken = "test-real-token-ide-2106"
+
+	// Step 1: hold the mutex so the worker cannot process anything yet.
+	impl.m.Lock()
+
+	// Step 2: enqueue the stale clear-token update (generation 0). The worker
+	// is blocked on impl.m.Lock() so this goes straight to the channel.
+	impl.credentialUpdateChan <- credentialUpdate{
+		token:            "",
+		sendNotification: false,
+		updateApiUrl:     false,
+		generation:       atomic.LoadUint64(&impl.syncGeneration), // 0
+	}
+
+	// Step 3: start UpdateCredentials — it blocks waiting for impl.m.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		service.UpdateCredentials(realToken, false, false)
+	}()
+
+	// Step 4: release the mutex. UpdateCredentials was already waiting so it
+	// is scheduled ahead of the worker goroutine on most runtimes; it acquires
+	// the lock, increments syncGeneration to 1, writes the real token, and
+	// releases the lock before the worker gets a turn.
+	impl.m.Unlock()
+
+	// Wait for UpdateCredentials to complete.
+	<-done
+
+	// Step 5: wait for the worker to drain the channel. The stale update
+	// (generation 0 < syncGeneration 1) must be discarded.
+	require.Eventually(t, func() bool {
+		return len(impl.credentialUpdateChan) == 0
+	}, 5*time.Second, 10*time.Millisecond, "credential update channel should drain")
+
+	// Give the worker one extra scheduler turn to finish its current iteration.
+	// Under the fixed code the update is discarded inside the lock, so GetToken
+	// must still return the real token.
+	require.Eventually(t, func() bool {
+		// We wait until the channel is empty AND the mutex is not held by the
+		// worker (i.e., the worker has released it after processing/discarding).
+		// Trying to TryLock the mutex would be ideal but sync.Mutex has no TryLock
+		// in older Go versions; a brief wait is equivalent here because the only
+		// work the worker does under the lock is a cheap atomic load + discard.
+		return config.GetToken(engine.GetConfiguration()) == realToken
+	}, 5*time.Second, 10*time.Millisecond,
+		"stale async clear-token update must not overwrite the synchronously-set token")
+}
+
+// Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterAuthenticate verifies that a
+// queued async clear-token update (generation N) is discarded by the worker when
+// a later synchronous authenticate() call has written a real token.
+//
+// This covers Finding 1 from the IDE-2106 verification: authenticate() called
+// a.updateCredentials() WITHOUT incrementing syncGeneration, so a stale async
+// clear-token update at the initial generation would pass the worker's
+// generation check (N < N is false) and wipe the freshly-authenticated token.
+//
+// Determinism guarantee (white-box, same package):
+//  1. Hold impl.m.Lock() before enqueueing the stale update.
+//  2. Enqueue the stale clear update (generation 0) while holding impl.m.
+//  3. Call Authenticate in a goroutine — it blocks waiting for impl.m.
+//  4. Release impl.m; Authenticate acquires the lock, calls authenticate() which
+//     calls updateCredentials() (fixed: this now increments syncGeneration to 1),
+//     writes the real token, then releases the lock.
+//  5. The worker acquires the lock, sees generation 0 < syncGeneration 1, discards
+//     the stale update.
+//  6. Assert the real token set by authenticate() survives.
+func Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterAuthenticate(t *testing.T) {
+	t.Parallel()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{Engine: engine}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+	impl := service.(*AuthenticationServiceImpl)
+
+	// Step 1: hold the mutex so the worker cannot process anything yet.
+	impl.m.Lock()
+
+	// Step 2: enqueue the stale clear-token update (generation 0). The worker
+	// is blocked on impl.m.Lock() so this goes straight to the channel.
+	impl.credentialUpdateChan <- credentialUpdate{
+		token:            "",
+		sendNotification: false,
+		updateApiUrl:     false,
+		generation:       atomic.LoadUint64(&impl.syncGeneration), // 0
+	}
+
+	// Step 3: start Authenticate — it blocks waiting for impl.m.
+	authDone := make(chan struct{})
+	go func() {
+		defer close(authDone)
+		_, _ = service.Authenticate(t.Context())
+	}()
+
+	// Step 4: release the mutex. Authenticate wins the lock (it was already
+	// waiting), calls authenticate() → updateCredentials() which (after the fix)
+	// increments syncGeneration to 1 and writes the real token.
+	impl.m.Unlock()
+
+	// Wait for Authenticate to complete.
+	<-authDone
+
+	// Step 5: wait for the worker to drain the channel.
+	require.Eventually(t, func() bool {
+		return len(impl.credentialUpdateChan) == 0
+	}, 5*time.Second, 10*time.Millisecond, "credential update channel should drain")
+
+	// Step 6: the stale async clear must be discarded; the real token must survive.
+	require.Eventually(t, func() bool {
+		return config.GetToken(engine.GetConfiguration()) == "e448dc1a-26c6-11ed-a261-0242ac120002"
+	}, 5*time.Second, 10*time.Millisecond,
+		"stale async clear-token update must not overwrite the token set by authenticate()")
+}
+
+// Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterLogout verifies that a
+// queued async restore-token update (generation N) is discarded by the worker
+// when a later synchronous logout() call has cleared the token.
+//
+// This covers Finding 1 from the IDE-2106 verification: logout() called
+// a.updateCredentials("", ...) WITHOUT incrementing syncGeneration, so a stale
+// async update at the initial generation would pass the worker's generation check
+// (N < N is false) and restore a token that was supposed to be cleared.
+//
+// Determinism guarantee (white-box, same package):
+//  1. Set a token so there is something to clear.
+//  2. Hold impl.m.Lock() before enqueueing the stale update.
+//  3. Enqueue the stale restore-token update (generation 0) while holding impl.m.
+//  4. Call Logout in a goroutine — it blocks waiting for impl.m.
+//  5. Release impl.m; Logout acquires the lock, calls logout() which calls
+//     updateCredentials("", ...) (fixed: increments syncGeneration to 1),
+//     clears the token, then releases the lock.
+//  6. The worker acquires the lock, sees generation 0 < syncGeneration 1, discards
+//     the stale restore update.
+//  7. Assert the token remains empty after logout.
+func Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterLogout(t *testing.T) {
+	t.Parallel()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{Engine: engine}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+	impl := service.(*AuthenticationServiceImpl)
+
+	const priorToken = "test-prior-token-that-should-be-cleared"
+
+	// Set an initial token so logout has something to clear.
+	service.UpdateCredentials(priorToken, false, false)
+	// After UpdateCredentials, syncGeneration is 1.
+
+	// Step 1: hold the mutex so the worker cannot process anything yet.
+	impl.m.Lock()
+
+	// Step 2: enqueue a stale restore-token update at the CURRENT generation (1).
+	// After the fix, logout() will increment syncGeneration to 2, making this stale.
+	impl.credentialUpdateChan <- credentialUpdate{
+		token:            priorToken, // would restore the cleared token
+		sendNotification: false,
+		updateApiUrl:     false,
+		generation:       atomic.LoadUint64(&impl.syncGeneration), // 1
+	}
+
+	// Step 3: start Logout — it blocks waiting for impl.m.
+	logoutDone := make(chan struct{})
+	go func() {
+		defer close(logoutDone)
+		service.Logout(t.Context())
+	}()
+
+	// Step 4: release the mutex. Logout wins the lock (it was already waiting),
+	// calls logout() → updateCredentials("", ...) which (after the fix)
+	// increments syncGeneration to 2 and clears the token.
+	impl.m.Unlock()
+
+	// Wait for Logout to complete.
+	<-logoutDone
+
+	// Step 5: wait for the worker to drain the channel.
+	require.Eventually(t, func() bool {
+		return len(impl.credentialUpdateChan) == 0
+	}, 5*time.Second, 10*time.Millisecond, "credential update channel should drain")
+
+	// Step 6: the stale restore update must be discarded; the token must stay empty.
+	require.Eventually(t, func() bool {
+		return config.GetToken(engine.GetConfiguration()) == ""
+	}, 5*time.Second, 10*time.Millisecond,
+		"stale async restore-token update must not undo the logout")
+}
+
+// Test_CredentialUpdateWorker_HookCanAcquireLock verifies that the
+// credentialUpdateWorker does NOT hold a.m while calling the
+// postCredentialUpdateHook, so that the hook can safely acquire a.m-protected
+// reads (e.g. via IsAuthenticated or Provider).
+//
+// This covers Finding 2 from the IDE-2106 verification: the worker previously
+// held a.m across the entire updateCredentials call, including the hook.
+// Since sync.RWMutex is not reentrant, any hook that called an a.m-locking
+// method (e.g. IsAuthenticated, Provider, Logout) would deadlock the worker
+// goroutine indefinitely.
+//
+// After the fix, the worker releases a.m BEFORE calling runPostMutationEffects,
+// so the hook can freely acquire a.m-protected reads without deadlock.
+func Test_CredentialUpdateWorker_HookCanAcquireLock(t *testing.T) {
+	t.Parallel()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+
+	impl := service.(*AuthenticationServiceImpl)
+	hookCalled := make(chan struct{}, 1)
+
+	// Install a hook that calls IsAuthenticated (acquires a.m.RLock).
+	// If the worker holds a.m.Lock() while calling the hook, IsAuthenticated
+	// will deadlock trying to acquire a.m.RLock on the same goroutine
+	// (sync.RWMutex is not reentrant).
+	service.SetPostCredentialUpdateHook(func() {
+		// IsAuthenticated acquires a.m.RLock — deadlocks if worker holds a.m.Lock.
+		_ = service.IsAuthenticated()
+		select {
+		case hookCalled <- struct{}{}:
+		default:
+		}
+	})
+
+	// Queue a non-empty token update so the hook fires.
+	impl.QueueCredentialUpdate("initial-token", false, false)
+
+	// The hook must complete (no deadlock) within a reasonable timeout.
+	select {
+	case <-hookCalled:
+		// success: worker did not hold a.m while calling the hook
+	case <-time.After(5 * time.Second):
+		t.Fatal("postCredentialUpdateHook deadlocked: worker is holding a.m across the hook call")
+	}
+}
+
 // Regression guard that pins the existing semantics of getPrioritizedApiUrl,
 // which the aud-claim discovery work explicitly leaves unchanged. Any future
 // "improvement" that breaks these rows should fail this test.
