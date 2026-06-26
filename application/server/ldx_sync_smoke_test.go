@@ -19,10 +19,10 @@
 package server
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/adrg/xdg"
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
@@ -46,9 +46,12 @@ func setupLdxSyncTest(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, 
 	t.Helper()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_4")
 
-	origConfigHome := xdg.ConfigHome
-	xdg.ConfigHome = t.TempDir()
-	t.Cleanup(func() { xdg.ConfigHome = origConfigHome })
+	// IDE-2108: use an explicit per-test config file path instead of mutating the
+	// process-global xdg.ConfigHome.  ConfigFileFromConfig (called by initializeHandler)
+	// checks SettingConfigFile first and never falls back to xdg.ConfigHome when it
+	// is set — eliminating the concurrent-test interference that caused the flake.
+	engine.GetConfiguration().Set(types.SettingConfigFile,
+		filepath.Join(t.TempDir(), "snyk", "ls-config.json"))
 
 	loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 
