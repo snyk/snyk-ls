@@ -990,8 +990,8 @@ func TestFeedbackBanner_DismissedPersists_InteractedSessionOnly(t *testing.T) {
 
 	SetupStorage(conf, s, &logger)
 
-	SetFeedbackBannerDismissed(conf)
 	SetFeedbackBannerInteracted(conf)
+	SetFeedbackBannerDismissed(conf)
 
 	// Read the backing file through a fresh configuration to simulate a restart.
 	require.Eventually(t, func() bool {

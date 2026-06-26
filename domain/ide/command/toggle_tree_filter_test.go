@@ -17,6 +17,7 @@
 package command
 
 import (
+	"math"
 	"testing"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -76,6 +77,15 @@ func folderIssueViewOptions(t *testing.T, engine workflow.Engine, folderPath typ
 	return resolver.IssueViewOptionsForFolder(fc)
 }
 
+func folderRiskScore(t *testing.T, engine workflow.Engine, folderPath types.FilePath) int {
+	t.Helper()
+	resolver := testutil.DefaultConfigResolver(engine)
+	fc := config.GetFolderConfigFromEngine(engine, resolver, folderPath, engine.GetLogger())
+	return resolver.RiskScoreThresholdForFolder(fc)
+}
+
+// --- NEW CONTRACT TESTS (combined token in args[0], value in args[1]) ---
+
 func TestToggleTreeFilter_Execute_SeverityHigh_Disabled(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	folderPath := setupToggleWorkspaceFolder(t, engine)
@@ -84,7 +94,8 @@ func TestToggleTreeFilter_Execute_SeverityHigh_Disabled(t *testing.T) {
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
-			Arguments: []any{"severity", "high", false},
+			// NEW: combined token "severity_high" in args[0], bool in args[1]
+			Arguments: []any{"severity_high", false},
 		},
 		engine: engine,
 	}
@@ -108,7 +119,7 @@ func TestToggleTreeFilter_Execute_SeverityMedium_Enabled(t *testing.T) {
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
-			Arguments: []any{"severity", "medium", true},
+			Arguments: []any{"severity_medium", true},
 		},
 		engine: engine,
 	}
@@ -121,6 +132,46 @@ func TestToggleTreeFilter_Execute_SeverityMedium_Enabled(t *testing.T) {
 	assert.True(t, filter.Medium, "medium should be enabled for the folder")
 }
 
+func TestToggleTreeFilter_Execute_SeverityCritical_Enabled(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	folderPath := setupToggleWorkspaceFolder(t, engine)
+	types.SetSeverityFilterForFolder(engine.GetConfiguration(), folderPath, util.Ptr(types.NewSeverityFilter(false, true, true, true)))
+
+	cmd := &toggleTreeFilter{
+		command: types.CommandData{
+			CommandId: types.ToggleTreeFilter,
+			Arguments: []any{"severity_critical", true},
+		},
+		engine: engine,
+	}
+
+	_, err := cmd.Execute(t.Context())
+	require.NoError(t, err)
+
+	filter := folderSeverityFilter(t, engine, folderPath)
+	assert.True(t, filter.Critical, "critical should be enabled")
+}
+
+func TestToggleTreeFilter_Execute_SeverityLow_Disabled(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	folderPath := setupToggleWorkspaceFolder(t, engine)
+	types.SetSeverityFilterForFolder(engine.GetConfiguration(), folderPath, util.Ptr(types.NewSeverityFilter(true, true, true, true)))
+
+	cmd := &toggleTreeFilter{
+		command: types.CommandData{
+			CommandId: types.ToggleTreeFilter,
+			Arguments: []any{"severity_low", false},
+		},
+		engine: engine,
+	}
+
+	_, err := cmd.Execute(t.Context())
+	require.NoError(t, err)
+
+	filter := folderSeverityFilter(t, engine, folderPath)
+	assert.False(t, filter.Low, "low should be disabled")
+}
+
 func TestToggleTreeFilter_Execute_IssueViewOpenIssues_Disabled(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	folderPath := setupToggleWorkspaceFolder(t, engine)
@@ -129,7 +180,8 @@ func TestToggleTreeFilter_Execute_IssueViewOpenIssues_Disabled(t *testing.T) {
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
-			Arguments: []any{"issueView", "openIssues", false},
+			// NEW: combined token "issueView_openIssues" in args[0], bool in args[1]
+			Arguments: []any{"issueView_openIssues", false},
 		},
 		engine: engine,
 	}
@@ -151,7 +203,7 @@ func TestToggleTreeFilter_Execute_IssueViewIgnoredIssues_Enabled(t *testing.T) {
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
-			Arguments: []any{"issueView", "ignoredIssues", true},
+			Arguments: []any{"issueView_ignoredIssues", true},
 		},
 		engine: engine,
 	}
@@ -162,6 +214,161 @@ func TestToggleTreeFilter_Execute_IssueViewIgnoredIssues_Enabled(t *testing.T) {
 
 	options := folderIssueViewOptions(t, engine, folderPath)
 	assert.True(t, options.IgnoredIssues, "ignored issues should be enabled for the folder")
+}
+
+func TestToggleTreeFilter_Execute_RiskScore_WritesToAllFolders(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	pathA := types.PathKey("rsA")
+	pathB := types.PathKey("rsB")
+	setupToggleWorkspaceFolders(t, engine, pathA, pathB)
+
+	cmd := &toggleTreeFilter{
+		command: types.CommandData{
+			CommandId: types.ToggleTreeFilter,
+			// NEW: threshold is now args[1] (not args[2]); no empty placeholder
+			// JSON numbers arrive as float64 over the LSP boundary.
+			Arguments: []any{"riskScore", float64(700)},
+		},
+		engine: engine,
+	}
+
+	result, err := cmd.Execute(t.Context())
+	require.NoError(t, err)
+	assert.Nil(t, result, "toggleTreeFilter should return nil; tree HTML is pushed via notification")
+
+	assert.Equal(t, 700, folderRiskScore(t, engine, pathA), "folder A threshold written")
+	assert.Equal(t, 700, folderRiskScore(t, engine, pathB), "folder B threshold written")
+}
+
+func TestToInt(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   any
+		want    int
+		wantErr bool
+	}{
+		{name: "float64 (LSP path)", input: float64(700), want: 700},
+		{name: "int (in-process caller)", input: 500, want: 500},
+		{name: "int64 (in-process caller)", input: int64(250), want: 250},
+		{name: "NaN rejected", input: math.NaN(), wantErr: true},
+		{name: "positive Inf rejected", input: math.Inf(1), wantErr: true},
+		{name: "negative Inf rejected", input: math.Inf(-1), wantErr: true},
+		{name: "unsupported type rejected", input: "700", wantErr: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := toInt(tc.input)
+			if tc.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestToggleTreeFilter_Execute_Reset_RestoresDefaultsAllFolders(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	pathA := types.PathKey("resetA")
+	pathB := types.PathKey("resetB")
+	setupToggleWorkspaceFolders(t, engine, pathA, pathB)
+
+	// Diverge both folders from the defaults across all popover filters.
+	conf := engine.GetConfiguration()
+	for _, p := range []types.FilePath{pathA, pathB} {
+		types.SetUserFolder(conf, p, types.SettingRiskScoreThreshold, 600)
+		types.SetIssueViewOptionsForFolder(conf, p, util.Ptr(types.NewIssueViewOptions(false, true)))
+	}
+
+	cmd := &toggleTreeFilter{
+		command: types.CommandData{
+			CommandId: types.ToggleTreeFilter,
+			Arguments: []any{"reset"},
+		},
+		engine: engine,
+	}
+
+	result, err := cmd.Execute(t.Context())
+	require.NoError(t, err)
+	assert.Nil(t, result, "toggleTreeFilter should return nil; tree HTML is pushed via notification")
+
+	defaults := types.DefaultIssueViewOptions()
+	for _, p := range []types.FilePath{pathA, pathB} {
+		assert.Equal(t, 0, folderRiskScore(t, engine, p), "risk score reset to 0 for %s", p)
+		assert.Equal(t, defaults, folderIssueViewOptions(t, engine, p), "issue view options reset to defaults for %s", p)
+	}
+}
+
+func TestToggleTreeFilter_Execute_Reset_LeavesSeverityUntouched(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	folderPath := setupToggleWorkspaceFolder(t, engine)
+	// A non-default severity filter must survive a popover reset (severity is not
+	// part of the popover).
+	custom := types.NewSeverityFilter(true, false, true, false)
+	types.SetSeverityFilterForFolder(engine.GetConfiguration(), folderPath, util.Ptr(custom))
+
+	cmd := &toggleTreeFilter{
+		command: types.CommandData{
+			CommandId: types.ToggleTreeFilter,
+			Arguments: []any{"reset"},
+		},
+		engine: engine,
+	}
+
+	_, err := cmd.Execute(t.Context())
+	require.NoError(t, err)
+
+	assert.Equal(t, custom, folderSeverityFilter(t, engine, folderPath), "reset must not touch severity filters")
+}
+
+func TestToggleTreeFilter_Execute_RiskScore_ClampsOutOfRange(t *testing.T) {
+	tests := []struct {
+		name  string
+		input float64
+		want  int
+	}{
+		{"negative clamps to 0", -50, 0},
+		{"above max clamps to 1000", 5000, 1000},
+		{"in range unchanged", 300, 300},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			folderPath := setupToggleWorkspaceFolder(t, engine)
+
+			cmd := &toggleTreeFilter{
+				command: types.CommandData{
+					CommandId: types.ToggleTreeFilter,
+					// NEW: threshold now in args[1], no empty placeholder
+					Arguments: []any{"riskScore", tc.input},
+				},
+				engine: engine,
+			}
+
+			_, err := cmd.Execute(t.Context())
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, folderRiskScore(t, engine, folderPath),
+				"threshold should be clamped to the valid [0,1000] domain")
+		})
+	}
+}
+
+func TestToggleTreeFilter_Execute_RiskScore_NonNumeric_ReturnsError(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	setupToggleWorkspaceFolder(t, engine)
+
+	cmd := &toggleTreeFilter{
+		command: types.CommandData{
+			CommandId: types.ToggleTreeFilter,
+			// NEW: non-numeric value in args[1]
+			Arguments: []any{"riskScore", "not-a-number"},
+		},
+		engine: engine,
+	}
+
+	_, err := cmd.Execute(t.Context())
+	require.Error(t, err, "non-numeric risk score must be rejected")
 }
 
 func TestToggleTreeFilter_MixedFolders_TogglesOnlyClickedSeverity(t *testing.T) {
@@ -178,7 +385,7 @@ func TestToggleTreeFilter_MixedFolders_TogglesOnlyClickedSeverity(t *testing.T) 
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
-			Arguments: []any{"severity", "high", true},
+			Arguments: []any{"severity_high", true},
 		},
 		engine: engine,
 	}
@@ -210,7 +417,7 @@ func TestToggleTreeFilter_PerFolderValueOutranksGlobal(t *testing.T) {
 
 func TestToggleTreeFilter_Execute_SendsConfigurationNotification(t *testing.T) {
 	// Toggling a filter must push the current configuration via the $/snyk.configuration
-	//notification so any open settings windows reflect the new filter values.
+	// notification so any open settings windows reflect the new filter values.
 	engine := testutil.UnitTest(t)
 	folderPath := setupToggleWorkspaceFolder(t, engine)
 	types.SetSeverityFilterForFolder(engine.GetConfiguration(), folderPath, util.Ptr(types.NewSeverityFilter(true, true, true, true)))
@@ -219,7 +426,7 @@ func TestToggleTreeFilter_Execute_SendsConfigurationNotification(t *testing.T) {
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
-			Arguments: []any{"severity", "high", false},
+			Arguments: []any{"severity_high", false},
 		},
 		engine:         engine,
 		notifier:       notifier,
@@ -248,47 +455,52 @@ func TestToggleTreeFilter_Execute_SendsConfigurationNotification(t *testing.T) {
 
 func TestToggleTreeFilter_Execute_MissingArgs_ReturnsError(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	cmd := &toggleTreeFilter{
-		command: types.CommandData{
-			CommandId: types.ToggleTreeFilter,
-			Arguments: []any{},
-		},
-		engine: engine,
-	}
 
-	_, err := cmd.Execute(t.Context())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "expected 3 arguments")
+	t.Run("no args at all", func(t *testing.T) {
+		cmd := &toggleTreeFilter{
+			command: types.CommandData{CommandId: types.ToggleTreeFilter, Arguments: []any{}},
+			engine:  engine,
+		}
+		_, err := cmd.Execute(t.Context())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected at least 1 argument")
+	})
+
+	t.Run("severity_high missing the enabled arg", func(t *testing.T) {
+		cmd := &toggleTreeFilter{
+			command: types.CommandData{CommandId: types.ToggleTreeFilter, Arguments: []any{"severity_high"}},
+			engine:  engine,
+		}
+		_, err := cmd.Execute(t.Context())
+		require.Error(t, err)
+		// New error shape describes the new contract
+		assert.Contains(t, err.Error(), "expected [filter, enabled]")
+	})
+
+	t.Run("riskScore missing the threshold arg", func(t *testing.T) {
+		cmd := &toggleTreeFilter{
+			command: types.CommandData{CommandId: types.ToggleTreeFilter, Arguments: []any{"riskScore"}},
+			engine:  engine,
+		}
+		_, err := cmd.Execute(t.Context())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "expected 2 arguments")
+	})
 }
 
-func TestToggleTreeFilter_Execute_InvalidFilterType_ReturnsError(t *testing.T) {
+func TestToggleTreeFilter_Execute_UnknownFilter_ReturnsError(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
-			Arguments: []any{"unknown", "high", true},
+			Arguments: []any{"unknown_token", true},
 		},
 		engine: engine,
 	}
 
 	_, err := cmd.Execute(t.Context())
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unknown filter type")
-}
-
-func TestToggleTreeFilter_Execute_InvalidSeverityValue_ReturnsError(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	cmd := &toggleTreeFilter{
-		command: types.CommandData{
-			CommandId: types.ToggleTreeFilter,
-			Arguments: []any{"severity", "extreme", true},
-		},
-		engine: engine,
-	}
-
-	_, err := cmd.Execute(t.Context())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unknown severity value")
+	assert.Contains(t, err.Error(), "unknown filter")
 }
 
 func TestToggleTreeFilter_Execute_ReturnsNil_NotHtml(t *testing.T) {
@@ -296,7 +508,7 @@ func TestToggleTreeFilter_Execute_ReturnsNil_NotHtml(t *testing.T) {
 	cmd := &toggleTreeFilter{
 		command: types.CommandData{
 			CommandId: types.ToggleTreeFilter,
-			Arguments: []any{"severity", "low", false},
+			Arguments: []any{"severity_low", false},
 		},
 		engine: engine,
 	}
@@ -310,4 +522,25 @@ func TestToggleTreeFilter_Command_ReturnsCommandData(t *testing.T) {
 	cmdData := types.CommandData{CommandId: types.ToggleTreeFilter}
 	cmd := &toggleTreeFilter{command: cmdData}
 	assert.Equal(t, cmdData, cmd.Command())
+}
+
+// TestFilterTokenToSetting_PinsContract pins the combined-token contract on the
+// Go side. The tokens are constructed in tree.js as `<filterType>_<filterValue>`
+// (e.g. "severity_high"), where filterType/filterValue come from the data-filter-type
+// and data-filter-value attributes rendered in tree.html — those attribute values
+// ("critical"/"high"/"medium"/"low", "openIssues"/"ignoredIssues") are pinned by
+// tree_html_test.go. If either side changes without the other, a filter would
+// silently no-op (Execute hits "unknown filter"); this test fails loudly instead,
+// forcing both layers to stay in sync.
+func TestFilterTokenToSetting_PinsContract(t *testing.T) {
+	expected := map[string]string{
+		"severity_critical":       types.SettingSeverityFilterCritical,
+		"severity_high":           types.SettingSeverityFilterHigh,
+		"severity_medium":         types.SettingSeverityFilterMedium,
+		"severity_low":            types.SettingSeverityFilterLow,
+		"issueView_openIssues":    types.SettingIssueViewOpenIssues,
+		"issueView_ignoredIssues": types.SettingIssueViewIgnoredIssues,
+	}
+	assert.Equal(t, expected, filterTokenToSetting,
+		"combined-token vocabulary changed — keep tree.js token construction and tree.html data-filter-value attributes in sync")
 }

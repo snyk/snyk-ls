@@ -27,8 +27,10 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/treeview"
 	"github.com/snyk/snyk-ls/domain/scanstates"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -153,6 +155,32 @@ func TestGetTreeViewCommand_Execute_FeedbackBannerReflectsConfig(t *testing.T) {
 		config.SetFeedbackBannerDismissed(engine.GetConfiguration())
 		assert.NotContains(t, execute(t, engine), `id="feedbackBanner"`)
 	})
+}
+
+// With the risk-score feature flag on, the on-demand render must
+// include the filter popover, matching the scan-emitter render path.
+func TestGetTreeViewCommand_Execute_RendersFilterPopover(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	ffSvc := featureflag.NewFakeService()
+	ffSvc.Override(featureflag.UseExperimentalRiskScoreInCLI, true)
+	workspaceutil.SetupWorkspaceWithFeatureFlags(t, engine, ffSvc, types.FilePath("/proj-popover"))
+
+	cmd := &getTreeViewCommand{
+		command: types.CommandData{CommandId: types.GetTreeView},
+		engine:  engine,
+	}
+
+	result, err := cmd.Execute(t.Context())
+	require.NoError(t, err)
+	html, ok := result.(string)
+	require.True(t, ok)
+
+	// id="filtersPopover" appears only in the rendered markup (the embedded JS
+	// references it via getElementById('filtersPopover')), so this confirms the
+	// popover is actually rendered, not just referenced by the script.
+	assert.Contains(t, html, `id="filtersPopoverBtn"`, "funnel button must render when the risk-score flag is on")
+	assert.Contains(t, html, `id="riskScoreSlider"`, "risk-score slider must render on the getTreeView path")
 }
 
 func TestGetTreeViewCommand_Command_ReturnsCommandData(t *testing.T) {

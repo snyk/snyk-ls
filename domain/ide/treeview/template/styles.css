@@ -392,6 +392,13 @@ body {
   padding: 6px 8px;
   border-bottom: 1px solid var(--panel-border);
   white-space: nowrap;
+  /* position: relative anchors the absolutely-positioned filter popover; flex
+     keeps the severity group on the left and the filter funnel on the right. */
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .filter-group {
@@ -490,6 +497,155 @@ body {
   opacity: 0.65;
   border-color: var(--focus-border);
   border-style: dashed;
+}
+
+/* ===== Filter popover (Risk Score + Issue View Options) ===== */
+.filter-popover-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Funnel trigger button */
+.filters-popover-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 4px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background-color: transparent;
+  color: var(--description-foreground);
+  font: inherit;
+  line-height: 0;
+  cursor: pointer;
+}
+
+.filters-popover-trigger svg {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  vertical-align: middle;
+}
+
+.filters-popover-trigger:hover,
+.filters-popover-trigger[aria-expanded="true"] {
+  background-color: var(--list-hover-background);
+  color: var(--text-color);
+}
+
+/* "Mixed" dot — at least one popover control differs across open folders, so the
+   funnel signals it even while the popover is closed. Matches the dashed-accent
+   treatment of the severity filter-mixed buttons by reusing --focus-border. */
+.filters-popover-trigger-mixed::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: var(--focus-border);
+}
+
+/* Popover panel */
+.filters-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  width: 240px;
+  max-width: 80vw;
+  padding: 10px 12px;
+  background: var(--dropdown-background);
+  color: var(--dropdown-foreground);
+  border: 1px solid var(--dropdown-border);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px var(--widget-shadow);
+  white-space: normal;
+}
+
+.filters-popover[hidden] {
+  display: none;
+}
+
+.filters-popover-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filters-popover-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.filters-popover-label {
+  color: var(--text-color);
+  font-weight: 600;
+}
+
+.filters-popover-section-label {
+  margin-bottom: 2px;
+}
+
+.filters-popover-value {
+  color: var(--description-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.filters-popover-slider {
+  width: 100%;
+  margin: 2px 0 0;
+  accent-color: var(--focus-border);
+}
+
+/* Mixed slider: folders disagree on the threshold; dimmed until the user sets a
+   value (which aligns every folder). */
+.filters-popover-slider[data-mixed="true"] {
+  opacity: 0.6;
+}
+
+.filters-popover-divider {
+  height: 1px;
+  background-color: var(--panel-border);
+  margin: 10px 0;
+}
+
+.filters-popover-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--text-color);
+}
+
+.filters-popover-check input[type="checkbox"] {
+  margin: 0;
+  accent-color: var(--focus-border);
+}
+
+.filters-popover-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.filters-popover-reset {
+  background: transparent;
+  border: 0;
+  padding: 2px 4px;
+  font: inherit;
+  color: var(--description-foreground);
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.filters-popover-reset:hover {
+  color: var(--text-color);
+  background-color: var(--list-hover-background);
 }
 
 /* Action buttons (expand/collapse all) */
