@@ -21,7 +21,9 @@ package remediation
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -56,10 +58,12 @@ type RemyOptions struct {
 
 // remyCacheEntry holds the changes produced by a single remy run that have not
 // yet been delivered to a code action. Entries are keyed by absolute workspace
-// path. createdAt is used for mtime-based eviction.
+// path. fileHashes records a SHA-256 content fingerprint for each cached file
+// path at the time the entry was populated; cacheValid uses these to detect any
+// content change on disk regardless of filesystem mtime granularity.
 type remyCacheEntry struct {
-	changes   map[string][]types.TextEdit
-	createdAt time.Time
+	changes    map[string][]types.TextEdit
+	fileHashes map[string]string // abs path → hex SHA-256 of file contents at cache time
 }
 
 // remyProvider is the concrete RemediationProvider that drives the host snyk
@@ -81,9 +85,10 @@ type remyProvider struct {
 	rootMus   map[string]*sync.Mutex
 }
 
-// Ensure remyProvider satisfies both interfaces at compile time.
+// Ensure remyProvider satisfies all interfaces at compile time.
 var _ RemediationProvider = (*remyProvider)(nil)
 var _ FileChangeNotifier = (*remyProvider)(nil)
+var _ FolderRemediator = (*remyProvider)(nil)
 
 // gafRunner is the default remyRunner that invokes the legacycli workflow via
 // the Go Application Framework engine. The remy fix workflow is a Go extension
@@ -106,6 +111,9 @@ func gafRunner(ctx context.Context, eng workflow.Engine, contentRoot string, _ s
 // invokes the legacycli workflow via the engine. Callers that want to plug
 // in a fake runner for unit tests pass a non-nil function here.
 func NewRemyProvider(engine workflow.Engine, runner remyRunner) RemediationProvider {
+	if runner == nil && engine == nil {
+		panic("NewRemyProvider: nil runner requires a non-nil engine; pass a test runner or a workflow.Engine")
+	}
 	var log zerolog.Logger
 	opts := RemyOptions{}
 	if engine != nil {
@@ -137,23 +145,61 @@ func (p *remyProvider) getOrCreateRootMu(root string) *sync.Mutex {
 	return mu
 }
 
-// tryServeFromCache looks up the cache for root/filePath. Holds cacheMu for
-// the full read-validate-consume cycle so that cacheValid (which iterates
-// entry.changes) and InvalidateFile (which deletes from entry.changes) are
-// never concurrent — preventing a data race on the shared map.
+// cacheValid reports whether every file in entry.changes still has the same
+// content it had when the entry was populated. It must be called with p.cacheMu
+// held. For each path it first looks up the stored hash; if no stored hash is
+// present the entry is immediately considered stale (the hash was not recorded
+// at populate time, so we cannot verify the file). If a hash is present, the
+// current file content is hashed via fileHash; a read error or content mismatch
+// also signals stale. The prior implementation used os.Stat under this same
+// lock for these same small tracked files, so performing content hashing here
+// is consistent with the existing design.
+func cacheValid(entry *remyCacheEntry) bool {
+	for path := range entry.changes {
+		stored, known := entry.fileHashes[path]
+		if !known {
+			// No stored hash — hash recording failed at populate time; treat as stale.
+			return false
+		}
+		cur, err := fileHash(path)
+		if err != nil || cur != stored {
+			return false
+		}
+	}
+	return true
+}
+
+// tryServeFromCache looks up the cache for root/filePath. Under p.cacheMu it
+// first checks whether the entry exists and whether filePath is present in the
+// entry's changes map — an absent filePath is an immediate miss with no I/O.
+// Only after confirming filePath is cached does it call cacheValid (which reads
+// and hashes every remaining file in the entry). If the entry is stale it is
+// evicted and a miss is returned. On a valid hit the edits for filePath are
+// consumed (deleted from both entry.changes and entry.fileHashes to keep the
+// maps in sync) and the entry is evicted when no changes remain.
+//
 // Returns (edits, true) on a valid cache hit, (nil, false) otherwise.
 func (p *remyProvider) tryServeFromCache(root, filePath string) ([]types.TextEdit, bool) {
 	p.cacheMu.Lock()
 	defer p.cacheMu.Unlock()
 	entry, exists := p.cache[root]
-	if !exists || !p.cacheValid(entry) {
+	if !exists {
 		return nil, false
 	}
 	edits, ok := entry.changes[filePath]
 	if !ok {
+		// filePath is not in this entry — return a miss without hashing any files.
+		return nil, false
+	}
+	if !cacheValid(entry) {
+		delete(p.cache, root)
 		return nil, false
 	}
 	delete(entry.changes, filePath)
+	delete(entry.fileHashes, filePath)
+	if len(entry.changes) == 0 {
+		delete(p.cache, root)
+	}
 	return edits, true
 }
 
@@ -173,7 +219,17 @@ func (p *remyProvider) Remediate(ctx context.Context, req RemediationRequest) (*
 	if !filepath.IsAbs(root) {
 		return nil, fmt.Errorf("remy: ContentRoot must be an absolute path, got %q", root)
 	}
+	// Canonicalize root so it agrees with git's canonical view (e.g. on macOS
+	// os.TempDir returns /var/... but git resolves symlinks to /private/var/...).
+	// Fall back to the original path on error (e.g. path does not exist yet).
+	if canonical, err := filepath.EvalSymlinks(root); err == nil {
+		root = canonical
+	}
 	filePath := string(req.FilePath)
+	// Canonicalize filePath for the same reason.
+	if canonical, err := filepath.EvalSymlinks(filePath); err == nil {
+		filePath = canonical
+	}
 
 	if edits, ok := p.tryServeFromCache(root, filePath); ok {
 		return editsToEdit(filePath, edits), nil
@@ -215,6 +271,23 @@ func editsToEdit(filePath string, edits []types.TextEdit) *types.WorkspaceEdit {
 	return &types.WorkspaceEdit{Changes: map[string][]types.TextEdit{filePath: edits}}
 }
 
+// collectFixEdits snapshots tracked files in runDir, runs the fix workflow there,
+// and builds TextEdits keyed under keyRoot. The per-finding path passes a freshly
+// created worktree as runDir and the upstream repo root as keyRoot; the folder path
+// passes the same already-isolated folder as both. findingID is forwarded to the
+// runner so it can target a specific finding; pass "" for the folder path.
+func (p *remyProvider) collectFixEdits(ctx context.Context, runDir, keyRoot, findingID string) (map[string][]types.TextEdit, error) {
+	snapshot, err := snapshotGitFiles(ctx, runDir)
+	if err != nil {
+		p.log.Debug().Err(err).Str("root", runDir).Msg("remy: failed to snapshot tracked files")
+		return nil, fmt.Errorf("remy: snapshot: %w", err)
+	}
+	if err = p.runner(ctx, p.engine, runDir, findingID); err != nil {
+		return nil, err
+	}
+	return buildWorkspaceEdits(ctx, p.log, runDir, keyRoot, snapshot)
+}
+
 // runRemyInWorktree creates an isolated git worktree, runs the remy runner, and
 // builds a WorkspaceEdit for all changed files. It owns the full worktree
 // lifecycle (creation and cleanup via defer).
@@ -223,9 +296,19 @@ func (p *remyProvider) runRemyInWorktree(ctx context.Context, root string, req R
 	if err != nil {
 		return nil, fmt.Errorf("remy: resolve git root: %w", err)
 	}
+	// gitRoot is already canonical: git rev-parse --show-toplevel resolves symlinks.
 	tmpParent, err := os.MkdirTemp("", "snyk-remy-*")
 	if err != nil {
 		return nil, fmt.Errorf("remy: create temp dir: %w", err)
+	}
+	// Canonicalize the temp parent so the worktree path agrees with git's view.
+	// On macOS os.MkdirTemp under /var/... returns a non-canonical path;
+	// git worktree add resolves symlinks before recording the worktree, so the
+	// path git knows differs from the path we computed — snapshot/diff lookups
+	// then fail to match. EvalSymlinks after the directory is created (so the
+	// path exists) gives us the same canonical form git will use.
+	if canonical, evalErr := filepath.EvalSymlinks(tmpParent); evalErr == nil {
+		tmpParent = canonical
 	}
 	worktreeDir := filepath.Join(tmpParent, "wt")
 	addOut, err := exec.CommandContext(ctx, "git", "-C", gitRoot, "worktree", "add", "--detach", worktreeDir, "HEAD").CombinedOutput()
@@ -241,15 +324,45 @@ func (p *remyProvider) runRemyInWorktree(ctx context.Context, root string, req R
 		_ = exec.CommandContext(cleanupCtx, "git", "-C", gitRoot, "worktree", "remove", "--force", worktreeDir).Run()
 		_ = os.RemoveAll(tmpParent)
 	}()
-	snapshot, err := snapshotGitFiles(ctx, worktreeDir)
-	if err != nil {
-		p.log.Debug().Err(err).Str("root", worktreeDir).Msg("remy: failed to snapshot tracked files")
-		return nil, fmt.Errorf("remy: snapshot: %w", err)
+	return p.collectFixEdits(ctx, worktreeDir, gitRoot, req.FindingId)
+}
+
+// FixFolder runs the remediation fix workflow directly in root (which must
+// already be the git repository root — i.e. the top level of an isolated git
+// worktree created by the caller). It does NOT create a nested worktree.
+// It returns a WorkspaceEdit whose file paths are keyed under root, or
+// (nil, nil) when the fix produces no changes.
+//
+// Precondition: root must be the git repository root (not a subdirectory).
+// The daemon caller always passes a detached-HEAD worktree root, so edits are
+// keyed under that root and the caller can remap paths using the passed-folder
+// prefix. Passing a subdirectory is rejected with a clear error so the fix
+// runner cannot silently escape its isolation boundary.
+func (p *remyProvider) FixFolder(ctx context.Context, root types.FilePath) (*types.WorkspaceEdit, error) {
+	r := string(root)
+	if r == "" || !filepath.IsAbs(r) {
+		return nil, fmt.Errorf("remy: FixFolder requires an absolute path, got %q", r)
 	}
-	if err = p.runner(ctx, p.engine, worktreeDir, req.FindingId); err != nil {
+	// Guard: r must be the git repository root. git rev-parse --show-prefix
+	// is symlink-safe: it outputs empty string when run at the repo root, and
+	// a non-empty relative path (e.g. "sub/") when run inside a subdirectory.
+	// If the command errors, the directory is not inside any git repository.
+	out, err := exec.CommandContext(ctx, "git", "-C", r, "rev-parse", "--show-prefix").Output()
+	if err != nil {
+		return nil, fmt.Errorf("remy: FixFolder: %q is not inside a git repository: %w", r, err)
+	}
+	if prefix := strings.TrimSpace(string(out)); prefix != "" {
+		return nil, fmt.Errorf("remy: FixFolder: %q is a subdirectory of a git repository (prefix %q); the caller must pass the git repository root", r, prefix)
+	}
+	// findingID is "" because FixFolder targets the whole folder, not a single finding.
+	changes, err := p.collectFixEdits(ctx, r, r, "")
+	if err != nil {
 		return nil, err
 	}
-	return buildWorkspaceEdits(ctx, p.log, worktreeDir, gitRoot, snapshot)
+	if len(changes) == 0 {
+		return nil, nil
+	}
+	return &types.WorkspaceEdit{Changes: changes}, nil
 }
 
 // buildWorkspaceEdits enumerates files changed in the worktree relative to HEAD
@@ -260,6 +373,17 @@ func buildWorkspaceEdits(ctx context.Context, log zerolog.Logger, worktreeDir, g
 		return nil, fmt.Errorf("remy: enumerate changed files: %w", err)
 	}
 	if len(changedPaths) == 0 {
+		// No changes detected — log the git state so CI failures show the actual
+		// worktree contents. This surfaces path-canonicalization mismatches (e.g.
+		// macOS /var→/private/var symlink, Windows 8.3 short names) where the
+		// snapshot keys and worktree paths diverge and git sees no diff.
+		statusOut, statusErr := exec.CommandContext(ctx, "git", "-C", worktreeDir, "status", "--porcelain").Output()
+		log.Debug().
+			Str("worktreeDir", worktreeDir).
+			Str("gitRoot", gitRoot).
+			Str("gitStatus", strings.TrimSpace(string(statusOut))).
+			AnErr("gitStatusErr", statusErr).
+			Msg("remy: no changes detected in worktree after fix run")
 		return nil, nil
 	}
 	allChanges := make(map[string][]types.TextEdit)
@@ -291,50 +415,97 @@ func buildWorkspaceEdits(ctx context.Context, log zerolog.Logger, worktreeDir, g
 	return allChanges, nil
 }
 
+// fileHash returns the hex-encoded SHA-256 of the file at path, or an error if
+// the file cannot be read.
+func fileHash(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
 // populateCache stores changes for all files except filePath in the cache so
 // that subsequent code action resolutions can be served without re-running remy.
+// It also captures a SHA-256 content fingerprint for each cached file so that
+// cacheValid can detect modifications independently of filesystem mtime granularity.
+// If fileHash fails for a path (e.g. the file is temporarily unreadable), no hash
+// is stored for that path; cacheValid treats a missing hash as an immediate stale
+// signal, which is safe.
+//
+// If excluding filePath leaves the entry's changes map empty (i.e. remy only
+// touched the requested file), no entry is stored. An empty entry would linger
+// in the cache indefinitely: cacheValid is vacuously true with no files to check,
+// yet there is nothing to serve and the evict-when-empty path in tryServeFromCache
+// is never reached.
 func (p *remyProvider) populateCache(root, filePath string, allChanges map[string][]types.TextEdit) {
-	p.cacheMu.Lock()
-	defer p.cacheMu.Unlock()
 	entry := &remyCacheEntry{
-		changes:   make(map[string][]types.TextEdit, len(allChanges)-1),
-		createdAt: time.Now(),
+		changes:    make(map[string][]types.TextEdit, len(allChanges)-1),
+		fileHashes: make(map[string]string, len(allChanges)-1),
 	}
 	for k, v := range allChanges {
 		if k != filePath {
 			entry.changes[k] = v
+			if h, err := fileHash(k); err == nil {
+				entry.fileHashes[k] = h
+			}
 		}
 	}
+	if len(entry.changes) == 0 {
+		// Nothing to cache — storing an empty entry would create a ghost that is
+		// vacuously valid but can never be served.
+		return
+	}
+	p.cacheMu.Lock()
 	p.cache[root] = entry
+	p.cacheMu.Unlock()
 }
 
 // InvalidateFile removes cached diffs for path from every cache entry so that
 // the next Remediate call for that file re-runs remy rather than serving stale
-// results. It is called by the LSP textDocument/didChange handler.
+// results. It is called by the LSP textDocument/didChange handler. The
+// corresponding fileHashes entry is deleted alongside the changes entry so
+// both maps stay in sync.
+//
+// The path is canonicalized via filepath.EvalSymlinks (with fallback on error)
+// before the cache lookup so that it matches the canonical key inserted by
+// Remediate. Without canonicalization, a non-canonical path (e.g. a symlinked
+// path on macOS /var→/private/var) would miss the canonical cache key and leave
+// stale entries alive.
 func (p *remyProvider) InvalidateFile(path types.FilePath) {
+	s := string(path)
+	if canonical, err := filepath.EvalSymlinks(s); err == nil {
+		s = canonical
+	} else if dir, derr := filepath.EvalSymlinks(filepath.Dir(s)); derr == nil {
+		// The file itself no longer exists (e.g. a fix deleted it and then
+		// didChange/didClose fired). EvalSymlinks on the file fails, but the
+		// parent directory still exists and can be resolved. Rejoin the base
+		// name to produce the same canonical path that Remediate wrote into
+		// the cache (Remediate calls EvalSymlinks while the file still existed).
+		//
+		// Limitation: if the missing file's basename was itself a symlink (rare),
+		// the reconstructed key may not match the canonical key stored by Remediate,
+		// in which case the delete is a harmless no-op — the stale entry simply is
+		// not evicted, the same outcome as before symlink canonicalization was added.
+		s = filepath.Join(dir, filepath.Base(s))
+	}
+	canonPath := s
 	p.cacheMu.Lock()
 	defer p.cacheMu.Unlock()
 	for root, entry := range p.cache {
-		delete(entry.changes, string(path))
+		delete(entry.changes, canonPath)
+		delete(entry.fileHashes, canonPath)
 		// Remove the cache entry entirely once it has no remaining changes so
 		// it does not occupy memory or cause vacuously-valid hits.
 		if len(entry.changes) == 0 {
 			delete(p.cache, root)
 		}
 	}
-}
-
-// cacheValid returns false if any file in the entry has been modified on disk
-// since the entry was created, indicating the cached diffs are stale.
-// Caller must hold p.cacheMu.
-func (p *remyProvider) cacheValid(entry *remyCacheEntry) bool {
-	for path := range entry.changes {
-		info, err := os.Stat(path)
-		if err != nil || info.ModTime().After(entry.createdAt) {
-			return false
-		}
-	}
-	return true
 }
 
 // resolveGitRoot returns the root of the git repository containing path by
