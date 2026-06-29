@@ -19,8 +19,12 @@
 package remediation
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -49,13 +53,15 @@ type RemyOptions struct {
 	Timeout time.Duration
 }
 
-// remyProvider is the concrete implementation that drives the remy workflow.
 type remyProvider struct {
 	opts   RemyOptions
 	runner remyRunner
 	engine workflow.Engine
 	log    zerolog.Logger
 }
+
+// Ensure remyProvider satisfies the FolderRemediator interface at compile time.
+var _ FolderRemediator = (*remyProvider)(nil)
 
 // gafRunner is the default remyRunner that invokes the legacycli workflow via
 // the Go Application Framework engine. The remy fix workflow is a Go extension
@@ -93,6 +99,208 @@ func NewRemyProvider(engine workflow.Engine, runner remyRunner) *remyProvider {
 		runner = gafRunner
 	}
 	return &remyProvider{opts: opts, runner: runner, engine: engine, log: log}
+}
+
+// collectFixEdits snapshots tracked files in runDir, runs the fix workflow there,
+// and builds TextEdits keyed under keyRoot. The per-finding path passes a freshly
+// created worktree as runDir and the upstream repo root as keyRoot; the folder path
+// passes the same already-isolated folder as both. findingID is forwarded to the
+// runner so it can target a specific finding; pass "" for the folder path.
+func (p *remyProvider) collectFixEdits(ctx context.Context, runDir, keyRoot, findingID string) (map[string][]types.TextEdit, map[string]string, error) {
+	snapshot, err := snapshotGitFiles(ctx, runDir)
+	if err != nil {
+		p.log.Debug().Err(err).Str("root", runDir).Msg("remy: failed to snapshot tracked files")
+		return nil, nil, fmt.Errorf("remy: snapshot: %w", err)
+	}
+	if err = p.runner(ctx, p.engine, runDir, findingID); err != nil {
+		return nil, nil, err
+	}
+	return buildWorkspaceEdits(ctx, p.log, runDir, keyRoot, snapshot)
+}
+
+// FixFolder runs the remediation fix workflow directly in root (which must
+// already be the git repository root — i.e. the top level of an isolated git
+// worktree created by the caller). It does NOT create a nested worktree.
+// It returns a WorkspaceEdit whose file paths are keyed under root, or
+// (nil, nil) when the fix produces no changes.
+//
+// Precondition: root must be the git repository root (not a subdirectory).
+// The daemon caller always passes a detached-HEAD worktree root, so edits are
+// keyed under that root and the caller can remap paths using the passed-folder
+// prefix. Passing a subdirectory is rejected with a clear error so the fix
+// runner cannot silently escape its isolation boundary.
+func (p *remyProvider) FixFolder(ctx context.Context, root types.FilePath) (*types.WorkspaceEdit, error) {
+	r := string(root)
+	if r == "" || !filepath.IsAbs(r) {
+		return nil, fmt.Errorf("remy: FixFolder requires an absolute path, got %q", r)
+	}
+	// Guard: r must be the git repository root. git rev-parse --show-prefix
+	// is symlink-safe: it outputs empty string when run at the repo root, and
+	// a non-empty relative path (e.g. "sub/") when run inside a subdirectory.
+	// If the command errors, the directory is not inside any git repository.
+	out, err := exec.CommandContext(ctx, "git", "-C", r, "rev-parse", "--show-prefix").Output()
+	if err != nil {
+		return nil, fmt.Errorf("remy: FixFolder: %q is not inside a git repository: %w", r, err)
+	}
+	if prefix := strings.TrimSpace(string(out)); prefix != "" {
+		return nil, fmt.Errorf("remy: FixFolder: %q is a subdirectory of a git repository (prefix %q); the caller must pass the git repository root", r, prefix)
+	}
+	// findingID is "" because FixFolder targets the whole folder, not a single finding.
+	// fileHashes is ignored: FixFolder returns a one-shot WorkspaceEdit and does not cache.
+	changes, _, err := p.collectFixEdits(ctx, r, r, "")
+	if err != nil {
+		return nil, err
+	}
+	if len(changes) == 0 {
+		return nil, nil
+	}
+	return &types.WorkspaceEdit{Changes: changes}, nil
+}
+
+// buildWorkspaceEdits enumerates files changed in the worktree relative to HEAD
+// and translates each unified diff into TextEdits keyed by the real workspace path.
+// Alongside the edits it returns, keyed by the SAME absolute workspace path, the
+// SHA-256 of each file's pre-run HEAD content (from snapshot). That hash is the
+// correct cache baseline: it is the content the edits were computed against, so
+// it detects any concurrent edit made while remy was running.
+func buildWorkspaceEdits(ctx context.Context, log zerolog.Logger, worktreeDir, gitRoot string, snapshot map[string][]byte) (map[string][]types.TextEdit, map[string]string, error) {
+	changedPaths, err := gitChangedFiles(ctx, worktreeDir)
+	if err != nil {
+		return nil, nil, fmt.Errorf("remy: enumerate changed files: %w", err)
+	}
+	if len(changedPaths) == 0 {
+		// No changes detected — log the git state so CI failures show the actual
+		// worktree contents. This surfaces path-canonicalization mismatches (e.g.
+		// macOS /var→/private/var symlink, Windows 8.3 short names) where the
+		// snapshot keys and worktree paths diverge and git sees no diff.
+		statusOut, statusErr := exec.CommandContext(ctx, "git", "-C", worktreeDir, "status", "--porcelain").Output()
+		log.Debug().
+			Str("worktreeDir", worktreeDir).
+			Str("gitRoot", gitRoot).
+			Str("gitStatus", strings.TrimSpace(string(statusOut))).
+			AnErr("gitStatusErr", statusErr).
+			Msg("remy: no changes detected in worktree after fix run")
+		return nil, nil, nil
+	}
+	allChanges := make(map[string][]types.TextEdit)
+	fileHashes := make(map[string]string)
+	for _, relPath := range changedPaths {
+		originalBytes, ok := snapshot[relPath]
+		if !ok {
+			continue
+		}
+		diff, err := gitFileDiff(ctx, worktreeDir, relPath)
+		if err != nil {
+			log.Debug().Err(err).Str("path", relPath).Msg("remy: failed to get diff for file")
+			continue
+		}
+		if diff == "" {
+			continue
+		}
+		absPath := filepath.Join(gitRoot, relPath)
+		edit, err := workspaceEditFromContent(absPath, originalBytes, diff)
+		if err != nil {
+			log.Debug().Err(err).Str("path", relPath).Msg("remy: failed to build WorkspaceEdit for file")
+			continue
+		}
+		if edit == nil {
+			continue
+		}
+		for k, v := range edit.Changes {
+			allChanges[k] = append(allChanges[k], v...)
+			fileHashes[k] = hashBytes(originalBytes)
+		}
+	}
+	return allChanges, fileHashes, nil
+}
+
+// normalizeLineEndings collapses CRLF pairs ("\r\n") to LF ("\n"), leaving lone
+// '\r' bytes intact. Both the pre-run HEAD snapshot bytes (always LF from the
+// git object store) and workspace files on Windows (CRLF when autocrlf is in
+// effect) are normalized before hashing so that a pure CRLF↔LF difference does
+// not cause a spurious cache miss. Lone '\r' bytes (e.g. a bare carriage return
+// inside a Go string literal) are intentionally preserved: stripping them
+// unconditionally would make removing a lone '\r' hash-identical to the
+// baseline, masking a real content change and causing the cache to serve stale
+// edits on a genuinely modified file.
+func normalizeLineEndings(b []byte) []byte {
+	return bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n"))
+}
+
+// hashBytes returns the hex-encoded SHA-256 of b with line endings normalized.
+// It fingerprints the pre-run HEAD content held in memory (from the snapshot).
+// fileHash is its disk counterpart and applies the same normalization so that
+// LF (object store) and CRLF (Windows workspace) produce equal hashes for
+// equal logical content.
+func hashBytes(b []byte) string {
+	h := sha256.Sum256(normalizeLineEndings(b))
+	return fmt.Sprintf("%x", h[:])
+}
+
+// snapshotGitFiles returns a map of relative path → original bytes for every
+// file currently tracked in the git repository at root.
+func snapshotGitFiles(ctx context.Context, root string) (map[string][]byte, error) {
+	// List all tracked files via git ls-files so we know which ones were
+	// present before remy runs.
+	cmd := exec.CommandContext(ctx, "git", "-C", root, "ls-files")
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("git ls-files: %w", err)
+	}
+
+	snapshot := make(map[string][]byte)
+	for _, relPath := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if relPath == "" {
+			continue
+		}
+		content, err := gitShowHEAD(ctx, root, relPath)
+		if err != nil {
+			continue
+		}
+		snapshot[relPath] = content
+	}
+	return snapshot, nil
+}
+
+// gitShowHEAD returns the content of relPath at HEAD in the repo at root.
+func gitShowHEAD(ctx context.Context, root, relPath string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", root, "show", "HEAD:"+relPath)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("git show HEAD:%s: %w (%s)", relPath, err, stderr.String())
+	}
+	return stdout.Bytes(), nil
+}
+
+// gitChangedFiles returns the relative paths of files that differ from HEAD in
+// the working tree at root.
+func gitChangedFiles(ctx context.Context, root string) ([]string, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", root, "diff", "--name-only", "HEAD")
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("git diff --name-only: %w", err)
+	}
+	var paths []string
+	for _, p := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if p != "" {
+			paths = append(paths, p)
+		}
+	}
+	return paths, nil
+}
+
+// gitFileDiff returns the unified diff for relPath from HEAD to the working
+// tree in the repository at root. Returns an empty string if the file is
+// unchanged.
+func gitFileDiff(ctx context.Context, root, relPath string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", root, "diff", "HEAD", "--", relPath)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("git diff HEAD -- %s: %w", relPath, err)
+	}
+	return string(out), nil
 }
 
 // workspaceEditFromContent converts a unified diff into a WorkspaceEdit keyed

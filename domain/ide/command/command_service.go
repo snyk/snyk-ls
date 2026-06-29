@@ -28,6 +28,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -40,34 +41,36 @@ import (
 var instance types.CommandService
 
 type serviceImpl struct {
-	authService        authentication.AuthenticationService
-	featureFlagService featureflag.Service
-	notifier           noti.Notifier
-	learnService       learn.Service
-	issueProvider      snyk.IssueProvider
-	codeScanner        *code.Scanner
-	cli                cli.Executor
-	ldxSyncService     LdxSyncService
-	configResolver     types.ConfigResolverInterface
-	scanStateFunc      func() scanstates.StateSnapshot
-	engine             workflow.Engine
-	logger             *zerolog.Logger
+	authService         authentication.AuthenticationService
+	featureFlagService  featureflag.Service
+	notifier            noti.Notifier
+	learnService        learn.Service
+	issueProvider       snyk.IssueProvider
+	codeScanner         *code.Scanner
+	cli                 cli.Executor
+	ldxSyncService      LdxSyncService
+	configResolver      types.ConfigResolverInterface
+	scanStateFunc       func() scanstates.StateSnapshot
+	engine              workflow.Engine
+	logger              *zerolog.Logger
+	remediationProvider remediation.FolderRemediator
 }
 
-func NewService(engine workflow.Engine, logger *zerolog.Logger, authService authentication.AuthenticationService, featureFlagService featureflag.Service, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor, ldxSyncService LdxSyncService, configResolver types.ConfigResolverInterface, scanStateFunc func() scanstates.StateSnapshot) types.CommandService {
+func NewService(engine workflow.Engine, logger *zerolog.Logger, authService authentication.AuthenticationService, featureFlagService featureflag.Service, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor, ldxSyncService LdxSyncService, configResolver types.ConfigResolverInterface, scanStateFunc func() scanstates.StateSnapshot, remediationProvider remediation.FolderRemediator) types.CommandService {
 	return &serviceImpl{
-		authService:        authService,
-		featureFlagService: featureFlagService,
-		notifier:           notifier,
-		learnService:       learnService,
-		issueProvider:      issueProvider,
-		codeScanner:        codeScanner,
-		cli:                cli,
-		ldxSyncService:     ldxSyncService,
-		configResolver:     configResolver,
-		scanStateFunc:      scanStateFunc,
-		engine:             engine,
-		logger:             logger,
+		authService:         authService,
+		featureFlagService:  featureFlagService,
+		notifier:            notifier,
+		learnService:        learnService,
+		issueProvider:       issueProvider,
+		codeScanner:         codeScanner,
+		cli:                 cli,
+		ldxSyncService:      ldxSyncService,
+		configResolver:      configResolver,
+		scanStateFunc:       scanStateFunc,
+		engine:              engine,
+		logger:              logger,
+		remediationProvider: remediationProvider,
 	}
 }
 
@@ -90,7 +93,7 @@ func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.
 
 	logger.Debug().Msgf("executing command %s", commandData.CommandId)
 	// TODO: move to DI
-	command, err := CreateFromCommandData(ctx, s.engine, commandData, server, s.authService, s.featureFlagService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli, s.ldxSyncService, s.configResolver, s.scanStateFunc)
+	command, err := CreateFromCommandData(ctx, s.engine, commandData, server, s.authService, s.featureFlagService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli, s.ldxSyncService, s.configResolver, s.scanStateFunc, s.remediationProvider)
 	if err != nil {
 		logger.Err(err).Msg("failed to create command")
 		return nil, err
