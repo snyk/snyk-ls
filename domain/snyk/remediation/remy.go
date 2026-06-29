@@ -88,9 +88,10 @@ type remyProvider struct {
 	rootMus   map[string]*sync.Mutex
 }
 
-// Ensure remyProvider satisfies both interfaces at compile time.
+// Ensure remyProvider satisfies all interfaces at compile time.
 var _ RemediationProvider = (*remyProvider)(nil)
 var _ FileChangeNotifier = (*remyProvider)(nil)
+var _ FolderRemediator = (*remyProvider)(nil)
 
 // gafRunner is the default remyRunner that invokes the legacycli workflow via
 // the Go Application Framework engine. The remy fix workflow is a Go extension
@@ -340,6 +341,23 @@ func editsToEdit(filePath string, edits []types.TextEdit) *types.WorkspaceEdit {
 	return &types.WorkspaceEdit{Changes: map[string][]types.TextEdit{filePath: edits}}
 }
 
+// collectFixEdits snapshots tracked files in runDir, runs the fix workflow there,
+// and builds TextEdits keyed under keyRoot. The per-finding path passes a freshly
+// created worktree as runDir and the upstream repo root as keyRoot; the folder path
+// passes the same already-isolated folder as both. findingID is forwarded to the
+// runner so it can target a specific finding; pass "" for the folder path.
+func (p *remyProvider) collectFixEdits(ctx context.Context, runDir, keyRoot, findingID string) (map[string][]types.TextEdit, map[string]string, error) {
+	snapshot, err := snapshotGitFiles(ctx, runDir)
+	if err != nil {
+		p.log.Debug().Err(err).Str("root", runDir).Msg("remy: failed to snapshot tracked files")
+		return nil, nil, fmt.Errorf("remy: snapshot: %w", err)
+	}
+	if err = p.runner(ctx, p.engine, runDir, findingID); err != nil {
+		return nil, nil, err
+	}
+	return buildWorkspaceEdits(ctx, p.log, runDir, keyRoot, snapshot)
+}
+
 // runRemyInWorktree creates an isolated git worktree, runs the remy runner, and
 // builds a WorkspaceEdit for all changed files. It owns the full worktree
 // lifecycle (creation and cleanup via defer).
@@ -376,15 +394,46 @@ func (p *remyProvider) runRemyInWorktree(ctx context.Context, root string, req R
 		_ = exec.CommandContext(cleanupCtx, "git", "-C", gitRoot, "worktree", "remove", "--force", worktreeDir).Run()
 		_ = os.RemoveAll(tmpParent)
 	}()
-	snapshot, err := snapshotGitFiles(ctx, worktreeDir)
+	return p.collectFixEdits(ctx, worktreeDir, gitRoot, req.FindingId)
+}
+
+// FixFolder runs the remediation fix workflow directly in root (which must
+// already be the git repository root — i.e. the top level of an isolated git
+// worktree created by the caller). It does NOT create a nested worktree.
+// It returns a WorkspaceEdit whose file paths are keyed under root, or
+// (nil, nil) when the fix produces no changes.
+//
+// Precondition: root must be the git repository root (not a subdirectory).
+// The daemon caller always passes a detached-HEAD worktree root, so edits are
+// keyed under that root and the caller can remap paths using the passed-folder
+// prefix. Passing a subdirectory is rejected with a clear error so the fix
+// runner cannot silently escape its isolation boundary.
+func (p *remyProvider) FixFolder(ctx context.Context, root types.FilePath) (*types.WorkspaceEdit, error) {
+	r := string(root)
+	if r == "" || !filepath.IsAbs(r) {
+		return nil, fmt.Errorf("remy: FixFolder requires an absolute path, got %q", r)
+	}
+	// Guard: r must be the git repository root. git rev-parse --show-prefix
+	// is symlink-safe: it outputs empty string when run at the repo root, and
+	// a non-empty relative path (e.g. "sub/") when run inside a subdirectory.
+	// If the command errors, the directory is not inside any git repository.
+	out, err := exec.CommandContext(ctx, "git", "-C", r, "rev-parse", "--show-prefix").Output()
 	if err != nil {
-		p.log.Debug().Err(err).Str("root", worktreeDir).Msg("remy: failed to snapshot tracked files")
-		return nil, nil, fmt.Errorf("remy: snapshot: %w", err)
+		return nil, fmt.Errorf("remy: FixFolder: %q is not inside a git repository: %w", r, err)
 	}
-	if err = p.runner(ctx, p.engine, worktreeDir, req.FindingId); err != nil {
-		return nil, nil, err
+	if prefix := strings.TrimSpace(string(out)); prefix != "" {
+		return nil, fmt.Errorf("remy: FixFolder: %q is a subdirectory of a git repository (prefix %q); the caller must pass the git repository root", r, prefix)
 	}
-	return buildWorkspaceEdits(ctx, p.log, worktreeDir, gitRoot, snapshot)
+	// findingID is "" because FixFolder targets the whole folder, not a single finding.
+	// fileHashes is ignored: FixFolder returns a one-shot WorkspaceEdit and does not cache.
+	changes, _, err := p.collectFixEdits(ctx, r, r, "")
+	if err != nil {
+		return nil, err
+	}
+	if len(changes) == 0 {
+		return nil, nil
+	}
+	return &types.WorkspaceEdit{Changes: changes}, nil
 }
 
 // buildWorkspaceEdits enumerates files changed in the worktree relative to HEAD
