@@ -27,6 +27,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 // INT-001: CreateFromCommandData wires provider and notifier into the handler.
@@ -42,10 +43,15 @@ func TestCreateFromCommandData_FixFolder_WiresProviderAndNotifier(t *testing.T) 
 	notifier := &fakeNotifier{}
 	provider := &fakeFolderRemediator{}
 
+	// Use a real OS temp dir converted to a file URI so the path is absolute on
+	// all operating systems. Hard-coding "file:///tmp" is not an absolute path
+	// on Windows (no drive letter) and would cause the command to reject it.
+	folderURI := string(uri.PathToUri(types.FilePath(t.TempDir())))
+
 	cmd, err := command.CreateFromCommandData(
 		context.Background(),
 		engine,
-		types.CommandData{CommandId: types.RemediationAgentFixFolderCommand, Arguments: []any{"file:///tmp"}},
+		types.CommandData{CommandId: types.RemediationAgentFixFolderCommand, Arguments: []any{folderURI}},
 		nil, // srv
 		nil, // authService
 		nil, // featureFlagService
@@ -62,11 +68,10 @@ func TestCreateFromCommandData_FixFolder_WiresProviderAndNotifier(t *testing.T) 
 	require.NoError(t, err)
 	require.NotNil(t, cmd)
 
-	// Execute the command with the folder path pointing to /tmp which exists.
+	// Execute the command with a real temp dir that exists on all OSes.
 	// The provider returns nil (no changes) — we only care that the handler
 	// got a non-nil provider and notifier so no nil-pointer panic occurs.
 	_, execErr := cmd.Execute(context.Background())
-	// /tmp exists and is a dir; provider is non-nil; returns nil (no changes).
 	assert.NoError(t, execErr, "provider and notifier must be wired; no nil-pointer panic")
 }
 

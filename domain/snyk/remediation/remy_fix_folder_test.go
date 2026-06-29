@@ -20,7 +20,9 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -30,6 +32,35 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	"github.com/snyk/snyk-ls/internal/types"
 )
+
+// errRunner returns a remyRunner that always returns err.
+func errRunner(err error) func(_ context.Context, _ workflow.Engine, _, _ string) error {
+	return func(_ context.Context, _ workflow.Engine, _, _ string) error {
+		return err
+	}
+}
+
+// initGitRepoInDir initializes a git repository in an already-existing dir.
+func initGitRepoInDir(t *testing.T, dir string) {
+	t.Helper()
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...) //nolint:gosec // test helper: git args are hardcoded strings, not user input
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, "git %v: %s", args, string(out))
+	}
+	run("init")
+	run("config", "user.email", "test@example.com")
+	run("config", "user.name", "Test")
+	run("config", "core.checkStat", "minimal")
+}
+
+// commitFileInDir is an alias for commitFile using a pre-existing repo root.
+func commitFileInDir(t *testing.T, repoRoot, relPath, content string) {
+	t.Helper()
+	commitFile(t, repoRoot, relPath, content)
+}
 
 // ---------------------------------------------------------------------------
 // UNIT-001: FixFolder returns edits keyed under the passed folder
@@ -45,20 +76,15 @@ func TestFixFolder_ReturnsEditsKeyedUnderFolder(t *testing.T) {
 	mainAbs := filepath.Join(repo, "main.go")
 
 	runner := func(_ context.Context, _ workflow.Engine, root, findingID string) error {
-		// findingID must be empty for the folder path
 		assert.Empty(t, findingID, "runner must be called with empty findingID for folder path")
 		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0644)
 	}
 
 	p := remediation.NewRemyProvider(nil, runner)
-	fr, ok := p.(remediation.FolderRemediator)
-	require.True(t, ok, "remyProvider must implement FolderRemediator")
-
-	edit, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	edit, err := p.FixFolder(context.Background(), types.FilePath(repo))
 	require.NoError(t, err)
 	require.NotNil(t, edit, "expected a WorkspaceEdit when a tracked file was modified")
 	assert.Contains(t, edit.Changes, mainAbs, "edit key must be <folder>/<file>")
-	// Every key in the edit must be under the passed folder.
 	for key := range edit.Changes {
 		assert.True(t, len(key) > len(repo) && key[:len(repo)] == repo,
 			"edit key %q must be under passed folder %q", key, repo)
@@ -74,10 +100,7 @@ func TestFixFolder_NoChangesReturnsNil(t *testing.T) {
 	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
 
 	p := remediation.NewRemyProvider(nil, noopRunner)
-	fr, ok := p.(remediation.FolderRemediator)
-	require.True(t, ok)
-
-	edit, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	edit, err := p.FixFolder(context.Background(), types.FilePath(repo))
 	require.NoError(t, err)
 	assert.Nil(t, edit, "no-change run must return nil edit")
 }
@@ -92,10 +115,7 @@ func TestFixFolder_PropagatesRunnerError(t *testing.T) {
 
 	sentinel := errors.New("remy runner failed")
 	p := remediation.NewRemyProvider(nil, errRunner(sentinel))
-	fr, ok := p.(remediation.FolderRemediator)
-	require.True(t, ok)
-
-	edit, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	edit, err := p.FixFolder(context.Background(), types.FilePath(repo))
 	require.Error(t, err)
 	assert.ErrorIs(t, err, sentinel)
 	assert.Nil(t, edit)
@@ -113,18 +133,14 @@ func TestFixFolder_RejectsNonAbsolutePath(t *testing.T) {
 	}
 
 	p := remediation.NewRemyProvider(nil, trackingRunner)
-	fr, ok := p.(remediation.FolderRemediator)
-	require.True(t, ok)
 
-	// Relative path
-	edit, err := fr.FixFolder(context.Background(), types.FilePath("relative/path"))
+	edit, err := p.FixFolder(context.Background(), types.FilePath("relative/path"))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "absolute")
 	assert.Nil(t, edit)
 	assert.False(t, runnerCalled, "runner must NOT be called on invalid path")
 
-	// Empty path
-	edit2, err2 := fr.FixFolder(context.Background(), types.FilePath(""))
+	edit2, err2 := p.FixFolder(context.Background(), types.FilePath(""))
 	require.Error(t, err2)
 	assert.Contains(t, err2.Error(), "absolute")
 	assert.Nil(t, edit2)
@@ -135,14 +151,7 @@ func TestFixFolder_RejectsNonAbsolutePath(t *testing.T) {
 // UNIT-005a: FixFolder rejects a subdirectory of a git repo with an error
 // ---------------------------------------------------------------------------
 
-// TestFixFolder_SubdirOfGitRoot_ReturnEdits verifies that FixFolder returns a
-// non-nil error (and no edits) when the passed path is a subdirectory of the
-// git root. The contract requires the caller to pass the git repository root
-// itself (e.g. a detached-HEAD worktree created by the daemon); passing a
-// subdirectory is rejected so the fix runner cannot silently escape its
-// isolation boundary.
 func TestFixFolder_SubdirOfGitRoot_ReturnEdits(t *testing.T) {
-	// Create a git repo with a tracked file inside a subdirectory.
 	repo := initGitRepo(t)
 	commitFile(t, repo, "sub/main.go", "package main\nvar x = 1\n")
 
@@ -155,11 +164,7 @@ func TestFixFolder_SubdirOfGitRoot_ReturnEdits(t *testing.T) {
 	}
 
 	p := remediation.NewRemyProvider(nil, runner)
-	fr, ok := p.(remediation.FolderRemediator)
-	require.True(t, ok, "remyProvider must implement FolderRemediator")
-
-	// Call FixFolder with the SUBDIRECTORY path — must return an error.
-	edit, err := fr.FixFolder(context.Background(), types.FilePath(subdir))
+	edit, err := p.FixFolder(context.Background(), types.FilePath(subdir))
 	require.Error(t, err, "FixFolder must return an error when passed a subdirectory of a git root")
 	assert.Nil(t, edit, "FixFolder must return nil edit when returning an error")
 	assert.False(t, runnerCalled, "runner must NOT be called when the precondition guard fires")
@@ -169,10 +174,7 @@ func TestFixFolder_SubdirOfGitRoot_ReturnEdits(t *testing.T) {
 // UNIT-005b: FixFolder rejects a directory that is not a git repository
 // ---------------------------------------------------------------------------
 
-// TestFixFolder_NonGitDirectory_ReturnsError verifies that FixFolder returns a
-// non-nil error when the passed path is not inside any git repository.
 func TestFixFolder_NonGitDirectory_ReturnsError(t *testing.T) {
-	// Use a temp dir that has no git init — it is not a git repo.
 	nonGit := t.TempDir()
 
 	var runnerCalled bool
@@ -182,10 +184,7 @@ func TestFixFolder_NonGitDirectory_ReturnsError(t *testing.T) {
 	}
 
 	p := remediation.NewRemyProvider(nil, runner)
-	fr, ok := p.(remediation.FolderRemediator)
-	require.True(t, ok)
-
-	edit, err := fr.FixFolder(context.Background(), types.FilePath(nonGit))
+	edit, err := p.FixFolder(context.Background(), types.FilePath(nonGit))
 	require.Error(t, err, "FixFolder must return an error for a non-git directory")
 	assert.Nil(t, edit)
 	assert.False(t, runnerCalled, "runner must NOT be called when the precondition guard fires")
@@ -204,13 +203,9 @@ func TestFixFolder_GitRoot_EditsKeyedUnderPassedRoot(t *testing.T) {
 	}
 
 	p := remediation.NewRemyProvider(nil, runner)
-	fr, ok := p.(remediation.FolderRemediator)
-	require.True(t, ok)
-
-	edit, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	edit, err := p.FixFolder(context.Background(), types.FilePath(repo))
 	require.NoError(t, err)
 	require.NotNil(t, edit)
-	// Daemon contract: key must be under the passed folder (repo root here).
 	assert.Contains(t, edit.Changes, mainAbs)
 	for key := range edit.Changes {
 		assert.True(t, len(key) > len(repo) && key[:len(repo)] == repo,
@@ -233,16 +228,11 @@ func TestFixFolder_RunsDirectlyInPassedFolder(t *testing.T) {
 	}
 
 	p := remediation.NewRemyProvider(nil, trackingRunner)
-	fr, ok := p.(remediation.FolderRemediator)
-	require.True(t, ok)
-
-	_, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	_, err := p.FixFolder(context.Background(), types.FilePath(repo))
 	require.NoError(t, err)
 
-	// Runner must be invoked with exactly the passed folder.
 	assert.Equal(t, repo, invokedWith, "runner must be invoked with the passed folder, not a child dir")
 
-	// No snyk-remy-* temp directories must have been created inside the folder.
 	entries, readErr := os.ReadDir(repo)
 	require.NoError(t, readErr)
 	for _, e := range entries {
@@ -250,7 +240,6 @@ func TestFixFolder_RunsDirectlyInPassedFolder(t *testing.T) {
 			"no nested snyk-remy-* temp dir must be created inside the passed folder")
 	}
 
-	// Also assert no worktree child exists as a sibling with "wt" suffix.
 	parent := filepath.Dir(repo)
 	siblings, _ := os.ReadDir(parent)
 	for _, s := range siblings {
@@ -258,5 +247,39 @@ func TestFixFolder_RunsDirectlyInPassedFolder(t *testing.T) {
 			assert.NotContains(t, s.Name(), "wt",
 				"no nested worktree dir must be created as a sibling of the passed folder")
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// DAEMON CONTRACT: FixFolder edit keys must be under the PASSED (non-canonical) path
+// ---------------------------------------------------------------------------
+
+func TestFixFolder_SymlinkPath_EditsKeyedUnderPassedPath(t *testing.T) {
+	realDir := t.TempDir()
+	var err error
+	realDir, err = filepath.EvalSymlinks(realDir)
+	require.NoError(t, err)
+	initGitRepoInDir(t, realDir)
+	commitFileInDir(t, realDir, "main.go", "package main\nvar x = 1\n")
+
+	linkDir := filepath.Join(t.TempDir(), "link")
+	if symlinkErr := os.Symlink(realDir, linkDir); symlinkErr != nil {
+		t.Skipf("cannot create symlink (os restriction): %v", symlinkErr)
+	}
+
+	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0644)
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+	edit, err := p.FixFolder(context.Background(), types.FilePath(linkDir))
+	require.NoError(t, err)
+	require.NotNil(t, edit, "FixFolder must return a non-nil edit when a file was modified")
+
+	for key := range edit.Changes {
+		assert.True(t, strings.HasPrefix(key, linkDir+string(filepath.Separator)),
+			"edit key %q must be prefixed by the passed symlinked path %q (daemon contract); "+
+				"if it is prefixed by the canonical path %q, FixFolder incorrectly canonicalized r",
+			key, linkDir, realDir)
 	}
 }
