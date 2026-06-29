@@ -103,6 +103,12 @@ func initGitRepoForCmd(t *testing.T) string {
 	run("init")
 	run("config", "user.email", "test@example.com")
 	run("config", "user.name", "Test")
+	// Overlay filesystems (e.g. Docker on Linux) have write-ordering delays that
+	// can cause git to report "not a valid object" when the object database is
+	// read immediately after a write. core.checkStat=minimal tells git not to
+	// recheck filesystem timestamps for objects it has already cached in memory,
+	// which suppresses the false-negative reads on overlayfs.
+	run("config", "core.checkStat", "minimal")
 	// Commit an initial file so HEAD is valid.
 	f := filepath.Join(dir, "main.go")
 	require.NoError(t, os.WriteFile(f, []byte("package main\n"), 0644))
