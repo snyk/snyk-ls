@@ -2552,7 +2552,7 @@ func Test_Smoke_RemediationAgent_CodeAction(t *testing.T) {
 	}
 
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
-	engine.GetConfiguration().Set("remediation_agent_enabled", true)
+	engine.GetConfiguration().Set(di.RemediationAgentEnabledKey, true)
 	testutil.CreateDummyProgressListener(t)
 
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))

@@ -33,7 +33,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// UNIT-001: FixFolder returns edits keyed under the passed folder
+// FixFolder returns edits keyed under the passed folder
 // ---------------------------------------------------------------------------
 
 // TestFixFolder_ReturnsEditsKeyedUnderFolder verifies that when the fake runner
@@ -67,7 +67,7 @@ func TestFixFolder_ReturnsEditsKeyedUnderFolder(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// UNIT-002: FixFolder returns (nil, nil) when runner makes no changes
+// FixFolder returns (nil, nil) when runner makes no changes
 // ---------------------------------------------------------------------------
 
 func TestFixFolder_NoChangesReturnsNil(t *testing.T) {
@@ -84,7 +84,7 @@ func TestFixFolder_NoChangesReturnsNil(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// UNIT-003: FixFolder propagates runner errors
+// FixFolder propagates runner errors
 // ---------------------------------------------------------------------------
 
 func TestFixFolder_PropagatesRunnerError(t *testing.T) {
@@ -103,7 +103,7 @@ func TestFixFolder_PropagatesRunnerError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// UNIT-004: FixFolder rejects non-absolute / empty paths
+// FixFolder rejects non-absolute / empty paths
 // ---------------------------------------------------------------------------
 
 func TestFixFolder_RejectsNonAbsolutePath(t *testing.T) {
@@ -133,7 +133,7 @@ func TestFixFolder_RejectsNonAbsolutePath(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// UNIT-005a: FixFolder rejects a subdirectory of a git repo with an error
+// FixFolder rejects a subdirectory of a git repo with an error
 // ---------------------------------------------------------------------------
 
 // TestFixFolder_SubdirOfGitRoot_ReturnEdits verifies that FixFolder returns a
@@ -167,7 +167,7 @@ func TestFixFolder_SubdirOfGitRoot_ReturnEdits(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// UNIT-005b: FixFolder rejects a directory that is not a git repository
+// FixFolder rejects a directory that is not a git repository
 // ---------------------------------------------------------------------------
 
 // TestFixFolder_NonGitDirectory_ReturnsError verifies that FixFolder returns a
@@ -220,7 +220,7 @@ func TestFixFolder_GitRoot_EditsKeyedUnderPassedRoot(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// UNIT-005: FixFolder runs directly in the passed folder (no nested worktree)
+// FixFolder runs directly in the passed folder (no nested worktree)
 // ---------------------------------------------------------------------------
 
 func TestFixFolder_RunsDirectlyInPassedFolder(t *testing.T) {
@@ -265,6 +265,119 @@ func TestFixFolder_RunsDirectlyInPassedFolder(t *testing.T) {
 // ---------------------------------------------------------------------------
 // DAEMON CONTRACT: FixFolder edit keys must be under the PASSED (non-canonical) path
 // ---------------------------------------------------------------------------
+
+// TestFixFolder_UncommittedChanges_ReturnsError verifies that FixFolder returns a
+// clear error when the passed worktree already has uncommitted working-tree changes.
+// The caller contract requires a fresh detached-HEAD worktree; a dirty worktree
+// would silently include pre-existing changes in the returned edit, making the fix
+// unpredictable and violating the isolation guarantee.
+func TestFixFolder_UncommittedChanges_ReturnsError(t *testing.T) {
+	repo := initGitRepo(t)
+	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
+
+	// Introduce an uncommitted working-tree change (tracked file, modified but not staged).
+	err := os.WriteFile(filepath.Join(repo, "main.go"), []byte("package main\nvar x = 99\n"), 0644)
+	require.NoError(t, err, "test setup: writing dirty file")
+
+	var runnerCalled bool
+	runner := func(_ context.Context, _ workflow.Engine, _, _ string) error {
+		runnerCalled = true
+		return nil
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+	fr, ok := p.(remediation.FolderRemediator)
+	require.True(t, ok, "remyProvider must implement FolderRemediator")
+
+	edit, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	require.Error(t, err, "FixFolder must return an error when the worktree has uncommitted changes")
+	assert.Nil(t, edit, "FixFolder must return nil edit when returning an error")
+	assert.False(t, runnerCalled, "runner must NOT be called when the precondition guard fires")
+}
+
+// TestFixFolder_CleanWorktree_Succeeds verifies that FixFolder proceeds normally
+// when the passed worktree has no uncommitted changes.
+func TestFixFolder_CleanWorktree_Succeeds(t *testing.T) {
+	repo := initGitRepo(t)
+	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
+	// No uncommitted changes — worktree is clean.
+
+	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0644)
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+	fr, ok := p.(remediation.FolderRemediator)
+	require.True(t, ok)
+
+	edit, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	require.NoError(t, err, "FixFolder must succeed on a clean worktree")
+	assert.NotNil(t, edit, "FixFolder must return an edit when the runner modifies files")
+}
+
+// TestFixFolder_UntrackedFileOnly_DoesNotError verifies that a worktree containing
+// only untracked files (e.g. build artifacts) is NOT rejected by the dirty-worktree
+// guard. The guard's purpose is to prevent pre-existing modifications to TRACKED
+// files from being silently included in the fix; untracked files are irrelevant to
+// the fix output and must be ignored.
+//
+// Previously, the guard ran "git status --porcelain" which includes "?? <file>"
+// lines for untracked files, causing FixFolder to return an error for any worktree
+// that contains untracked build artifacts.
+func TestFixFolder_UntrackedFileOnly_DoesNotError(t *testing.T) {
+	repo := initGitRepo(t)
+	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
+
+	// Add an untracked file (not committed, not staged) — simulates a build artifact.
+	err := os.WriteFile(filepath.Join(repo, "artifact.bin"), []byte("binary"), 0644)
+	require.NoError(t, err, "test setup: writing untracked artifact file")
+
+	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+		// Verify the runner can see the untracked file (it is in the worktree).
+		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0644)
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+	fr, ok := p.(remediation.FolderRemediator)
+	require.True(t, ok, "remyProvider must implement FolderRemediator")
+
+	// Must NOT return an error — an untracked-only worktree is considered clean.
+	edit, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	require.NoError(t, err, "FixFolder must not error when the only dirty state is untracked files")
+	// Runner modified main.go, so a non-nil edit is expected.
+	assert.NotNil(t, edit, "FixFolder must return an edit when the runner modifies a tracked file")
+}
+
+// TestFixFolder_TrackedFileModified_StillErrors verifies that the dirty-worktree
+// guard still fires when a tracked file has uncommitted working-tree changes,
+// even after switching to --untracked-files=no.
+func TestFixFolder_TrackedFileModified_StillErrors(t *testing.T) {
+	repo := initGitRepo(t)
+	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
+
+	// Modify the tracked file without staging or committing.
+	err := os.WriteFile(filepath.Join(repo, "main.go"), []byte("package main\nvar x = 99\n"), 0644)
+	require.NoError(t, err, "test setup: writing dirty tracked file")
+
+	// Also add an untracked file to confirm it is ignored.
+	err = os.WriteFile(filepath.Join(repo, "artifact.bin"), []byte("binary"), 0644)
+	require.NoError(t, err, "test setup: writing untracked artifact file")
+
+	var runnerCalled bool
+	runner := func(_ context.Context, _ workflow.Engine, _, _ string) error {
+		runnerCalled = true
+		return nil
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+	fr, ok := p.(remediation.FolderRemediator)
+	require.True(t, ok)
+
+	edit, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	require.Error(t, err, "FixFolder must return an error when a tracked file has uncommitted changes")
+	assert.Nil(t, edit, "FixFolder must return nil edit when returning an error")
+	assert.False(t, runnerCalled, "runner must NOT be called when the dirty-worktree guard fires")
+}
 
 // TestFixFolder_SymlinkPath_EditsKeyedUnderPassedPath locks the daemon contract:
 // when the caller passes a symlinked folder path as ContentRoot, FixFolder must

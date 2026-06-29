@@ -182,7 +182,7 @@ func TestResolveCodeAction_RemediationAgent_InvokesProvider(t *testing.T) {
 	}
 	require.NotNil(t, remyAction, "expected RemediationAgentQuickFix action")
 
-	resolved, err := service.ResolveCodeAction(*remyAction)
+	resolved, err := service.ResolveCodeAction(t.Context(), *remyAction)
 	require.NoError(t, err)
 	require.NotNil(t, resolved.Edit, "resolved action must have an edit")
 	// The converter transforms the key via uri.PathToUri; just verify the edit is populated.
@@ -207,6 +207,35 @@ func TestGetCodeActions_RemediationAgent_NonCodeProduct_NoAction(t *testing.T) {
 	for _, a := range actions {
 		assert.NotEqual(t, types.RemediationAgentQuickFix, a.Kind,
 			"non-Code product must not produce RemediationAgentQuickFix actions")
+	}
+}
+
+// TestGetCodeActions_RemediationAgent_FullyFixableOSS_NoAction verifies that an
+// OSS issue where IsFixable() returns true (upgradable with a real upgrade path)
+// does NOT receive a RemediationAgentQuickFix action. The remy agent is designed
+// for Code (hasAIFix) and IaC issues; OSS upgrades are handled by a separate
+// mechanism (package manager upgrade, not LLM code edits).
+func TestGetCodeActions_RemediationAgent_FullyFixableOSS_NoAction(t *testing.T) {
+	fake := &fakeRemediationProvider{edit: &types.WorkspaceEdit{}}
+
+	// Construct an OSS issue where IsFixable() returns true:
+	// IsUpgradable=true, UpgradePath[1] != From[1], len(UpgradePath)>1, len(From)>1.
+	ossIssue := &snyk.Issue{
+		FindingId: "finding-oss-fixable",
+		Product:   product.ProductOpenSource,
+		AdditionalData: snyk.OssIssueData{
+			IsUpgradable: true,
+			UpgradePath:  []any{"lodash@4.17.21", "lodash@4.17.21"},
+			From:         []string{"app@1.0.0", "lodash@4.17.4"},
+		},
+	}
+
+	service, params := setupWithIssueAndProvider(t, ossIssue, fake)
+	actions := service.GetCodeActions(params)
+
+	for _, a := range actions {
+		assert.NotEqual(t, types.RemediationAgentQuickFix, a.Kind,
+			"fully-fixable OSS issue (IsFixable()==true) must not produce RemediationAgentQuickFix actions; remy handles Code/IaC only")
 	}
 }
 
@@ -311,4 +340,54 @@ func TestGetCodeActions_RemediationAgent_IaCIssue_WithFindingId_OfferedAction(t 
 		}
 	}
 	assert.True(t, found, "IaC issue with FindingId must produce RemediationAgentQuickFix action")
+}
+
+// recordingRemediationProvider captures the context passed to Remediate.
+type recordingRemediationProvider struct {
+	receivedCtx context.Context
+}
+
+func (r *recordingRemediationProvider) Remediate(ctx context.Context, _ remediation.RemediationRequest) (*types.WorkspaceEdit, error) {
+	r.receivedCtx = ctx
+	return &types.WorkspaceEdit{}, nil
+}
+
+// TestResolveCodeAction_RemediationAgent_PropagatesContext proves that the
+// context supplied to ResolveCodeAction is threaded through to the provider.
+// Before the fix, provider.Remediate receives context.Background() even when
+// ResolveCodeAction is called with a cancellable context; after the fix it
+// receives the passed context, so canceling that context also cancels the
+// provider call.
+func TestResolveCodeAction_RemediationAgent_PropagatesContext(t *testing.T) {
+	recorder := &recordingRemediationProvider{}
+	issue := buildFixableIssue("finding-ctx")
+
+	service, params := setupWithIssueAndProvider(t, issue, recorder)
+
+	actions := service.GetCodeActions(params)
+
+	var remyAction *types.LSPCodeAction
+	for i := range actions {
+		if actions[i].Kind == types.RemediationAgentQuickFix {
+			remyAction = &actions[i]
+			break
+		}
+	}
+	require.NotNil(t, remyAction, "expected RemediationAgentQuickFix action")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancel so we can assert the provider received a Done ctx
+
+	_, err := service.ResolveCodeAction(ctx, *remyAction)
+	require.NoError(t, err)
+
+	// The provider must have received the same (canceled) context — not
+	// context.Background(), which would never be Done.
+	require.NotNil(t, recorder.receivedCtx, "provider must have been called")
+	select {
+	case <-recorder.receivedCtx.Done():
+		// correct: the provider received a canceled context
+	default:
+		t.Fatal("provider received a non-canceled context; cancellation was not propagated")
+	}
 }
