@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
@@ -59,27 +60,52 @@ func initGitRepo(t *testing.T) string {
 	run("init")
 	run("config", "user.email", "test@example.com")
 	run("config", "user.name", "Test")
+	// Overlay filesystems (e.g. Docker on Linux) have write-ordering delays that
+	// can cause git to report "not a valid object" when the object database is
+	// read immediately after a write. core.checkStat=minimal tells git not to
+	// recheck filesystem timestamps for objects it has already cached in memory,
+	// which suppresses the false-negative reads on overlayfs.
 	run("config", "core.checkStat", "minimal")
 	return dir
 }
 
 // commitFile writes content to path (relative to repo root), stages, and commits it.
+// git commands are retried a few times on overlayfs write-ordering errors ("not a
+// valid object") that can occur when the kernel page cache hasn't flushed a freshly
+// written git object before the next git command reads the object store.
 func commitFile(t *testing.T, repoRoot, relPath, content string) {
 	t.Helper()
 	absPath := filepath.Join(repoRoot, relPath)
 	require.NoError(t, os.MkdirAll(filepath.Dir(absPath), 0o755))
 	require.NoError(t, os.WriteFile(absPath, []byte(content), 0o644))
 
-	run := func(args ...string) {
+	runWithRetry := func(args ...string) {
 		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = repoRoot
-		out, err := cmd.CombinedOutput()
-		require.NoError(t, err, "git %v: %s", args, string(out))
+		const maxRetries = 8
+		for attempt := 0; attempt < maxRetries; attempt++ {
+			cmd := exec.Command("git", args...)
+			cmd.Dir = repoRoot
+			out, err := cmd.CombinedOutput()
+			if err == nil {
+				return
+			}
+			// Network- and overlay-filesystem write-ordering delays: a freshly
+			// written git object or ref is not yet visible for reading due to page
+			// cache coherence. Two known manifestations:
+			//   "not a valid object" — object written but not yet readable
+			//   "nonexistent object" — ref update races object write
+			isWriteOrderingDelay := strings.Contains(string(out), "not a valid object") ||
+				strings.Contains(string(out), "nonexistent object")
+			if attempt < maxRetries-1 && isWriteOrderingDelay {
+				time.Sleep(50 * time.Millisecond)
+				continue
+			}
+			require.NoError(t, err, "git %v: %s", args, string(out))
+		}
 	}
 
-	run("add", relPath)
-	run("commit", "-m", "initial")
+	runWithRetry("add", relPath)
+	runWithRetry("commit", "-m", "initial")
 }
 
 // fakeRunner is a test remyRunner that accepts (and ignores) a nil engine.

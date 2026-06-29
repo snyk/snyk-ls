@@ -453,11 +453,65 @@ func TestNewRemyProvider_WithEngine(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// cacheValid — stale file eviction (mtime check)
+// cacheValid — stale file eviction (content-hash check)
 // ---------------------------------------------------------------------------
+
+// TestCacheValid_SameSizeContentChange verifies that when a cached file is
+// overwritten with different content of identical byte length (the case that
+// mtime- and size-based checks both miss), cacheValid detects the change via
+// content hash and forces a re-run. This is the exact failure mode that caused
+// the CI flake: coarse filesystem mtimes (1-second granularity) meant the mtime
+// of the freshly-written file was ≤ the ns-precise createdAt, so .After()
+// returned false and the cache was incorrectly considered valid.
+//
+//nolint:dupl // parallel test to TestCacheValid_StaleFile; same setup, different mutation (same-size content swap)
+func TestCacheValid_SameSizeContentChange(t *testing.T) {
+	repo := initGitRepo(t)
+	// Both files have the same byte length so size-based checks would pass.
+	commitFile(t, repo, "foo.go", "package main\nvar x = 1\n")
+	commitFile(t, repo, "bar.go", "package main\nvar y = 1\n")
+
+	fooAbs := filepath.Join(repo, "foo.go")
+	barAbs := filepath.Join(repo, "bar.go")
+
+	var callCount int32
+	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+		atomic.AddInt32(&callCount, 1)
+		if err := os.WriteFile(filepath.Join(root, "foo.go"), []byte("package main\nvar x = 2\n"), 0644); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(root, "bar.go"), []byte("package main\nvar y = 2\n"), 0644)
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	// First call: foo.go requested, bar.go cached.
+	_, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "f1",
+		ContentRoot: types.FilePath(repo),
+		FilePath:    types.FilePath(fooAbs),
+	})
+	require.NoError(t, err)
+	require.Equal(t, int32(1), atomic.LoadInt32(&callCount))
+
+	// Overwrite bar.go with the same byte length but different content.
+	// "var y = 1\n" → "var y = 9\n" — identical length, different hash.
+	require.NoError(t, os.WriteFile(barAbs, []byte("package main\nvar y = 9\n"), 0644))
+
+	// Second call for bar.go: content hash differs → cache stale → runner re-invoked.
+	_, err = p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "f1",
+		ContentRoot: types.FilePath(repo),
+		FilePath:    types.FilePath(barAbs),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int32(2), atomic.LoadInt32(&callCount), "same-size content change must force re-run")
+}
 
 // TestCacheValid_StaleFile verifies that when a cached file is modified after
 // the cache was populated, tryServeFromCache evicts the entry and returns false.
+//
+//nolint:dupl // parallel test to TestCacheValid_SameSizeContentChange; same setup, different mutation (size change)
 func TestCacheValid_StaleFile(t *testing.T) {
 	repo := initGitRepo(t)
 	commitFile(t, repo, "foo.go", "package main\nvar x = 1\n")
@@ -486,7 +540,7 @@ func TestCacheValid_StaleFile(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int32(1), atomic.LoadInt32(&callCount))
 
-	// Modify bar.go on disk so that cacheValid returns false (mtime check).
+	// Modify bar.go on disk so that the content hash changes.
 	require.NoError(t, os.WriteFile(barAbs, []byte("package main\nvar y = 99\n"), 0644))
 
 	// Second call for bar.go: cache entry is stale → runner re-invoked.
@@ -956,6 +1010,56 @@ func TestWorkspaceEditFromContent_ConsecutiveInsertions(t *testing.T) {
 	assert.True(t, found, "expected at least one insertion TextEdit")
 }
 
+// TestCacheValid_MissingStoredHash_TreatsEntryAsStale verifies that when a
+// cached entry has no stored hash for a file (simulating a populate-time
+// fileHash failure — e.g. the file was temporarily unreadable when the cache
+// was built), the cache correctly treats the entry as stale on the next call.
+// The runner must be re-invoked rather than serving from the (partially
+// populated) cache entry.
+//
+// This uses InjectCacheEntry to directly synthesize the "missing hash" state
+// because some container filesystems ignore chmod 0000 for the file owner,
+// making permission-based simulation unreliable.
+func TestCacheValid_MissingStoredHash_TreatsEntryAsStale(t *testing.T) {
+	repo := initGitRepo(t)
+	commitFile(t, repo, "foo.go", "package main\nvar x = 1\n")
+	commitFile(t, repo, "bar.go", "package main\nvar y = 1\n")
+
+	barAbs := filepath.Join(repo, "bar.go")
+
+	var callCount int32
+	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+		atomic.AddInt32(&callCount, 1)
+		if err := os.WriteFile(filepath.Join(root, "foo.go"), []byte("package main\nvar x = 2\n"), 0644); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(root, "bar.go"), []byte("package main\nvar y = 2\n"), 0644)
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	// Inject a synthetic cache entry for repo: bar.go has a pending edit but
+	// NO stored hash (simulating a fileHash failure at populate time).
+	// An empty storedHashes map means entry.fileHashes[barAbs] is absent.
+	remediation.InjectCacheEntry(p, repo,
+		map[string][]types.TextEdit{
+			barAbs: {{Range: types.Range{}, NewText: "package main\nvar y = 2\n"}},
+		},
+		map[string]string{}, // no stored hashes — simulates populate-time read failure
+	)
+
+	// At this point callCount=0. The second Remediate call for bar.go must detect
+	// the missing stored hash and treat the entry as stale, re-running the runner.
+	_, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "f1",
+		ContentRoot: types.FilePath(repo),
+		FilePath:    types.FilePath(barAbs),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int32(1), atomic.LoadInt32(&callCount),
+		"missing stored hash must be treated as stale immediately, forcing a re-run")
+}
+
 // TestWorkspaceEditFromContent_NoDiffHunks_ReturnsNil verifies that a diff
 // with no actionable hunks (only headers) results in nil.
 func TestWorkspaceEditFromContent_NoDiffHunks_ReturnsNil(t *testing.T) {
@@ -1021,4 +1125,111 @@ func TestGetOrCreateRootMu_DifferentRoots(t *testing.T) {
 	wg.Wait()
 	require.NoError(t, errs[0])
 	require.NoError(t, errs[1])
+}
+
+// ---------------------------------------------------------------------------
+// Change 1: miss path must not hash sibling files
+// ---------------------------------------------------------------------------
+
+// TestTryServeFromCache_MissSkipsHashing verifies that when the requested
+// filePath is absent from a cache entry, tryServeFromCache returns a miss
+// without hashing (and thus without evicting) the sibling files that ARE
+// cached. Proof: the sibling file in entry.changes has a deliberately wrong
+// stored hash, yet the absent-filePath lookup still returns (nil, false) and
+// the entry is not evicted — a subsequent serve for the sibling is still
+// resolved from cache (because the hash is only evaluated when filePath IS
+// found in the entry).
+//
+// Before Change 1 (old order), cacheValid ran before the filePath membership
+// check, so the wrong stored hash would cause eviction on any miss for an
+// unrelated path. After the reorder, the file-presence check comes first and
+// an absent filePath returns early before any hashing is done.
+func TestTryServeFromCache_MissSkipsHashing(t *testing.T) {
+	repo := initGitRepo(t)
+	commitFile(t, repo, "sibling.go", "package main\nvar s = 1\n")
+
+	siblingAbs := filepath.Join(repo, "sibling.go")
+	absentAbs := filepath.Join(repo, "absent.go") // never committed, not in entry
+
+	p := remediation.NewRemyProvider(nil, noopRunner)
+
+	// Compute the real hash of sibling.go so the entry looks valid from a
+	// content perspective — but then we'll use a deliberately WRONG hash to
+	// prove the miss path never reads the file.
+	wrongHash := "0000000000000000000000000000000000000000000000000000000000000000"
+
+	// Inject a cache entry: sibling.go is present with a wrong stored hash.
+	// Under the OLD code (cacheValid before filePath check), a lookup for
+	// absentAbs would call cacheValid, detect the hash mismatch, evict the
+	// entry, and return false — but ALSO destroy the sibling entry.
+	// Under the NEW code (filePath check first), the lookup for absentAbs
+	// returns false immediately without touching the sibling entry.
+	remediation.InjectCacheEntry(p, repo,
+		map[string][]types.TextEdit{
+			siblingAbs: {{Range: types.Range{}, NewText: "package main\nvar s = 2\n"}},
+		},
+		map[string]string{
+			siblingAbs: wrongHash, // wrong hash — cacheValid would evict if called
+		},
+	)
+
+	// Lookup for the absent file: must be a miss (filePath not in entry.changes).
+	// After Change 1 the lookup returns early, so the wrong hash is never read
+	// and the sibling entry is NOT evicted.
+	//
+	// We assert the miss indirectly: CacheLen must still be 1 (entry retained),
+	// which can only be true if the wrong-hash path was never triggered.
+	edit, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "f-absent",
+		ContentRoot: types.FilePath(repo),
+		FilePath:    types.FilePath(absentAbs),
+	})
+	// The absent file has no cached edits and no committed content, so the runner
+	// fires (noopRunner → no changes) and returns (nil, nil).
+	require.NoError(t, err)
+	assert.Nil(t, edit)
+
+	// The sibling entry must still be present in the cache (not evicted by the
+	// miss path). If Change 1 is NOT applied, cacheValid would have evicted the
+	// entry, and CacheLen would be 0 here.
+	assert.Equal(t, 1, remediation.CacheLen(p),
+		"miss for absent filePath must not evict the cache entry for the root")
+}
+
+// ---------------------------------------------------------------------------
+// Change 2: empty-entry ghost-fix — populateCache must not store an empty entry
+// ---------------------------------------------------------------------------
+
+// TestPopulateCache_SingleFileFix_NoGhostEntry verifies that when remy only
+// modifies the requested filePath (so after excluding it the remaining-changes
+// map is empty), populateCache does NOT store an entry in p.cache.
+//
+// Before Change 2 (ghost-entry fix), an empty remyCacheEntry was stored for
+// the root. That entry lingered forever: cacheValid returned true vacuously
+// (no files to hash) but there was nothing to serve. After Change 2, populateCache
+// returns early without storing when the built entry would be empty.
+func TestPopulateCache_SingleFileFix_NoGhostEntry(t *testing.T) {
+	repo := initGitRepo(t)
+	commitFile(t, repo, "only.go", "package main\nvar x = 1\n")
+
+	onlyAbs := filepath.Join(repo, "only.go")
+
+	// Runner modifies only the requested file — so populateCache sees an empty
+	// changes map after excluding filePath.
+	runner := modifyRunner("only.go", "package main\nvar x = 2\n")
+	p := remediation.NewRemyProvider(nil, runner)
+
+	edit, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "f1",
+		ContentRoot: types.FilePath(repo),
+		FilePath:    types.FilePath(onlyAbs),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, edit, "the requested file was modified so an edit must be returned")
+
+	// After Change 2: no ghost entry must be stored in the cache.
+	// Before Change 2: CacheLen would be 1 (empty entry) even though there is
+	// nothing to serve from it.
+	assert.Equal(t, 0, remediation.CacheLen(p),
+		"populateCache must not store an empty cache entry when the only change is the requested file")
 }
