@@ -43,6 +43,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/treeview"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	scanner2 "github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
@@ -55,7 +56,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/oss"
 	"github.com/snyk/snyk-ls/infrastructure/sentry"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
-	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	domainNotify "github.com/snyk/snyk-ls/internal/notification"
 	er "github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	performance2 "github.com/snyk/snyk-ls/internal/observability/performance"
@@ -110,13 +110,13 @@ type Dependencies struct {
 	// process-lifecycle dependencies used during startup, not per-request.
 	// Access them via di.Installer() / di.Initializer() until those global
 	// accessors are retired.
-	Scanner             scanner2.Scanner
-	HoverService        hover.Service
-	ScanNotifier        scanner2.ScanNotifier
-	ScanPersister       persistence.ScanSnapshotPersister
-	FileWatcher         *watcher.FileWatcher
-	ErrorReporter       er.ErrorReporter
-	CodeActionService   *codeaction.CodeActionsService
+	Scanner           scanner2.Scanner
+	HoverService      hover.Service
+	ScanNotifier      scanner2.ScanNotifier
+	ScanPersister     persistence.ScanSnapshotPersister
+	FileWatcher       *watcher.FileWatcher
+	ErrorReporter     er.ErrorReporter
+	CodeActionService *codeaction.CodeActionsService
 }
 
 func currentDependencies() Dependencies {
@@ -135,13 +135,13 @@ func currentDependencies() Dependencies {
 		InlineValueProvider:   inlineValueProvider,
 		TreeEmitter:           treeEmitterInstance,
 		// Handler-accessed dependencies:
-		Scanner:             scanner,
-		HoverService:        hoverService,
-		ScanNotifier:        scanNotifier,
-		ScanPersister:       scanPersister,
-		FileWatcher:         fileWatcher,
-		ErrorReporter:       errorReporter,
-		CodeActionService:   codeActionService,
+		Scanner:           scanner,
+		HoverService:      hoverService,
+		ScanNotifier:      scanNotifier,
+		ScanPersister:     scanPersister,
+		FileWatcher:       fileWatcher,
+		ErrorReporter:     errorReporter,
+		CodeActionService: codeActionService,
 	}
 }
 
