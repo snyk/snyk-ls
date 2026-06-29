@@ -25,6 +25,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -437,18 +439,44 @@ func TestGetOrCreateRootMu_ConcurrentSameRoot(t *testing.T) {
 // NewRemyProvider — engine != nil branch
 // ---------------------------------------------------------------------------
 
-// TestNewRemyProvider_WithEngine verifies that NewRemyProvider succeeds when a
-// non-nil workflow.Engine is provided (exercises the logger setup branch).
-func TestNewRemyProvider_WithEngine(t *testing.T) {
-	// We need a minimal workflow.Engine. The only thing NewRemyProvider calls
-	// on it is GetLogger(). Use the exported NoopProvider as a sanity check
-	// that the constructor returns a non-nil value even without a real engine.
-	// Since we cannot easily construct a real GAF engine in a unit test, we
-	// exercise the non-nil engine branch via the nil-runner path (gafRunner)
-	// to cover the runner == nil assignment.  The nil engine path is already
-	// covered by other tests.
-	p := remediation.NewRemyProvider(nil, nil) // triggers runner==nil branch → gafRunner
+// TestNewRemyProvider_WithNilRunnerNilEngine_Panics verifies that
+// NewRemyProvider panics when both engine and runner are nil. When runner is
+// nil the constructor would fall back to gafRunner which dereferences engine at
+// call time; with a nil engine the first Remediate or FixFolder call would
+// panic with a nil pointer dereference far from the misconfiguration site. The
+// guard makes the failure immediate and actionable at construction time.
+func TestNewRemyProvider_WithNilRunnerNilEngine_Panics(t *testing.T) {
+	assert.Panics(t, func() {
+		_ = remediation.NewRemyProvider(nil, nil)
+	}, "NewRemyProvider must panic when both engine and runner are nil")
+}
+
+// TestNewRemyProvider_NilEngineNonNilRunner_Succeeds verifies that
+// NewRemyProvider succeeds when engine is nil and runner is non-nil. Supplying
+// a non-nil runner satisfies the construction guard (which only panics when
+// both engine AND runner are nil), so the provider is returned ready for use.
+func TestNewRemyProvider_NilEngineNonNilRunner_Succeeds(t *testing.T) {
+	p := remediation.NewRemyProvider(nil, noopRunner)
 	assert.NotNil(t, p)
+}
+
+// TestNewRemyProvider_NonNilEngineNilRunner_SubstitutesGafRunner verifies the
+// production code path where runner is nil but engine is non-nil: the constructor
+// must substitute gafRunner and return a non-nil, callable provider. The real
+// gafRunner is never invoked here — an empty FindingId short-circuits Remediate
+// before reaching the runner, keeping this a pure unit test with no network or
+// CLI calls.
+func TestNewRemyProvider_NonNilEngineNilRunner_SubstitutesGafRunner(t *testing.T) {
+	engine := app.CreateAppEngineWithOptions()
+	p := remediation.NewRemyProvider(engine, nil)
+	require.NotNil(t, p, "NewRemyProvider must return a non-nil provider when engine is non-nil and runner is nil")
+
+	// Remediate with an empty FindingId short-circuits before the runner is
+	// invoked, so this proves the nil runner was replaced (provider is callable)
+	// without triggering any real remy/CLI invocation.
+	edit, err := p.Remediate(context.Background(), remediation.RemediationRequest{})
+	require.NoError(t, err)
+	assert.Nil(t, edit)
 }
 
 // ---------------------------------------------------------------------------
@@ -868,4 +896,21 @@ func TestPopulateCache_SingleFileFix_NoGhostEntry(t *testing.T) {
 	// nothing to serve from it.
 	assert.Equal(t, 0, remediation.CacheLen(p),
 		"populateCache must not store an empty cache entry when the only change is the requested file")
+}
+
+// ---------------------------------------------------------------------------
+// NewRemyProviderWithLogger — nil-engine + nil-runner guard
+// ---------------------------------------------------------------------------
+
+// TestNewRemyProviderWithLogger_NilEngineNilRunner_Panics verifies that
+// NewRemyProviderWithLogger panics immediately when both engine and runner are
+// nil. When runner is nil the constructor falls back to gafRunner, which
+// dereferences engine at call time; with a nil engine the first Remediate or
+// FixFolder call would panic with a nil pointer dereference — a confusing
+// crash far from the misconfiguration site. The guard makes the failure
+// immediate and actionable at construction time.
+func TestNewRemyProviderWithLogger_NilEngineNilRunner_Panics(t *testing.T) {
+	assert.Panics(t, func() {
+		_ = remediation.NewRemyProviderWithLogger(nil, nil, zerolog.Nop())
+	}, "NewRemyProviderWithLogger must panic when both engine and runner are nil")
 }

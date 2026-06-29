@@ -111,6 +111,9 @@ func gafRunner(ctx context.Context, eng workflow.Engine, contentRoot string, _ s
 // invokes the legacycli workflow via the engine. Callers that want to plug
 // in a fake runner for unit tests pass a non-nil function here.
 func NewRemyProvider(engine workflow.Engine, runner remyRunner) RemediationProvider {
+	if runner == nil && engine == nil {
+		panic("NewRemyProvider: nil runner requires a non-nil engine; pass a test runner or a workflow.Engine")
+	}
 	var log zerolog.Logger
 	opts := RemyOptions{}
 	if engine != nil {
@@ -216,7 +219,17 @@ func (p *remyProvider) Remediate(ctx context.Context, req RemediationRequest) (*
 	if !filepath.IsAbs(root) {
 		return nil, fmt.Errorf("remy: ContentRoot must be an absolute path, got %q", root)
 	}
+	// Canonicalize root so it agrees with git's canonical view (e.g. on macOS
+	// os.TempDir returns /var/... but git resolves symlinks to /private/var/...).
+	// Fall back to the original path on error (e.g. path does not exist yet).
+	if canonical, err := filepath.EvalSymlinks(root); err == nil {
+		root = canonical
+	}
 	filePath := string(req.FilePath)
+	// Canonicalize filePath for the same reason.
+	if canonical, err := filepath.EvalSymlinks(filePath); err == nil {
+		filePath = canonical
+	}
 
 	if edits, ok := p.tryServeFromCache(root, filePath); ok {
 		return editsToEdit(filePath, edits), nil
@@ -283,9 +296,19 @@ func (p *remyProvider) runRemyInWorktree(ctx context.Context, root string, req R
 	if err != nil {
 		return nil, fmt.Errorf("remy: resolve git root: %w", err)
 	}
+	// gitRoot is already canonical: git rev-parse --show-toplevel resolves symlinks.
 	tmpParent, err := os.MkdirTemp("", "snyk-remy-*")
 	if err != nil {
 		return nil, fmt.Errorf("remy: create temp dir: %w", err)
+	}
+	// Canonicalize the temp parent so the worktree path agrees with git's view.
+	// On macOS os.MkdirTemp under /var/... returns a non-canonical path;
+	// git worktree add resolves symlinks before recording the worktree, so the
+	// path git knows differs from the path we computed — snapshot/diff lookups
+	// then fail to match. EvalSymlinks after the directory is created (so the
+	// path exists) gives us the same canonical form git will use.
+	if canonical, evalErr := filepath.EvalSymlinks(tmpParent); evalErr == nil {
+		tmpParent = canonical
 	}
 	worktreeDir := filepath.Join(tmpParent, "wt")
 	addOut, err := exec.CommandContext(ctx, "git", "-C", gitRoot, "worktree", "add", "--detach", worktreeDir, "HEAD").CombinedOutput()
@@ -350,6 +373,17 @@ func buildWorkspaceEdits(ctx context.Context, log zerolog.Logger, worktreeDir, g
 		return nil, fmt.Errorf("remy: enumerate changed files: %w", err)
 	}
 	if len(changedPaths) == 0 {
+		// No changes detected — log the git state so CI failures show the actual
+		// worktree contents. This surfaces path-canonicalization mismatches (e.g.
+		// macOS /var→/private/var symlink, Windows 8.3 short names) where the
+		// snapshot keys and worktree paths diverge and git sees no diff.
+		statusOut, statusErr := exec.CommandContext(ctx, "git", "-C", worktreeDir, "status", "--porcelain").Output()
+		log.Debug().
+			Str("worktreeDir", worktreeDir).
+			Str("gitRoot", gitRoot).
+			Str("gitStatus", strings.TrimSpace(string(statusOut))).
+			AnErr("gitStatusErr", statusErr).
+			Msg("remy: no changes detected in worktree after fix run")
 		return nil, nil
 	}
 	allChanges := make(map[string][]types.TextEdit)
@@ -437,12 +471,35 @@ func (p *remyProvider) populateCache(root, filePath string, allChanges map[strin
 // results. It is called by the LSP textDocument/didChange handler. The
 // corresponding fileHashes entry is deleted alongside the changes entry so
 // both maps stay in sync.
+//
+// The path is canonicalized via filepath.EvalSymlinks (with fallback on error)
+// before the cache lookup so that it matches the canonical key inserted by
+// Remediate. Without canonicalization, a non-canonical path (e.g. a symlinked
+// path on macOS /var→/private/var) would miss the canonical cache key and leave
+// stale entries alive.
 func (p *remyProvider) InvalidateFile(path types.FilePath) {
+	s := string(path)
+	if canonical, err := filepath.EvalSymlinks(s); err == nil {
+		s = canonical
+	} else if dir, derr := filepath.EvalSymlinks(filepath.Dir(s)); derr == nil {
+		// The file itself no longer exists (e.g. a fix deleted it and then
+		// didChange/didClose fired). EvalSymlinks on the file fails, but the
+		// parent directory still exists and can be resolved. Rejoin the base
+		// name to produce the same canonical path that Remediate wrote into
+		// the cache (Remediate calls EvalSymlinks while the file still existed).
+		//
+		// Limitation: if the missing file's basename was itself a symlink (rare),
+		// the reconstructed key may not match the canonical key stored by Remediate,
+		// in which case the delete is a harmless no-op — the stale entry simply is
+		// not evicted, the same outcome as before symlink canonicalization was added.
+		s = filepath.Join(dir, filepath.Base(s))
+	}
+	canonPath := s
 	p.cacheMu.Lock()
 	defer p.cacheMu.Unlock()
 	for root, entry := range p.cache {
-		delete(entry.changes, string(path))
-		delete(entry.fileHashes, string(path))
+		delete(entry.changes, canonPath)
+		delete(entry.fileHashes, canonPath)
 		// Remove the cache entry entirely once it has no remaining changes so
 		// it does not occupy memory or cause vacuously-valid hits.
 		if len(entry.changes) == 0 {
