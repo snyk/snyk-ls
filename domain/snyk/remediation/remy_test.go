@@ -35,17 +35,17 @@ import (
 )
 
 // initGitRepo sets up a minimal git repository under dir so the provider can
-// use git-based change detection. Returns the repo root.
+// use git-based change detection. Returns the CANONICAL repo root (symlinks
+// resolved) so that test assertions against edit keys match the paths that the
+// production code and git produce — on macOS t.TempDir returns /var/... but
+// git resolves symlinks to /private/var/...; using the canonical path here
+// prevents false "expected key not found" assertion failures.
 func initGitRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	// Canonicalize so the returned path matches git's view (git rev-parse
-	// --show-toplevel resolves symlinks). On macOS t.TempDir() is under /var
-	// (a symlink to /private/var) and on Windows it can be an 8.3 short name;
-	// without this the production canonicalization in Remediate produces cache
-	// keys the test's non-canonical paths never match, so Remediate returns a
-	// nil WorkspaceEdit and the cache tests fail on those platforms.
-	if canonical, err := filepath.EvalSymlinks(dir); err == nil {
+	// Resolve symlinks so the returned path is canonical.
+	canonical, err := filepath.EvalSymlinks(dir)
+	if err == nil {
 		dir = canonical
 	}
 
@@ -75,37 +75,7 @@ func initGitRepo(t *testing.T) string {
 // written git object before the next git command reads the object store.
 func commitFile(t *testing.T, repoRoot, relPath, content string) {
 	t.Helper()
-	absPath := filepath.Join(repoRoot, relPath)
-	require.NoError(t, os.MkdirAll(filepath.Dir(absPath), 0o755))
-	require.NoError(t, os.WriteFile(absPath, []byte(content), 0o644))
-
-	runWithRetry := func(args ...string) {
-		t.Helper()
-		const maxRetries = 8
-		for attempt := 0; attempt < maxRetries; attempt++ {
-			cmd := exec.Command("git", args...)
-			cmd.Dir = repoRoot
-			out, err := cmd.CombinedOutput()
-			if err == nil {
-				return
-			}
-			// Network- and overlay-filesystem write-ordering delays: a freshly
-			// written git object or ref is not yet visible for reading due to page
-			// cache coherence. Two known manifestations:
-			//   "not a valid object" — object written but not yet readable
-			//   "nonexistent object" — ref update races object write
-			isWriteOrderingDelay := strings.Contains(string(out), "not a valid object") ||
-				strings.Contains(string(out), "nonexistent object")
-			if attempt < maxRetries-1 && isWriteOrderingDelay {
-				time.Sleep(50 * time.Millisecond)
-				continue
-			}
-			require.NoError(t, err, "git %v: %s", args, string(out))
-		}
-	}
-
-	runWithRetry("add", relPath)
-	runWithRetry("commit", "-m", "initial")
+	commitFileInDir(t, repoRoot, relPath, content)
 }
 
 // fakeRunner is a test remyRunner that accepts (and ignores) a nil engine.
@@ -538,11 +508,15 @@ func TestRemediate_GitRoot_SubdirWorkspace(t *testing.T) {
 		"Changes must be keyed by the real workspace path (gitRoot/relPath), not subdir/relPath")
 }
 
-// TestNewRemyProvider_NilRunner_SetsDefault verifies that NewRemyProvider with a
-// nil runner substitutes the default gafRunner. The default runner is never
-// invoked here because Remediate short-circuits on empty FindingId.
-func TestNewRemyProvider_NilRunner_SetsDefault(t *testing.T) {
-	p := remediation.NewRemyProvider(nil, nil)
+// TestNewRemyProvider_NilEngineNonNilRunner_RemediateEmptyFindingId_ReturnsNil
+// verifies that constructing with a nil engine and a non-nil runner succeeds, and
+// that calling Remediate with an empty FindingId short-circuits to (nil, nil)
+// without invoking the runner. This is distinct from
+// TestNewRemyProvider_NilEngineNonNilRunner_Succeeds in remy_provider_test.go,
+// which only asserts the provider is non-nil; this test additionally exercises the
+// Remediate empty-FindingId short-circuit path.
+func TestNewRemyProvider_NilEngineNonNilRunner_RemediateEmptyFindingId_ReturnsNil(t *testing.T) {
+	p := remediation.NewRemyProvider(nil, noopRunner)
 	require.NotNil(t, p)
 	edit, err := p.Remediate(context.Background(), remediation.RemediationRequest{})
 	require.NoError(t, err)
@@ -685,6 +659,132 @@ func TestParseDiffHunks_DeletionOfDashDashLine(t *testing.T) {
 	assert.True(t, found, "expected a deletion TextEdit on line 0")
 }
 
+// mustEvalSymlinks is a test helper that resolves symlinks in path and fails the
+// test if resolution fails (e.g. the path does not exist). On Linux with no
+// symlinks EvalSymlinks is a no-op; on macOS /var→/private/var it returns the
+// real path.
+func mustEvalSymlinks(t *testing.T, path string) string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(path)
+	require.NoError(t, err, "EvalSymlinks(%q) must succeed", path)
+	return resolved
+}
+
+// TestRemediate_SymlinkContentRoot_ReturnsCanonicalEdit is a regression test
+// for the macOS/Windows cross-platform bug where t.TempDir() (or os.TempDir())
+// returns a non-canonical path (e.g. /var/... on macOS, which resolves to
+// /private/var/...). When ContentRoot is a non-canonical path containing a
+// symlink component, Remediate must still return a WorkspaceEdit keyed under
+// the CANONICAL path — matching git's canonical view — rather than a nil edit.
+//
+// On Linux we reproduce the macOS class by explicitly creating a symlink to the
+// real temp dir and passing the symlinked path as ContentRoot. Without the
+// filepath.EvalSymlinks fix, the edit keys (from git --show-toplevel, canonical)
+// do not match the lookup key (non-canonical symlink path), so the test fails
+// with a nil edit even though the runner modified a file.
+func TestRemediate_SymlinkContentRoot_ReturnsCanonicalEdit(t *testing.T) {
+	// Create the real repo under a canonical temp dir.
+	realDir := t.TempDir()
+	realDir = mustEvalSymlinks(t, realDir) // ensure realDir itself is canonical
+	initGitRepoInDir(t, realDir)
+	commitFileInDir(t, realDir, "main.go", "package main\nvar x = 1\n")
+
+	// Create a symlink pointing to the real dir so we can pass a non-canonical
+	// path as ContentRoot, reproducing the macOS /var → /private/var class.
+	linkDir := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(realDir, linkDir); err != nil {
+		t.Skipf("cannot create symlink (os restriction): %v", err)
+	}
+
+	// ContentRoot is the non-canonical symlinked path.
+	symlinkRoot := linkDir
+	// The canonical path (what git rev-parse --show-toplevel returns).
+	canonicalRoot := realDir
+
+	modified := "package main\nvar x = 99\n"
+	runner := fakeRunner(func(_ context.Context, root string, _ string) error {
+		return os.WriteFile(filepath.Join(root, "main.go"), []byte(modified), 0o644)
+	})
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	edit, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "finding-symlink",
+		ContentRoot: types.FilePath(symlinkRoot),
+		FilePath:    types.FilePath(filepath.Join(symlinkRoot, "main.go")),
+	})
+
+	require.NoError(t, err)
+	// Before the fix, edit is nil because the key (canonical) does not match the
+	// non-canonical lookup. After the fix, the canonical key is used throughout
+	// and the edit is non-nil.
+	require.NotNil(t, edit,
+		"Remediate must return a non-nil edit even when ContentRoot contains a symlink component; "+
+			"symlink root=%q canonical root=%q", symlinkRoot, canonicalRoot)
+
+	// The edit key must use the canonical path, not the symlinked path.
+	canonicalFilePath := filepath.Join(canonicalRoot, "main.go")
+	assert.Contains(t, edit.Changes, canonicalFilePath,
+		"edit must be keyed under the canonical path %q, not the symlink path %q",
+		canonicalFilePath, filepath.Join(symlinkRoot, "main.go"))
+}
+
+// initGitRepoInDir initializes a git repo in an already-existing directory dir.
+// Unlike initGitRepo (which creates a new t.TempDir), this takes an existing dir.
+func initGitRepoInDir(t *testing.T, dir string) {
+	t.Helper()
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, "git %v: %s", args, string(out))
+	}
+	run("init")
+	run("config", "user.email", "test@example.com")
+	run("config", "user.name", "Test")
+	run("config", "core.checkStat", "minimal")
+}
+
+// commitFileInDir writes content to relPath (relative to dir), stages, and
+// commits it. git commands are retried a few times on overlayfs write-ordering
+// errors ("not a valid object") that can occur when the kernel page cache
+// hasn't flushed a freshly written git object before the next git command
+// reads the object store.
+func commitFileInDir(t *testing.T, dir, relPath, content string) {
+	t.Helper()
+	absPath := filepath.Join(dir, relPath)
+	require.NoError(t, os.MkdirAll(filepath.Dir(absPath), 0o755))
+	require.NoError(t, os.WriteFile(absPath, []byte(content), 0o644))
+
+	runWithRetry := func(args ...string) {
+		t.Helper()
+		const maxRetries = 8
+		for attempt := 0; attempt < maxRetries; attempt++ {
+			cmd := exec.Command("git", args...)
+			cmd.Dir = dir
+			out, err := cmd.CombinedOutput()
+			if err == nil {
+				return
+			}
+			// Network- and overlay-filesystem write-ordering delays: a freshly
+			// written git object or ref is not yet visible for reading due to page
+			// cache coherence. Two known manifestations:
+			//   "not a valid object" — object written but not yet readable
+			//   "nonexistent object" — ref update races object write
+			isWriteOrderingDelay := strings.Contains(string(out), "not a valid object") ||
+				strings.Contains(string(out), "nonexistent object")
+			if attempt < maxRetries-1 && isWriteOrderingDelay {
+				time.Sleep(50 * time.Millisecond)
+				continue
+			}
+			require.NoError(t, err, "git %v: %s", args, string(out))
+		}
+	}
+	runWithRetry("add", relPath)
+	runWithRetry("commit", "-m", "initial")
+}
+
 // TestParseDiffHunks_NoNewlineAtEndOfFile verifies that the "\ No newline at end
 // of file" diff marker is handled without error by adjusting the line cursor.
 func TestParseDiffHunks_NoNewlineAtEndOfFile(t *testing.T) {
@@ -699,4 +799,147 @@ func TestParseDiffHunks_NoNewlineAtEndOfFile(t *testing.T) {
 	require.NoError(t, err, "no-newline marker must be parsed without error")
 	require.NotNil(t, edit)
 	assert.Contains(t, edit.Changes, absPath)
+}
+
+// TestInvalidateFile_DeletedFile_SymlinkPath_EvictsCanonicalKey tests Fix 1:
+// when a file has been deleted (e.g. a fix removed it) and then the LSP
+// didClose/didChange handler calls InvalidateFile with the non-canonical
+// (symlinked) path, filepath.EvalSymlinks(path) FAILS because the file no
+// longer exists on disk. The implementation must fall back to resolving the
+// PARENT DIRECTORY (which still exists) and re-joining the base name, so the
+// resulting canonical path matches the key that Remediate wrote into the cache
+// (which used EvalSymlinks while the file still existed).
+//
+// Without the Dir+Base fallback, InvalidateFile falls back to the raw
+// (non-canonical) path, misses the canonical cache key, and the stale entry
+// survives. The next Remediate call then incorrectly serves stale edits.
+//
+// The test is skipped gracefully if the OS disallows symlink creation.
+func TestInvalidateFile_DeletedFile_SymlinkPath_EvictsCanonicalKey(t *testing.T) {
+	// Create a real git repo under a canonical temp dir with two files.
+	realDir := t.TempDir()
+	realDir = mustEvalSymlinks(t, realDir)
+	initGitRepoInDir(t, realDir)
+	commitFileInDir(t, realDir, "a.go", "package main\nvar a = 1\n")
+	commitFileInDir(t, realDir, "b.go", "package main\nvar b = 1\n")
+
+	// Create a symlink to the real dir — the "LSP handler" path is non-canonical.
+	linkDir := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(realDir, linkDir); err != nil {
+		t.Skipf("cannot create symlink (os restriction): %v", err)
+	}
+
+	symlinkRoot := linkDir
+	symlinkA := filepath.Join(symlinkRoot, "a.go")
+	symlinkB := filepath.Join(symlinkRoot, "b.go")
+
+	var runnerCalls int
+	runner := fakeRunner(func(_ context.Context, root string, _ string) error {
+		runnerCalls++
+		// Modify both files so b.go ends up in the cache after the a.go request.
+		if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package main\nvar a = 2\n"), 0o644); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(root, "b.go"), []byte("package main\nvar b = 2\n"), 0o644)
+	})
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	// First Remediate populates cache: a.go edits returned, b.go edits cached
+	// under the CANONICAL key (realDir/b.go).
+	_, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "finding-del-symlink",
+		ContentRoot: types.FilePath(symlinkRoot),
+		FilePath:    types.FilePath(symlinkA),
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, runnerCalls, "runner must run once on first call")
+
+	// NOW delete b.go from disk — simulating a fix that removed the file.
+	// After deletion, filepath.EvalSymlinks(symlinkB) FAILS because the target
+	// no longer exists. The Dir+Base fallback must resolve the parent (linkDir →
+	// realDir) and re-join "b.go" to produce the canonical path for the delete.
+	require.NoError(t, os.Remove(filepath.Join(realDir, "b.go")))
+
+	// Invalidate using the non-canonical symlinked path of the now-deleted file.
+	inv, ok := p.(remediation.FileChangeNotifier)
+	require.True(t, ok, "remyProvider must implement FileChangeNotifier")
+	inv.InvalidateFile(types.FilePath(symlinkB))
+
+	// The cache entry (keyed under the canonical path realDir) must now be empty
+	// (b.go was the only remaining cached file). CacheLen must be 0.
+	assert.Equal(t, 0, remediation.CacheLen(p),
+		"InvalidateFile with a non-canonical path of a DELETED file must evict the cache entry; "+
+			"Dir+Base fallback required when EvalSymlinks(file) fails but EvalSymlinks(dir) succeeds; "+
+			"symlink=%q canonical dir=%q", symlinkB, realDir)
+}
+
+// TestInvalidateFile_SymlinkPath_EvictsCanonicalKey is a regression test for
+// the macOS/Windows class of bug where the LSP textDocument/didChange handler
+// calls InvalidateFile with the raw URI path (non-canonical, e.g. the symlinked
+// path) while the cache was populated by Remediate using the canonical path
+// (after filepath.EvalSymlinks). Without the fix, the delete misses the
+// canonical key and the stale cache entry survives, causing the next Remediate
+// to serve stale edits instead of re-running remy.
+//
+// On Linux we reproduce this by creating a symlink to a real temp dir.
+// The test is skipped gracefully if the OS disallows symlink creation.
+func TestInvalidateFile_SymlinkPath_EvictsCanonicalKey(t *testing.T) {
+	// Create the real repo under a canonical temp dir (two files so one gets cached).
+	realDir := t.TempDir()
+	realDir = mustEvalSymlinks(t, realDir)
+	initGitRepoInDir(t, realDir)
+	commitFileInDir(t, realDir, "a.go", "package main\nvar a = 1\n")
+	commitFileInDir(t, realDir, "b.go", "package main\nvar b = 1\n")
+
+	// Create a symlink pointing to the real dir.
+	linkDir := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(realDir, linkDir); err != nil {
+		t.Skipf("cannot create symlink (os restriction): %v", err)
+	}
+
+	// Non-canonical (symlinked) paths — what the LSP handler would supply.
+	symlinkRoot := linkDir
+	symlinkA := filepath.Join(symlinkRoot, "a.go")
+	symlinkB := filepath.Join(symlinkRoot, "b.go")
+
+	var runnerCalls int
+	runner := fakeRunner(func(_ context.Context, root string, _ string) error {
+		runnerCalls++
+		if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package main\nvar a = 2\n"), 0o644); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(root, "b.go"), []byte("package main\nvar b = 2\n"), 0o644)
+	})
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	// First call with symlinked ContentRoot — Remediate canonicalizes internally.
+	// a.go edits are returned; b.go edits are cached under the CANONICAL key.
+	_, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "finding-symlink-invalidate",
+		ContentRoot: types.FilePath(symlinkRoot),
+		FilePath:    types.FilePath(symlinkA),
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, runnerCalls, "runner must be called exactly once on first Remediate")
+
+	// Invalidate b.go via the NON-canonical (symlinked) path — the path a
+	// real LSP handler would pass from uri.PathFromUri.
+	inv, ok := p.(remediation.FileChangeNotifier)
+	require.True(t, ok, "remyProvider must implement FileChangeNotifier")
+	inv.InvalidateFile(types.FilePath(symlinkB))
+
+	// Second call for b.go via the symlinked path. The cache entry (keyed under
+	// canonical path) must have been evicted by InvalidateFile, so the runner
+	// must fire again.
+	_, err = p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "finding-symlink-invalidate",
+		ContentRoot: types.FilePath(symlinkRoot),
+		FilePath:    types.FilePath(symlinkB),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 2, runnerCalls,
+		"runner must be re-invoked after InvalidateFile with the non-canonical (symlinked) path; "+
+			"symlink=%q canonical=%q", symlinkB, filepath.Join(realDir, "b.go"))
 }

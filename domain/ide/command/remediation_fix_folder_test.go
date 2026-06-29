@@ -88,11 +88,18 @@ func (f *fakeFolderRemediator) FixFolder(_ context.Context, _ types.FilePath) (*
 	return f.edit, f.err
 }
 
-// initGitRepo creates a minimal git repo in a temp dir for tests that need a
-// real directory on disk.
+// initGitRepoForCmd creates a minimal git repo in a temp dir for tests that
+// need a real directory on disk. Returns the CANONICAL path (symlinks resolved)
+// so test assertions against edit keys agree with what git and the production
+// code produce — on macOS t.TempDir returns /var/... but git resolves symlinks
+// to /private/var/...; canonicalizing here avoids false assertion failures.
 func initGitRepoForCmd(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
+	// Resolve symlinks so the returned path is canonical.
+	if canonical, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = canonical
+	}
 	run := func(args ...string) {
 		t.Helper()
 		cmd := exec.Command("git", args...)

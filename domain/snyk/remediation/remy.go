@@ -114,6 +114,9 @@ func gafRunner(ctx context.Context, eng workflow.Engine, contentRoot string, _ s
 // invokes the legacycli workflow via the engine. Callers that want to plug
 // in a fake runner for unit tests pass a non-nil function here.
 func NewRemyProvider(engine workflow.Engine, runner remyRunner) RemediationProvider {
+	if runner == nil && engine == nil {
+		panic("NewRemyProvider: nil runner requires a non-nil engine; pass a test runner or a workflow.Engine")
+	}
 	var log zerolog.Logger
 	opts := RemyOptions{}
 	if engine != nil {
