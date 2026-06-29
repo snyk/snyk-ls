@@ -233,6 +233,7 @@ func initApplication(conf configuration.Configuration, engine workflow.Engine, l
 	fileWatcher = watcher.NewFileWatcher()
 
 	var remediationProvider remediation.RemediationProvider
+	var folderRemediator remediation.FolderRemediator
 	remediationNotifier = nil
 	if conf.GetBool(remediationAgentEnabledKey) {
 		p := remediation.NewRemyProvider(engine, nil)
@@ -240,10 +241,13 @@ func initApplication(conf configuration.Configuration, engine workflow.Engine, l
 		if n, ok := p.(remediation.FileChangeNotifier); ok {
 			remediationNotifier = n
 		}
+		if fr, ok := p.(remediation.FolderRemediator); ok {
+			folderRemediator = fr
+		}
 	}
 
 	codeActionService = codeaction.NewService(engine, w, fileWatcher, notifier, featureFlagService, configResolver, remediationProvider)
-	command.SetService(command.NewService(engine, logger, authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, ldxSyncService, configResolver, scanStateAggregator.StateSnapshot))
+	command.SetService(command.NewService(engine, logger, authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, ldxSyncService, configResolver, scanStateAggregator.StateSnapshot, folderRemediator))
 }
 
 // remediationAgentEnabledKey is the configuration key that gates the remy-backed
