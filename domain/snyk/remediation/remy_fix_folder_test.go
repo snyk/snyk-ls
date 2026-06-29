@@ -21,6 +21,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -258,5 +259,60 @@ func TestFixFolder_RunsDirectlyInPassedFolder(t *testing.T) {
 			assert.NotContains(t, s.Name(), "wt",
 				"no nested worktree dir must be created as a sibling of the passed folder")
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// DAEMON CONTRACT: FixFolder edit keys must be under the PASSED (non-canonical) path
+// ---------------------------------------------------------------------------
+
+// TestFixFolder_SymlinkPath_EditsKeyedUnderPassedPath locks the daemon contract:
+// when the caller passes a symlinked folder path as ContentRoot, FixFolder must
+// return edit keys under the EXACT passed path (not the canonicalized/resolved
+// path). The external daemon remaps edits by the prefix of the path it passed;
+// canonicalizing `r` inside FixFolder would make edits key under the resolved
+// path, breaking the daemon's prefix match on any path with a symlink component.
+//
+// On Linux we reproduce the macOS /var→/private/var class by creating an
+// explicit symlink. The test is skipped gracefully if symlink creation fails.
+func TestFixFolder_SymlinkPath_EditsKeyedUnderPassedPath(t *testing.T) {
+	// Set up a real git repo under a canonical dir.
+	realDir := t.TempDir()
+	var err error
+	realDir, err = filepath.EvalSymlinks(realDir)
+	require.NoError(t, err)
+	initGitRepoInDir(t, realDir)
+	commitFileInDir(t, realDir, "main.go", "package main\nvar x = 1\n")
+
+	// Create a symlink to the real dir — the daemon-like caller passes this.
+	linkDir := filepath.Join(t.TempDir(), "link")
+	if symlinkErr := os.Symlink(realDir, linkDir); symlinkErr != nil {
+		t.Skipf("cannot create symlink (os restriction): %v", symlinkErr)
+	}
+
+	// The runner writes a change so we get a non-nil edit back.
+	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0644)
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+	fr, ok := p.(remediation.FolderRemediator)
+	require.True(t, ok)
+
+	// Call FixFolder with the SYMLINKED (non-canonical) path.
+	edit, err := fr.FixFolder(context.Background(), types.FilePath(linkDir))
+	require.NoError(t, err)
+	require.NotNil(t, edit, "FixFolder must return a non-nil edit when a file was modified")
+
+	// Daemon contract: every edit key must begin with the PASSED path (linkDir),
+	// not the canonical resolved path (realDir). Canonicalizing inside FixFolder
+	// would produce keys under realDir, breaking the daemon's prefix remap.
+	// Use a path-separator-aware check so a sibling directory whose name merely
+	// starts with linkDir cannot produce a false pass.
+	for key := range edit.Changes {
+		assert.True(t, strings.HasPrefix(key, linkDir+string(filepath.Separator)),
+			"edit key %q must be prefixed by the passed symlinked path %q (daemon contract); "+
+				"if it is prefixed by the canonical path %q, FixFolder incorrectly canonicalized r",
+			key, linkDir, realDir)
 	}
 }

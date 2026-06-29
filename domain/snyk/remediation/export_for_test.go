@@ -16,7 +16,42 @@
 
 package remediation
 
-import "github.com/snyk/snyk-ls/internal/types"
+import (
+	"sync"
+	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+
+	"github.com/snyk/snyk-ls/internal/types"
+)
+
+// NewRemyProviderWithLogger constructs a remyProvider with an explicit zerolog.Logger
+// so that tests using a nil workflow.Engine can still capture diagnostic output
+// (e.g. the "no changes detected in worktree" WARN logged by buildWorkspaceEdits).
+// Use zerolog.New(testWriter) where testWriter is a zerolog.TestWriter or similar.
+//
+// Panics if both runner and engine are nil: when runner is nil the constructor
+// falls back to gafRunner which dereferences engine at call time, so a nil engine
+// would cause a nil-pointer dereference far from the misconfiguration site. The
+// guard makes the failure immediate and actionable at construction time.
+func NewRemyProviderWithLogger(engine workflow.Engine, runner remyRunner, log zerolog.Logger) RemediationProvider {
+	if runner == nil && engine == nil {
+		panic("NewRemyProviderWithLogger: nil runner requires a non-nil engine; pass a test runner or provide a workflow.Engine")
+	}
+	opts := RemyOptions{Timeout: 5 * time.Minute}
+	if runner == nil {
+		runner = gafRunner
+	}
+	return &remyProvider{
+		opts:    opts,
+		runner:  runner,
+		engine:  engine,
+		log:     log,
+		cache:   make(map[string]*remyCacheEntry),
+		rootMus: make(map[string]*sync.Mutex),
+	}
+}
 
 // ExportedWorkspaceEditFromContent exposes workspaceEditFromContent for
 // black-box tests in the remediation_test package.
