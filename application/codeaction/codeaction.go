@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -48,6 +49,12 @@ type CodeActionsService struct {
 	IssuesProvider     snyk.IssueProvider
 	featureFlagService featureflag.Service
 
+	// actionsCacheMu protects actionsCache. Every read and write of actionsCache
+	// must hold this lock. In ResolveCodeAction, the lock is released BEFORE
+	// invoking the slow deferred edit so that concurrent codeAction/resolve
+	// requests (which run on separate LSP handler goroutines) are not serialized
+	// through the potentially multi-minute remediation call.
+	actionsCacheMu sync.Mutex
 	// actionsCache holds all the issues that were returns by the GetCodeActions method.
 	// This is used to resolve the code actions later on in ResolveCodeAction.
 	actionsCache        map[uuid.UUID]cachedAction
@@ -115,7 +122,7 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 			}
 			filteredIssues = append(filteredIssues, issue)
 		}
-		c.logger.Debug().Any("path", path).Any("range", r).Msgf("Filtered to %d issues", len(issues))
+		c.logger.Debug().Any("path", path).Any("range", r).Msgf("Filtered to %d issues", len(filteredIssues))
 	}
 
 	quickFixGroupables := c.getQuickFixGroupablesAndCache(filteredIssues)
@@ -146,19 +153,27 @@ func (c *CodeActionsService) remediationCodeActions(issues []types.Issue, path t
 			continue
 		}
 		issueProduct := issue.GetProduct()
-		if issueProduct == product.ProductSecrets || issueProduct == product.ProductUnknown {
-			continue
-		}
 		additionalData := issue.GetAdditionalData()
-		if issueProduct != product.ProductInfrastructureAsCode && (additionalData == nil || !additionalData.IsFixable()) {
+		switch issueProduct {
+		case product.ProductCode:
+			// Remy handles Code issues that carry an AI-generated fix (hasAIFix).
+			if additionalData == nil || !additionalData.IsFixable() {
+				continue
+			}
+		case product.ProductInfrastructureAsCode:
+			// Remy handles IaC issues via FindingId; IaCIssueData.IsFixable() is
+			// always false, so eligibility is determined by FindingId alone (already
+			// guarded above).
+		default:
+			// OSS, Secrets, Unknown, and any future product are not handled by remy.
 			continue
 		}
 		// Capture loop variables for the closure.
 		issueFindingId := findingId
 		issueRange := r
 		provider := c.remediationProvider
-		deferredEdit := func() *types.WorkspaceEdit {
-			edit, err := provider.Remediate(context.Background(), remediation.RemediationRequest{
+		deferredEdit := func(ctx context.Context) *types.WorkspaceEdit {
+			edit, err := provider.Remediate(ctx, remediation.RemediationRequest{
 				FindingId:   issueFindingId,
 				FilePath:    path,
 				ContentRoot: folderPath,
@@ -257,11 +272,24 @@ func (c *CodeActionsService) cacheCodeAction(action types.CodeAction, issue type
 			issue:  issue,
 			action: action,
 		}
+		c.actionsCacheMu.Lock()
 		c.actionsCache[*action.GetUuid()] = cached
+		c.actionsCacheMu.Unlock()
 	}
 }
 
-func (c *CodeActionsService) ResolveCodeAction(action types.LSPCodeAction) (types.LSPCodeAction, error) {
+// ResolveCodeAction resolves a cached code action by invoking its deferred edit
+// and returning the resulting LSPCodeAction. The cache entry is kept alive for
+// the duration of the edit so that a concurrent retry for the same UUID can
+// still find it (e.g. a client that timed out and re-sent the request). The
+// entry is always removed after the edit — even if the edit panics (the jrpc2
+// handler recovers panics, keeping the process alive) — because the delete is
+// registered as a deferred call before the edit runs.
+//
+// Concurrent resolves of the same UUID are not deduplicated at this layer: both
+// callers may invoke the deferred edit independently. Providers must be safe for
+// concurrent calls; the remy provider serializes per content-root.
+func (c *CodeActionsService) ResolveCodeAction(ctx context.Context, action types.LSPCodeAction) (types.LSPCodeAction, error) {
 	c.logger.Debug().Msg("Received code action resolve request")
 	t := time.Now()
 
@@ -277,14 +305,35 @@ func (c *CodeActionsService) ResolveCodeAction(action types.LSPCodeAction) (type
 	}
 
 	key := uuid.UUID(*action.Data)
+
+	// Read under lock, then release before invoking the slow deferred edit.
+	// The entry stays in the cache while the edit runs so that a concurrent
+	// retry for the same UUID (e.g. a client that timed out and re-sent the
+	// request) can still find it instead of receiving a hard "not found" error.
+	c.actionsCacheMu.Lock()
 	cached, found := c.actionsCache[key]
+	c.actionsCacheMu.Unlock()
+
 	if !found {
 		return types.LSPCodeAction{}, errors.New(fmt.Sprint("could not find cached action for uuid ", key))
 	}
 
-	// only delete cache entry after it's been resolved
-	defer delete(c.actionsCache, key)
-	edit := (*cached.action.GetDeferredEdit())()
+	// Remove the cache entry once the edit is done, even if it panics.
+	// Using defer guarantees cleanup on any exit path — normal return or panic.
+	defer func() {
+		c.actionsCacheMu.Lock()
+		delete(c.actionsCache, key)
+		c.actionsCacheMu.Unlock()
+	}()
+
+	// Invoke the deferred edit outside the lock. When DeferredEdit is nil the
+	// action carries no edit (e.g. a command-only CodeAction); skip the call and
+	// leave edit as nil so the resolved action is returned without an Edit field.
+	var edit *types.WorkspaceEdit
+	if de := cached.action.GetDeferredEdit(); de != nil {
+		edit = (*de)(ctx)
+	}
+
 	resolvedAction := cached.action
 	resolvedAction.SetEdit(edit)
 	elapsed := time.Since(t)
