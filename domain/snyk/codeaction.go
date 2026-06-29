@@ -18,6 +18,7 @@
 package snyk
 
 import (
+	"context"
 	"errors"
 
 	"github.com/google/uuid"
@@ -51,8 +52,11 @@ type CodeAction struct {
 
 	// DeferredEdit is a function that returns a WorkspaceEdit.
 	// Used for heavy calculations that shouldn't be done ahead of time.
+	// The context passed to the function propagates cancellation from the
+	// codeAction/resolve request, allowing long-running operations to be
+	// interrupted when the client disconnects or abandons the request.
 	// A CodeAction cannot have both Edit and DeferredEdit.
-	DeferredEdit *func() *types.WorkspaceEdit `json:"-"`
+	DeferredEdit *func(context.Context) *types.WorkspaceEdit `json:"-"`
 
 	// Command that will be executed after the Edit (if present).
 	Command *types.CommandData
@@ -102,7 +106,7 @@ func (c *CodeAction) GetEdit() *types.WorkspaceEdit {
 	return c.Edit
 }
 
-func (c *CodeAction) GetDeferredEdit() *func() *types.WorkspaceEdit {
+func (c *CodeAction) GetDeferredEdit() *func(context.Context) *types.WorkspaceEdit {
 	return c.DeferredEdit
 }
 
@@ -152,7 +156,7 @@ func NewCodeAction(title string, edit *types.WorkspaceEdit, command *types.Comma
 
 func NewDeferredCodeAction(
 	title string,
-	deferredEdit *func() *types.WorkspaceEdit,
+	deferredEdit *func(context.Context) *types.WorkspaceEdit,
 	deferredCommand *func() *types.CommandData,
 	groupingKey types.Key,
 	groupingValue any,
