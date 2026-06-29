@@ -1747,7 +1747,7 @@ func TestInitializeHandler_MissingDep_PropagatesLSPError(t *testing.T) {
 // returns no RPC error when the remediation agent is enabled (INTEG-006).
 func Test_textDocumentDidChange_WithRemediationEnabled_NoRPCError(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	engine.GetConfiguration().Set("remediation_agent_enabled", true)
+	engine.GetConfiguration().Set(di.RemediationAgentEnabledKey, true)
 	loc, _, _ := setupServer(t, engine, tokenService)
 	testutil.CreateDummyProgressListener(t)
 
@@ -1778,7 +1778,7 @@ func Test_textDocumentDidChange_WithRemediationEnabled_NoRPCError(t *testing.T) 
 func Test_workspaceDidChangeWorkspaceFolders_RemediationAction_WorksInDynamicFolder(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	// Enable the remediation-agent flag so the provider is wired in by TestInit path.
-	engine.GetConfiguration().Set("remediation_agent_enabled", true)
+	engine.GetConfiguration().Set(di.RemediationAgentEnabledKey, true)
 	loc, _, _ := setupServer(t, engine, tokenService)
 	testutil.CreateDummyProgressListener(t)
 
@@ -1910,4 +1910,40 @@ func Test_codeActionResolve_RemediationAgent_ReturnsEdit(t *testing.T) {
 	require.NoError(t, resolveResp.UnmarshalResult(&resolved))
 	require.NotNil(t, resolved.Edit, "resolved action must carry the WorkspaceEdit from the provider")
 	assert.NotEmpty(t, resolved.Edit.Changes, "WorkspaceEdit must have at least one change")
+}
+
+// Test_initialize_RemediationFixFolderCommand_NotAdvertised_WhenFlagOff asserts that
+// RemediationAgentFixFolderCommand is absent from the advertised commands when the
+// remediation_agent_enabled flag is false (the default). Advertising a command the
+// feature flag is off teaches the client that the command exists and that it should
+// call it, which leads to a "command not found" error at runtime.
+func Test_initialize_RemediationFixFolderCommand_NotAdvertised_WhenFlagOff(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	// remediation_agent_enabled is false by default; confirm the command is absent.
+	engine.GetConfiguration().Set(di.RemediationAgentEnabledKey, false)
+	loc, _, _ := setupServer(t, engine, tokenService)
+
+	rsp, err := loc.Client.Call(t.Context(), "initialize", nil)
+	require.NoError(t, err)
+	var result types.InitializeResult
+	require.NoError(t, rsp.UnmarshalResult(&result))
+
+	assert.NotContains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.RemediationAgentFixFolderCommand,
+		"RemediationAgentFixFolderCommand must not be advertised when remediation_agent_enabled=false")
+}
+
+// Test_initialize_RemediationFixFolderCommand_Advertised_WhenFlagOn asserts that
+// RemediationAgentFixFolderCommand IS advertised when remediation_agent_enabled=true.
+func Test_initialize_RemediationFixFolderCommand_Advertised_WhenFlagOn(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	engine.GetConfiguration().Set(di.RemediationAgentEnabledKey, true)
+	loc, _, _ := setupServer(t, engine, tokenService)
+
+	rsp, err := loc.Client.Call(t.Context(), "initialize", nil)
+	require.NoError(t, err)
+	var result types.InitializeResult
+	require.NoError(t, rsp.UnmarshalResult(&result))
+
+	assert.Contains(t, result.Capabilities.ExecuteCommandProvider.Commands, types.RemediationAgentFixFolderCommand,
+		"RemediationAgentFixFolderCommand must be advertised when remediation_agent_enabled=true")
 }

@@ -703,41 +703,7 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 				CodeLensProvider:    &sglsp.CodeLensOptions{ResolveProvider: false},
 				InlineValueProvider: true,
 				ExecuteCommandProvider: &sglsp.ExecuteCommandOptions{
-					Commands: []string{
-						types.NavigateToRangeCommand,
-						types.WorkspaceScanCommand,
-						types.WorkspaceFolderScanCommand,
-						types.OpenBrowserCommand,
-						types.LoginCommand,
-						types.CopyAuthLinkCommand,
-						types.LogoutCommand,
-						types.TrustWorkspaceFoldersCommand,
-						types.OpenLearnLesson,
-						types.GetLearnLesson,
-						types.SubmitIgnoreRequest,
-						types.GetSettingsSastEnabled,
-						types.GetFeatureFlagStatus,
-						types.GetActiveUserCommand,
-						types.CodeFixCommand,
-						types.CodeSubmitFixFeedback,
-						types.CodeFixDiffsCommand,
-						types.CodeFixApplyEditCommand,
-						types.ExecuteCLICommand,
-						types.ConnectivityCheckCommand,
-						types.DirectoryDiagnosticsCommand,
-						types.ClearCacheCommand,
-						types.GenerateIssueDescriptionCommand,
-						types.ReportAnalyticsCommand,
-						types.WorkspaceConfigurationCommand,
-						types.GetTreeView,
-						types.ToggleTreeFilter,
-						types.SetNodeExpanded,
-						types.ShowScanErrorDetails,
-						types.UpdateFolderConfig,
-						types.DismissFeedbackBanner,
-						types.FeedbackBannerInteracted,
-						types.RemediationAgentFixFolderCommand,
-					},
+					Commands: remediationGatedCommands(conf),
 				},
 			},
 		}
@@ -746,6 +712,51 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		logger.Debug().Str("method", method).Any("result", result).Msg("SENDING")
 		return result, nil
 	})
+}
+
+// remediationGatedCommands returns the full command list for ExecuteCommandProvider,
+// appending RemediationAgentFixFolderCommand only when di.RemediationAgentEnabledKey
+// is true. Advertising a command the feature flag is off teaches the client that the
+// command exists, which leads to "command not found" errors when the client calls it.
+func remediationGatedCommands(conf configuration.Configuration) []string {
+	cmds := []string{
+		types.NavigateToRangeCommand,
+		types.WorkspaceScanCommand,
+		types.WorkspaceFolderScanCommand,
+		types.OpenBrowserCommand,
+		types.LoginCommand,
+		types.CopyAuthLinkCommand,
+		types.LogoutCommand,
+		types.TrustWorkspaceFoldersCommand,
+		types.OpenLearnLesson,
+		types.GetLearnLesson,
+		types.SubmitIgnoreRequest,
+		types.GetSettingsSastEnabled,
+		types.GetFeatureFlagStatus,
+		types.GetActiveUserCommand,
+		types.CodeFixCommand,
+		types.CodeSubmitFixFeedback,
+		types.CodeFixDiffsCommand,
+		types.CodeFixApplyEditCommand,
+		types.ExecuteCLICommand,
+		types.ConnectivityCheckCommand,
+		types.DirectoryDiagnosticsCommand,
+		types.ClearCacheCommand,
+		types.GenerateIssueDescriptionCommand,
+		types.ReportAnalyticsCommand,
+		types.WorkspaceConfigurationCommand,
+		types.GetTreeView,
+		types.ToggleTreeFilter,
+		types.SetNodeExpanded,
+		types.ShowScanErrorDetails,
+		types.UpdateFolderConfig,
+		types.DismissFeedbackBanner,
+		types.FeedbackBannerInteracted,
+	}
+	if conf.GetBool(di.RemediationAgentEnabledKey) {
+		cmds = append(cmds, types.RemediationAgentFixFolderCommand)
+	}
+	return cmds
 }
 
 func startClientMonitor(params types.InitializeParams, logger zerolog.Logger) {
