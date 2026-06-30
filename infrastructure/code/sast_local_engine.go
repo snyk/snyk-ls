@@ -17,6 +17,8 @@
 package code
 
 import (
+	"slices"
+
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -40,9 +42,13 @@ func updateCodeApiLocalEngine(engine workflow.Engine, sastResponse *sast_contrac
 		logger.Err(err).Msg("failed to get code api url")
 		return ""
 	}
+	authURLsMu.Lock()
+	defer authURLsMu.Unlock()
 	additionalURLs := engineConfig.GetStringSlice(configuration.AUTHENTICATION_ADDITIONAL_URLS)
-	additionalURLs = append(additionalURLs, url)
-	engineConfig.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, additionalURLs)
+	if !slices.Contains(additionalURLs, url) {
+		additionalURLs = append(additionalURLs, url)
+		engineConfig.Set(configuration.AUTHENTICATION_ADDITIONAL_URLS, additionalURLs)
+	}
 	logger.Debug().Str("snykCodeApi", url).Msg("updated Snyk Code API Local Engine")
 	return url
 }
