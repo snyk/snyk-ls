@@ -425,6 +425,25 @@
   }
 
   container.addEventListener('click', function(e) {
+    // Trust button on the untrusted-folder banner (IDE-1882). Handle this before
+    // the row logic below so trusting a folder doesn't also toggle expand/collapse.
+    // Walk up from the click target since the button has no child elements but the
+    // click may originate on text inside it.
+    var trustBtn = e.target;
+    while (trustBtn && trustBtn !== container) {
+      if (trustBtn.getAttribute && trustBtn.getAttribute('data-action') === 'trust-folder') break;
+      trustBtn = trustBtn.parentElement;
+    }
+    if (trustBtn && trustBtn !== container && trustBtn.getAttribute &&
+        trustBtn.getAttribute('data-action') === 'trust-folder') {
+      e.stopPropagation();
+      var folderPath = trustBtn.getAttribute('data-folder-path');
+      if (folderPath) {
+        executeCommand('snyk.trustWorkspaceFolders', [folderPath]);
+      }
+      return;
+    }
+
     var row = null;
     var el = e.target;
     // Walk up to find the tree-node-row (use hasClass for SVG compatibility)
@@ -493,6 +512,11 @@
       executeCommand('snyk.showScanErrorDetails', [productAttr, errorMessage]);
     }
 
+    // Untrusted folder nodes are dimmed and non-expandable (no children, no
+    // chevron). The folder template still emits an empty children container, so
+    // bail here to avoid toggling and persisting spurious expand state (IDE-1882).
+    if (hasClass(node, 'tree-node-untrusted')) return;
+
     // Toggle expand/collapse for non-leaf nodes
     var children = findChildrenContainer(node);
     if (!children) return;
@@ -555,8 +579,112 @@
         btn.classList.remove('filter-active');
       }
 
-      executeCommand('snyk.toggleTreeFilter', [filterType, filterValue, enabled]);
+      executeCommand('snyk.toggleTreeFilter', [filterType + '_' + filterValue, enabled]);
     });
+  }
+
+  // Filter popover (Risk Score + Issue View Options).
+  // The funnel button opens a small popover whose controls write per-folder
+  // settings to EVERY open folder (workspace-wide), mirroring the severity
+  // buttons. When open folders disagree on a setting it renders "mixed":
+  // indeterminate checkboxes / a "Mixed" risk-score label, plus a dot on the
+  // funnel. The first change aligns all folders, resolving the mismatch.
+  // Note: each change triggers a server-side re-render that replaces this view,
+  // so the popover closes after a change — same model as the severity buttons.
+  var popoverBtn = document.getElementById('filtersPopoverBtn');
+  var popover = document.getElementById('filtersPopover');
+  if (popoverBtn && popover) {
+    var openPopover = function() {
+      popover.hidden = false;
+      popoverBtn.setAttribute('aria-expanded', 'true');
+    };
+    var closePopover = function() {
+      if (popover.hidden) return;
+      popover.hidden = true;
+      popoverBtn.setAttribute('aria-expanded', 'false');
+    };
+
+    popoverBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (popover.hidden) { openPopover(); } else { closePopover(); }
+    });
+
+    // Keep clicks inside the popover from reaching the document dismiss handler.
+    popover.addEventListener('click', function(e) { e.stopPropagation(); });
+
+    document.addEventListener('click', function() { closePopover(); });
+    document.addEventListener('keydown', function(e) {
+      if (popover.hidden) return;
+      if (e.key === 'Escape' || e.key === 'Esc' || e.keyCode === 27) { closePopover(); }
+    });
+
+    // The DOM `indeterminate` flag can't be expressed in HTML markup, so apply it
+    // here on load from the server-set data-mixed attribute.
+    var issueViewChecks = popover.querySelectorAll('input[type="checkbox"][data-filter-type="issueView"]');
+    for (var ci = 0; ci < issueViewChecks.length; ci++) {
+      if (issueViewChecks[ci].getAttribute('data-mixed') === 'true') {
+        issueViewChecks[ci].indeterminate = true;
+      }
+      issueViewChecks[ci].addEventListener('change', function(e) {
+        var chk = e.target;
+        chk.indeterminate = false;
+        chk.removeAttribute('data-mixed');
+        executeCommand('snyk.toggleTreeFilter', ['issueView_' + chk.getAttribute('data-filter-value'), chk.checked]);
+      });
+    }
+
+    // Risk-score slider: update the label live on input, commit on change (avoids
+    // a command per drag step). Reads "All" at 0, otherwise "≥ N".
+    var slider = document.getElementById('riskScoreSlider');
+    var riskValue = document.getElementById('riskScoreValue');
+    var updateRiskLabel = function(v) {
+      if (riskValue) { riskValue.textContent = (v === 0) ? 'All' : ('≥ ' + v); }
+    };
+    var commitRiskScore = function() {
+      slider.removeAttribute('data-mixed');
+      executeCommand('snyk.toggleTreeFilter', ['riskScore', parseIntSafe(slider.value, 0)]);
+    };
+    if (slider) {
+      slider.addEventListener('input', function() {
+        slider.removeAttribute('data-mixed');
+        updateRiskLabel(parseIntSafe(slider.value, 0));
+      });
+      slider.addEventListener('change', commitRiskScore);
+      // When folders disagree the slider is "mixed": it shows the highest threshold
+      // but commits nothing until the value changes. Accepting the shown value by
+      // clicking/releasing on it fires no 'change', so the mixed state would never
+      // resolve. Treat a click on a still-mixed slider as a commit of the shown
+      // value, aligning every folder to it. 'input'/'change' clear data-mixed first
+      // on a real drag, so this no-ops then (no double-commit).
+      slider.addEventListener('click', function() {
+        if (slider.getAttribute('data-mixed') !== 'true') return;
+        updateRiskLabel(parseIntSafe(slider.value, 0));
+        commitRiskScore();
+      });
+    }
+
+    // Reset: restore defaults (risk score 0, open issues on, ignored off). The
+    // controls are updated optimistically, then a SINGLE 'reset' command writes all
+    // defaults to every folder server-side — one config-change cycle / re-render for
+    // the whole reset rather than one per control.
+    var resetBtn = document.getElementById('filtersResetBtn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (slider) {
+          slider.value = '0';
+          slider.removeAttribute('data-mixed');
+          updateRiskLabel(0);
+        }
+        for (var ri = 0; ri < issueViewChecks.length; ri++) {
+          var chk = issueViewChecks[ri];
+          chk.indeterminate = false;
+          chk.removeAttribute('data-mixed');
+          chk.checked = (chk.getAttribute('data-filter-value') === 'openIssues');
+        }
+        executeCommand('snyk.toggleTreeFilter', ['reset']);
+      });
+    }
   }
 
   // Expand All / Collapse All toolbar buttons.
@@ -851,4 +979,45 @@
       hideTooltip();
     }
   });
+
+  // Feedback banner. Dismissal is persisted via snyk.dismissFeedbackBanner so the
+  // banner is omitted from later renders. When the banner renders hidden it is
+  // revealed 5s after the user's first interaction; the reveal is reported via
+  // snyk.feedbackBannerInteracted so the server keeps it visible across re-renders.
+  (function() {
+    var banner = document.getElementById('feedbackBanner');
+    if (!banner) return;
+
+    var dismissed = false;
+
+    var dismissBtn = banner.querySelector('[data-action="dismiss-feedback"]');
+    if (dismissBtn) {
+      dismissBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        banner.hidden = true;
+        dismissed = true;
+        executeCommand('snyk.dismissFeedbackBanner', []);
+      });
+    }
+
+    // Already revealed server-side (the user interacted earlier this session).
+    if (!banner.hidden) return;
+
+    var armed = false;
+
+    function reveal() {
+      if (dismissed) return;
+      banner.hidden = false;
+      executeCommand('snyk.feedbackBannerInteracted', []);
+    }
+
+    function arm() {
+      if (armed || dismissed) return;
+      armed = true;
+      setTimeout(reveal, 5000);
+    }
+
+    document.addEventListener('click', arm);
+    document.addEventListener('keydown', arm);
+  })();
 })();

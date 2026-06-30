@@ -52,7 +52,7 @@ The tree follows a four-level hierarchy:
 | `domain/ide/treeview/expand_state.go` | LS-side expand/collapse state persistence |
 | `domain/ide/treeview/template/tree.js` | ES5 expand/collapse, filter toggle handlers |
 | `domain/ide/command/get_tree_view.go` | `snyk.getTreeView` command (on-demand full HTML) |
-| `domain/ide/command/toggle_tree_filter.go` | `snyk.toggleTreeFilter` command (severity/issueView toggles) |
+| `domain/ide/command/toggle_tree_filter.go` | `snyk.toggleTreeFilter` command (severity / issueView / riskScore / reset filters) |
 | `domain/ide/command/set_node_expanded.go` | `snyk.setNodeExpanded` command (expand/collapse persistence) |
 | `domain/ide/command/update_folder_config.go` | `snyk.updateFolderConfig` command (delta reference updates) |
 | `domain/ide/command/navigate_to_range.go` | `snyk.navigateToRange` command (navigation + detail panel) |
@@ -71,13 +71,22 @@ Returns the full tree view HTML. Used for initial load or manual refresh.
 
 #### `snyk.toggleTreeFilter`
 
-Toggles a filter setting. The updated tree HTML is pushed via `$/snyk.treeView` notification (not returned directly).
+Toggles a filter setting. The updated tree HTML is pushed via `$/snyk.treeView` notification (not returned directly). Every variant applies the change to **all open folders** (the toolbar is workspace-wide).
 
-**Arguments:** `[filterType: string, filterValue: string, enabled: boolean]`
+**Arguments:** `args[0]` is a combined filter token; `args[1]` is always the value (or omitted for `reset`):
 
-- `filterType`: `"severity"` or `"issueView"`
-- `filterValue`: for severity: `"critical"`, `"high"`, `"medium"`, `"low"`; for issueView: `"openIssues"`, `"ignoredIssues"`
-- `enabled`: `true` to enable, `false` to disable
+| `args[0]` token | `args[1]` | Notes |
+|-----------------|-----------|-------|
+| `"severity_critical"` | `enabled: boolean` | enable/disable the Critical severity filter |
+| `"severity_high"` | `enabled: boolean` | enable/disable the High severity filter |
+| `"severity_medium"` | `enabled: boolean` | enable/disable the Medium severity filter |
+| `"severity_low"` | `enabled: boolean` | enable/disable the Low severity filter |
+| `"issueView_openIssues"` | `enabled: boolean` | enable/disable Open Issues in the issue view |
+| `"issueView_ignoredIssues"` | `enabled: boolean` | enable/disable Ignored Issues in the issue view |
+| `"riskScore"` | `threshold: number` | minimum risk score, clamped to `0`–`1000` |
+| `"reset"` | _(none)_ | restores risk score + issue-view options to their defaults; takes no further arguments |
+
+`enabled`: `true` to enable, `false` to disable. JSON numbers arrive as `float64` over LSP; the handler coerces to `int` and rejects non-finite values.
 
 **Returns:** `null`
 
@@ -197,7 +206,7 @@ window.__ideExecuteCommand__ = function(command, args, callback) {
 | Call | Command | Args |
 |------|---------|------|
 | Issue click | `snyk.navigateToRange` | `[filePath, { start: { line, character }, end: { line, character } }, issueId, product]` |
-| Filter toggle | `snyk.toggleTreeFilter` | `[filterType, filterValue, enabled]` |
+| Filter toggle | `snyk.toggleTreeFilter` | combined token in `args[0]` — `["severity_high", enabled]`, `["issueView_openIssues", enabled]`, `["riskScore", threshold]`, `["reset"]` |
 | Expand/collapse | `snyk.setNodeExpanded` | `[nodeID, expanded]` |
 
 ### Filter Architecture
@@ -210,9 +219,9 @@ sequenceDiagram
     participant LS
 
     User->>WebView: Click severity button "High"
-    WebView->>WebView: JS: read data-filter-type, data-filter-value
-    WebView->>IDE: __ideExecuteCommand__("snyk.toggleTreeFilter", ["severity", "high", false])
-    IDE->>LS: workspace/executeCommand snyk.toggleTreeFilter ["severity", "high", false]
+    WebView->>WebView: JS: build token "severity_" + data-filter-value
+    WebView->>IDE: __ideExecuteCommand__("snyk.toggleTreeFilter", ["severity_high", false])
+    IDE->>LS: workspace/executeCommand snyk.toggleTreeFilter ["severity_high", false]
     LS->>LS: Update Config.SetSeverityFilter
     LS->>LS: HandleConfigChange → CompositeEmitter.Emit
     LS-->>IDE: $/snyk.treeView notification (re-rendered HTML)

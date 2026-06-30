@@ -215,7 +215,16 @@ func (fc *FolderConfig) ToLspFolderConfig() *LspFolderConfig {
 			OriginScope: ev.OriginScope,
 			IsLocked:    strings.Contains(ev.Source, "locked"),
 		}
-		if !isMeaningfulValue(ev.Value) {
+		// Settings annotated AnnotationAlwaysSend are emitted even at their zero
+		// default (e.g. risk score 0 = "All"), so a reset syncs to an open settings
+		// window; isMeaningfulValue would otherwise drop a zero-valued numeric
+		// setting. The policy is declared at registration rather than hardcoded
+		// here, so a future always-send setting needs no edit to this shared loop.
+		alwaysSend := false
+		if as, found := fm.GetConfigurationOptionAnnotation(name, AnnotationAlwaysSend); found && as == "true" {
+			alwaysSend = true
+		}
+		if !alwaysSend && !isMeaningfulValue(ev.Value) {
 			continue
 		}
 		switch name {

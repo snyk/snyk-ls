@@ -53,13 +53,16 @@ func (cmd *getTreeViewCommand) Execute(_ context.Context) (any, error) {
 
 	var data treeview.TreeViewData
 	conf := cmd.engine.GetConfiguration()
-	if ws := config.GetWorkspace(conf); ws != nil {
+	ws := config.GetWorkspace(conf)
+	if ws != nil {
 		data = builder.BuildTree(ws)
 	}
-	data.FilterState = treeview.TreeViewFilterState{
-		SeverityFilter:   config.GetFilterSeverity(conf),
-		IssueViewOptions: config.GetIssueViewOptions(conf),
-	}
+	// Use the same resolver as the push path so a tree pulled on panel-open (e.g.
+	// to show the trust banner that the early startup push may have missed) matches
+	// one pushed on a scan — including the per-folder aggregate "mixed" toolbar state.
+	data.FilterState = treeview.ResolveFilterState(conf, ws)
+	data.FeedbackBannerDismissed = config.GetFeedbackBannerDismissed(conf)
+	data.FeedbackBannerInteracted = config.GetFeedbackBannerInteracted(conf)
 
 	return renderer.RenderTreeView(data), nil
 }

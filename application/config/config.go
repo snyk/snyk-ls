@@ -131,6 +131,29 @@ func GetIssueViewOptions(conf configuration.Configuration) types.IssueViewOption
 	return types.GetIssueViewOptionsFromConfig(conf)
 }
 
+// GetFeedbackBannerDismissed reports whether the user has dismissed the tree view feedback banner.
+func GetFeedbackBannerDismissed(conf configuration.Configuration) bool {
+	return conf.GetBool(types.SettingFeedbackBannerDismissed)
+}
+
+// SetFeedbackBannerDismissed persists the dismissal of the tree view feedback banner so it survives
+// restarts. The key is registered for storage in SetupStorage, so a plain Set writes through to disk.
+func SetFeedbackBannerDismissed(conf configuration.Configuration) {
+	conf.Set(types.SettingFeedbackBannerDismissed, true)
+}
+
+// GetFeedbackBannerInteracted reports whether the user has interacted with the tree view this session.
+func GetFeedbackBannerInteracted(conf configuration.Configuration) bool {
+	return conf.GetBool(types.SettingFeedbackBannerInteracted)
+}
+
+// SetFeedbackBannerInteracted records, for this session only, that the user has interacted with the
+// tree view. It is intentionally not persisted, so the feedback banner stays visible across re-renders
+// once shown but reappears in a later session until dismissed.
+func SetFeedbackBannerInteracted(conf configuration.Configuration) {
+	conf.Set(types.SettingFeedbackBannerInteracted, true)
+}
+
 // SetIssueViewOptionsOnConfig sets the issue view options on the given configuration. Returns true if options were modified.
 func SetIssueViewOptionsOnConfig(conf configuration.Configuration, opts *types.IssueViewOptions, logger *zerolog.Logger) bool {
 	return types.SetIssueViewOptionsOnConfig(conf, opts, logger)
@@ -728,6 +751,7 @@ func SetupStorage(conf configuration.Configuration, s storage.StorageWithCallbac
 	conf.PersistInStorage(folderconfig.ConfigMainKey)
 	conf.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
 	conf.PersistInStorage(configuration.AUTHENTICATION_TOKEN)
+	conf.PersistInStorage(types.SettingFeedbackBannerDismissed)
 
 	if preInitOAuthToken != "" {
 		if err := s.Set(auth.CONFIG_KEY_OAUTH_TOKEN, preInitOAuthToken); err != nil {

@@ -39,6 +39,33 @@
         Per-scanner chevrons (see .tree-chevron in styles.css) handle
         expand/collapse. tree.js keeps the expandAll/collapseAll handlers,
         which no-op when the buttons are absent. */}}
+    {{if .FilterState.ShowFilterPopover}}
+    <span class="filter-popover-wrap">
+      <button type="button" id="filtersPopoverBtn" class="filters-popover-trigger{{if or .FilterState.RiskScoreMixed .FilterState.MixedIssueViewOptions.OpenIssues .FilterState.MixedIssueViewOptions.IgnoredIssues}} filters-popover-trigger-mixed{{end}}" title="More filters" aria-haspopup="dialog" aria-expanded="false" aria-controls="filtersPopover"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 3h12l-4.5 6v4l-3 1.5V9L2 3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" fill="none"/></svg></button>
+      <div class="filters-popover" id="filtersPopover" role="dialog" aria-label="More filters" aria-modal="false" tabindex="-1" hidden>
+        {{if .FilterState.RiskScoreEnabled}}
+        <div class="filters-popover-section">
+          <div class="filters-popover-row">
+            <label class="filters-popover-label" for="riskScoreSlider">Risk score</label>
+            <span class="filters-popover-value" id="riskScoreValue" aria-live="polite">{{if .FilterState.RiskScoreMixed}}Mixed{{if gt .FilterState.RiskScoreThreshold 0}} (≥ {{.FilterState.RiskScoreThreshold}}){{end}}{{else if eq .FilterState.RiskScoreThreshold 0}}All{{else}}≥ {{.FilterState.RiskScoreThreshold}}{{end}}</span>
+          </div>
+          <input type="range" id="riskScoreSlider" min="0" max="1000" step="50" value="{{.FilterState.RiskScoreThreshold}}" class="filters-popover-slider"{{if .FilterState.RiskScoreMixed}} data-mixed="true"{{end}} aria-label="Minimum risk score">
+        </div>
+        {{end}}
+        {{if and .FilterState.RiskScoreEnabled .FilterState.IssueViewOptionsEnabled}}<div class="filters-popover-divider"></div>{{end}}
+        {{if .FilterState.IssueViewOptionsEnabled}}
+        <div class="filters-popover-section">
+          <div class="filters-popover-label filters-popover-section-label">Issue view options</div>
+          <label class="filters-popover-check"><input type="checkbox" data-filter-type="issueView" data-filter-value="openIssues"{{if .FilterState.IssueViewOptions.OpenIssues}} checked{{end}}{{if .FilterState.MixedIssueViewOptions.OpenIssues}} data-mixed="true"{{end}}><span>Show open issues</span></label>
+          <label class="filters-popover-check"><input type="checkbox" data-filter-type="issueView" data-filter-value="ignoredIssues"{{if .FilterState.IssueViewOptions.IgnoredIssues}} checked{{end}}{{if .FilterState.MixedIssueViewOptions.IgnoredIssues}} data-mixed="true"{{end}}><span>Show ignored issues</span></label>
+        </div>
+        {{end}}
+        <div class="filters-popover-footer">
+          <button type="button" class="filters-popover-reset" id="filtersResetBtn">Reset filters</button>
+        </div>
+      </div>
+    </span>
+    {{end}}
   </div>
 
   <div class="tree-container" id="treeContainer" data-total-issues="{{.TotalIssues}}">
@@ -47,6 +74,14 @@
     {{end}}
   </div>
 
+  {{if not .FeedbackBannerDismissed}}
+  <div class="feedback-banner" id="feedbackBanner"{{if not .FeedbackBannerInteracted}} hidden{{end}}>
+    <span class="feedback-banner-text">Snyk has a new look!</span>
+    <a class="feedback-banner-link" href="{{feedbackBannerURL}}" target="_blank" rel="noopener noreferrer">Give feedback</a>
+    <button class="feedback-banner-dismiss" type="button" data-action="dismiss-feedback" aria-label="Dismiss feedback banner">✕</button>
+  </div>
+  {{end}}
+
   <script nonce="${nonce}">{{.Script}}</script>
   ${ideScript}
 </body>
@@ -54,7 +89,7 @@
 
 {{define "treeNode"}}
   {{if eq .Type "folder"}}
-    <div class="tree-node{{if .Expanded}} expanded{{end}}{{if .Children}} tree-node-has-children{{end}}" data-node-id="{{.ID}}"{{if .DeltaEnabled}} data-delta-enabled="true" data-file-path="{{.FilePath}}"{{if .BaseBranch}} data-base-branch="{{.BaseBranch}}"{{end}}{{if .LocalBranches}} data-local-branches="{{joinStrings .LocalBranches ","}}"{{end}}{{if .ReferenceFolderPath}} data-reference-folder-path="{{.ReferenceFolderPath}}"{{end}}{{end}}>
+    <div class="tree-node{{if .Expanded}} expanded{{end}}{{if .Children}} tree-node-has-children{{end}}{{if .Untrusted}} tree-node-untrusted{{end}}" data-node-id="{{.ID}}"{{if .DeltaEnabled}} data-delta-enabled="true" data-file-path="{{.FilePath}}"{{if .BaseBranch}} data-base-branch="{{.BaseBranch}}"{{end}}{{if .LocalBranches}} data-local-branches="{{joinStrings .LocalBranches ","}}"{{end}}{{if .ReferenceFolderPath}} data-reference-folder-path="{{.ReferenceFolderPath}}"{{end}}{{end}}>
       <div class="tree-node-row">
         <span class="tree-chevron"></span>
         <span class="folder-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" opacity="0.6"><path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h3.88l1.62 2H12.5A1.5 1.5 0 0 1 14 5.5v7A1.5 1.5 0 0 1 12.5 14h-9A1.5 1.5 0 0 1 2 12.5z"/></svg></span>
@@ -152,11 +187,8 @@
       <div class="tree-node-row tree-node-row-info untrusted-folder-list-row">
         <span class="untrusted-folder-list-heading">Untrusted Folders:</span>
         <ul class="untrusted-folder-paths">
-          {{range .UntrustedFolderPaths}}<li class="untrusted-folder-path" title="{{.}}"><span class="tree-label" data-truncate-middle="1" data-full-label="{{.}}">{{.}}</span></li>{{end}}
+          {{range .FolderPaths}}<li class="untrusted-folder-path" title="{{.}}"><span class="tree-label" data-truncate-middle="1" data-full-label="{{.}}">{{.}}</span><button type="button" class="untrusted-trust-btn" data-action="trust-folder" data-folder-path="{{.}}">Trust folder</button></li>{{end}}
         </ul>
-      </div>
-      <div class="tree-node-row tree-node-row-info untrusted-action-row">
-        <button type="button" class="untrusted-trust-btn" data-action="trust-folder">Trust folders and continue</button>
       </div>
     </div>
     {{else}}

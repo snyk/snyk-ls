@@ -72,13 +72,17 @@ type TreeNode struct {
 	// severity filters hide every issue; "untrusted-folder" is the
 	// workspace-trust banner with a folder list + Trust button.
 	InfoVariant string `json:"infoVariant,omitempty"`
-	// UntrustedFolderPaths lists the untrusted folder paths shown in the
-	// "untrusted-folder" info banner.
-	UntrustedFolderPaths []string `json:"untrustedFolderPaths,omitempty"`
-	DeltaEnabled         bool     `json:"deltaEnabled,omitempty"`
-	BaseBranch           string   `json:"baseBranch,omitempty"`
-	LocalBranches        []string `json:"localBranches,omitempty"`
-	ReferenceFolderPath  string   `json:"referenceFolderPath,omitempty"`
+	// FolderPaths lists the untrusted folder paths shown in the "untrusted-folder"
+	// info banner.
+	FolderPaths []string `json:"folderPaths,omitempty"`
+	// Untrusted marks a folder node as not-yet-trusted: it renders dimmed and,
+	// having no children, without a chevron (not expandable). It lets the user see
+	// every open project while the trust banner drives the actual trust action.
+	Untrusted           bool     `json:"untrusted,omitempty"`
+	DeltaEnabled        bool     `json:"deltaEnabled,omitempty"`
+	BaseBranch          string   `json:"baseBranch,omitempty"`
+	LocalBranches       []string `json:"localBranches,omitempty"`
+	ReferenceFolderPath string   `json:"referenceFolderPath,omitempty"`
 	// FileIconHTML holds a pre-rendered HTML fragment (inline SVG or <img> tag)
 	// for the file icon shown on file-type nodes. Empty string falls back to the
 	// generic icon defined in the template.
@@ -97,11 +101,36 @@ type MixedSeverity struct {
 	Low      bool `json:"low,omitempty"`
 }
 
+// MixedIssueViewOptions marks, per issue-view option, whether the open folders
+// disagree on that option. Analogous to MixedSeverity: when folders disagree the
+// corresponding popover toggle renders as indeterminate rather than on/off.
+type MixedIssueViewOptions struct {
+	OpenIssues    bool `json:"openIssues,omitempty"`
+	IgnoredIssues bool `json:"ignoredIssues,omitempty"`
+}
+
 // TreeViewFilterState captures the current filter settings for the tree view.
 type TreeViewFilterState struct {
 	SeverityFilter   types.SeverityFilter   `json:"severityFilter"`
 	MixedSeverity    MixedSeverity          `json:"mixedSeverity,omitempty"`
 	IssueViewOptions types.IssueViewOptions `json:"issueViewOptions"`
+	// RiskScoreThreshold is the aggregated minimum-risk-score threshold across
+	// open folders (0 = "All"). When folders disagree, RiskScoreMixed is set and
+	// this carries the highest folder's threshold, so the "Mixed" slider sits at a
+	// defined position and the label can show the value.
+	RiskScoreThreshold    int                   `json:"riskScoreThreshold,omitempty"`
+	RiskScoreMixed        bool                  `json:"riskScoreMixed,omitempty"`
+	MixedIssueViewOptions MixedIssueViewOptions `json:"mixedIssueViewOptions,omitempty"`
+	// RiskScoreEnabled / IssueViewOptionsEnabled gate the two popover sections to
+	// match the server-side filter's feature flags (UseOsTestWorkflow and
+	// SnykCodeConsistentIgnores respectively). They are true when the flag is on
+	// for at least one open folder, so the UI never offers a control that filters
+	// nothing.
+	RiskScoreEnabled        bool `json:"riskScoreEnabled,omitempty"`
+	IssueViewOptionsEnabled bool `json:"issueViewOptionsEnabled,omitempty"`
+	// ShowFilterPopover gates the whole funnel button: there is no popover to open
+	// when neither section is enabled.
+	ShowFilterPopover bool `json:"showFilterPopover,omitempty"`
 }
 
 // DefaultTreeViewFilterState returns filter state with all filters enabled.
@@ -118,6 +147,13 @@ type TreeViewData struct {
 	FilterState TreeViewFilterState `json:"filterState"`
 	TotalIssues int                 `json:"totalIssues"`
 	MultiRoot   bool                `json:"multiRoot"`
+	// FeedbackBannerDismissed suppresses the feedback banner. When true the
+	// renderer omits the banner element entirely.
+	FeedbackBannerDismissed bool `json:"feedbackBannerDismissed"`
+	// FeedbackBannerInteracted controls the banner's initial visibility. When
+	// true the banner renders visible; when false it renders hidden and is
+	// revealed client-side after the user's first interaction with the tree.
+	FeedbackBannerInteracted bool `json:"feedbackBannerInteracted"`
 }
 
 // TreeNodeOption is a functional option for configuring a TreeNode.
@@ -209,8 +245,12 @@ func WithInfoVariant(variant string) TreeNodeOption {
 	return func(n *TreeNode) { n.InfoVariant = variant }
 }
 
-func WithUntrustedFolderPaths(paths []string) TreeNodeOption {
-	return func(n *TreeNode) { n.UntrustedFolderPaths = paths }
+func WithFolderPaths(paths []string) TreeNodeOption {
+	return func(n *TreeNode) { n.FolderPaths = paths }
+}
+
+func WithUntrusted(untrusted bool) TreeNodeOption {
+	return func(n *TreeNode) { n.Untrusted = untrusted }
 }
 
 func WithDeltaEnabled(enabled bool) TreeNodeOption {

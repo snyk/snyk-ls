@@ -17,7 +17,6 @@
 package command
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -134,7 +133,7 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 
 	_, n := workspaceutil.SetupWorkspace(t, mockEngine, types.FilePath("/workspace/one"))
 
-	HandleFolders(engineConfig, mockEngine, mockEngine.GetLogger(), context.Background(), nil, n, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), types.NewConfigResolver(mockEngine.GetLogger()))
+	HandleFolders(engineConfig, mockEngine, mockEngine.GetLogger(), n, persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), types.NewConfigResolver(mockEngine.GetLogger()))
 
 	select {
 	case <-called:
