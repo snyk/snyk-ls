@@ -31,28 +31,62 @@ import (
 //goland:noinspection GoRedundantConversion
 func Test_getLearnLesson_Execute(t *testing.T) {
 	testutil.UnitTest(t)
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
-	eco := "javascript"
-	rule := "javascript%2Fsqlinjection"
-	cwes := "CWE-89,CWE-ZZ"
-	cves := "CVE-2020-1234"
-	data := types.CommandData{
-		Title:     types.GetLearnLesson,
-		CommandId: types.GetLearnLesson,
-		Arguments: []any{rule, eco, cwes, cves, float64(types.DependencyVulnerability)},
+	tests := []struct {
+		name      string
+		eco       string
+		rule      string
+		cwes      string
+		cves      string
+		issueType types.IssueType
+		expCWEs   []string
+		expCVEs   []string
+	}{
+		{
+			name:      "DependencyVulnerability",
+			eco:       "javascript",
+			rule:      "javascript%2Fsqlinjection",
+			cwes:      "CWE-89,CWE-ZZ",
+			cves:      "CVE-2020-1234",
+			issueType: types.DependencyVulnerability,
+			expCWEs:   []string{"CWE-89", "CWE-ZZ"},
+			expCVEs:   []string{"CVE-2020-1234"},
+		},
+		{
+			// Confirms the JSON-number round-trip lands on int8(5) for SecretsIssue.
+			name:      "SecretsIssue",
+			eco:       "",
+			rule:      "",
+			cwes:      "CWE-798",
+			cves:      "",
+			issueType: types.SecretsIssue,
+			expCWEs:   []string{"CWE-798"},
+			expCVEs:   []string{""},
+		},
 	}
-	mockService := mock_learn.NewMockService(ctrl)
-	cut := getLearnLesson{learnService: mockService, command: data}
-	expectedLessonURL := "https://lessonURL"
-	expectedLesson := &learn.Lesson{Url: expectedLessonURL}
-	mockService.EXPECT().
-		GetLesson(eco, rule, []string{"CWE-89", "CWE-ZZ"}, []string{"CVE-2020-1234"}, types.DependencyVulnerability).
-		Return(expectedLesson, nil)
 
-	lesson, err := cut.Execute(t.Context())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-	assert.NoError(t, err)
-	assert.Equal(t, expectedLesson, lesson)
+			data := types.CommandData{
+				Title:     types.GetLearnLesson,
+				CommandId: types.GetLearnLesson,
+				Arguments: []any{tt.rule, tt.eco, tt.cwes, tt.cves, float64(tt.issueType)},
+			}
+			mockService := mock_learn.NewMockService(ctrl)
+			cut := getLearnLesson{learnService: mockService, command: data}
+			expectedLessonURL := "https://lessonURL"
+			expectedLesson := &learn.Lesson{Url: expectedLessonURL}
+			mockService.EXPECT().
+				GetLesson(tt.eco, tt.rule, tt.expCWEs, tt.expCVEs, tt.issueType).
+				Return(expectedLesson, nil)
+
+			lesson, err := cut.Execute(t.Context())
+
+			assert.NoError(t, err)
+			assert.Equal(t, expectedLesson, lesson)
+		})
+	}
 }

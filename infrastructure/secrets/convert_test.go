@@ -22,12 +22,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
+	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -88,7 +92,7 @@ func TestToIssues_SingleFinding_SingleLocation(t *testing.T) {
 	rule := newSecretsRuleProblem("hardcoded-secret", "Hardcoded Secret", []string{"Security"})
 	finding := newFinding("test-key", "Hardcoded Secret Found", "A hardcoded secret was detected", testapi.SeverityHigh, []testapi.FindingLocation{loc}, []testapi.Problem{cwe, rule}, nil)
 
-	issues := converter.ToIssues([]testapi.FindingData{finding}, "", "/folder/path")
+	issues := converter.ToIssues(t.Context(), []testapi.FindingData{finding}, "", "/folder/path")
 
 	require.Len(t, issues, 1)
 	issue := issues[0]
@@ -131,6 +135,35 @@ func TestToIssues_SingleFinding_SingleLocation(t *testing.T) {
 	assert.Equal(t, snyk.CodePoint{9, 9}, additionalData.Rows)
 }
 
+func TestToIssues_PopulatesLessonUrl_WhenLearnServiceInContext(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
+	converter := NewFindingsConverter(logger)
+
+	loc := newSourceLocation("src/config.yml", 10, intPtr(5), intPtr(10), intPtr(20))
+	cwe := newCweProblem("CWE-798")
+	finding := newFinding(
+		"learn-ctx-key", "Hardcoded Secret Found", "A hardcoded secret was detected",
+		testapi.SeverityHigh, []testapi.FindingLocation{loc}, []testapi.Problem{cwe}, nil,
+	)
+
+	expectedLessonURL := "https://learn.snyk.io/lesson/hardcoded-secrets/?loc=ide"
+	ctrl := gomock.NewController(t)
+	learnMock := mock_learn.NewMockService(ctrl)
+	learnMock.EXPECT().
+		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), types.SecretsIssue).
+		Return(&learn.Lesson{Url: expectedLessonURL}, nil).
+		Times(1)
+
+	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
+		ctx2.DepLearnService: learnMock,
+	})
+	issues := converter.ToIssues(ctx, []testapi.FindingData{finding}, "", "/folder/path")
+
+	require.Len(t, issues, 1)
+	assert.Equal(t, expectedLessonURL, issues[0].GetLessonUrl())
+}
+
 func TestToIssues_MultipleLocations_DuplicatesFinding(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	logger := engine.GetLogger()
@@ -140,7 +173,7 @@ func TestToIssues_MultipleLocations_DuplicatesFinding(t *testing.T) {
 	loc2 := newSourceLocation("src/other.yml", 20, intPtr(5), intPtr(20), intPtr(40))
 	finding := newFinding("dup-key", "Secret Found", "desc", testapi.SeverityMedium, []testapi.FindingLocation{loc1, loc2}, nil, nil)
 
-	issues := converter.ToIssues([]testapi.FindingData{finding}, "", "/folder")
+	issues := converter.ToIssues(t.Context(), []testapi.FindingData{finding}, "", "/folder")
 
 	require.Len(t, issues, 2)
 
@@ -154,6 +187,33 @@ func TestToIssues_MultipleLocations_DuplicatesFinding(t *testing.T) {
 	// But different ranges
 	assert.Equal(t, 9, issues[0].GetRange().Start.Line)
 	assert.Equal(t, 19, issues[1].GetRange().Start.Line)
+
+	// Per-file count: one location per file — no multi-loc banner on either issue
+	for _, issue := range issues {
+		ad, ok := issue.GetAdditionalData().(snyk.SecretsIssueData)
+		require.True(t, ok)
+		assert.Equal(t, 1, ad.LocationsCount)
+	}
+}
+
+func TestToIssues_MultipleLocations_SameFile_PopulatesPerFileLocationsCount(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
+	converter := NewFindingsConverter(logger)
+
+	loc1 := newSourceLocation("src/config.yml", 10, intPtr(1), intPtr(10), intPtr(30))
+	loc2 := newSourceLocation("src/config.yml", 20, intPtr(5), intPtr(20), intPtr(40))
+	finding := newFinding("same-file-key", "Secret Found", "desc", testapi.SeverityMedium,
+		[]testapi.FindingLocation{loc1, loc2}, nil, nil)
+
+	issues := converter.ToIssues(t.Context(), []testapi.FindingData{finding}, "", "/folder")
+
+	require.Len(t, issues, 2)
+	for _, issue := range issues {
+		ad, ok := issue.GetAdditionalData().(snyk.SecretsIssueData)
+		require.True(t, ok)
+		assert.Equal(t, 2, ad.LocationsCount)
+	}
 }
 
 func TestToIssues_MultipleFindings(t *testing.T) {
@@ -166,7 +226,7 @@ func TestToIssues_MultipleFindings(t *testing.T) {
 	f1 := newFinding("key-1", "Secret 1", "desc1", testapi.SeverityHigh, []testapi.FindingLocation{loc1}, nil, nil)
 	f2 := newFinding("key-2", "Secret 2", "desc2", testapi.SeverityLow, []testapi.FindingLocation{loc2}, nil, nil)
 
-	issues := converter.ToIssues([]testapi.FindingData{f1, f2}, "/scan", "/folder")
+	issues := converter.ToIssues(t.Context(), []testapi.FindingData{f1, f2}, "/scan", "/folder")
 
 	require.Len(t, issues, 2)
 	assert.Equal(t, "key-1", issues[0].GetID())
@@ -179,7 +239,7 @@ func TestToIssues_NilAttributes_Skipped(t *testing.T) {
 	converter := NewFindingsConverter(logger)
 
 	finding := testapi.FindingData{Attributes: nil}
-	issues := converter.ToIssues([]testapi.FindingData{finding}, "/scan", "/folder")
+	issues := converter.ToIssues(t.Context(), []testapi.FindingData{finding}, "/scan", "/folder")
 
 	assert.Empty(t, issues)
 }
@@ -190,7 +250,7 @@ func TestToIssues_EmptyLocations_Skipped(t *testing.T) {
 	converter := NewFindingsConverter(logger)
 
 	finding := newFinding("key", "title", "desc", testapi.SeverityLow, []testapi.FindingLocation{}, nil, nil)
-	issues := converter.ToIssues([]testapi.FindingData{finding}, "/scan", "/folder")
+	issues := converter.ToIssues(t.Context(), []testapi.FindingData{finding}, "/scan", "/folder")
 
 	assert.Empty(t, issues)
 }
@@ -200,7 +260,7 @@ func TestToIssues_EmptyFindings(t *testing.T) {
 	logger := engine.GetLogger()
 	converter := NewFindingsConverter(logger)
 
-	issues := converter.ToIssues([]testapi.FindingData{}, "/scan", "/folder")
+	issues := converter.ToIssues(t.Context(), []testapi.FindingData{}, "/scan", "/folder")
 
 	assert.Empty(t, issues)
 }
@@ -214,7 +274,7 @@ func TestToIssues_RuleIDFallsBackToKey(t *testing.T) {
 	// No secrets rule problem, so ruleID should default to key
 	finding := newFinding("fallback-key", "title", "desc", testapi.SeverityLow, []testapi.FindingLocation{loc}, nil, nil)
 
-	issues := converter.ToIssues([]testapi.FindingData{finding}, "/scan", "/folder")
+	issues := converter.ToIssues(t.Context(), []testapi.FindingData{finding}, "/scan", "/folder")
 
 	require.Len(t, issues, 1)
 	assert.Equal(t, "fallback-key", issues[0].GetID())
@@ -522,7 +582,7 @@ func TestToIssues_IgnoredFinding(t *testing.T) {
 		&testapi.Suppression{Status: testapi.SuppressionStatusIgnored, Justification: strPtr("False positive")},
 	)
 
-	issues := converter.ToIssues([]testapi.FindingData{finding}, "/scan", "/folder")
+	issues := converter.ToIssues(t.Context(), []testapi.FindingData{finding}, "/scan", "/folder")
 
 	require.Len(t, issues, 1)
 	assert.True(t, issues[0].GetIsIgnored())
@@ -539,7 +599,7 @@ func TestToIssues_FindingIdFromUUID(t *testing.T) {
 	loc := newSourceLocation("file.yml", 1, nil, nil, nil)
 	finding := newFinding("my-key", "title", "desc", testapi.SeverityLow, []testapi.FindingLocation{loc}, nil, nil)
 
-	issues := converter.ToIssues([]testapi.FindingData{finding}, "/scan", "/folder")
+	issues := converter.ToIssues(t.Context(), []testapi.FindingData{finding}, "/scan", "/folder")
 
 	require.Len(t, issues, 1)
 	assert.NotEmpty(t, issues[0].GetFindingId())
@@ -562,7 +622,7 @@ func TestToIssues_NilFindingId(t *testing.T) {
 		},
 	}
 
-	issues := converter.ToIssues([]testapi.FindingData{finding}, "/scan", "/folder")
+	issues := converter.ToIssues(t.Context(), []testapi.FindingData{finding}, "/scan", "/folder")
 
 	require.Len(t, issues, 1)
 	assert.Equal(t, "key-no-id", issues[0].GetFindingId())

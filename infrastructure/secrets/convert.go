@@ -17,6 +17,7 @@
 package secrets
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -26,6 +27,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/learn"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -43,18 +46,44 @@ func NewFindingsConverter(logger *zerolog.Logger) *FindingsConverter {
 
 // ToIssues converts a slice of testapi.FindingData into a slice of types.Issue.
 // Findings with multiple locations produce one issue per location.
-func (c *FindingsConverter) ToIssues(findings []testapi.FindingData, scanPath types.FilePath, folderPath types.FilePath) []types.Issue {
+//
+// When ctx carries a learn.Service via ctx2.DepLearnService, each produced issue is
+// additionally enriched with a Snyk Learn LessonUrl. A missing service, a learn
+// lookup error, or a nil/empty lesson all leave LessonUrl empty — the scan never
+// fails because of Learn cache misses.
+func (c *FindingsConverter) ToIssues(ctx context.Context, findings []testapi.FindingData, scanPath types.FilePath, folderPath types.FilePath) []types.Issue {
+	learnService := learnServiceFromContext(ctx)
 	var issues []types.Issue
 	for i := range findings {
-		issues = append(issues, c.findingToIssues(&findings[i], scanPath, folderPath)...)
+		issues = append(issues, c.findingToIssues(&findings[i], scanPath, folderPath, learnService)...)
 	}
 	c.logger.Debug().Int("count", len(issues)).Msg("converted findings to issues")
 	return issues
 }
 
+// learnServiceFromContext returns the Snyk Learn service stored in the request
+// context dependencies map, or nil when absent. Mirrors the read pattern used by
+// infrastructure/oss/unified_converter.go.
+func learnServiceFromContext(ctx context.Context) learn.Service {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil
+	}
+	ls, _ := deps[ctx2.DepLearnService].(learn.Service)
+	return ls
+}
+
 // findingToIssues converts a single testapi.FindingData into one issue per location.
 // Returns an empty slice when the finding cannot be converted (e.g. missing attributes or locations).
-func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, scanPath types.FilePath, folderPath types.FilePath) []types.Issue {
+// When learnService is non-nil, each emitted issue's LessonUrl is populated in-place
+// from the Snyk Learn cache; lookup errors or empty lessons leave LessonUrl untouched.
+//
+// Sentry-reporter parity with the SAST scanner is intentionally omitted here:
+// secrets.Scanner currently has no errorReporter dependency and the rest of the
+// package logs transient errors via the scanner's zerolog logger only. Adding a
+// non-actionable Learn-cache-miss Sentry event would be disproportionate; revisit
+// alongside any future Sentry pass on the secrets package.
+func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, scanPath types.FilePath, folderPath types.FilePath, learnService learn.Service) []types.Issue {
 	if finding.Attributes == nil {
 		return nil
 	}
@@ -105,14 +134,14 @@ func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, scanPa
 			Categories:     categories,
 			Cols:           snyk.CodePoint{issueRange.Start.Character, issueRange.End.Character},
 			Rows:           snyk.CodePoint{issueRange.Start.Line, issueRange.End.Line},
-			LocationsCount: len(attrs.Locations),
+			LocationsCount: countSourceLocationsInFile(attrs.Locations, sourceLocation.FilePath),
 			RiskScore:      riskScore,
 		}
 
 		message := c.getMessage(attrs.Title, attrs.Description)
 		formattedMessage := c.formattedMessageMarkdown(severity, attrs.Title, attrs.Description, cwes)
 
-		issues = append(issues, &snyk.Issue{
+		issue := &snyk.Issue{
 			ID:               ruleID,
 			Severity:         severity,
 			IssueType:        types.SecretsIssue,
@@ -128,9 +157,33 @@ func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, scanPa
 			FindingId:        attrs.Key,
 			Fingerprint:      attrs.Key,
 			AdditionalData:   additionalData,
-		})
+		}
+		c.enrichWithLearnLesson(issue, learnService)
+		issues = append(issues, issue)
 	}
 	return issues
+}
+
+// enrichWithLearnLesson looks up the Snyk Learn lesson for an issue and writes
+// lesson.Url into LessonUrl on success. A nil learnService, a lookup error, or
+// a nil/empty lesson all leave LessonUrl untouched — Learn cache misses must
+// never fail the scan.
+func (c *FindingsConverter) enrichWithLearnLesson(issue *snyk.Issue, learnService learn.Service) {
+	if learnService == nil {
+		return
+	}
+	lesson, err := learnService.GetLesson(
+		issue.GetEcosystem(), issue.GetID(),
+		issue.GetCWEs(), issue.GetCVEs(),
+		issue.GetIssueType(),
+	)
+	if err != nil {
+		c.logger.Warn().Err(err).Str("issueId", issue.GetID()).Msg("Failed to get learn lesson")
+		return
+	}
+	if lesson != nil && lesson.Url != "" {
+		issue.SetLessonUrl(lesson.Url)
+	}
 }
 
 func (c *FindingsConverter) getMessage(title, description string) string {
@@ -203,6 +256,22 @@ func (c *FindingsConverter) formattedMessageMarkdown(severity types.Severity, ti
 	builder.WriteString(description)
 
 	return builder.String()
+}
+
+// countSourceLocationsInFile returns how many finding locations share the same
+// relative file path, for accurate "locations in this file" UI on per-location issues.
+func countSourceLocationsInFile(locations []testapi.FindingLocation, filePath string) int {
+	count := 0
+	for _, loc := range locations {
+		sl, err := loc.AsSourceLocation()
+		if err != nil {
+			continue
+		}
+		if sl.FilePath == filePath {
+			count++
+		}
+	}
+	return count
 }
 
 // toRange converts a 1-based SourceLocation into a 0-based types.Range.
