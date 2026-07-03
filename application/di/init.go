@@ -235,29 +235,18 @@ func initApplication(conf configuration.Configuration, engine workflow.Engine, l
 	var remediationProvider remediation.RemediationProvider
 	var folderRemediator remediation.FolderRemediator
 	remediationNotifier = nil
-	if conf.GetBool(RemediationAgentEnabledKey) {
-		p := remediation.NewRemyProvider(engine, nil)
-		remediationProvider = p
-		if n, ok := p.(remediation.FileChangeNotifier); ok {
-			remediationNotifier = n
-		}
-		if fr, ok := p.(remediation.FolderRemediator); ok {
-			folderRemediator = fr
-		}
+	p := remediation.NewRemyProvider(engine, nil)
+	remediationProvider = p
+	if n, ok := p.(remediation.FileChangeNotifier); ok {
+		remediationNotifier = n
+	}
+	if fr, ok := p.(remediation.FolderRemediator); ok {
+		folderRemediator = fr
 	}
 
 	codeActionService = codeaction.NewService(engine, w, fileWatcher, notifier, featureFlagService, configResolver, remediationProvider)
 	command.SetService(command.NewService(engine, logger, authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, ldxSyncService, configResolver, scanStateAggregator.StateSnapshot, folderRemediator))
 }
-
-// RemediationAgentEnabledKey is the configuration key that gates the remy-backed
-// remediation provider. The feature ships off by default; set this key to true
-// only when the host CLI bundles the remy subcommand and an LLM API key is
-// available.
-//
-// The key is exported so that server.go and other callers can reference the
-// same constant rather than duplicating the raw string literal.
-const RemediationAgentEnabledKey = "remediation_agent_enabled"
 
 /*
 TODO Accessors: This should go away, since all dependencies should be satisfied at startup-time, if needed for testing

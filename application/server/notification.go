@@ -147,7 +147,7 @@ func registerNotifier(conf configuration.Configuration, engine workflow.Engine, 
 			notifyClient(logger, srv, "$/snyk.treeView", params)
 			l.Debug().Msg("sending tree view to client")
 		case types.ApplyWorkspaceEditParams:
-			handleApplyWorkspaceEdit(conf, srv, params, &l)
+			handleApplyWorkspaceEdit(srv, params, &l)
 			l.Debug().
 				Msg("sending apply workspace edit request to client")
 		case types.CodeLensRefresh:
@@ -234,14 +234,8 @@ func handleCodelensRefresh(conf configuration.Configuration, srv types.Server, l
 	}
 }
 
-func handleApplyWorkspaceEdit(conf configuration.Configuration, srv types.Server, params types.ApplyWorkspaceEditParams, logger *zerolog.Logger) {
+func handleApplyWorkspaceEdit(srv types.Server, params types.ApplyWorkspaceEditParams, logger *zerolog.Logger) {
 	method := "handleApplyWorkspaceEdit"
-	key := types.SettingClientCapabilities
-	capabilities, _ := conf.Get(key).(types.ClientCapabilities)
-	if !capabilities.Workspace.ApplyEdit {
-		logger.Debug().Str("method", method).Msg("workspace/applyEdit not supported by client, not sending request")
-		return
-	}
 	callback, err := srv.Callback(context.Background(), "workspace/applyEdit", params)
 	if err != nil {
 		logger.Err(err).Str("method", method).Msg("error while sending workspace/applyEdit request")
