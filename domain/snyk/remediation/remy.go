@@ -99,12 +99,28 @@ var _ FolderRemediator = (*remyProvider)(nil)
 // auto-approve suppresses interactive prompts required for non-interactive LS use.
 func gafRunner(ctx context.Context, eng workflow.Engine, contentRoot string, _ string) error {
 	remyWorkflowID := workflow.NewWorkflowIdentifier("fix")
-	conf := eng.GetConfiguration().Clone()
-	conf.Set("agentic", true)
-	conf.Set("auto-approve", true)
-	conf.Set(configuration.INPUT_DIRECTORY, []string{contentRoot})
+	conf := buildRemyFixConfig(eng.GetConfiguration(), contentRoot)
 	_, err := eng.Invoke(remyWorkflowID, workflow.WithContext(ctx), workflow.WithConfig(conf))
 	return err
+}
+
+// buildRemyFixConfig clones base and sets the configuration keys that select and
+// drive the fix workflow for contentRoot. It is a pure helper (no engine, no I/O)
+// so the exact config the runner hands to the workflow can be asserted in a unit
+// test — the regression guard that keeps the product flow from silently reverting
+// to a no-op.
+func buildRemyFixConfig(base configuration.Configuration, contentRoot string) configuration.Configuration {
+	conf := base.Clone()
+	conf.Set("agentic", true)
+	conf.Set("auto-approve", true)
+	conf.Set("quiet", true)
+	// Select the Snyk Code (SAST) agentic flow. Without an explicit product flow
+	// the fix workflow defaults to SCA, detects no changes, and no-ops. These keys
+	// mirror the proven CLI invocation `snyk fix <dir> --agentic --sast --experimental --auto-approve`.
+	conf.Set("sast", true)
+	conf.Set("experimental", true)
+	conf.Set(configuration.INPUT_DIRECTORY, []string{contentRoot})
+	return conf
 }
 
 // NewRemyProvider constructs a remyProvider.

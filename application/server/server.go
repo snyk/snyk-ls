@@ -703,7 +703,7 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 				CodeLensProvider:    &sglsp.CodeLensOptions{ResolveProvider: false},
 				InlineValueProvider: true,
 				ExecuteCommandProvider: &sglsp.ExecuteCommandOptions{
-					Commands: remediationGatedCommands(conf),
+					Commands: commands(conf),
 				},
 			},
 		}
@@ -714,11 +714,7 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 	})
 }
 
-// remediationGatedCommands returns the full command list for ExecuteCommandProvider,
-// appending RemediationAgentFixFolderCommand only when di.RemediationAgentEnabledKey
-// is true. Advertising a command the feature flag is off teaches the client that the
-// command exists, which leads to "command not found" errors when the client calls it.
-func remediationGatedCommands(conf configuration.Configuration) []string {
+func commands(conf configuration.Configuration) []string {
 	cmds := []string{
 		types.NavigateToRangeCommand,
 		types.WorkspaceScanCommand,
@@ -752,9 +748,7 @@ func remediationGatedCommands(conf configuration.Configuration) []string {
 		types.UpdateFolderConfig,
 		types.DismissFeedbackBanner,
 		types.FeedbackBannerInteracted,
-	}
-	if conf.GetBool(di.RemediationAgentEnabledKey) {
-		cmds = append(cmds, types.RemediationAgentFixFolderCommand)
+		types.RemediationAgentFixFolderCommand,
 	}
 	return cmds
 }

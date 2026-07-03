@@ -48,9 +48,6 @@ func TestDI_FixFolderCommand_WiredWhenEnabled(t *testing.T) {
 	repo := initGitRepoForDI(t)
 	folderURI := string(uri.PathToUri(types.FilePath(repo)))
 
-	// Set the flag so initApplication builds the real remediationProvider.
-	engine.GetConfiguration().Set(di.RemediationAgentEnabledKey, true)
-
 	// Call di.Init to exercise the real wiring path.
 	deps := di.Init(engine, tokenService)
 	_ = deps

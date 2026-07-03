@@ -366,11 +366,13 @@ func TestFixFolder_Execute_ProviderError_Propagated(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Fix 1: ApplyEdit capability guard (UNIT-011, UNIT-012)
+// ApplyEdit capability: the command does NOT gate on workspace/applyEdit
 // ---------------------------------------------------------------------------
 
 // newFixFolderCmdWithEngine constructs a remediationFixFolderCommand with an
-// engine so that the capability guard can be exercised.
+// engine. The command no longer gates on the applyEdit capability, so the
+// applyEdit param does not change command behavior; it only controls whether
+// the engine reports the capability.
 func newFixFolderCmdWithEngine(t *testing.T, args []any, provider remediation.FolderRemediator, notifier *fakeNotifier, applyEdit bool) types.Command {
 	t.Helper()
 	engine, _ := testutil.UnitTestWithEngine(t)
@@ -386,9 +388,11 @@ func newFixFolderCmdWithEngine(t *testing.T, args []any, provider remediation.Fo
 	}, provider, notifier, engine)
 }
 
-// UNIT-011: when ApplyEdit capability is false AND provider returns a non-empty
-// edit, Execute must return a non-nil error and notifier.Send must NEVER be called.
-func TestFixFolder_Execute_ApplyEditCapabilityFalse_ReturnsErrorNoSend(t *testing.T) {
+// when the ApplyEdit capability is ABSENT and the provider returns a non-empty
+// edit, Execute must still succeed and deliver the edit. This command is invoked
+// programmatically (the caller consumes the mutated worktree directly), so it
+// must not gate on the client's workspace/applyEdit capability.
+func TestFixFolder_Execute_ApplyEditCapabilityAbsent_StillSendsEdit(t *testing.T) {
 	repo := initGitRepoForCmd(t)
 	folderURI := string(uri.PathToUri(types.FilePath(repo)))
 	notifier := &fakeNotifier{}
@@ -405,28 +409,27 @@ func TestFixFolder_Execute_ApplyEditCapabilityFalse_ReturnsErrorNoSend(t *testin
 	cmd := newFixFolderCmdWithEngine(t, []any{folderURI}, provider, notifier, false /* applyEdit=false */)
 	_, err := cmd.Execute(context.Background())
 
-	require.Error(t, err, "must return error when ApplyEdit capability is false")
-	assert.Contains(t, err.Error(), "applyEdit", "error must mention the missing capability")
-	assert.Empty(t, notifier.ApplyEditsSent(), "notifier.Send must NOT be called when capability is absent")
+	require.NoError(t, err, "must succeed even when the ApplyEdit capability is absent")
+	require.Len(t, notifier.ApplyEditsSent(), 1, "notifier.Send must be called exactly once regardless of applyEdit capability")
 }
 
-// UNIT-012b: when provider is nil AND client lacks applyEdit, Execute must
-// return the "not enabled" error — NOT the capability error. The feature-gate
-// check (provider nil) must precede the applyEdit capability check.
-func TestFixFolder_Execute_NilProvider_BeforeCapabilityCheck(t *testing.T) {
+// when the provider is nil, Execute must return the "not enabled" error. Even
+// with an engine present and the applyEdit capability absent, the error must be
+// about the disabled feature and must never mention applyEdit.
+func TestFixFolder_Execute_NilProvider_WithEngine_ReturnsNotEnabled(t *testing.T) {
 	repo := initGitRepoForCmd(t)
 	folderURI := string(uri.PathToUri(types.FilePath(repo)))
 	notifier := &fakeNotifier{}
 
-	// Build command with nil provider AND applyEdit=false.
+	// Build command with nil provider AND an engine (applyEdit=false).
 	cmd := newFixFolderCmdWithEngine(t, []any{folderURI}, nil /* nil provider */, notifier, false /* applyEdit=false */)
 	_, err := cmd.Execute(context.Background())
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not enabled",
-		"when provider is nil, Execute must return 'not enabled' regardless of applyEdit capability; got: %v", err)
+		"when provider is nil, Execute must return 'not enabled'; got: %v", err)
 	assert.NotContains(t, err.Error(), "applyEdit",
-		"capability error must NOT be surfaced when the feature is off (provider nil)")
+		"the 'not enabled' error must never mention applyEdit")
 }
 
 // UNIT-012: when ApplyEdit capability is true AND provider returns a non-empty
