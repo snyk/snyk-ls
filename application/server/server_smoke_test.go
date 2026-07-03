@@ -2520,13 +2520,18 @@ func substituteRemyFlow(t *testing.T, engine workflow.Engine) {
 			return nil, fmt.Errorf("remy substitute: INPUT_DIRECTORY not set")
 		}
 		contentRoot := dirs[0]
+		// --sast selects the Snyk Code agentic fix flow. The CLI requires an explicit
+		// product flow (--sast/--sca); without one it prints "No product selected" and
+		// exits 0 without changing any files. Both remediation smoke tests scan Code
+		// (enableOnlyProducts(ProductCode)), so Code is the flow to run.
 		cmd := exec.CommandContext(t.Context(), previewCLIPath,
 			"fix", contentRoot,
-			"--agentic", "--experimental", "--auto-approve",
+			"--agentic", "--sast", "--experimental", "--auto-approve",
 		)
 		cmd.Dir = contentRoot
 		cmd.Env = os.Environ()
-		if out, err := cmd.CombinedOutput(); err != nil {
+		out, err := cmd.CombinedOutput()
+		if err != nil {
 			return nil, fmt.Errorf("remy substitute: snyk fix --agentic failed: %w\n%s", err, out)
 		}
 		return nil, nil
@@ -2538,10 +2543,11 @@ func substituteRemyFlow(t *testing.T, engine workflow.Engine) {
 // Test_Smoke_RemediationAgent_CodeAction verifies the full LSP code-action
 // roundtrip for the quickfix.snyk.remediationAgent action (SMOKE-001).
 //
-// It clones a real repo, waits for Snyk Code scan, finds a fixable issue,
-// lists code actions to confirm the Remy action has the correct protocol shape
-// (deferred, kind set, UUID present), resolves it via codeAction/resolve, and
-// asserts the resolved WorkspaceEdit is non-nil with at least one file change.
+// It clones a real repo, waits for Snyk Code scan, then resolves the Remy code
+// action across the fixable findings. The folder-wide remy fix changes only a
+// subset of files and snyk-ls filters each resolved action to the finding's own
+// file, so it confirms the protocol shape (deferred, kind set, UUID present) and
+// that at least one fixable finding resolves to a WorkspaceEdit with a change.
 //
 // Skips only when LLM credentials are absent — set ANTHROPIC_API_KEY or
 // OPENAI_API_KEY. The preview CLI always bundles the remy extension, so
@@ -2552,7 +2558,6 @@ func Test_Smoke_RemediationAgent_CodeAction(t *testing.T) {
 	}
 
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
-	engine.GetConfiguration().Set(di.RemediationAgentEnabledKey, true)
 	testutil.CreateDummyProgressListener(t)
 
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
@@ -2568,46 +2573,148 @@ func Test_Smoke_RemediationAgent_CodeAction(t *testing.T) {
 	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
 	require.NotEmpty(t, issueList, "expected at least one Snyk Code issue in scan results")
 
-	var fixableIssue *types.ScanIssue
+	// Collect every fixable (hasAIFix) finding. The remy "fix" workflow fixes the
+	// whole folder, changing a subset of files; snyk-ls then filters each resolved
+	// code action down to the finding's own file. A given finding therefore yields
+	// an edit only when remy actually changed that file — so we resolve the remy
+	// action for each fixable finding until one lands in a changed file. remy runs
+	// once (on the first resolve); resolutions for the other changed files are then
+	// served from the provider's cache.
+	var fixable []types.ScanIssue
 	for i := range issueList {
 		data, ok := issueList[i].AdditionalData.(map[string]interface{})
 		if ok && data["hasAIFix"] == true {
-			fixableIssue = &issueList[i]
-			break
+			fixable = append(fixable, issueList[i])
 		}
 	}
-	if fixableIssue == nil {
-		t.Skip("no fixable (hasAIFix=true) Code issue in scan results")
+	require.NotEmpty(t, fixable, "expected at least one fixable (hasAIFix) Code issue in scan results")
+
+	var shapeChecked, sawEdit bool
+	for i := range fixable {
+		// --- list phase ---
+		response, err := loc.Client.Call(t.Context(), "textDocument/codeAction", sglsp.CodeActionParams{
+			TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(fixable[i].FilePath)},
+			Range:        fixable[i].Range,
+		})
+		require.NoError(t, err)
+
+		var actions []types.LSPCodeAction
+		require.NoError(t, response.UnmarshalResult(&actions))
+
+		var remyAction *types.LSPCodeAction
+		for j := range actions {
+			if actions[j].Kind == types.RemediationAgentQuickFix {
+				remyAction = &actions[j]
+				break
+			}
+		}
+		if remyAction == nil {
+			continue
+		}
+		// Verify the protocol shape once: the action is deferred (no inline edit at
+		// list time) and carries a resolve UUID in Data.
+		if !shapeChecked {
+			assert.Nil(t, remyAction.Edit, "Remy action must carry no edit at list time (deferred)")
+			assert.NotNil(t, remyAction.Data, "Remy action must carry a resolve UUID in Data")
+			shapeChecked = true
+		}
+
+		// --- resolve phase ---
+		resolveResponse, err := loc.Client.Call(t.Context(), "codeAction/resolve", remyAction)
+		require.NoError(t, err)
+
+		var resolved types.LSPCodeAction
+		require.NoError(t, resolveResponse.UnmarshalResult(&resolved))
+		if resolved.Edit == nil || len(resolved.Edit.Changes) == 0 {
+			// remy did not change this finding's file; try the next fixable finding.
+			continue
+		}
+
+		// The path delivered an edit — assert it is correctly scoped. snyk-ls must
+		// filter the folder-wide remy fix down to EXACTLY this finding's own file
+		// (not the other files remy also changed), keyed to that file, with real
+		// text edits.
+		assert.Equal(t, types.RemediationAgentQuickFix, resolved.Kind, "resolved action must preserve kind")
+		require.Len(t, resolved.Edit.Changes, 1,
+			"resolved edit must be filtered to exactly the finding's file, not the whole folder")
+		fileURI := string(uri.PathToUri(fixable[i].FilePath))
+		editsForFile, keyed := resolved.Edit.Changes[fileURI]
+		require.True(t, keyed, "resolved edit must be keyed to the finding's own file %s", fixable[i].FilePath)
+		assert.NotEmpty(t, editsForFile, "resolved edit for the finding's file must contain at least one text edit")
+		sawEdit = true
+		break
+	}
+	require.True(t, shapeChecked, "expected a Remy code action to be offered for at least one fixable finding")
+	require.True(t, sawEdit,
+		"expected the remediation code-action path to deliver an edit for at least one fixable finding")
+}
+
+// Test_Smoke_RemediationAgent_FixFolder verifies the full LSP command roundtrip
+// for snyk.remediationAgent.fixFolder — the folder-wide sibling of the code-action
+// remediation path exercised by Test_Smoke_RemediationAgent_CodeAction.
+//
+// It clones a real repo, registers the preview-CLI remy "fix" workflow, enables the
+// workspace/applyEdit client capability, invokes the command via
+// workspace/executeCommand, and asserts the server delivers the resulting fix as a
+// server→client workspace/applyEdit callback carrying at least one file change.
+//
+// The executeCommand response is null on both the edit and no-edit paths, so the
+// real success signal is the applyEdit callback, not the command response. Unlike
+// the code-action test, the folder command runs remy over the whole folder with no
+// per-finding gate; on NodejsGoof (abundant fixable vulnerabilities) the agentic
+// fixer reliably produces at least one change.
+//
+// Skips only when LLM credentials are absent — set ANTHROPIC_API_KEY or
+// OPENAI_API_KEY. The preview CLI always bundles the remy extension, so credential
+// absence is the only legitimate reason to skip.
+func Test_Smoke_RemediationAgent_FixFolder(t *testing.T) {
+	if os.Getenv("ANTHROPIC_API_KEY") == "" && os.Getenv("OPENAI_API_KEY") == "" {
+		t.Skip("skipping Remy smoke test: LLM credentials not available — set ANTHROPIC_API_KEY or OPENAI_API_KEY")
 	}
 
-	// --- list phase: verify protocol shape ---
-	response, err := loc.Client.Call(t.Context(), "textDocument/codeAction", sglsp.CodeActionParams{
-		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(fixableIssue.FilePath)},
-		Range:        fixableIssue.Range,
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
+	testutil.CreateDummyProgressListener(t)
+
+	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	enableOnlyProducts(t, engine, product.ProductCode)
+
+	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, engine, tokenService)
+	substituteRemyFlow(t, engine)
+
+	// The fixFolder command handler and handleApplyWorkspaceEdit both require the
+	// workspace/applyEdit client capability, which prepareInitParams does not set.
+	// Enable it on the engine config after initialization so the command runs and
+	// the applyEdit request is not silently dropped.
+	caps := types.ClientCapabilities{}
+	caps.Workspace.ApplyEdit = true
+	engine.GetConfiguration().Set(types.SettingClientCapabilities, caps)
+
+	// Invoke the command end-to-end. It is blocking: the call returns only after
+	// remy has finished fixing the folder.
+	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		Command:   types.RemediationAgentFixFolderCommand,
+		Arguments: []any{string(uri.PathToUri(cloneTargetDir))},
 	})
-	require.NoError(t, err)
+	require.NoError(t, err, "fixFolder command must execute the full flow without error")
 
-	var actions []types.LSPCodeAction
-	require.NoError(t, response.UnmarshalResult(&actions))
+	// notifier.Send is async: the applyEdit callback is delivered on the notifier
+	// consumer goroutine shortly after the command returns. Poll until it arrives.
+	var applyEditCallbacks []jrpc2.Request
+	assert.Eventually(t, func() bool {
+		applyEditCallbacks = jsonRPCRecorder.FindCallbacksByMethod("workspace/applyEdit")
+		return len(applyEditCallbacks) > 0
+	}, maxIntegTestDuration, 100*time.Millisecond,
+		"expected a server→client workspace/applyEdit callback carrying the remediation fix")
 
-	var remyAction *types.LSPCodeAction
-	for i := range actions {
-		if actions[i].Kind == types.RemediationAgentQuickFix {
-			remyAction = &actions[i]
+	var sawFileChange bool
+	for i := range applyEditCallbacks {
+		var params types.ApplyWorkspaceEditParams
+		require.NoError(t, applyEditCallbacks[i].UnmarshalParams(&params))
+		if params.Edit != nil && len(params.Edit.Changes) > 0 {
+			sawFileChange = true
 			break
 		}
 	}
-	require.NotNil(t, remyAction, "expected code action with kind %q", types.RemediationAgentQuickFix)
-	assert.Nil(t, remyAction.Edit, "Remy action must carry no edit at list time (deferred)")
-	assert.NotNil(t, remyAction.Data, "Remy action must carry a resolve UUID in Data")
-
-	// --- resolve phase: assert real edit returned ---
-	resolveResponse, err := loc.Client.Call(t.Context(), "codeAction/resolve", remyAction)
-	require.NoError(t, err)
-
-	var resolved types.LSPCodeAction
-	require.NoError(t, resolveResponse.UnmarshalResult(&resolved))
-	assert.Equal(t, types.RemediationAgentQuickFix, resolved.Kind, "resolved action must preserve kind")
-	require.NotNil(t, resolved.Edit, "resolved edit must be non-nil when LLM credentials are present")
-	assert.NotEmpty(t, resolved.Edit.Changes, "resolved edit must contain at least one file change")
+	assert.True(t, sawFileChange, "expected at least one workspace/applyEdit callback with a file change")
 }

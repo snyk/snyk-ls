@@ -18,7 +18,6 @@ package command
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -71,14 +70,6 @@ func (cmd *remediationFixFolderCommand) Execute(ctx context.Context) (any, error
 
 	if cmd.provider == nil {
 		return nil, fmt.Errorf("snyk.remediationAgent.fixFolder: remediation agent is not enabled")
-	}
-
-	if cmd.engine != nil {
-		key := types.SettingClientCapabilities
-		capabilities, _ := cmd.engine.GetConfiguration().Get(key).(types.ClientCapabilities)
-		if !capabilities.Workspace.ApplyEdit {
-			return nil, errors.New("snyk.remediationAgent.fixFolder: client does not support workspace/applyEdit capability")
-		}
 	}
 
 	edit, err := cmd.provider.FixFolder(ctx, path)
