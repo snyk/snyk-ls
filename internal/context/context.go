@@ -134,6 +134,28 @@ func DependenciesFromContext(ctx context.Context) (map[string]any, bool) {
 	return d, ok
 }
 
+// CopyDependenciesFromContext returns a shallow copy of the dependencies map
+// stored in ctx, or an empty map if none is present. Merge helpers use this so
+// that enriching a context never mutates the map shared with the parent context.
+// Without the copy, deriving multiple contexts concurrently from a single parent
+// (e.g. one scan goroutine per folder) races on the shared map.
+func CopyDependenciesFromContext(ctx context.Context) map[string]any {
+	deps, found := DependenciesFromContext(ctx)
+	newDeps := make(map[string]any, len(deps)+1)
+	if found {
+		for k, v := range deps {
+			newDeps[k] = v
+		}
+	}
+	return newDeps
+}
+
+// copyDependenciesFromContext is the package-internal alias kept for backward
+// compatibility with internal callers that pre-date the exported version.
+func copyDependenciesFromContext(ctx context.Context) map[string]any {
+	return CopyDependenciesFromContext(ctx)
+}
+
 // ConfigResolverFromContext returns the ConfigResolver stored in ctx, if any.
 // It reads from the dependencies map using DepConfigResolver.
 //
@@ -152,10 +174,7 @@ func ConfigResolverFromContext(ctx context.Context) (types.ConfigResolverInterfa
 // NewContextWithConfigResolver returns a new Context that carries the given ConfigResolver
 // in the dependencies map. Merges with existing dependencies if present.
 func NewContextWithConfigResolver(ctx context.Context, resolver types.ConfigResolverInterface) context.Context {
-	deps, found := DependenciesFromContext(ctx)
-	if !found {
-		deps = map[string]any{}
-	}
+	deps := copyDependenciesFromContext(ctx)
 	deps[DepConfigResolver] = resolver
 	return NewContextWithDependencies(ctx, deps)
 }
@@ -174,10 +193,7 @@ func FolderConfigFromContext(ctx context.Context) (*types.FolderConfig, bool) {
 // NewContextWithFolderConfig returns a new Context that carries the given FolderConfig
 // in the dependencies map. Merges with existing dependencies if present.
 func NewContextWithFolderConfig(ctx context.Context, fc *types.FolderConfig) context.Context {
-	deps, found := DependenciesFromContext(ctx)
-	if !found {
-		deps = map[string]any{}
-	}
+	deps := copyDependenciesFromContext(ctx)
 	deps[DepFolderConfig] = fc
 	return NewContextWithDependencies(ctx, deps)
 }
@@ -195,10 +211,7 @@ func WorkspaceFromContext(ctx context.Context) (types.Workspace, bool) {
 // NewContextWithWorkspace returns a new Context that carries the given Workspace
 // in the dependencies map. Merges with existing dependencies if present.
 func NewContextWithWorkspace(ctx context.Context, ws types.Workspace) context.Context {
-	deps, found := DependenciesFromContext(ctx)
-	if !found {
-		deps = map[string]any{}
-	}
+	deps := copyDependenciesFromContext(ctx)
 	deps[DepWorkspace] = ws
 	return NewContextWithDependencies(ctx, deps)
 }
@@ -216,10 +229,7 @@ func EngineFromContext(ctx context.Context) (workflow.Engine, bool) {
 // NewContextWithEngine returns a new Context that carries the given workflow.Engine
 // in the dependencies map. Merges with existing dependencies if present.
 func NewContextWithEngine(ctx context.Context, engine workflow.Engine) context.Context {
-	deps, found := DependenciesFromContext(ctx)
-	if !found {
-		deps = map[string]any{}
-	}
+	deps := copyDependenciesFromContext(ctx)
 	deps[DepEngine] = engine
 	return NewContextWithDependencies(ctx, deps)
 }
@@ -237,10 +247,7 @@ func ConfigurationFromContext(ctx context.Context) (configuration.Configuration,
 // NewContextWithConfiguration returns a new Context that carries the given configuration.Configuration
 // in the dependencies map. Merges with existing dependencies if present.
 func NewContextWithConfiguration(ctx context.Context, conf configuration.Configuration) context.Context {
-	deps, found := DependenciesFromContext(ctx)
-	if !found {
-		deps = map[string]any{}
-	}
+	deps := copyDependenciesFromContext(ctx)
 	deps[DepConfiguration] = conf
 	return NewContextWithDependencies(ctx, deps)
 }
@@ -306,10 +313,7 @@ func WorkDirFromContext(ctx context.Context) types.FilePath {
 }
 
 func Clone(ctx, newCtx context.Context) context.Context {
-	deps, found := DependenciesFromContext(ctx)
-	if !found {
-		deps = map[string]any{}
-	}
+	deps := copyDependenciesFromContext(ctx)
 	newCtx = NewContextWithDependencies(newCtx, deps)
 	newCtx = NewContextWithWorkDirAndFilePath(newCtx, WorkDirFromContext(ctx), FilePathFromContext(ctx))
 	newCtx = NewContextWithLogger(newCtx, LoggerFromContext(ctx))

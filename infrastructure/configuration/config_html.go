@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -81,6 +82,9 @@ var configAuthFieldMonitorTemplate string
 
 //go:embed template/js/features/folders.js
 var configFoldersTemplate string
+
+//go:embed template/js/features/filter-sync.js
+var configFilterSyncTemplate string
 
 // UI
 //
@@ -304,8 +308,8 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings map[string]any, folderConfig
 		}
 	}
 
-	// Get CLI release channel from runtime version
-	cliReleaseChannel := getCliReleaseChannel(r.engine)
+	// Get CLI release channel from the configured setting, falling back to runtime version
+	cliReleaseChannel := getCliReleaseChannel(conf, r.engine)
 
 	// Build DefaultsScopes for project default indicator rendering
 	defaultsScopes := computeProjectDefaultScopes(r.configResolver)
@@ -333,6 +337,7 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings map[string]any, folderConfig
 		"Authentication":   template.JS(configAuthenticationTemplate),
 		"AuthFieldMonitor": template.JS(configAuthFieldMonitorTemplate),
 		"Folders":          template.JS(configFoldersTemplate),
+		"FilterSync":       template.JS(configFilterSyncTemplate),
 		// UI
 		"FormHandler":  template.JS(configFormHandlerTemplate),
 		"Tooltips":     template.JS(configTooltipsTemplate),
@@ -375,8 +380,13 @@ func isEclipse(integrationName string) bool {
 	return integrationName == "ECLIPSE"
 }
 
-// getCliReleaseChannel derives the CLI release channel from the runtime version
-func getCliReleaseChannel(engine workflow.Engine) string {
+// getCliReleaseChannel returns the configured CLI release channel, falling back to a
+// runtime-version-derived value only when the setting has never been configured.
+func getCliReleaseChannel(conf configuration.Configuration, engine workflow.Engine) string {
+	if configured := conf.GetString(configresolver.UserGlobalKey(types.SettingCliReleaseChannel)); configured != "" {
+		return configured
+	}
+
 	info := engine.GetRuntimeInfo()
 	if info == nil {
 		return "stable"

@@ -1175,6 +1175,60 @@ func TestFolderConfig_ApplyLspUpdate(t *testing.T) {
 		assert.True(t, types.HasUserOverride(conf, fc.FolderPath, types.SettingScanAutomatic),
 			"ApplyLspUpdate should apply setting; lock enforcement is the caller's responsibility (validateLockedFields)")
 	})
+
+	t.Run("clears preferred_org override via explicit null and reverts to auto-org", func(t *testing.T) {
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+		types.RegisterAllConfigurations(fs)
+		_ = conf.AddFlagSet(fs)
+		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
+		fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
+
+		// Seed a user-set folder org override plus a global org to fall back to.
+		types.SetPreferredOrgAndOrgSetByUser(conf, fc.FolderPath, "folder-org", true)
+		types.SetGlobalUser(conf, types.SettingLastSetOrganization, "global-org")
+		require.True(t, types.HasUserOverride(conf, fc.FolderPath, types.SettingPreferredOrg))
+		require.True(t, types.HasUserOverride(conf, fc.FolderPath, types.SettingOrgSetByUser))
+
+		update := &types.LspFolderConfig{
+			FolderPath: "/path/to/folder",
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg: {Value: nil, Changed: true},
+			},
+		}
+
+		changed := fc.ApplyLspUpdate(update)
+
+		assert.True(t, changed)
+		assert.False(t, types.HasUserOverride(conf, fc.FolderPath, types.SettingPreferredOrg),
+			"preferred_org override should be cleared")
+		assert.False(t, types.HasUserOverride(conf, fc.FolderPath, types.SettingOrgSetByUser),
+			"org_set_by_user override should be cleared by the org reset")
+		assert.False(t, fc.OrgSetByUser(), "OrgSetByUser reverts to false after reset")
+		assert.Empty(t, fc.PreferredOrg(), "PreferredOrg falls back (no user override) after reset")
+	})
+
+	t.Run("preferred_org null reset with no existing override is a no-op", func(t *testing.T) {
+		conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+		types.RegisterAllConfigurations(fs)
+		_ = conf.AddFlagSet(fs)
+		fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
+		fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
+
+		update := &types.LspFolderConfig{
+			FolderPath: "/path/to/folder",
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingPreferredOrg: {Value: nil, Changed: true},
+			},
+		}
+
+		changed := fc.ApplyLspUpdate(update)
+
+		assert.False(t, changed, "resetting an org that was never overridden changes nothing")
+		assert.False(t, types.HasUserOverride(conf, fc.FolderPath, types.SettingPreferredOrg))
+		assert.False(t, types.HasUserOverride(conf, fc.FolderPath, types.SettingOrgSetByUser))
+	})
 }
 
 func TestFolderConfig_ToLspFolderConfig(t *testing.T) {
@@ -1229,7 +1283,11 @@ func TestFolderConfig_ToLspFolderConfig(t *testing.T) {
 		require.NotNil(t, result.Settings[types.SettingSeverityFilterCritical])
 		assert.Equal(t, true, result.Settings[types.SettingSeverityFilterCritical].Value)
 		assert.Equal(t, "default", result.Settings[types.SettingSeverityFilterCritical].Source)
-		assert.Nil(t, result.Settings[types.SettingRiskScoreThreshold])
+		// Risk score is always sent (even its 0 default) so a reset to 0 syncs to the
+		// open settings page — see ToLspFolderConfig's SettingRiskScoreThreshold exemption.
+		require.NotNil(t, result.Settings[types.SettingRiskScoreThreshold])
+		assert.Equal(t, 0, result.Settings[types.SettingRiskScoreThreshold].Value)
+		assert.Equal(t, "default", result.Settings[types.SettingRiskScoreThreshold].Source)
 		require.NotNil(t, result.Settings[types.SettingScanAutomatic])
 		assert.Equal(t, true, result.Settings[types.SettingScanAutomatic].Value)
 		assert.Equal(t, "default", result.Settings[types.SettingScanAutomatic].Source)
