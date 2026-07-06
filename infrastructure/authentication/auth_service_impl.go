@@ -170,6 +170,25 @@ func (a *AuthenticationServiceImpl) credentialUpdateWorker(ctx context.Context) 
 // call by comparing the incoming token against writingToken; external updates from GAF always
 // carry a different token string and are never silently dropped by this guard.
 func (a *AuthenticationServiceImpl) QueueCredentialUpdate(token string, sendNotification bool, updateApiUrl bool) {
+	// Correctness assumptions for this guard:
+	//
+	//  1. Synchronous callback: this guard only closes the re-entrancy window because
+	//     storage.Set fires the OAuth bridge callback INLINE on the worker's goroutine —
+	//     see internal/storage/storage.go, where Set calls callback(key, value) directly
+	//     under its own mutex rather than dispatching a goroutine.  That inline call runs
+	//     the re-entrant QueueCredentialUpdate before credentialUpdateWorker's deferred
+	//     writingToken.Store(nil) executes, so writingToken is still set when we Load it
+	//     below.  If GAF ever dispatches storage callbacks asynchronously, the worker
+	//     would clear writingToken before the async callback reads it, this guard would
+	//     silently stop matching (a silent race), and the IDE-2104 re-entrancy would have
+	//     to be broken by other means.
+	//
+	//  2. Token-equality: we treat two updates as interchangeable when their token strings
+	//     match, so a secondary update that carries the SAME token but different
+	//     sendNotification/updateApiUrl flags is dropped here.  This is safe today because
+	//     the OAuth storage bridge always enqueues static flags for a given token; a future
+	//     caller that needs to refresh notification/API-URL state for an already-written
+	//     token must revisit this comparison.
 	if w := a.writingToken.Load(); w != nil && *w == token {
 		// Re-entrant call: the worker is already applying this exact token via
 		// conf.Set → storage.Set → callback.  Drop it to prevent the stale copy
