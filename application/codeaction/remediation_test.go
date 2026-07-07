@@ -342,6 +342,54 @@ func TestGetCodeActions_RemediationAgent_IaCIssue_WithFindingId_OfferedAction(t 
 	assert.True(t, found, "IaC issue with FindingId must produce RemediationAgentQuickFix action")
 }
 
+// TestGetCodeActions_RemediationAgent_DedupsMultipleFixableIssues verifies that
+// when IssuesForRange returns more than one eligible fixable issue for the same
+// request range, the client receives exactly ONE remediation action rather than
+// multiple identical-titled quickfix entries.
+func TestGetCodeActions_RemediationAgent_DedupsMultipleFixableIssues(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	r := exampleRange
+	uriPath := documentUriExample
+	path := uri.PathFromUri(uriPath)
+
+	_, _ = workspaceutil.SetupWorkspace(t, engine, types.FilePath("/path/to"))
+
+	ctrl := gomock.NewController(t)
+	providerMock := mock_snyk.NewMockIssueProvider(ctrl)
+	issues := []types.Issue{
+		buildFixableIssue("finding-1"),
+		buildFixableIssue("finding-2"),
+	}
+	providerMock.EXPECT().IssuesForRange(path, converter.FromRange(r)).Return(issues).AnyTimes()
+
+	service := codeaction.NewService(
+		engine,
+		providerMock,
+		watcher.NewFileWatcher(),
+		notification.NewMockNotifier(),
+		featureflag.NewFakeService(),
+		types.NewConfigResolver(engine.GetLogger()),
+		&fakeRemediationProvider{edit: &types.WorkspaceEdit{}},
+	)
+
+	params := types.CodeActionParams{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: uriPath},
+		Range:        r,
+		Context:      types.CodeActionContext{},
+	}
+
+	actions := service.GetCodeActions(params)
+
+	count := 0
+	for _, a := range actions {
+		if a.Kind == types.RemediationAgentQuickFix {
+			count++
+		}
+	}
+	assert.Equal(t, 1, count,
+		"multiple fixable issues in the same range must yield exactly one remediation action (dedup by title)")
+}
+
 // recordingRemediationProvider captures the context passed to Remediate.
 type recordingRemediationProvider struct {
 	receivedCtx context.Context

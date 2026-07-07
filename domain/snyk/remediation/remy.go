@@ -81,11 +81,24 @@ type remyProvider struct {
 	cacheMu sync.Mutex
 	cache   map[string]*remyCacheEntry // ContentRoot → leftover changes from last run
 
-	// rootMusMu protects rootMus. rootMus holds one mutex per ContentRoot so
-	// that concurrent Remediate calls for different roots run in parallel while
-	// calls for the same root are serialized, preventing double remy invocations.
+	// rootMusMu protects rootMus. rootMus holds one reference-counted mutex per
+	// ContentRoot so that concurrent Remediate calls for different roots run in
+	// parallel while calls for the same root are serialized, preventing double
+	// remy invocations. Entries are evicted once no caller references them
+	// (refs drops to 0), so the map cannot grow unbounded across distinct roots.
 	rootMusMu sync.Mutex
-	rootMus   map[string]*sync.Mutex
+	rootMus   map[string]*rootMutex
+}
+
+// rootMutex is a reference-counted mutex for a single ContentRoot. refs tracks
+// how many callers currently hold or are waiting on the mutex; it is guarded by
+// remyProvider.rootMusMu, not by mu. When refs reaches zero the entry is removed
+// from rootMus. Reference counting (rather than tying eviction to cache deletion)
+// avoids the race where an evictor could remove a mutex between the moment a
+// caller obtains it and the moment that caller locks it.
+type rootMutex struct {
+	mu   sync.Mutex
+	refs int
 }
 
 // Ensure remyProvider satisfies all interfaces at compile time.
@@ -147,21 +160,41 @@ func NewRemyProvider(engine workflow.Engine, runner remyRunner) RemediationProvi
 	if runner == nil {
 		runner = gafRunner
 	}
-	return &remyProvider{opts: opts, runner: runner, engine: engine, log: log, cache: make(map[string]*remyCacheEntry), rootMus: make(map[string]*sync.Mutex)}
+	return &remyProvider{opts: opts, runner: runner, engine: engine, log: log, cache: make(map[string]*remyCacheEntry), rootMus: make(map[string]*rootMutex)}
 }
 
-// getOrCreateRootMu returns the per-ContentRoot mutex, creating it if needed.
-// Serializing remy invocations per root prevents concurrent callers from
-// both missing the cache and launching duplicate LLM calls.
-func (p *remyProvider) getOrCreateRootMu(root string) *sync.Mutex {
+// acquireRootMu returns the per-ContentRoot reference-counted mutex, creating it
+// if needed, and increments its reference count. Serializing remy invocations
+// per root prevents concurrent callers from both missing the cache and launching
+// duplicate LLM calls. Every acquireRootMu call must be paired with exactly one
+// releaseRootMu(root) once the caller has unlocked the mutex.
+func (p *remyProvider) acquireRootMu(root string) *rootMutex {
 	p.rootMusMu.Lock()
 	defer p.rootMusMu.Unlock()
-	if mu, ok := p.rootMus[root]; ok {
-		return mu
+	rm, ok := p.rootMus[root]
+	if !ok {
+		rm = &rootMutex{}
+		p.rootMus[root] = rm
 	}
-	mu := &sync.Mutex{}
-	p.rootMus[root] = mu
-	return mu
+	rm.refs++
+	return rm
+}
+
+// releaseRootMu decrements the reference count of root's mutex and removes the
+// entry from rootMus once no caller references it. It must be called after the
+// caller has unlocked the mutex it obtained from acquireRootMu, so the map cannot
+// grow unbounded as distinct roots come and go.
+func (p *remyProvider) releaseRootMu(root string) {
+	p.rootMusMu.Lock()
+	defer p.rootMusMu.Unlock()
+	rm, ok := p.rootMus[root]
+	if !ok {
+		return
+	}
+	rm.refs--
+	if rm.refs <= 0 {
+		delete(p.rootMus, root)
+	}
 }
 
 // tryServeFromCache looks up the cache for root/filePath while holding p.cacheMu
@@ -324,9 +357,12 @@ func (p *remyProvider) Remediate(ctx context.Context, req RemediationRequest) (*
 		return editsToEdit(filePath, edits), nil
 	}
 
-	rootMu := p.getOrCreateRootMu(root)
-	rootMu.Lock()
-	defer rootMu.Unlock()
+	rootMu := p.acquireRootMu(root)
+	rootMu.mu.Lock()
+	defer func() {
+		rootMu.mu.Unlock()
+		p.releaseRootMu(root)
+	}()
 
 	if edits, ok := p.tryServeFromCache(root, filePath); ok {
 		return editsToEdit(filePath, edits), nil
@@ -456,6 +492,10 @@ func (p *remyProvider) FixFolder(ctx context.Context, root types.FilePath) (*typ
 	if status := strings.TrimSpace(string(statusOut)); status != "" {
 		return nil, fmt.Errorf("remy: FixFolder: %q has uncommitted changes to tracked files; the caller must pass a clean detached-HEAD worktree:\n%s", r, status)
 	}
+	// Bound the folder-wide run with the same internal timeout Remediate applies,
+	// so a hung fix cannot stall the caller indefinitely.
+	ctx, cancel := context.WithTimeout(ctx, p.opts.Timeout)
+	defer cancel()
 	// findingID is "" because FixFolder targets the whole folder, not a single finding.
 	// fileHashes is ignored: FixFolder returns a one-shot WorkspaceEdit and does not cache.
 	changes, _, err := p.collectFixEdits(ctx, r, r, "")

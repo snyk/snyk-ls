@@ -17,7 +17,6 @@
 package remediation
 
 import (
-	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -49,7 +48,7 @@ func NewRemyProviderWithLogger(engine workflow.Engine, runner remyRunner, log ze
 		engine:  engine,
 		log:     log,
 		cache:   make(map[string]*remyCacheEntry),
-		rootMus: make(map[string]*sync.Mutex),
+		rootMus: make(map[string]*rootMutex),
 	}
 }
 
@@ -84,4 +83,14 @@ func CacheLen(p RemediationProvider) int {
 	rp.cacheMu.Lock()
 	defer rp.cacheMu.Unlock()
 	return len(rp.cache)
+}
+
+// RootMuLen returns the number of per-ContentRoot mutex entries currently held
+// in the provider's rootMus map. Tests use it to assert that per-root mutexes
+// are evicted once no caller references them, so the map cannot grow unbounded.
+func RootMuLen(p RemediationProvider) int {
+	rp := p.(*remyProvider)
+	rp.rootMusMu.Lock()
+	defer rp.rootMusMu.Unlock()
+	return len(rp.rootMus)
 }

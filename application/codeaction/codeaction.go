@@ -145,7 +145,13 @@ func (c *CodeActionsService) remediationCodeActions(issues []types.Issue, path t
 	if c.remediationProvider == nil {
 		return nil
 	}
+	const remediationActionTitle = "Fix with Snyk Remediation Agent"
 	var actions []types.LSPCodeAction
+	// De-duplicate by title: IssuesForRange can return several fixable issues for
+	// one request range, each producing an identical-titled remediation action.
+	// The client would then show multiple indistinguishable quickfix entries, so
+	// emit at most one remediation action per distinct title.
+	seenTitles := make(map[string]bool)
 	for i := range issues {
 		issue := issues[i]
 		findingId := issue.GetFindingId()
@@ -169,6 +175,12 @@ func (c *CodeActionsService) remediationCodeActions(issues []types.Issue, path t
 			continue
 		}
 
+		if seenTitles[remediationActionTitle] {
+			// A remediation action with this title was already emitted for this
+			// request; skip the duplicate.
+			continue
+		}
+
 		// Capture loop variables for the closure.
 		issueFindingId := findingId
 		issueRange := r
@@ -187,7 +199,7 @@ func (c *CodeActionsService) remediationCodeActions(issues []types.Issue, path t
 			return edit
 		}
 		action, err := snyk.NewDeferredCodeAction(
-			"Fix with Snyk Remediation Agent",
+			remediationActionTitle,
 			&deferredEdit,
 			nil,
 			"",
@@ -198,6 +210,7 @@ func (c *CodeActionsService) remediationCodeActions(issues []types.Issue, path t
 			lspAction := converter.ToCodeAction(issue, &action)
 			c.cacheCodeAction(&action, issue)
 			actions = append(actions, lspAction)
+			seenTitles[remediationActionTitle] = true
 		}
 	}
 	return actions
