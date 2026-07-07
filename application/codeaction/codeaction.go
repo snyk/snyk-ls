@@ -35,6 +35,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	noti "github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -152,6 +153,21 @@ func (c *CodeActionsService) remediationCodeActions(issues []types.Issue, path t
 			continue
 		}
 		issueProduct := issue.GetProduct()
+		additionalData := issue.GetAdditionalData()
+		switch issueProduct {
+		case product.ProductCode:
+			// Remy handles Code issues that carry an AI-generated fix (hasAIFix).
+			if additionalData == nil || !additionalData.IsFixable() {
+				continue
+			}
+		case product.ProductInfrastructureAsCode:
+			// Remy handles IaC issues via FindingId; IaCIssueData.IsFixable() is
+			// always false, so eligibility is determined by FindingId alone (already
+			// guarded above).
+		default:
+			// OSS, Secrets, Unknown, and any future product are not handled by remy.
+			continue
+		}
 
 		// Capture loop variables for the closure.
 		issueFindingId := findingId
