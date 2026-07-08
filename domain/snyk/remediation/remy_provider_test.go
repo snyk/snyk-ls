@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -530,6 +531,301 @@ func TestCacheValid_StaleFile(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, int32(2), atomic.LoadInt32(&callCount), "stale cache must force re-run")
+}
+
+// TestRemediate_StaleSiblingDoesNotEvictRequestedFile verifies that a sibling
+// file becoming stale on disk does NOT evict the requested file's valid cached
+// edits. Entry has {bar.go, baz.go}; user edits baz.go making it stale; the
+// second Remediate call is for bar.go which is still valid — it must be a HIT.
+// (The prior over-eviction bug validated ALL cached files and evicted the whole
+// root if any sibling was stale, causing an unnecessary re-run for bar.go.)
+func TestRemediate_StaleSiblingDoesNotEvictRequestedFile(t *testing.T) {
+	repo := initGitRepo(t)
+	commitFile(t, repo, "foo.go", "package main\nvar x = 1\n")
+	commitFile(t, repo, "bar.go", "package main\nvar y = 1\n")
+	commitFile(t, repo, "baz.go", "package main\nvar z = 1\n")
+
+	fooAbs := filepath.Join(repo, "foo.go")
+	barAbs := filepath.Join(repo, "bar.go")
+	bazAbs := filepath.Join(repo, "baz.go")
+
+	var callCount int32
+	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+		atomic.AddInt32(&callCount, 1)
+		if err := os.WriteFile(filepath.Join(root, "foo.go"), []byte("package main\nvar x = 2\n"), 0644); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(root, "bar.go"), []byte("package main\nvar y = 2\n"), 0644); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(root, "baz.go"), []byte("package main\nvar z = 2\n"), 0644)
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	// First call for foo.go; bar.go and baz.go cached.
+	_, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "f1",
+		ContentRoot: types.FilePath(repo),
+		FilePath:    types.FilePath(fooAbs),
+	})
+	require.NoError(t, err)
+	require.Equal(t, int32(1), atomic.LoadInt32(&callCount))
+
+	// Simulate a user editing baz.go on disk (the LSP didChange notification has
+	// not yet arrived — InvalidateFile has not been called).
+	require.NoError(t, os.WriteFile(bazAbs, []byte("package main\nvar z = 99\n"), 0644))
+
+	// Second call for bar.go: bar.go is still valid; baz.go is stale on disk.
+	// The cache must serve bar.go — a stale SIBLING must not evict bar.go's
+	// valid edits and must not force a runner re-run.
+	edit, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "f1",
+		ContentRoot: types.FilePath(repo),
+		FilePath:    types.FilePath(barAbs),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, edit, "bar.go must be served from cache even if sibling baz.go is stale")
+	assert.Equal(t, int32(1), atomic.LoadInt32(&callCount), "stale sibling must not force a re-run for bar.go")
+}
+
+// TestRemediate_CRLFWorkspaceMatchesLFBaseline verifies that a workspace file
+// written with CRLF line endings (Windows autocrlf) matches a baseline built
+// from LF bytes (git object store always stores LF). Both sides must normalize
+// line endings before hashing so a CRLF↔LF difference does not invalidate the
+// cache when the logical content is identical.
+func TestRemediate_CRLFWorkspaceMatchesLFBaseline(t *testing.T) {
+	repo := initGitRepo(t)
+	commitFile(t, repo, "foo.go", "package main\nvar x = 1\n")
+	commitFile(t, repo, "bar.go", "package main\nvar y = 1\n")
+
+	fooAbs := filepath.Join(repo, "foo.go")
+	barAbs := filepath.Join(repo, "bar.go")
+
+	var callCount int32
+	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+		atomic.AddInt32(&callCount, 1)
+		if err := os.WriteFile(filepath.Join(root, "foo.go"), []byte("package main\nvar x = 2\n"), 0644); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(root, "bar.go"), []byte("package main\nvar y = 2\n"), 0644)
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	// First call for foo.go; bar.go cached with LF-based baseline hash.
+	_, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "f1",
+		ContentRoot: types.FilePath(repo),
+		FilePath:    types.FilePath(fooAbs),
+	})
+	require.NoError(t, err)
+	require.Equal(t, int32(1), atomic.LoadInt32(&callCount))
+
+	// Simulate Windows autocrlf: rewrite bar.go on disk with CRLF. The logical
+	// content is identical to what was committed (and in the snapshot).
+	crlfContent := strings.ReplaceAll("package main\nvar y = 1\n", "\n", "\r\n")
+	require.NoError(t, os.WriteFile(barAbs, []byte(crlfContent), 0644))
+
+	// Second call for bar.go: CRLF workspace must hash equal to LF baseline →
+	// cache HIT, no re-run.
+	edit, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "f1",
+		ContentRoot: types.FilePath(repo),
+		FilePath:    types.FilePath(barAbs),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, edit, "CRLF workspace must match LF baseline and be served from cache")
+	assert.Equal(t, int32(1), atomic.LoadInt32(&callCount), "CRLF line endings alone must not invalidate the cache")
+}
+
+// TestRemediate_TransientReadErrorDoesNotEvictCache verifies that a transient
+// read error from fileHash (e.g. file temporarily locked by AV/IDE, or briefly
+// absent) does NOT consume or evict the cached entry. If the entry were evicted
+// on every read error, a transient failure would permanently discard a valid
+// multi-minute remy result and force an unnecessary re-run on the next request.
+//
+// Flow:
+//  1. Commit two files; first Remediate caches bar.go's edits.
+//  2. Remove barAbs from disk (os.ReadFile will return a not-exist error).
+//  3. Remediate(bar.go) → MISS (hashErr != nil), but the entry must be intact.
+//  4. Restore barAbs with the exact original HEAD content (hash matches stored).
+//  5. Remediate(bar.go) → HIT, callCount must not have increased beyond 1.
+func TestRemediate_TransientReadErrorDoesNotEvictCache(t *testing.T) {
+	repo := initGitRepo(t)
+	barContent := "package main\nvar y = 1\n"
+	commitFile(t, repo, "foo.go", "package main\nvar x = 1\n")
+	commitFile(t, repo, "bar.go", barContent)
+
+	fooAbs := filepath.Join(repo, "foo.go")
+	barAbs := filepath.Join(repo, "bar.go")
+
+	var callCount int32
+	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+		atomic.AddInt32(&callCount, 1)
+		if err := os.WriteFile(filepath.Join(root, "foo.go"), []byte("package main\nvar x = 2\n"), 0644); err != nil {
+			return err
+		}
+		// Modify bar.go inside the worktree so it ends up cached.
+		return os.WriteFile(filepath.Join(root, "bar.go"), []byte("package main\nvar y = 2\n"), 0644)
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	// Step 1: foo.go requested; bar.go edits cached. Workspace barAbs is still
+	// the original committed content (the runner only writes to the worktree).
+	_, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "f1",
+		ContentRoot: types.FilePath(repo),
+		FilePath:    types.FilePath(fooAbs),
+	})
+	require.NoError(t, err)
+	require.Equal(t, int32(1), atomic.LoadInt32(&callCount))
+
+	// Step 2: simulate a transient read error by removing barAbs from disk.
+	require.NoError(t, os.Remove(barAbs))
+
+	// Step 3: Remediate(bar.go) must be a MISS because fileHash fails, but the
+	// cache entry must remain intact (not consumed or evicted).
+	_, err = p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "f1",
+		ContentRoot: types.FilePath(repo),
+		FilePath:    types.FilePath(barAbs),
+	})
+	require.NoError(t, err)
+	// callCount stays at 1 only if tryServeFromCache returned a miss; if it
+	// returned a hit that's also fine for this step. What matters is step 5.
+
+	// Step 4: restore barAbs with the exact HEAD content so its hash matches the
+	// stored baseline (hashBytes of the pre-run snapshot, which equals hashBytes
+	// of the committed content).
+	require.NoError(t, os.WriteFile(barAbs, []byte(barContent), 0644))
+
+	// Step 5: Remediate(bar.go) must be a HIT from the preserved cache entry.
+	// Without the fix, step 3 would have consumed/evicted the entry → runner
+	// re-runs → callCount = 2.
+	edit, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "f1",
+		ContentRoot: types.FilePath(repo),
+		FilePath:    types.FilePath(barAbs),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, edit, "bar.go edits must be served from the preserved cache entry after the file is restored")
+	assert.Equal(t, int32(1), atomic.LoadInt32(&callCount),
+		"a transient read error must not evict the cache entry; runner must not re-run after the file is restored")
+}
+
+// TestRemediate_LoneCRChangeDetectedAsCacheMiss verifies that normalizeLineEndings
+// collapses only CRLF pairs to LF and leaves lone '\r' bytes intact. If lone
+// '\r' bytes were stripped unconditionally, a user removing a bare '\r' from a
+// file would hash to the same value as the baseline (both normalize to identical
+// bytes), causing the cache to serve stale edits despite a real content change.
+// The test: commit bar.go with a lone '\r' in the content; cache its edits;
+// then rewrite the workspace copy WITHOUT the bare '\r'; the next Remediate for
+// bar.go must be a cache MISS (runner re-invoked, callCount = 2).
+func TestRemediate_LoneCRChangeDetectedAsCacheMiss(t *testing.T) {
+	repo := initGitRepo(t)
+	// bar.go content has a lone '\r' embedded (not followed by '\n').
+	barOriginal := "package main\nvar y = \"hello\rworld\"\n"
+	commitFile(t, repo, "foo.go", "package main\nvar x = 1\n")
+	commitFile(t, repo, "bar.go", barOriginal)
+
+	fooAbs := filepath.Join(repo, "foo.go")
+	barAbs := filepath.Join(repo, "bar.go")
+
+	var callCount int32
+	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+		atomic.AddInt32(&callCount, 1)
+		if err := os.WriteFile(filepath.Join(root, "foo.go"), []byte("package main\nvar x = 2\n"), 0644); err != nil {
+			return err
+		}
+		// Runner modifies bar.go inside the worktree so it ends up cached.
+		return os.WriteFile(filepath.Join(root, "bar.go"), []byte("package main\nvar y = \"hello\rworld\"\nvar z = 3\n"), 0644)
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	// First call for foo.go; bar.go cached with baseline = LF-normalized snapshot
+	// bytes (which still contain the lone '\r' because CRLF-only normalization
+	// leaves it intact).
+	_, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "f1",
+		ContentRoot: types.FilePath(repo),
+		FilePath:    types.FilePath(fooAbs),
+	})
+	require.NoError(t, err)
+	require.Equal(t, int32(1), atomic.LoadInt32(&callCount))
+
+	// User edits bar.go on disk, removing the lone '\r' — a real content change.
+	barEdited := "package main\nvar y = \"helloworld\"\n"
+	require.NoError(t, os.WriteFile(barAbs, []byte(barEdited), 0644))
+
+	// Second call for bar.go: the lone-CR removal must be detected → cache MISS,
+	// runner re-invoked. If normalizeLineEndings stripped ALL '\r' bytes (not just
+	// CRLF), both the baseline and the workspace would normalize to identical
+	// bytes and the stale edits would be served incorrectly.
+	_, err = p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "f1",
+		ContentRoot: types.FilePath(repo),
+		FilePath:    types.FilePath(barAbs),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int32(2), atomic.LoadInt32(&callCount),
+		"removing a lone '\\r' must be detected as a content change and force a cache miss")
+}
+
+// TestRemediate_ConcurrentEditDuringRun_SecondaryFileCacheMiss reproduces the
+// TOCTOU baseline bug: while remy runs (minutes), a user edits a secondary file
+// that will be cached. The cache baseline must be the pre-run HEAD content the
+// edits were computed against — NOT a post-run re-read of the workspace file.
+// If the baseline is a post-run read it captures the concurrent edit, so the
+// later validity check sees "no change" and serves stale edits. The correct
+// behavior is a cache MISS that re-invokes the runner.
+func TestRemediate_ConcurrentEditDuringRun_SecondaryFileCacheMiss(t *testing.T) {
+	repo := initGitRepo(t)
+	commitFile(t, repo, "foo.go", "package main\nvar x = 1\n")
+	commitFile(t, repo, "bar.go", "package main\nvar y = 1\n")
+
+	fooAbs := filepath.Join(repo, "foo.go")
+	barAbs := filepath.Join(repo, "bar.go")
+
+	var callCount int32
+	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+		atomic.AddInt32(&callCount, 1)
+		// remy modifies both files inside its isolated worktree.
+		if err := os.WriteFile(filepath.Join(root, "foo.go"), []byte("package main\nvar x = 2\n"), 0644); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(root, "bar.go"), []byte("package main\nvar y = 2\n"), 0644); err != nil {
+			return err
+		}
+		// Simulate a concurrent user edit to the SECONDARY file in the real
+		// workspace (not the worktree) while remy is still running.
+		return os.WriteFile(barAbs, []byte("package main\nvar y = 77\n"), 0644)
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	// First call for foo.go; bar.go changes are cached. The baseline for bar.go
+	// must be its pre-run HEAD content, not the concurrently edited disk copy.
+	_, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "f1",
+		ContentRoot: types.FilePath(repo),
+		FilePath:    types.FilePath(fooAbs),
+	})
+	require.NoError(t, err)
+	require.Equal(t, int32(1), atomic.LoadInt32(&callCount))
+
+	// Second call for bar.go: the workspace copy was edited during the first run,
+	// so the cached baseline must not match the current file — cache MISS, re-run.
+	_, err = p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "f1",
+		ContentRoot: types.FilePath(repo),
+		FilePath:    types.FilePath(barAbs),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int32(2), atomic.LoadInt32(&callCount),
+		"concurrent edit during run must invalidate the cached baseline and force a re-run")
 }
 
 // ---------------------------------------------------------------------------

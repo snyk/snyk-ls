@@ -23,7 +23,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -58,12 +57,14 @@ type RemyOptions struct {
 
 // remyCacheEntry holds the changes produced by a single remy run that have not
 // yet been delivered to a code action. Entries are keyed by absolute workspace
-// path. fileHashes records a SHA-256 content fingerprint for each cached file
-// path at the time the entry was populated; cacheValid uses these to detect any
-// content change on disk regardless of filesystem mtime granularity.
+// path. fileHashes records, for each cached file path, the SHA-256 of the
+// pre-run HEAD content the cached edits were computed against.
+// tryServeFromCache hashes the current file and compares it against this
+// baseline to detect any modification — including a concurrent user edit made
+// while remy was still running — independently of filesystem mtime granularity.
 type remyCacheEntry struct {
 	changes    map[string][]types.TextEdit
-	fileHashes map[string]string // abs path → hex SHA-256 of file contents at cache time
+	fileHashes map[string]string // abs path → hex SHA-256 of pre-run HEAD content
 }
 
 // remyProvider is the concrete RemediationProvider that drives the host snyk
@@ -141,60 +142,107 @@ func (p *remyProvider) getOrCreateRootMu(root string) *sync.Mutex {
 	return mu
 }
 
-// cacheValid reports whether every file in entry.changes still has the same
-// content it had when the entry was populated. It must be called with p.cacheMu
-// held. For each path it first looks up the stored hash; if no stored hash is
-// present the entry is immediately considered stale (the hash was not recorded
-// at populate time, so we cannot verify the file). If a hash is present, the
-// current file content is hashed via fileHash; a read error or content mismatch
-// also signals stale. The prior implementation used os.Stat under this same
-// lock for these same small tracked files, so performing content hashing here
-// is consistent with the existing design.
-func cacheValid(entry *remyCacheEntry) bool {
-	for path := range entry.changes {
-		stored, known := entry.fileHashes[path]
-		if !known {
-			// No stored hash — hash recording failed at populate time; treat as stale.
-			return false
-		}
-		cur, err := fileHash(path)
-		if err != nil || cur != stored {
-			return false
-		}
-	}
-	return true
-}
-
-// tryServeFromCache looks up the cache for root/filePath. Under p.cacheMu it
-// first checks whether the entry exists and whether filePath is present in the
-// entry's changes map — an absent filePath is an immediate miss with no I/O.
-// Only after confirming filePath is cached does it call cacheValid (which reads
-// and hashes every remaining file in the entry). If the entry is stale it is
-// evicted and a miss is returned. On a valid hit the edits for filePath are
-// consumed (deleted from both entry.changes and entry.fileHashes to keep the
-// maps in sync) and the entry is evicted when no changes remain.
+// tryServeFromCache looks up the cache for root/filePath while holding p.cacheMu
+// only around map access, never during file I/O. It first confirms the entry
+// exists and filePath is present — an absent filePath is an immediate miss with
+// no I/O. It then reads only filePath's stored hash, RELEASES the lock, and
+// hashes filePath's current content off-lock so that a concurrent InvalidateFile
+// (LSP didChange) is never blocked waiting for disk I/O.
 //
-// Returns (edits, true) on a valid cache hit, (nil, false) otherwise.
+// Sibling staleness is intentionally not checked here: validating all cached
+// files and evicting the whole root on any mismatch causes over-eviction — a
+// concurrent InvalidateFile that correctly removes a sibling would appear stale
+// in a pre-lock snapshot and destroy still-valid siblings. Each sibling is
+// validated only when it is itself served; InvalidateFile handles LSP-driven
+// invalidation.
+//
+// After hashing, re-acquires the lock and re-checks the entry is still present
+// and unchanged (pointer equality guards against a concurrent remy run replacing
+// the entry) and filePath is still present (guards concurrent InvalidateFile).
+//
+// The hash outcome drives four distinct behaviors, checked in this order:
+//
+//  1. hashErr != nil (transient read error, e.g. file briefly locked by AV/IDE
+//     or temporarily absent): leave the entry COMPLETELY intact, emit a debug
+//     log, and return (nil, true). The true signals Remediate to skip the runner
+//     (which would replace the preserved entry) and return (nil, nil) to the LSP
+//     client, which will retry on the next code action. Evicting or running the
+//     runner on a transient error would permanently discard a valid multi-minute
+//     remy result and force an unnecessary re-run.
+//
+//  2. storedHash == "" (hash was not recorded at populate time — unreachable with
+//     the current hashBytes path, but guarded defensively): return (nil, false)
+//     WITHOUT consuming the entry. If we consumed and evicted without being able
+//     to validate, we would destroy valid edits unnecessarily.
+//
+//  3. curHash != storedHash (genuine content change confirmed): consume filePath
+//     from both maps (dual-map delete to keep maps in sync), evict when empty,
+//     return (nil, false) — genuine miss, caller runs the runner.
+//
+//  4. curHash == storedHash (content unchanged): consume filePath and return
+//     (edits, true).
+//
+// Only cases 3 and 4 consume the entry; cases 1 and 2 leave it intact.
+//
+// Returns (edits, true) on a valid hit, (nil, true) on a transient I/O error
+// (entry preserved, runner must not fire), and (nil, false) on a genuine miss.
 func (p *remyProvider) tryServeFromCache(root, filePath string) ([]types.TextEdit, bool) {
 	p.cacheMu.Lock()
-	defer p.cacheMu.Unlock()
 	entry, exists := p.cache[root]
 	if !exists {
+		p.cacheMu.Unlock()
 		return nil, false
 	}
-	edits, ok := entry.changes[filePath]
-	if !ok {
-		// filePath is not in this entry — return a miss without hashing any files.
+	if _, ok := entry.changes[filePath]; !ok {
+		// filePath is not in this entry — miss without hashing any files.
+		p.cacheMu.Unlock()
 		return nil, false
 	}
-	if !cacheValid(entry) {
-		delete(p.cache, root)
+	// Only snapshot filePath's own hash. Checking sibling hashes here causes
+	// over-eviction (see doc comment above).
+	storedHash := entry.fileHashes[filePath]
+	original := entry
+	p.cacheMu.Unlock()
+
+	// Hash the current workspace file off-lock so InvalidateFile is never blocked.
+	curHash, hashErr := fileHash(filePath)
+
+	p.cacheMu.Lock()
+	defer p.cacheMu.Unlock()
+	entry, exists = p.cache[root]
+	if !exists || entry != original {
+		// Entry was evicted or replaced by a concurrent remy run while off-lock.
 		return nil, false
 	}
+	if _, ok := entry.changes[filePath]; !ok {
+		// filePath was invalidated by a concurrent InvalidateFile while off-lock.
+		return nil, false
+	}
+	if hashErr != nil {
+		// Transient read error — leave the entry completely intact. Return true so
+		// Remediate skips the runner (which would replace this preserved entry).
+		// The LSP client will retry on the next code-action request.
+		p.log.Debug().Err(hashErr).Str("path", filePath).Msg("remy: transient hash error; preserving cache entry, suppressing re-run")
+		return nil, true
+	}
+	if storedHash == "" {
+		// No baseline recorded — cannot validate. Do NOT consume the entry: if we
+		// evicted without being able to confirm staleness we would discard valid
+		// edits. This path is unreachable with the current hashBytes implementation
+		// (which always returns a non-empty hex string), but is guarded defensively.
+		return nil, false
+	}
+	// Definitive outcome (hash computed, baseline known): consume filePath from
+	// both maps. Siblings are not touched.
+	edits := entry.changes[filePath]
 	delete(entry.changes, filePath)
 	delete(entry.fileHashes, filePath)
 	if len(entry.changes) == 0 {
 		delete(p.cache, root)
+	}
+	if curHash != storedHash {
+		// Genuine content change — edits no longer apply to the current file.
+		return nil, false
 	}
 	return edits, true
 }
@@ -232,14 +280,14 @@ func (p *remyProvider) Remediate(ctx context.Context, req RemediationRequest) (*
 	ctx, cancel := context.WithTimeout(ctx, p.opts.Timeout)
 	defer cancel()
 
-	allChanges, err := p.runRemyInWorktree(ctx, root, req)
+	allChanges, fileHashes, err := p.runRemyInWorktree(ctx, root, req)
 	if err != nil {
 		return nil, err
 	}
 	if len(allChanges) == 0 {
 		return nil, nil
 	}
-	p.populateCache(root, filePath, allChanges)
+	p.populateCache(root, filePath, allChanges, fileHashes)
 
 	fileEdits := allChanges[filePath]
 	if len(fileEdits) == 0 {
@@ -260,20 +308,20 @@ func editsToEdit(filePath string, edits []types.TextEdit) *types.WorkspaceEdit {
 // runRemyInWorktree creates an isolated git worktree, runs the remy runner, and
 // builds a WorkspaceEdit for all changed files. It owns the full worktree
 // lifecycle (creation and cleanup via defer).
-func (p *remyProvider) runRemyInWorktree(ctx context.Context, root string, req RemediationRequest) (map[string][]types.TextEdit, error) {
+func (p *remyProvider) runRemyInWorktree(ctx context.Context, root string, req RemediationRequest) (map[string][]types.TextEdit, map[string]string, error) {
 	gitRoot, err := resolveGitRoot(ctx, root)
 	if err != nil {
-		return nil, fmt.Errorf("remy: resolve git root: %w", err)
+		return nil, nil, fmt.Errorf("remy: resolve git root: %w", err)
 	}
 	tmpParent, err := os.MkdirTemp("", "snyk-remy-*")
 	if err != nil {
-		return nil, fmt.Errorf("remy: create temp dir: %w", err)
+		return nil, nil, fmt.Errorf("remy: create temp dir: %w", err)
 	}
 	worktreeDir := filepath.Join(tmpParent, "wt")
 	addOut, err := exec.CommandContext(ctx, "git", "-C", gitRoot, "worktree", "add", "--detach", worktreeDir, "HEAD").CombinedOutput()
 	if err != nil {
 		_ = os.RemoveAll(tmpParent)
-		return nil, fmt.Errorf("remy: git worktree add: %w (%s)", err, addOut)
+		return nil, nil, fmt.Errorf("remy: git worktree add: %w (%s)", err, addOut)
 	}
 	defer func() {
 		// Use a fresh context with a short deadline so cleanup is bounded even
@@ -286,25 +334,30 @@ func (p *remyProvider) runRemyInWorktree(ctx context.Context, root string, req R
 	snapshot, err := snapshotGitFiles(ctx, worktreeDir)
 	if err != nil {
 		p.log.Debug().Err(err).Str("root", worktreeDir).Msg("remy: failed to snapshot tracked files")
-		return nil, fmt.Errorf("remy: snapshot: %w", err)
+		return nil, nil, fmt.Errorf("remy: snapshot: %w", err)
 	}
 	if err = p.runner(ctx, p.engine, worktreeDir, req.FindingId); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	return buildWorkspaceEdits(ctx, p.log, worktreeDir, gitRoot, snapshot)
 }
 
 // buildWorkspaceEdits enumerates files changed in the worktree relative to HEAD
 // and translates each unified diff into TextEdits keyed by the real workspace path.
-func buildWorkspaceEdits(ctx context.Context, log zerolog.Logger, worktreeDir, gitRoot string, snapshot map[string][]byte) (map[string][]types.TextEdit, error) {
+// Alongside the edits it returns, keyed by the SAME absolute workspace path, the
+// SHA-256 of each file's pre-run HEAD content (from snapshot). That hash is the
+// correct cache baseline: it is the content the edits were computed against, so
+// it detects any concurrent edit made while remy was running.
+func buildWorkspaceEdits(ctx context.Context, log zerolog.Logger, worktreeDir, gitRoot string, snapshot map[string][]byte) (map[string][]types.TextEdit, map[string]string, error) {
 	changedPaths, err := gitChangedFiles(ctx, worktreeDir)
 	if err != nil {
-		return nil, fmt.Errorf("remy: enumerate changed files: %w", err)
+		return nil, nil, fmt.Errorf("remy: enumerate changed files: %w", err)
 	}
 	if len(changedPaths) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	allChanges := make(map[string][]types.TextEdit)
+	fileHashes := make(map[string]string)
 	for _, relPath := range changedPaths {
 		originalBytes, ok := snapshot[relPath]
 		if !ok {
@@ -318,7 +371,8 @@ func buildWorkspaceEdits(ctx context.Context, log zerolog.Logger, worktreeDir, g
 		if diff == "" {
 			continue
 		}
-		edit, err := workspaceEditFromContent(filepath.Join(gitRoot, relPath), originalBytes, diff)
+		absPath := filepath.Join(gitRoot, relPath)
+		edit, err := workspaceEditFromContent(absPath, originalBytes, diff)
 		if err != nil {
 			log.Debug().Err(err).Str("path", relPath).Msg("remy: failed to build WorkspaceEdit for file")
 			continue
@@ -328,40 +382,63 @@ func buildWorkspaceEdits(ctx context.Context, log zerolog.Logger, worktreeDir, g
 		}
 		for k, v := range edit.Changes {
 			allChanges[k] = append(allChanges[k], v...)
+			fileHashes[k] = hashBytes(originalBytes)
 		}
 	}
-	return allChanges, nil
+	return allChanges, fileHashes, nil
 }
 
-// fileHash returns the hex-encoded SHA-256 of the file at path, or an error if
-// the file cannot be read.
+// normalizeLineEndings collapses CRLF pairs ("\r\n") to LF ("\n"), leaving lone
+// '\r' bytes intact. Both the pre-run HEAD snapshot bytes (always LF from the
+// git object store) and workspace files on Windows (CRLF when autocrlf is in
+// effect) are normalized before hashing so that a pure CRLF↔LF difference does
+// not cause a spurious cache miss. Lone '\r' bytes (e.g. a bare carriage return
+// inside a Go string literal) are intentionally preserved: stripping them
+// unconditionally would make removing a lone '\r' hash-identical to the
+// baseline, masking a real content change and causing the cache to serve stale
+// edits on a genuinely modified file.
+func normalizeLineEndings(b []byte) []byte {
+	return bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n"))
+}
+
+// hashBytes returns the hex-encoded SHA-256 of b with line endings normalized.
+// It fingerprints the pre-run HEAD content held in memory (from the snapshot).
+// fileHash is its disk counterpart and applies the same normalization so that
+// LF (object store) and CRLF (Windows workspace) produce equal hashes for
+// equal logical content.
+func hashBytes(b []byte) string {
+	h := sha256.Sum256(normalizeLineEndings(b))
+	return fmt.Sprintf("%x", h[:])
+}
+
+// fileHash returns the hex-encoded SHA-256 of the file at path with line
+// endings normalized, or an error if the file cannot be read. Normalization
+// matches hashBytes so that a workspace file written with CRLF line endings
+// (Windows autocrlf) hashes equal to the LF-based snapshot baseline.
 func fileHash(path string) (string, error) {
-	f, err := os.Open(path)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%x", h.Sum(nil)), nil
+	h := sha256.Sum256(normalizeLineEndings(b))
+	return fmt.Sprintf("%x", h[:]), nil
 }
 
 // populateCache stores changes for all files except filePath in the cache so
 // that subsequent code action resolutions can be served without re-running remy.
-// It also captures a SHA-256 content fingerprint for each cached file so that
-// cacheValid can detect modifications independently of filesystem mtime granularity.
-// If fileHash fails for a path (e.g. the file is temporarily unreadable), no hash
-// is stored for that path; cacheValid treats a missing hash as an immediate stale
-// signal, which is safe.
+// The baseline fingerprint for each cached file is the precomputed fileHashes
+// value — the SHA-256 of the pre-run HEAD content the edits were computed
+// against — NOT a post-run re-read of the workspace file. Re-reading after the
+// multi-minute remy run would capture a concurrent user edit as the baseline,
+// defeating staleness detection. tryServeFromCache uses these baselines to
+// detect any modification independently of filesystem mtime granularity.
 //
 // If excluding filePath leaves the entry's changes map empty (i.e. remy only
 // touched the requested file), no entry is stored. An empty entry would linger
-// in the cache indefinitely: cacheValid is vacuously true with no files to check,
+// in the cache indefinitely: a vacuously valid entry with no files to check,
 // yet there is nothing to serve and the evict-when-empty path in tryServeFromCache
 // is never reached.
-func (p *remyProvider) populateCache(root, filePath string, allChanges map[string][]types.TextEdit) {
+func (p *remyProvider) populateCache(root, filePath string, allChanges map[string][]types.TextEdit, fileHashes map[string]string) {
 	entry := &remyCacheEntry{
 		changes:    make(map[string][]types.TextEdit, len(allChanges)-1),
 		fileHashes: make(map[string]string, len(allChanges)-1),
@@ -369,9 +446,7 @@ func (p *remyProvider) populateCache(root, filePath string, allChanges map[strin
 	for k, v := range allChanges {
 		if k != filePath {
 			entry.changes[k] = v
-			if h, err := fileHash(k); err == nil {
-				entry.fileHashes[k] = h
-			}
+			entry.fileHashes[k] = fileHashes[k]
 		}
 	}
 	if len(entry.changes) == 0 {
