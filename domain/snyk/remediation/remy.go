@@ -21,7 +21,9 @@ package remediation
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -56,10 +58,12 @@ type RemyOptions struct {
 
 // remyCacheEntry holds the changes produced by a single remy run that have not
 // yet been delivered to a code action. Entries are keyed by absolute workspace
-// path. createdAt is used for mtime-based eviction.
+// path. fileHashes records a SHA-256 content fingerprint for each cached file
+// path at the time the entry was populated; cacheValid uses these to detect any
+// content change on disk regardless of filesystem mtime granularity.
 type remyCacheEntry struct {
-	changes   map[string][]types.TextEdit
-	createdAt time.Time
+	changes    map[string][]types.TextEdit
+	fileHashes map[string]string // abs path → hex SHA-256 of file contents at cache time
 }
 
 // remyProvider is the concrete RemediationProvider that drives the host snyk
@@ -137,23 +141,61 @@ func (p *remyProvider) getOrCreateRootMu(root string) *sync.Mutex {
 	return mu
 }
 
-// tryServeFromCache looks up the cache for root/filePath. Holds cacheMu for
-// the full read-validate-consume cycle so that cacheValid (which iterates
-// entry.changes) and InvalidateFile (which deletes from entry.changes) are
-// never concurrent — preventing a data race on the shared map.
+// cacheValid reports whether every file in entry.changes still has the same
+// content it had when the entry was populated. It must be called with p.cacheMu
+// held. For each path it first looks up the stored hash; if no stored hash is
+// present the entry is immediately considered stale (the hash was not recorded
+// at populate time, so we cannot verify the file). If a hash is present, the
+// current file content is hashed via fileHash; a read error or content mismatch
+// also signals stale. The prior implementation used os.Stat under this same
+// lock for these same small tracked files, so performing content hashing here
+// is consistent with the existing design.
+func cacheValid(entry *remyCacheEntry) bool {
+	for path := range entry.changes {
+		stored, known := entry.fileHashes[path]
+		if !known {
+			// No stored hash — hash recording failed at populate time; treat as stale.
+			return false
+		}
+		cur, err := fileHash(path)
+		if err != nil || cur != stored {
+			return false
+		}
+	}
+	return true
+}
+
+// tryServeFromCache looks up the cache for root/filePath. Under p.cacheMu it
+// first checks whether the entry exists and whether filePath is present in the
+// entry's changes map — an absent filePath is an immediate miss with no I/O.
+// Only after confirming filePath is cached does it call cacheValid (which reads
+// and hashes every remaining file in the entry). If the entry is stale it is
+// evicted and a miss is returned. On a valid hit the edits for filePath are
+// consumed (deleted from both entry.changes and entry.fileHashes to keep the
+// maps in sync) and the entry is evicted when no changes remain.
+//
 // Returns (edits, true) on a valid cache hit, (nil, false) otherwise.
 func (p *remyProvider) tryServeFromCache(root, filePath string) ([]types.TextEdit, bool) {
 	p.cacheMu.Lock()
 	defer p.cacheMu.Unlock()
 	entry, exists := p.cache[root]
-	if !exists || !p.cacheValid(entry) {
+	if !exists {
 		return nil, false
 	}
 	edits, ok := entry.changes[filePath]
 	if !ok {
+		// filePath is not in this entry — return a miss without hashing any files.
+		return nil, false
+	}
+	if !cacheValid(entry) {
+		delete(p.cache, root)
 		return nil, false
 	}
 	delete(entry.changes, filePath)
+	delete(entry.fileHashes, filePath)
+	if len(entry.changes) == 0 {
+		delete(p.cache, root)
+	}
 	return edits, true
 }
 
@@ -291,50 +333,74 @@ func buildWorkspaceEdits(ctx context.Context, log zerolog.Logger, worktreeDir, g
 	return allChanges, nil
 }
 
+// fileHash returns the hex-encoded SHA-256 of the file at path, or an error if
+// the file cannot be read.
+func fileHash(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
 // populateCache stores changes for all files except filePath in the cache so
 // that subsequent code action resolutions can be served without re-running remy.
+// It also captures a SHA-256 content fingerprint for each cached file so that
+// cacheValid can detect modifications independently of filesystem mtime granularity.
+// If fileHash fails for a path (e.g. the file is temporarily unreadable), no hash
+// is stored for that path; cacheValid treats a missing hash as an immediate stale
+// signal, which is safe.
+//
+// If excluding filePath leaves the entry's changes map empty (i.e. remy only
+// touched the requested file), no entry is stored. An empty entry would linger
+// in the cache indefinitely: cacheValid is vacuously true with no files to check,
+// yet there is nothing to serve and the evict-when-empty path in tryServeFromCache
+// is never reached.
 func (p *remyProvider) populateCache(root, filePath string, allChanges map[string][]types.TextEdit) {
-	p.cacheMu.Lock()
-	defer p.cacheMu.Unlock()
 	entry := &remyCacheEntry{
-		changes:   make(map[string][]types.TextEdit, len(allChanges)-1),
-		createdAt: time.Now(),
+		changes:    make(map[string][]types.TextEdit, len(allChanges)-1),
+		fileHashes: make(map[string]string, len(allChanges)-1),
 	}
 	for k, v := range allChanges {
 		if k != filePath {
 			entry.changes[k] = v
+			if h, err := fileHash(k); err == nil {
+				entry.fileHashes[k] = h
+			}
 		}
 	}
+	if len(entry.changes) == 0 {
+		// Nothing to cache — storing an empty entry would create a ghost that is
+		// vacuously valid but can never be served.
+		return
+	}
+	p.cacheMu.Lock()
 	p.cache[root] = entry
+	p.cacheMu.Unlock()
 }
 
 // InvalidateFile removes cached diffs for path from every cache entry so that
 // the next Remediate call for that file re-runs remy rather than serving stale
-// results. It is called by the LSP textDocument/didChange handler.
+// results. It is called by the LSP textDocument/didChange handler. The
+// corresponding fileHashes entry is deleted alongside the changes entry so
+// both maps stay in sync.
 func (p *remyProvider) InvalidateFile(path types.FilePath) {
 	p.cacheMu.Lock()
 	defer p.cacheMu.Unlock()
 	for root, entry := range p.cache {
 		delete(entry.changes, string(path))
+		delete(entry.fileHashes, string(path))
 		// Remove the cache entry entirely once it has no remaining changes so
 		// it does not occupy memory or cause vacuously-valid hits.
 		if len(entry.changes) == 0 {
 			delete(p.cache, root)
 		}
 	}
-}
-
-// cacheValid returns false if any file in the entry has been modified on disk
-// since the entry was created, indicating the cached diffs are stale.
-// Caller must hold p.cacheMu.
-func (p *remyProvider) cacheValid(entry *remyCacheEntry) bool {
-	for path := range entry.changes {
-		info, err := os.Stat(path)
-		if err != nil || info.ModTime().After(entry.createdAt) {
-			return false
-		}
-	}
-	return true
 }
 
 // resolveGitRoot returns the root of the git repository containing path by
