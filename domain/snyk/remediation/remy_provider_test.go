@@ -43,10 +43,20 @@ import (
 func initGitRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
+	// Canonicalize so the returned path matches git's view (git rev-parse
+	// --show-toplevel resolves symlinks). On macOS t.TempDir() is under
+	// /var (a symlink to /private/var) and on Windows it can be an 8.3 short
+	// name; without this the production canonicalization in Remediate produces
+	// cache keys the test's non-canonical paths never match, so Remediate
+	// returns a nil WorkspaceEdit and the cache tests fail on those platforms.
+	if canonical, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = canonical
+	}
 	for _, args := range [][]string{
 		{"init"},
 		{"config", "user.email", "test@test.com"},
 		{"config", "user.name", "Test"},
+		{"config", "core.checkStat", "minimal"},
 	} {
 		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
 		cmd.Stdout = nil
