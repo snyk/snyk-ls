@@ -932,29 +932,9 @@ func (a *AuthenticationServiceImpl) configureProviders(conf configuration.Config
 
 	authMethodChanged := a.provider() == nil || a.provider().AuthenticationMethod() != authMethod
 
-	// always set the provider even if the authentication method didn't change, to make sure that the provider is initialized with current config
-	if authMethodChanged {
-		var p AuthenticationProvider
-		switch authMethod {
-		default:
-			p = Default(a.engine, a)
-			a.setProvider(p)
-		case types.TokenAuthentication:
-			p = Token(a.engine, a.errorReporter, a.configResolver)
-			a.setProvider(p)
-		case types.PatAuthentication:
-			p = Pat(a.engine, a)
-			a.setProvider(p)
-		case types.FakeAuthentication:
-			a.setProvider(NewFakeCliAuthenticationProvider(a.engine))
-		case "":
-			// don't do anything
-		}
-		subLogger.Debug().
-			Str("provider_type", fmt.Sprintf("%T", a.provider())).
-			Msg("auth provider configured")
-	}
-	// Check whether we have a valid token for the current auth method
+	// Check credential mismatch BEFORE replacing the provider so that ClearAuthentication
+	// is called on the provider that owns the stale credentials.
+	// logout internally calls configureProviders, which will create the fresh provider.
 	token := config.GetToken(conf)
 	if token != "" && !config.AuthenticationMethodMatchesCredentials(token, authMethod, logger) {
 		subLogger.Info().
@@ -968,6 +948,31 @@ func (a *AuthenticationServiceImpl) configureProviders(conf configuration.Config
 			subLogger.Info().Msg("detected token change which is incompatible with auth provider.")
 			a.handleInvalidCredentials()
 		}
+		// Provider was replaced by logout → configureProviders. Return to avoid double-replace.
+		return
+	}
+
+	// Always replace the provider, even when the auth method is unchanged. A fresh provider
+	// has an unlocked p.m (OAuth2Provider.Authenticate holds p.m for the entire browser wait),
+	// so a concurrent re-login attempt captures a new provider and starts immediately instead of
+	// blocking on the previous auth flow's in-progress mutex. Provider creation is cheap —
+	// token/config state lives in configuration.Configuration, not in the provider struct.
+	switch authMethod {
+	default:
+		a.setProvider(Default(a.engine, a))
+	case types.TokenAuthentication:
+		a.setProvider(Token(a.engine, a.errorReporter, a.configResolver))
+	case types.PatAuthentication:
+		a.setProvider(Pat(a.engine, a))
+	case types.FakeAuthentication:
+		a.setProvider(NewFakeCliAuthenticationProvider(a.engine))
+	case "":
+		// don't do anything
+	}
+	if authMethod != "" {
+		subLogger.Debug().
+			Str("provider_type", fmt.Sprintf("%T", a.provider())).
+			Msg("auth provider configured")
 	}
 }
 
