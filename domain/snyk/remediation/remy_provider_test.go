@@ -639,18 +639,24 @@ func TestRemediate_CRLFWorkspaceMatchesLFBaseline(t *testing.T) {
 	assert.Equal(t, int32(1), atomic.LoadInt32(&callCount), "CRLF line endings alone must not invalidate the cache")
 }
 
-// TestRemediate_TransientReadErrorDoesNotEvictCache verifies that a transient
-// read error from fileHash (e.g. file temporarily locked by AV/IDE, or briefly
-// absent) does NOT consume or evict the cached entry. If the entry were evicted
-// on every read error, a transient failure would permanently discard a valid
-// multi-minute remy result and force an unnecessary re-run on the next request.
+// TestRemediate_TransientReadErrorDoesNotEvictCache verifies that a GENUINE
+// transient read error from fileHash — the file EXISTS but cannot be read
+// (locked by AV/IDE, a permission blip, or is-a-directory) — does NOT consume or
+// evict the cached entry. Only a not-exist error invalidates the entry; every
+// other read error is treated as transient so a valid multi-minute remy result
+// is not discarded and re-run unnecessarily.
+//
+// The transient error is simulated by replacing the cached workspace file with a
+// DIRECTORY at the same path: os.ReadFile then returns a non-not-exist error
+// (EISDIR) on both Linux and Windows, distinct from the deletion case exercised
+// by TestRemediate_DeletedFileReRunsRunner.
 //
 // Flow:
 //  1. Commit two files; first Remediate caches bar.go's edits.
-//  2. Remove barAbs from disk (os.ReadFile will return a not-exist error).
-//  3. Remediate(bar.go) → MISS (hashErr != nil), but the entry must be intact.
-//  4. Restore barAbs with the exact original HEAD content (hash matches stored).
-//  5. Remediate(bar.go) → HIT, callCount must not have increased beyond 1.
+//  2. Replace barAbs with a directory (os.ReadFile → EISDIR, not fs.ErrNotExist).
+//  3. Remediate(bar.go) → MISS, entry PRESERVED, runner NOT re-invoked (callCount == 1).
+//  4. Remove the directory, restore barAbs with the exact original HEAD content.
+//  5. Remediate(bar.go) → HIT from the preserved entry, callCount still 1.
 func TestRemediate_TransientReadErrorDoesNotEvictCache(t *testing.T) {
 	repo := initGitRepo(t)
 	barContent := "package main\nvar y = 1\n"
@@ -682,29 +688,35 @@ func TestRemediate_TransientReadErrorDoesNotEvictCache(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int32(1), atomic.LoadInt32(&callCount))
 
-	// Step 2: simulate a transient read error by removing barAbs from disk.
+	// Step 2: simulate a GENUINE transient read error by replacing barAbs with a
+	// directory. os.ReadFile then returns EISDIR — a non-not-exist error — on
+	// both Linux and Windows.
 	require.NoError(t, os.Remove(barAbs))
+	require.NoError(t, os.MkdirAll(barAbs, 0755))
 
-	// Step 3: Remediate(bar.go) must be a MISS because fileHash fails, but the
-	// cache entry must remain intact (not consumed or evicted).
-	_, err = p.Remediate(context.Background(), remediation.RemediationRequest{
+	// Step 3: Remediate(bar.go) must be a MISS (nil edit) because fileHash fails
+	// with a transient error, but the cache entry must remain intact — the runner
+	// must NOT be re-invoked.
+	edit, err := p.Remediate(context.Background(), remediation.RemediationRequest{
 		FindingId:   "f1",
 		ContentRoot: types.FilePath(repo),
 		FilePath:    types.FilePath(barAbs),
 	})
 	require.NoError(t, err)
-	// callCount stays at 1 only if tryServeFromCache returned a miss; if it
-	// returned a hit that's also fine for this step. What matters is step 5.
+	require.Nil(t, edit, "a transient (EISDIR) read error must not serve edits")
+	require.Equal(t, int32(1), atomic.LoadInt32(&callCount),
+		"a transient read error must not re-invoke the runner")
 
-	// Step 4: restore barAbs with the exact HEAD content so its hash matches the
-	// stored baseline (hashBytes of the pre-run snapshot, which equals hashBytes
-	// of the committed content).
+	// Step 4: remove the directory and restore barAbs with the exact HEAD content
+	// so its hash matches the stored baseline (hashBytes of the pre-run snapshot,
+	// which equals hashBytes of the committed content).
+	require.NoError(t, os.RemoveAll(barAbs))
 	require.NoError(t, os.WriteFile(barAbs, []byte(barContent), 0644))
 
 	// Step 5: Remediate(bar.go) must be a HIT from the preserved cache entry.
-	// Without the fix, step 3 would have consumed/evicted the entry → runner
-	// re-runs → callCount = 2.
-	edit, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+	// If the transient error had consumed/evicted the entry, the runner would
+	// re-run → callCount = 2.
+	edit, err = p.Remediate(context.Background(), remediation.RemediationRequest{
 		FindingId:   "f1",
 		ContentRoot: types.FilePath(repo),
 		FilePath:    types.FilePath(barAbs),
@@ -713,6 +725,62 @@ func TestRemediate_TransientReadErrorDoesNotEvictCache(t *testing.T) {
 	require.NotNil(t, edit, "bar.go edits must be served from the preserved cache entry after the file is restored")
 	assert.Equal(t, int32(1), atomic.LoadInt32(&callCount),
 		"a transient read error must not evict the cache entry; runner must not re-run after the file is restored")
+}
+
+// TestRemediate_DeletedFileReRunsRunner verifies that when a cached workspace
+// file is DELETED (os.ReadFile → fs.ErrNotExist), tryServeFromCache treats the
+// entry as invalid and Remediate RE-RUNS the runner rather than preserving the
+// stale entry. The cached edits target content that no longer exists, so serving
+// or preserving them is wrong; the finding must be recomputed from HEAD. This
+// codifies the not-exist→re-run contract that the team's
+// TestCacheValid_StatError_InvalidatesCache relies on.
+//
+// Flow:
+//  1. Commit two files; first Remediate(foo.go) caches bar.go's edits.
+//  2. Delete barAbs from disk (os.ReadFile → fs.ErrNotExist).
+//  3. Remediate(bar.go) → not-exist invalidates the entry → runner RE-RUNS (callCount == 2).
+func TestRemediate_DeletedFileReRunsRunner(t *testing.T) {
+	repo := initGitRepo(t)
+	commitFile(t, repo, "foo.go", "package main\nvar x = 1\n")
+	commitFile(t, repo, "bar.go", "package main\nvar y = 1\n")
+
+	fooAbs := filepath.Join(repo, "foo.go")
+	barAbs := filepath.Join(repo, "bar.go")
+
+	var callCount int32
+	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+		atomic.AddInt32(&callCount, 1)
+		if err := os.WriteFile(filepath.Join(root, "foo.go"), []byte("package main\nvar x = 2\n"), 0644); err != nil {
+			return err
+		}
+		// Modify bar.go inside the worktree so it ends up cached.
+		return os.WriteFile(filepath.Join(root, "bar.go"), []byte("package main\nvar y = 2\n"), 0644)
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	// Step 1: foo.go requested; bar.go edits cached.
+	_, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "f1",
+		ContentRoot: types.FilePath(repo),
+		FilePath:    types.FilePath(fooAbs),
+	})
+	require.NoError(t, err)
+	require.Equal(t, int32(1), atomic.LoadInt32(&callCount))
+
+	// Step 2: delete the cached workspace file so fileHash fails with fs.ErrNotExist.
+	require.NoError(t, os.Remove(barAbs))
+
+	// Step 3: Remediate(bar.go) — a not-exist error must invalidate the entry and
+	// re-run the runner (the cached edits target content that no longer exists).
+	_, err = p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "f1",
+		ContentRoot: types.FilePath(repo),
+		FilePath:    types.FilePath(barAbs),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int32(2), atomic.LoadInt32(&callCount),
+		"deleting a cached file must invalidate the entry and re-run the runner")
 }
 
 // TestRemediate_LoneCRChangeDetectedAsCacheMiss verifies that normalizeLineEndings

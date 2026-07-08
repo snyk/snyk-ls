@@ -22,7 +22,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -160,29 +162,40 @@ func (p *remyProvider) getOrCreateRootMu(root string) *sync.Mutex {
 // and unchanged (pointer equality guards against a concurrent remy run replacing
 // the entry) and filePath is still present (guards concurrent InvalidateFile).
 //
-// The hash outcome drives four distinct behaviors, checked in this order:
+// The hash outcome drives five distinct behaviors, checked in this order:
 //
-//  1. hashErr != nil (transient read error, e.g. file briefly locked by AV/IDE
-//     or temporarily absent): leave the entry COMPLETELY intact, emit a debug
-//     log, and return (nil, true). The true signals Remediate to skip the runner
-//     (which would replace the preserved entry) and return (nil, nil) to the LSP
-//     client, which will retry on the next code action. Evicting or running the
-//     runner on a transient error would permanently discard a valid multi-minute
-//     remy result and force an unnecessary re-run.
+//  1. hashErr is fs.ErrNotExist (the file is GONE): the cached edits target
+//     content that no longer exists, so the entry is invalid. Consume filePath
+//     from both maps (evict when empty) and return (nil, false) so Remediate
+//     re-runs the runner — identical handling to a genuine content mismatch.
 //
-//  2. storedHash == "" (hash was not recorded at populate time — unreachable with
+//  2. hashErr != nil, but NOT not-exist (the file EXISTS yet is momentarily
+//     unreadable — briefly locked by AV/IDE, a permission blip, or is-a-directory):
+//     this is transient. Leave the entry COMPLETELY intact, emit a debug log, and
+//     return (nil, true). The true signals Remediate to skip the runner (which
+//     would replace the preserved entry) and return (nil, nil) to the LSP client,
+//     which will retry on the next code action. Evicting or running the runner on
+//     a transient error would permanently discard a valid multi-minute remy result
+//     and force an unnecessary re-run.
+//
+//  3. storedHash == "" (hash was not recorded at populate time — unreachable with
 //     the current hashBytes path, but guarded defensively): return (nil, false)
 //     WITHOUT consuming the entry. If we consumed and evicted without being able
 //     to validate, we would destroy valid edits unnecessarily.
 //
-//  3. curHash != storedHash (genuine content change confirmed): consume filePath
+//  4. curHash != storedHash (genuine content change confirmed): consume filePath
 //     from both maps (dual-map delete to keep maps in sync), evict when empty,
 //     return (nil, false) — genuine miss, caller runs the runner.
 //
-//  4. curHash == storedHash (content unchanged): consume filePath and return
+//  5. curHash == storedHash (content unchanged): consume filePath and return
 //     (edits, true).
 //
-// Only cases 3 and 4 consume the entry; cases 1 and 2 leave it intact.
+// Cases 1 (not-exist), 4 (mismatch) and 5 (match) consume the entry; cases 2
+// (transient) and 3 (empty baseline) leave it intact.
+//
+// In summary: gone/not-exist → miss, consume (re-run); transient other error →
+// preserve, suppress re-run; empty baseline → miss, no consume; mismatch → miss,
+// consume; match → hit, consume.
 //
 // Returns (edits, true) on a valid hit, (nil, true) on a transient I/O error
 // (entry preserved, runner must not fire), and (nil, false) on a genuine miss.
@@ -219,9 +232,21 @@ func (p *remyProvider) tryServeFromCache(root, filePath string) ([]types.TextEdi
 		return nil, false
 	}
 	if hashErr != nil {
-		// Transient read error — leave the entry completely intact. Return true so
-		// Remediate skips the runner (which would replace this preserved entry).
-		// The LSP client will retry on the next code-action request.
+		if errors.Is(hashErr, fs.ErrNotExist) {
+			// The file is gone — cached edits target content that no longer exists.
+			// Consume filePath from both maps (evict when empty) and return a miss
+			// so Remediate re-runs the runner, exactly as for a content mismatch.
+			delete(entry.changes, filePath)
+			delete(entry.fileHashes, filePath)
+			if len(entry.changes) == 0 {
+				delete(p.cache, root)
+			}
+			return nil, false
+		}
+		// The file exists but is momentarily unreadable — a transient error. Leave
+		// the entry completely intact. Return true so Remediate skips the runner
+		// (which would replace this preserved entry). The LSP client will retry on
+		// the next code-action request.
 		p.log.Debug().Err(hashErr).Str("path", filePath).Msg("remy: transient hash error; preserving cache entry, suppressing re-run")
 		return nil, true
 	}
