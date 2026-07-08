@@ -79,7 +79,6 @@ var (
 	scanNotifier                scanner2.ScanNotifier
 	codeActionService           *codeaction.CodeActionsService
 	fileWatcher                 *watcher.FileWatcher
-	remediationNotifier         remediation.FileChangeNotifier
 	initMutex                   = &sync.Mutex{}
 	notifier                    domainNotify.Notifier
 	codeInstrumentor            codeClientObservability.Instrumentor
@@ -115,7 +114,6 @@ type Dependencies struct {
 	FileWatcher         *watcher.FileWatcher
 	ErrorReporter       er.ErrorReporter
 	CodeActionService   *codeaction.CodeActionsService
-	RemediationNotifier remediation.FileChangeNotifier
 }
 
 func currentDependencies() Dependencies {
@@ -141,7 +139,6 @@ func currentDependencies() Dependencies {
 		FileWatcher:         fileWatcher,
 		ErrorReporter:       errorReporter,
 		CodeActionService:   codeActionService,
-		RemediationNotifier: remediationNotifier,
 	}
 }
 

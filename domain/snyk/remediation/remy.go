@@ -210,10 +210,13 @@ func applyInsertion(s *diffState, line string, lastLine int) error {
 // server applies fixes.
 func parseDiffHunks(diffLines []string, lastLine int) ([]types.TextEdit, error) {
 	s := &diffState{}
+	inHunk := false
 
 	for _, line := range diffLines {
-		if strings.HasPrefix(line, "---") || strings.HasPrefix(line, "+++") {
-			// Ignore unified diff file header lines.
+		if !inHunk && (strings.HasPrefix(line, "---") || strings.HasPrefix(line, "+++")) {
+			// File header lines appear before the first @@ hunk; skip them.
+			// Inside a hunk, "---" is a deletion of a "--"-prefixed line and
+			// "+++" is an insertion of a "++" line — handled by the +/- branches.
 			continue
 		}
 		if strings.HasPrefix(line, "@@") {
@@ -224,6 +227,7 @@ func parseDiffHunks(diffLines []string, lastLine int) ([]types.TextEdit, error) 
 			n, _ := strconv.Atoi(m[1])
 			s.currentLine = n - 1 // convert to 0-indexed
 			s.lastWasInsertion = false
+			inHunk = true
 			continue
 		}
 		if strings.HasPrefix(line, "-") {
