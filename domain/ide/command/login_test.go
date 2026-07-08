@@ -474,10 +474,10 @@ func TestLoginCommand_Execute_InvalidInsecureArg_ReturnsError(t *testing.T) {
 }
 
 func TestLoginCommand_Execute_CanRestartAuthWhenPreviousInProgress(t *testing.T) {
-	// Regression test: starting a new login while a previous auth is in progress must not
-	// deadlock. The root cause was applyAuthConfig → ConfigureProviders acquiring the same
-	// mutex as the in-progress Authenticate, without first canceling the previous auth.
-	// Execute must call CancelOngoingAuth before applyAuthConfig to unblock the mutex.
+	// Regression test: starting a new login while a previous OAuth auth is in progress
+	// must not block. Authenticate no longer holds a.m for the full browser-wait
+	// duration, so ConfigureProviders and a second Authenticate can proceed immediately
+	// after CancelOngoingAuth() without waiting for the first auth's timeout (120 s).
 	engine, ts := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	ctrl := gomock.NewController(t)
@@ -488,19 +488,19 @@ func TestLoginCommand_Execute_CanRestartAuthWhenPreviousInProgress(t *testing.T)
 	blockingProvider := authentication.NewBlockingFakeAuthProvider()
 	authService := authentication.NewAuthenticationService(engine, ts, blockingProvider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
 
-	// Start a blocking auth in the background — it holds a.m.Lock() until canceled.
+	// Start a blocking auth in the background.
 	go authService.Authenticate(context.Background())
 
-	// Wait for the first auth to enter Authenticate (and acquire the lock).
+	// Wait for the first auth to enter the provider's Authenticate call.
 	select {
 	case <-blockingProvider.Started:
 	case <-time.After(5 * time.Second):
 		t.Fatal("first auth did not start in time")
 	}
 
-	// Execute a second login while the first is still in progress. ConfigureProviders (called
-	// inside applyAuthConfig) must not deadlock waiting for the mutex held by the first auth.
-	// CancelOngoingAuth must have been called first to unblock the first auth.
+	// Execute a second login while the first is still in progress. ConfigureProviders and
+	// the second Authenticate must complete quickly because the first auth no longer holds
+	// a.m during the OAuth wait.
 	mockLdxSync := mock_command.NewMockLdxSyncService(ctrl)
 	mockLdxSync.EXPECT().RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 

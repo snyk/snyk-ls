@@ -169,29 +169,40 @@ func (a *AuthenticationServiceImpl) provider() AuthenticationProvider {
 func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token string, err error) {
 	a.CancelOngoingAuth()
 
-	a.m.Lock()
-	defer a.m.Unlock()
-
 	a.previousAuthCtxCancelFuncMu.Lock()
 	ctx, a.previousAuthCtxCancelFunc = context.WithCancel(ctx)
 	a.previousAuthCtxCancelFuncMu.Unlock()
-
 	defer a.previousAuthCtxCancelFunc() // need to clean up resources if we weren't interrupted, impl should ensure its safe to double call
-	return a.authenticate(ctx)
-}
 
-func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token string, err error) {
-	if a.authProvider == nil {
-		err = errors.New("authentication provider is not configured")
-		a.engine.GetLogger().Warn().Err(err).Msg("Failed to authenticate: auth provider is nil")
+	// Capture the provider under a brief read lock. ConfigureProviders takes a
+	// write lock, so releasing a.m before the slow browser wait lets a concurrent
+	// re-login reconfigure providers without waiting for the OAuth flow to time out.
+	a.m.RLock()
+	provider := a.authProvider
+	a.m.RUnlock()
+
+	if provider == nil {
+		a.engine.GetLogger().Warn().Msg("Failed to authenticate: auth provider is nil")
+		a.m.Lock()
 		a.authCache.RemoveAll()
-		return "", err
+		a.m.Unlock()
+		return "", errors.New("authentication provider is not configured")
 	}
 
-	token, err = a.authProvider.Authenticate(ctx)
+	// Run the auth flow without holding a.m. This lets ConfigureProviders and
+	// Logout proceed while waiting for the OAuth browser callback (up to 2 minutes).
+	// CancelOngoingAuth above signals any concurrent auth to abort.
+	token, err = provider.Authenticate(ctx)
 
+	// Re-acquire the write lock to save results.
+	a.m.Lock()
+	defer a.m.Unlock()
+	return a.authenticate(token, err, provider)
+}
+
+func (a *AuthenticationServiceImpl) authenticate(token string, err error, provider AuthenticationProvider) (string, error) {
 	if token == "" || err != nil {
-		a.engine.GetLogger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.authProvider))
+		a.engine.GetLogger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(provider))
 		a.authCache.RemoveAll()
 		return token, err
 	}
