@@ -264,9 +264,6 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv))
 	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv))
 	var onFileChange func(types.FilePath)
-	if deps.RemediationNotifier != nil {
-		onFileChange = deps.RemediationNotifier.InvalidateFile
-	}
 	handlers["textDocument/didChange"] = enrich(textDocumentDidChangeHandler(conf, onFileChange))
 	handlers["textDocument/didClose"] = enrich(noOpHandler())
 	handlers[textDocumentDidOpenOperation] = enrich(textDocumentDidOpenHandler(conf))

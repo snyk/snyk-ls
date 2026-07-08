@@ -79,7 +79,6 @@ type CodeAction interface {
 	GetCommand() *CommandData
 	GetDeferredCommand() *func() *CommandData
 	GetUuid() *uuid.UUID
-	GetKind() CodeActionKind
 	SetTitle(title string)
 	SetEdit(edit *WorkspaceEdit)
 }
