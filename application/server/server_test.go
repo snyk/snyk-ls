@@ -92,9 +92,11 @@ func didOpenTextParams(t *testing.T) (sglsp.DidOpenTextDocumentParams, types.Fil
 type ServerTestOption func(*serverTestConfig)
 
 type serverTestConfig struct {
-	useRealDI    bool
-	overrideDeps *di.Dependencies
-	callbackFn   onCallbackFn
+	useRealDI       bool
+	overrideDeps    *di.Dependencies
+	callbackFn      onCallbackFn
+	concurrency     int
+	scannerOverride scanner.Scanner
 }
 
 func WithRealDI() ServerTestOption {
@@ -112,6 +114,26 @@ func WithDeps(deps di.Dependencies) ServerTestOption {
 func WithCallback(fn onCallbackFn) ServerTestOption {
 	return func(cfg *serverTestConfig) {
 		cfg.callbackFn = fn
+	}
+}
+
+// WithScanner replaces the Scanner dependency injected into request contexts.
+// It composes with WithRealDI, so a test can keep the real command service (needed
+// for commands that actually render, e.g. the settings-configuration HTML) while
+// still controlling scanner Init behavior.
+func WithScanner(s scanner.Scanner) ServerTestOption {
+	return func(cfg *serverTestConfig) {
+		cfg.scannerOverride = s
+	}
+}
+
+// WithServerConcurrency pins the jrpc2 server worker-pool size for the test.
+// A value of 1 deterministically reproduces the saturated-dispatch condition
+// from IDE-2181 (a single busy worker starves later requests) regardless of the
+// host core count; 0 keeps the production default (number of cores).
+func WithServerConcurrency(n int) ServerTestOption {
+	return func(cfg *serverTestConfig) {
+		cfg.concurrency = n
 	}
 }
 
@@ -154,10 +176,16 @@ func setupServer(
 		}
 	}
 
+	// Scanner override applies to either DI path (composes with WithRealDI); only the
+	// Scanner dependency injected into request contexts is replaced.
+	if cfg.scannerOverride != nil {
+		deps.Scanner = cfg.scannerOverride
+	}
+
 	setUniqueCliPath(t, engine)
 
 	jsonRPCRecorder := &testsupport.JsonRPCRecorder{}
-	loc := startServer(engine, tokenService, cfg.callbackFn, jsonRPCRecorder, deps)
+	loc := startServer(engine, tokenService, cfg.callbackFn, jsonRPCRecorder, deps, cfg.concurrency)
 	cleanupChannels()
 
 	t.Cleanup(func() {
@@ -289,7 +317,7 @@ func TestWithContext_HandlerPanic_ReturnsJRPC2Error(t *testing.T) {
 
 type onCallbackFn = func(ctx context.Context, request *jrpc2.Request) (any, error)
 
-func startServer(engine workflow.Engine, tokenService *config.TokenServiceImpl, callBackFn onCallbackFn, jsonRPCRecorder *testsupport.JsonRPCRecorder, deps di.Dependencies) server.Local {
+func startServer(engine workflow.Engine, tokenService *config.TokenServiceImpl, callBackFn onCallbackFn, jsonRPCRecorder *testsupport.JsonRPCRecorder, deps di.Dependencies, concurrency int) server.Local {
 	var srv *jrpc2.Server
 	logger := engine.GetLogger()
 
@@ -308,7 +336,7 @@ func startServer(engine workflow.Engine, tokenService *config.TokenServiceImpl, 
 		},
 		Server: &jrpc2.ServerOptions{
 			AllowPush:   true,
-			Concurrency: 0, // set concurrency to < 1 causes initialization with number of cores
+			Concurrency: concurrency, // 0 => number of cores (production default); >0 pins the pool size for tests
 			Logger: func(text string) {
 				logger.Trace().Str("method", "json-rpc").Msg(text)
 			},
@@ -513,6 +541,11 @@ func Test_initialized_shouldInitializeAndTriggerCliDownload(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Scanner init (which triggers the CLI download) now runs in the background after
+	// the initialized handler returns (IDE-2181). Wait for the init-complete signal
+	// (invariant D1) so the assertion observes the finished download without racing the
+	// goroutine.
+	types.WaitForLspInitialized(engine.GetConfiguration())
 	assert.Equal(t, 1, di.Installer().(*install.FakeInstaller).Installs())
 }
 
@@ -1280,6 +1313,11 @@ func Test_initializedHandler_PopulatesFeatureFlagsAndSastSettingsForWorkspaceFol
 	_, err = loc.Client.Call(t.Context(), "initialized", types.InitializedParams{})
 	require.NoError(t, err)
 
+	// HandleFolders (feature-flag + SAST population) now runs in the background after
+	// initialized returns (IDE-2181); wait for the init-complete signal (invariant D1)
+	// so these reads happen-after the goroutine's writes.
+	types.WaitForLspInitialized(engine.GetConfiguration())
+
 	assert.Equal(t, len(folderPaths), fakeFF.PopulateFolderConfigCallCount,
 		"PopulateFolderConfig must be called once per workspace folder")
 	for _, p := range folderPaths {
@@ -1725,7 +1763,7 @@ func TestInitializeHandler_MissingDep_PropagatesLSPError(t *testing.T) {
 			tc.mutate(&deps)
 
 			jsonRPCRecorder := &testsupport.JsonRPCRecorder{}
-			loc := startServer(engine, tokenService, nil, jsonRPCRecorder, deps)
+			loc := startServer(engine, tokenService, nil, jsonRPCRecorder, deps, 0)
 			t.Cleanup(func() { _ = loc.Close() })
 
 			_, err := loc.Client.Call(t.Context(), "initialize", nil)

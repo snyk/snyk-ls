@@ -50,3 +50,27 @@ func TestGetGlobalOrganization_ResolvesAndPrimesViaExplicitSet(t *testing.T) {
 	assert.True(t, conf.IsSet(configuration.ORGANIZATION),
 		"GetGlobalOrganization stores the resolved org, so IsSet becomes true (primes hot-path GlobalOrg)")
 }
+
+func TestIsLspHandshakeAcknowledged(t *testing.T) {
+	t.Run("false when neither flag set", func(t *testing.T) {
+		conf := configuration.NewWithOpts()
+		assert.False(t, types.IsLspHandshakeAcknowledged(conf))
+	})
+
+	t.Run("true when only the early handshake-ack flag is set (init window)", func(t *testing.T) {
+		conf := configuration.NewWithOpts()
+		conf.Set(types.SettingIsLspHandshakeAcknowledged, true)
+		// Scanner readiness has NOT been signaled — this is the IDE-2181 window.
+		assert.False(t, conf.GetBool(types.SettingIsLspInitialized))
+		assert.True(t, types.IsLspHandshakeAcknowledged(conf),
+			"handshake ack must be true during the scanner-init window")
+	})
+
+	t.Run("true when only the late scanner-ready flag is set (back-compat)", func(t *testing.T) {
+		conf := configuration.NewWithOpts()
+		conf.Set(types.SettingIsLspInitialized, true)
+		// Callers/tests that set SettingIsLspInitialized directly must still count as
+		// having acknowledged the handshake (late implies early).
+		assert.True(t, types.IsLspHandshakeAcknowledged(conf))
+	})
+}
