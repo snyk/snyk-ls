@@ -2036,6 +2036,10 @@ func ensureInitialized(t *testing.T, engine workflow.Engine, tokenService *confi
 
 	_, err = loc.Client.Call(t.Context(), "initialized", nil)
 	assert.NoError(t, err)
+
+	// Scanner init now runs in the background (IDE-2181). Wait for completion so smoke
+	// tests observe the same post-init semantics as when initializedHandler was synchronous.
+	types.WaitForLspInitialized(engine.GetConfiguration())
 }
 
 func getCurrentCommitHash(t *testing.T, workDir types.FilePath) string {
