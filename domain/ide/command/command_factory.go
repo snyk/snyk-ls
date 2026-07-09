@@ -156,9 +156,7 @@ func CreateFromCommandData(
 	case types.RemediationAgentFixFolderCommand:
 		return &remediationFixFolderCommand{
 			command:  commandData,
-			notifier: notifier,
 			provider: remediationProvider,
-			engine:   engine,
 		}, nil
 	}
 

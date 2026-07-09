@@ -2650,23 +2650,18 @@ func Test_Smoke_RemediationAgent_CodeAction(t *testing.T) {
 }
 
 // Test_Smoke_RemediationAgent_FixFolder verifies the full LSP command roundtrip
-// for snyk.remediationAgent.fixFolder — the folder-wide sibling of the code-action
-// remediation path exercised by Test_Smoke_RemediationAgent_CodeAction.
+// for snyk.remediationAgent.fixFolder — the folder-wide agentic fix command.
 //
-// It clones a real repo, registers the preview-CLI remy "fix" workflow, enables the
-// workspace/applyEdit client capability, invokes the command via
-// workspace/executeCommand, and asserts the server delivers the resulting fix as a
-// server→client workspace/applyEdit callback carrying at least one file change.
-//
-// The executeCommand response is null on both the edit and no-edit paths, so the
-// real success signal is the applyEdit callback, not the command response. Unlike
-// the code-action test, the folder command runs remy over the whole folder with no
-// per-finding gate; on NodejsGoof (abundant fixable vulnerabilities) the agentic
-// fixer reliably produces at least one change.
+// It clones a real repo, registers the preview-CLI remy "fix" workflow, invokes
+// the command via workspace/executeCommand, and asserts the executeCommand
+// response body is a FolderFixResult with at least one file entry whose Diff is
+// non-empty and whose WorktreePath exists on disk. No workspace/applyEdit
+// callback must be sent (the apply step has been removed — the daemon lands
+// changes by copying from the returned worktree path).
 //
 // Skips only when LLM credentials are absent — set ANTHROPIC_API_KEY or
-// OPENAI_API_KEY. The preview CLI always bundles the remy extension, so credential
-// absence is the only legitimate reason to skip.
+// OPENAI_API_KEY. The preview CLI always bundles the remy extension, so
+// credential absence is the only legitimate reason to skip.
 func Test_Smoke_RemediationAgent_FixFolder(t *testing.T) {
 	if os.Getenv("ANTHROPIC_API_KEY") == "" && os.Getenv("OPENAI_API_KEY") == "" {
 		t.Skip("skipping Remy smoke test: LLM credentials not available — set ANTHROPIC_API_KEY or OPENAI_API_KEY")
@@ -2679,42 +2674,70 @@ func Test_Smoke_RemediationAgent_FixFolder(t *testing.T) {
 	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductCode)
 
-	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, engine, tokenService)
+	// Register the scan-completion cleanup so temp-dir removal races with in-flight
+	// HTTP requests are avoided (same pattern as setupRepoAndInitializeInDir).
+	t.Cleanup(func() {
+		waitForAllScansToComplete(t, di.ScanStateAggregator())
+	})
+	cloneTargetDir := copyGoofDirInto(t, string(repoTempDir))
+
+	// Build init params with workspace.applyEdit=true so that IF the fixFolder path
+	// accidentally sends workspace/applyEdit, handleApplyWorkspaceEdit passes the
+	// capability guard and srv.Callback reaches jsonRPCRecorder — making
+	// assert.Empty(FindCallbacksByMethod("workspace/applyEdit")) non-vacuous.
+	initParams := prepareInitParams(t, cloneTargetDir, engine)
+	initParams.Capabilities.Workspace.ApplyEdit = true
+	ensureInitialized(t, engine, tokenService, loc, initParams, nil)
+
 	substituteRemyFlow(t, engine)
 
-	// The fixFolder command handler and handleApplyWorkspaceEdit both require the
-	// workspace/applyEdit client capability, which prepareInitParams does not set.
-	// Enable it on the engine config after initialization so the command runs and
-	// the applyEdit request is not silently dropped.
-	caps := types.ClientCapabilities{}
-	caps.Workspace.ApplyEdit = true
-	engine.GetConfiguration().Set(types.SettingClientCapabilities, caps)
-
 	// Invoke the command end-to-end. It is blocking: the call returns only after
-	// remy has finished fixing the folder.
-	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
+	// remy has finished fixing the folder. The response body is now a
+	// FolderFixResult (not null) carrying per-file results.
+	response, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 		Command:   types.RemediationAgentFixFolderCommand,
 		Arguments: []any{string(uri.PathToUri(cloneTargetDir))},
 	})
 	require.NoError(t, err, "fixFolder command must execute the full flow without error")
 
-	// notifier.Send is async: the applyEdit callback is delivered on the notifier
-	// consumer goroutine shortly after the command returns. Poll until it arrives.
-	var applyEditCallbacks []jrpc2.Request
-	assert.Eventually(t, func() bool {
-		applyEditCallbacks = jsonRPCRecorder.FindCallbacksByMethod("workspace/applyEdit")
-		return len(applyEditCallbacks) > 0
-	}, maxIntegTestDuration, 100*time.Millisecond,
-		"expected a server→client workspace/applyEdit callback carrying the remediation fix")
+	// Parse the executeCommand response body into FolderFixResult.
+	var result types.FolderFixResult
+	require.NoError(t, response.UnmarshalResult(&result),
+		"fixFolder response must unmarshal into types.FolderFixResult")
 
-	var sawFileChange bool
-	for i := range applyEditCallbacks {
-		var params types.ApplyWorkspaceEditParams
-		require.NoError(t, applyEditCallbacks[i].UnmarshalParams(&params))
-		if params.Edit != nil && len(params.Edit.Changes) > 0 {
-			sawFileChange = true
+	// Assert at least one file was fixed with a non-empty Diff and, for edit
+	// entries, a WorktreePath that exists on disk under the clone directory.
+	// Deletion entries have an empty WorktreePath by design; that is also valid.
+	require.NotEmpty(t, result.Files,
+		"fixFolder must return at least one file result on NodejsGoof with LLM creds")
+
+	separator := string(filepath.Separator)
+	cloneTargetDirStr := string(cloneTargetDir)
+	var sawValidEntry bool
+	for _, f := range result.Files {
+		if f.Diff == "" {
+			continue
+		}
+		if f.WorktreePath == "" {
+			// Valid deletion entry: file was removed by the fix.
+			sawValidEntry = true
+			break
+		}
+		// Edit entry: worktree file must exist on disk and be located under the
+		// clone directory (not a stale or leaked path from a prior run).
+		_, statErr := os.Stat(f.WorktreePath)
+		if statErr == nil && strings.HasPrefix(f.WorktreePath, cloneTargetDirStr+separator) {
+			sawValidEntry = true
 			break
 		}
 	}
-	assert.True(t, sawFileChange, "expected at least one workspace/applyEdit callback with a file change")
+	assert.True(t, sawValidEntry,
+		"at least one file result must have a non-empty Diff and, for edit entries, "+
+			"a WorktreePath that exists on disk under the clone directory")
+
+	// Regression guard: no workspace/applyEdit callback must have been recorded.
+	// The apply step is removed — the LS no longer applies changes itself.
+	applyEditCallbacks := jsonRPCRecorder.FindCallbacksByMethod("workspace/applyEdit")
+	assert.Empty(t, applyEditCallbacks,
+		"fixFolder must NOT send workspace/applyEdit (apply step removed)")
 }

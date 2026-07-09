@@ -374,3 +374,46 @@ func Test_NotifierWaitsForLspInitializedChannel(t *testing.T) {
 	assert.Eventually(t, delivered, 2*time.Second, time.Millisecond,
 		"notification must be delivered after LspInitialized is signaled")
 }
+
+// Test_handleApplyWorkspaceEdit_NoCapability_DoesNotCallback verifies that
+// workspace/applyEdit is NOT sent to clients that do not declare support for it.
+func Test_handleApplyWorkspaceEdit_NoCapability_DoesNotCallback(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	// Explicitly leave ApplyEdit = false (zero value).
+	conf.Set(types.SettingClientCapabilities, types.ClientCapabilities{
+		Workspace: types.WorkspaceClientCapabilities{ApplyEdit: false},
+	})
+
+	srv := mock_types.NewMockServer(ctrl)
+	// Callback must NOT be called when the client has not declared applyEdit support.
+	srv.EXPECT().Callback(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	logger := engine.GetLogger()
+	params := types.ApplyWorkspaceEditParams{Label: "test-no-cap"}
+	handleApplyWorkspaceEdit(conf, srv, params, logger)
+}
+
+// Test_handleApplyWorkspaceEdit_WithCapability_SendsCallback verifies that
+// workspace/applyEdit IS sent when the client declares support for it.
+func Test_handleApplyWorkspaceEdit_WithCapability_SendsCallback(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(types.SettingClientCapabilities, types.ClientCapabilities{
+		Workspace: types.WorkspaceClientCapabilities{ApplyEdit: true},
+	})
+
+	srv := mock_types.NewMockServer(ctrl)
+	srv.EXPECT().
+		Callback(gomock.Any(), "workspace/applyEdit", gomock.Any()).
+		Return(nil, nil).
+		Times(1)
+
+	logger := engine.GetLogger()
+	params := types.ApplyWorkspaceEditParams{Label: "test-with-cap"}
+	handleApplyWorkspaceEdit(conf, srv, params, logger)
+}
