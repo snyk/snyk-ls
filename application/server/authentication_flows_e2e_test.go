@@ -120,6 +120,9 @@ func Test_E2E_AuthenticationMethodChangeClearsIncompatibleToken(t *testing.T) {
 
 	require.NoError(t, initializeLSPClientOnly(t, loc, types.InitializeParams{}))
 	require.NoError(t, initializedLSPClient(t, loc))
+	// Init runs in the background now (IDE-2181); auth notifications are dispatched only
+	// after scanner init completes, so wait before exercising config-driven auth changes.
+	types.WaitForLspInitialized(engine.GetConfiguration())
 
 	apiToken := "22222222-2222-4222-8222-222222222222"
 	_, err := loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", types.DidChangeConfigurationParams{

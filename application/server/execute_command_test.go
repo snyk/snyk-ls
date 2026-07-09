@@ -194,6 +194,10 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	_, err = loc.Client.Call(t.Context(), "initialized", types.InitializedParams{})
 	assert.NoError(t, err)
 
+	// Scanner init now runs in the background (IDE-2181); wait for it to finish so the
+	// auth check has written its token before we clear it for the login assertion below.
+	types.WaitForLspInitialized(engine.GetConfiguration())
+
 	// Clear the token written by the scanner-init auth check during `initialized`. Without
 	// this, snyk.login's Authenticate would re-store the same fake token, updateCredentials
 	// would early-return on the no-op, and the post-credential hook (where the login-time
