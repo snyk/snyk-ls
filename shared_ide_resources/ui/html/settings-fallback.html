@@ -59,6 +59,10 @@
       --border-color: var(--vscode-panel-border, #454545);
       --focus-border: var(--vscode-focusBorder, #007acc);
 
+      /* Buttons */
+      --button-background: var(--vscode-button-background, #0e639c);
+      --button-foreground: var(--vscode-button-foreground, #ffffff);
+
       /* Other */
       --border-radius: 4px;
       --border-radius-small: 2px;
@@ -213,6 +217,34 @@
       display: none !important;
     }
 
+    /* Re-authentication control */
+    .reauth-status {
+      margin: 0 0 var(--form-group-margin) 0;
+      color: var(--text-color);
+    }
+
+    .reauth-button {
+      align-self: flex-start;
+      padding: var(--input-padding) 16px;
+      background-color: var(--button-background);
+      color: var(--button-foreground);
+      border: 1px solid var(--button-background);
+      border-radius: var(--border-radius-small);
+      font-family: inherit;
+      font-size: inherit;
+      cursor: pointer;
+    }
+
+    .reauth-button:focus {
+      outline: 1px solid var(--focus-border);
+      outline-offset: 2px;
+    }
+
+    .reauth-button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
     /* Info Message */
     .info-message {
       padding: var(--section-padding);
@@ -310,6 +342,11 @@
   <div class="section">
     <h2>Authentication</h2>
 
+    <div class="form-group">
+      <p id="reauth-status" class="reauth-status">Sign in or reconnect with Snyk.</p>
+      <button type="button" id="reauth-button" class="reauth-button">Connect</button>
+    </div>
+
     <div class="form-group half-width">
       <label class="checkbox-label">
         <input type="checkbox" name="proxy_insecure" id="proxy_insecure" {{INSECURE_CHECKED}}>
@@ -366,6 +403,9 @@
     var initialState = null;
     // Guard against re-entrance when blur() triggers getAndSaveIdeConfig
     var _isSaving = false;
+    // Monotonic re-auth cycle counter. Each startReauth() bumps it; a done()
+    // callback from a superseded cycle is inert (see startReauth).
+    var _reauthGen = 0;
 
     function get(id) {
       return document.getElementById(id);
@@ -502,10 +542,63 @@
       }
     };
 
+    // Re-authenticate via the IDE command bridge. D2(a): pass no auth args so the
+    // language server re-auths with the user's existing configured method/endpoint
+    // rather than overwriting it from this limited fallback page.
+    //
+    // The button is disabled while a re-auth is in flight (prevents a double-fire)
+    // and re-enabled when the language server invokes done(). If done() never fires
+    // — the user cancels the OAuth browser tab, auth stalls, or the LS dies mid-flow
+    // — a client-side safety timeout restores the button so the user can retry
+    // instead of being stuck on "Connecting…" forever. done() clears that timer so
+    // there is no double-restore. __REAUTH_TIMEOUT_MS__ overrides the duration in tests.
+    //
+    // done() is single-shot AND cycle-aware. If the safety timeout re-enables the
+    // button (auth exceeds the timeout) the user can start a fresh cycle; the prior
+    // cycle's bridge callback may still fire late. A stale done() from a superseded
+    // cycle (gen !== _reauthGen) — or a second invocation of the same cycle (finished)
+    // — must be inert, or it would re-enable the button mid-new-cycle and reopen the
+    // double-dispatch it guards against.
+    function startReauth() {
+      if (typeof window.__ideExecuteCommand__ !== 'function') { return; }
+      var btn = get('reauth-button');
+      if (btn && btn.disabled) { return; } // a re-auth is already in progress
+      var gen = ++_reauthGen;
+      var timeoutMs = typeof window.__REAUTH_TIMEOUT_MS__ === 'number'
+        ? window.__REAUTH_TIMEOUT_MS__
+        : 60000;
+      var safetyTimer = null;
+      var finished = false;
+      function done() {
+        if (finished || gen !== _reauthGen) { return; }
+        finished = true;
+        if (safetyTimer !== null) {
+          window.clearTimeout(safetyTimer);
+          safetyTimer = null;
+        }
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Connect';
+        }
+      }
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Connecting…';
+      }
+      safetyTimer = window.setTimeout(done, timeoutMs);
+      try {
+        window.__ideExecuteCommand__('snyk.login', [], done);
+      } catch (e) {
+        console.error('Error starting authentication:', e);
+        done();
+      }
+    }
+
     window.__isFormDirty__ = function() { return isDirty(); };
     window.collectData = collectData;
     window.collectChangedData = collectChangedData;
     window.markDirty = markDirty;
+    window.startReauth = startReauth;
 
     function repositionTooltip(trigger) {
       var popup = trigger.querySelector('.tooltip-popup');
@@ -565,6 +658,11 @@
 
       get('cli_release_channel_custom').addEventListener('input', validateCliVersion);
       get('cli_release_channel_custom').addEventListener('blur', validateCliVersion);
+
+      var reauthBtn = get('reauth-button');
+      if (reauthBtn) {
+        reauthBtn.addEventListener('click', startReauth);
+      }
 
       var tooltipTriggers = document.querySelectorAll('[data-toggle="tooltip"]');
       for (var k = 0; k < tooltipTriggers.length; k++) {
