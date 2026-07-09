@@ -410,6 +410,109 @@ func Test_RegisterOAuthStorageBridge_LastWriteWins_WithReentrancy(t *testing.T) 
 	)
 }
 
+// Test_RegisterOAuthStorageBridge_EmptyStorageUpdateDoesNotClearAppliedToken is the
+// deterministic regression test for IDE-2179.
+//
+// Root cause: during the `initialized` handler, the auto-authentication flow calls
+// configureProviders → logout, which clears the OAuth token in storage. The OAuth
+// storage bridge reacts to that empty storage write by enqueuing an asynchronous
+// updateCredentials("") on credentialUpdateChan. That queued empty update is drained by
+// credentialUpdateWorker on a background goroutine with no ordering relationship to the
+// LSP request handlers. On a slow runner it is applied AFTER a later
+// workspace/didChangeConfiguration has synchronously set a token, overwriting the valid
+// token with empty — permanent credential loss until the next config change. This is the
+// fast (non-timeout) assertion failure of
+// Test_E2E_EndpointChangeAfterInitializationClearsToken observed on Windows CI.
+//
+// The bridge exists solely to propagate a newly written/rotated (non-empty) OAuth token
+// from storage to the auth service; credential clears are always driven synchronously
+// through updateCredentials/logout (service → storage), so a storage → service empty is
+// only ever a redundant echo. The bridge must therefore drop empty updates.
+//
+// require.Never polls continuously for 2 seconds: without the empty-guard the worker
+// drains updateCredentials("") within milliseconds and clears the token (reliable RED);
+// with it the empty update is dropped and the token stays stable (reliable GREEN),
+// across -race and all GOMAXPROCS values.
+func Test_RegisterOAuthStorageBridge_EmptyStorageUpdateDoesNotClearAppliedToken(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	storageWithCallbacks, err := storage2.NewStorageWithCallbacks(
+		storage2.WithStorageFile(filepath.Join(t.TempDir(), "testStorage")),
+	)
+	require.NoError(t, err)
+	conf.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
+	conf.SetStorage(storageWithCallbacks)
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+
+	service := NewAuthenticationService(
+		engine,
+		tokenService,
+		nil,
+		error_reporting.NewTestErrorReporter(engine),
+		notification.NewNotifier(),
+		testutil.DefaultConfigResolver(engine),
+	)
+	t.Cleanup(func() { service.Shutdown() })
+
+	RegisterOAuthStorageBridge(storageWithCallbacks, service)
+
+	appliedTokenBytes, err := json.Marshal(oauth2.Token{
+		AccessToken:  "applied-access",
+		RefreshToken: "applied-refresh",
+		TokenType:    "Bearer",
+		Expiry:       time.Now().Add(time.Hour),
+	})
+	require.NoError(t, err)
+	appliedToken := string(appliedTokenBytes)
+
+	// A valid token is applied, as workspace/didChangeConfiguration does synchronously.
+	require.NoError(t, storageWithCallbacks.Set(auth.CONFIG_KEY_OAUTH_TOKEN, appliedToken))
+	require.Eventually(t, func() bool {
+		return config.GetToken(conf) == appliedToken
+	}, 2*time.Second, time.Millisecond, "applied token must be written to user:global:token")
+
+	// A stale empty OAuth storage update (as produced during init auto-auth logout) must
+	// NOT clobber the already-applied token.
+	require.NoError(t, storageWithCallbacks.Set(auth.CONFIG_KEY_OAUTH_TOKEN, ""))
+	require.Never(t,
+		func() bool { return config.GetToken(conf) == "" },
+		2*time.Second, time.Millisecond,
+		"empty oauth storage update must not clear an applied token",
+	)
+}
+
+// Test_oauthStorageBridgeCallback_DropsEmptyToken locks the fix at the unit level: the
+// bridge callback must not drive a credential update for an empty token. An applied
+// token is seeded, the callback is invoked with an empty value, and the token must
+// remain unchanged.
+func Test_oauthStorageBridgeCallback_DropsEmptyToken(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+
+	service := NewAuthenticationService(
+		engine,
+		tokenService,
+		nil,
+		error_reporting.NewTestErrorReporter(engine),
+		notification.NewNotifier(),
+		testutil.DefaultConfigResolver(engine),
+	)
+	t.Cleanup(func() { service.Shutdown() })
+
+	tokenService.SetToken(conf, "applied-token")
+	require.Equal(t, "applied-token", config.GetToken(conf))
+
+	newOAuthStorageBridgeCallback(service)("", "")
+
+	require.Never(t,
+		func() bool { return config.GetToken(conf) == "" },
+		time.Second, time.Millisecond,
+		"empty bridge callback must not clear the token",
+	)
+}
+
 func Test_RegisterOAuthStorageBridge_PreInitRefreshIsBufferedForIde(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()

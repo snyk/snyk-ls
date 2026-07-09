@@ -159,6 +159,23 @@ func newOAuthStorageBridgeCallback(authenticationService AuthenticationService) 
 	return func(_ string, value any) {
 		// an empty struct marks an empty token, so we stay with empty string if the cast fails
 		newToken, _ := value.(string)
+		// Drop empty-token storage updates. The bridge exists only to propagate a newly
+		// written/rotated (non-empty) OAuth token from storage to the auth service.
+		// Credential clears are always driven synchronously through updateCredentials /
+		// logout (service → storage), so an empty value arriving here (e.g. the OAuth key
+		// cleared during the init auto-auth logout) is only ever a redundant echo. Queuing
+		// it lets the async worker apply updateCredentials("") after a later, unrelated
+		// synchronous token write (workspace/didChangeConfiguration), clobbering a valid
+		// token with empty — the IDE-2179 credential-loss race. See the regression test
+		// Test_RegisterOAuthStorageBridge_EmptyStorageUpdateDoesNotClearAppliedToken.
+		if newToken == "" {
+			if logger != nil {
+				logger.Debug().
+					Str("oauth_storage_key", auth.CONFIG_KEY_OAUTH_TOKEN).
+					Msg("oauth storage bridge ignoring empty token update")
+			}
+			return
+		}
 		if logger != nil {
 			logger.Debug().
 				Str("oauth_storage_key", auth.CONFIG_KEY_OAUTH_TOKEN).
