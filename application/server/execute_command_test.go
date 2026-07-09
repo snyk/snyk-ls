@@ -198,7 +198,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	// auth check has written its token before we clear it for the login assertion below.
 	types.WaitForLspInitialized(engine.GetConfiguration())
 
-	// Clear the token written by the scanner-init auth check during `initialized`. Without
+	// Clear the token written by the background scanner-init auth check. Without
 	// this, snyk.login's Authenticate would re-store the same fake token, updateCredentials
 	// would early-return on the no-op, and the post-credential hook (where the login-time
 	// RefreshConfigFromLdxSync now lives) would never fire.
