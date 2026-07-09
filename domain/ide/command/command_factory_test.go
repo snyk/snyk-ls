@@ -25,27 +25,21 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/snyk/remediation"
+	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-// INT-001: CreateFromCommandData wires provider and notifier into the handler.
-// Deleting the wiring in CreateFromCommandData makes this test RED.
-func TestCreateFromCommandData_FixFolder_WiresProviderAndNotifier(t *testing.T) {
+// INT-101: CreateFromCommandData wires provider into the handler.
+// Deleting the wiring in CreateFromCommandData (the case for
+// RemediationAgentFixFolderCommand) makes this test RED.
+func TestCreateFromCommandData_FixFolder_WiresProvider(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
-	// Enable the workspace/applyEdit capability so the guard passes.
-	conf := engine.GetConfiguration()
-	caps := types.ClientCapabilities{}
-	caps.Workspace.ApplyEdit = true
-	conf.Set(types.SettingClientCapabilities, caps)
 
-	notifier := &fakeNotifier{}
+	notifier := noti.NewMockNotifier()
 	provider := &fakeFolderRemediator{}
 
-	// Use a real OS temp dir converted to a file URI so the path is absolute on
-	// all operating systems. Hard-coding "file:///tmp" is not an absolute path
-	// on Windows (no drive letter) and would cause the command to reject it.
 	folderURI := string(uri.PathToUri(types.FilePath(t.TempDir())))
 
 	cmd, err := command.CreateFromCommandData(
@@ -69,10 +63,10 @@ func TestCreateFromCommandData_FixFolder_WiresProviderAndNotifier(t *testing.T) 
 	require.NotNil(t, cmd)
 
 	// Execute the command with a real temp dir that exists on all OSes.
-	// The provider returns nil (no changes) — we only care that the handler
-	// got a non-nil provider and notifier so no nil-pointer panic occurs.
+	// The provider returns empty results — we only care that the handler
+	// got a non-nil provider so no nil-pointer panic occurs.
 	_, execErr := cmd.Execute(context.Background())
-	assert.NoError(t, execErr, "provider and notifier must be wired; no nil-pointer panic")
+	assert.NoError(t, execErr, "provider must be wired; no nil-pointer panic")
 }
 
 // fakeFolderRemediatorForFactory satisfies remediation.FolderRemediator for factory tests.

@@ -34,7 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-// INT-002: DI passes the gated provider into the command service.
+// INT-102: DI passes the gated provider into the command service.
 //
 // When remediation_agent_enabled=true, the real remyProvider (which implements
 // FolderRemediator) must reach the fixFolder command handler. We verify this
@@ -74,17 +74,12 @@ func TestDI_FixFolderCommand_WiredWhenEnabled(t *testing.T) {
 	}
 }
 
-// INT-002b: Wiring test that is RED if the FolderRemediator param is removed
+// INT-102b: Wiring test that is RED if the FolderRemediator param is removed
 // from NewService. Constructs a service with a non-nil provider and verifies
 // the fixFolder command reaches the provider.
 func TestDI_NewService_FixFolderProvider_Wired(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	_ = tokenService
-
-	// Enable workspace/applyEdit so the capability guard in the handler passes.
-	caps := types.ClientCapabilities{}
-	caps.Workspace.ApplyEdit = true
-	engine.GetConfiguration().Set(types.SettingClientCapabilities, caps)
 
 	repo := initGitRepoForDI(t)
 	folderURI := string(uri.PathToUri(types.FilePath(repo)))
@@ -111,7 +106,7 @@ type diTestFolderRemediator struct {
 	called bool
 }
 
-func (d *diTestFolderRemediator) FixFolder(_ context.Context, _ types.FilePath) (*types.WorkspaceEdit, error) {
+func (d *diTestFolderRemediator) FixFolder(_ context.Context, _ types.FilePath) ([]types.FolderFixFileResult, error) {
 	d.called = true
 	return nil, nil
 }
@@ -131,11 +126,11 @@ func initGitRepoForDI(t *testing.T) string {
 	run("init")
 	run("config", "user.email", "test@example.com")
 	run("config", "user.name", "Test")
-	// Overlay filesystems (e.g. Docker on Linux) have write-ordering delays that
-	// can cause git to report "not a valid object" when the object database is
-	// read immediately after a write. core.checkStat=minimal tells git not to
-	// recheck filesystem timestamps for objects it has already cached in memory,
-	// which suppresses the false-negative reads on overlayfs.
+	// overlay-FS write-ordering delays cause git to report "not a valid object" or
+	// false "local changes would be overwritten" errors during rebase/cherry-pick
+	// on this overlay filesystem. core.checkStat=minimal suppresses those
+	// false-negative stat reads by skipping the ctime/size comparison that
+	// overlayfs cannot guarantee to be coherent immediately after a write.
 	run("config", "core.checkStat", "minimal")
 	f := filepath.Join(dir, "main.go")
 	require.NoError(t, os.WriteFile(f, []byte("package main\n"), 0644))

@@ -455,15 +455,18 @@ func (p *remyProvider) runRemyInWorktree(ctx context.Context, root string, req R
 // FixFolder runs the remediation fix workflow directly in root (which must
 // already be the git repository root — i.e. the top level of an isolated git
 // worktree created by the caller). It does NOT create a nested worktree.
-// It returns a WorkspaceEdit whose file paths are keyed under root, or
-// (nil, nil) when the fix produces no changes.
+// It returns one result per changed tracked file, or an empty slice when the
+// fix produces no changes. It does NOT apply changes; the caller lands them.
+//
+// FixFolder reports modifications and deletions of TRACKED files. Because of
+// --no-renames, a rename surfaces as a deletion of the old path (and the new
+// path, being untracked, is outside the current contract). A newly-created
+// untracked file is likewise outside the contract and does not appear in results.
 //
 // Precondition: root must be the git repository root (not a subdirectory).
-// The daemon caller always passes a detached-HEAD worktree root, so edits are
-// keyed under that root and the caller can remap paths using the passed-folder
-// prefix. Passing a subdirectory is rejected with a clear error so the fix
-// runner cannot silently escape its isolation boundary.
-func (p *remyProvider) FixFolder(ctx context.Context, root types.FilePath) (*types.WorkspaceEdit, error) {
+// Passing a subdirectory is rejected so the fix runner cannot silently escape
+// its isolation boundary.
+func (p *remyProvider) FixFolder(ctx context.Context, root types.FilePath) ([]types.FolderFixFileResult, error) {
 	r := string(root)
 	if r == "" || !filepath.IsAbs(r) {
 		return nil, fmt.Errorf("remy: FixFolder requires an absolute path, got %q", r)
@@ -483,8 +486,7 @@ func (p *remyProvider) FixFolder(ctx context.Context, root types.FilePath) (*typ
 	// --untracked-files=no excludes "??" lines for untracked files (e.g. build
 	// artifacts) so they do not falsely trip the guard. Only uncommitted
 	// modifications to tracked files matter: they would be silently included in
-	// the returned edit, making the fix unpredictable and violating the isolation
-	// guarantee that the caller must pass a fresh detached-HEAD worktree.
+	// the returned results, making the fix unpredictable.
 	statusOut, err := exec.CommandContext(ctx, "git", "-C", r, "status", "--porcelain", "--untracked-files=no").Output()
 	if err != nil {
 		return nil, fmt.Errorf("remy: FixFolder: failed to check worktree status of %q: %w", r, err)
@@ -496,16 +498,147 @@ func (p *remyProvider) FixFolder(ctx context.Context, root types.FilePath) (*typ
 	// so a hung fix cannot stall the caller indefinitely.
 	ctx, cancel := context.WithTimeout(ctx, p.opts.Timeout)
 	defer cancel()
-	// findingID is "" because FixFolder targets the whole folder, not a single finding.
-	// fileHashes is ignored: FixFolder returns a one-shot WorkspaceEdit and does not cache.
-	changes, _, err := p.collectFixEdits(ctx, r, r, "")
-	if err != nil {
-		return nil, err
-	}
-	if len(changes) == 0 {
+	return p.collectFileDiffs(ctx, r)
+}
+
+// gitEnumerationTimeout is the budget given to the git diff enumeration phase
+// after the runner completes. A separate timeout prevents a runner that consumed
+// all of the caller's context budget from causing git commands to fail and the
+// completed fix to be discarded as a context error.
+const gitEnumerationTimeout = 30 * time.Second
+
+// nameStatusRecord holds the status letter and relative path for one entry from
+// git diff -z --name-status output.
+type nameStatusRecord struct {
+	status string // e.g. "M", "D", "A"
+	path   string // relative path, verbatim UTF-8 (NUL-delimited so never quoted)
+}
+
+// parseNameStatus parses the NUL-delimited output of
+// "git diff -z --name-status --no-renames HEAD".
+// With --no-renames each record is exactly: <status>\0<path>\0
+// where status is a single letter (M, D, A, T, …).
+// Paths are never quoted or escaped because -z uses raw NUL separators.
+func parseNameStatus(out []byte) ([]nameStatusRecord, error) {
+	if len(out) == 0 {
 		return nil, nil
 	}
-	return &types.WorkspaceEdit{Changes: changes}, nil
+	// Strip a single trailing NUL if present so the field count is always even.
+	data := out
+	if data[len(data)-1] == 0 {
+		data = data[:len(data)-1]
+	}
+	fields := bytes.Split(data, []byte{0})
+	if len(fields)%2 != 0 {
+		return nil, fmt.Errorf("remy: odd number of NUL-separated fields in name-status output (%d fields)", len(fields))
+	}
+	records := make([]nameStatusRecord, 0, len(fields)/2)
+	for i := 0; i < len(fields); i += 2 {
+		status := string(fields[i])
+		path := string(fields[i+1])
+		if status == "" || path == "" {
+			continue
+		}
+		records = append(records, nameStatusRecord{status: status, path: path})
+	}
+	return records, nil
+}
+
+// collectFileDiffs runs the fix workflow in runDir and returns one raw-diff
+// result per changed tracked file. No TextEdit parse, no cache.
+// runDir is used verbatim (non-canonical) so the daemon's prefix-remap contract
+// is preserved when the caller passes a symlinked path.
+//
+// collectFileDiffs reports modifications and deletions of TRACKED files. Because
+// of --no-renames, a rename surfaces as a deletion of the old path (and the new
+// path, being untracked, is outside the current contract). A newly-created
+// untracked file is likewise outside the contract and does not appear in results.
+//
+// After the runner returns, git enumeration gets its own fresh context so that a
+// runner that consumed most of the caller's timeout budget does not cause the
+// completed fix to be discarded as a context.DeadlineExceeded error.
+//
+// Files are enumerated via "git diff -z --name-status --no-renames HEAD":
+//   - -z gives NUL-separated records so filenames need no unquoting/unescaping,
+//     which fixes octal-escaped non-ASCII filenames (e.g. café.go) and the
+//     LastIndex " b/" split ambiguity of the old combined-diff approach.
+//   - --name-status gives the authoritative status letter per file; 'D' is the
+//     deletion signal, not os.Stat guessing (which misclassifies on transient errors).
+//   - --no-renames prevents a rename from collapsing into a single new-path entry
+//     that would leave the old workspace file stale.
+//
+// Per-file diffs use "--no-color --no-ext-diff --no-textconv HEAD -- <path>":
+//   - --no-color ensures ANSI escape sequences (color.diff=always) never corrupt headers.
+//   - --no-ext-diff ensures external diff tools (delta, difftastic) are bypassed.
+//   - --no-textconv bypasses any diff.<driver>.textconv filter so the raw blob bytes are
+//     diffed even when .gitattributes declares a textconv for the file type. Without this,
+//     a textconv that produces identical output for old and new blobs would yield an empty
+//     diff for a listed-as-changed file.
+//   - Single-file scope: the entire stdout IS that file's diff; no header parsing needed.
+//
+// An error is returned on ANY git failure or on an unexpected empty diff — files are
+// never silently dropped.
+func (p *remyProvider) collectFileDiffs(ctx context.Context, runDir string) ([]types.FolderFixFileResult, error) {
+	// findingID is "" because FixFolder targets the whole folder.
+	if err := p.runner(ctx, p.engine, runDir, ""); err != nil {
+		return nil, err
+	}
+	// context.Background() is intentional — git enumeration must survive the caller's
+	// context being near-expiry after a long runner so a COMPLETED fix is never
+	// discarded as context.DeadlineExceeded. Do NOT revert to ctx or context.WithoutCancel.
+	enumCtx, enumCancel := context.WithTimeout(context.Background(), gitEnumerationTimeout)
+	defer enumCancel()
+
+	// Enumerate changed tracked files via NUL-delimited name-status.
+	nameStatusOut, err := exec.CommandContext(enumCtx, "git", "-C", runDir,
+		"diff", "-z", "--name-status", "--no-renames", "HEAD").Output()
+	if err != nil {
+		return nil, fmt.Errorf("remy: enumerate changed files: %w", err)
+	}
+	records, err := parseNameStatus(nameStatusOut)
+	if err != nil {
+		return nil, fmt.Errorf("remy: parse name-status output: %w", err)
+	}
+
+	out := make([]types.FolderFixFileResult, 0, len(records))
+	for _, rec := range records {
+		// Use filepath.Join(runDir, rec.path) with the non-canonical runDir so
+		// every result path is prefixed by the exact path the caller passed.
+		abs := filepath.Join(runDir, rec.path)
+
+		// Fetch the per-file unified diff.
+		// --no-color: suppresses ANSI codes even when color.diff=always is set.
+		// --no-ext-diff: bypasses any diff.external / delta / difftastic config.
+		// --no-textconv: diffs raw blob bytes, bypassing any .gitattributes textconv
+		//   filter; without this a textconv producing identical output for old and new
+		//   blobs yields an empty diff for a file that IS listed as changed.
+		// Single-file scope: all stdout is this file's diff; no header parsing needed.
+		diffBytes, diffErr := exec.CommandContext(enumCtx, "git", "-C", runDir,
+			"diff", "--no-color", "--no-ext-diff", "--no-textconv", "HEAD", "--", rec.path).Output()
+		if diffErr != nil {
+			return nil, fmt.Errorf("remy: get diff for %q: %w", rec.path, diffErr)
+		}
+		diff := string(diffBytes)
+		if diff == "" {
+			p.log.Warn().Str("path", rec.path).Str("status", rec.status).
+				Msg("remy: file listed by name-status produced empty per-file diff")
+			return nil, fmt.Errorf("remy: file %q has status %q but produced an empty diff", rec.path, rec.status)
+		}
+
+		// Use 'D' status from --name-status as the authoritative deletion signal.
+		// Avoids os.Stat guessing, which can misclassify a live file as deleted on
+		// transient permission errors or race conditions.
+		var worktreePath string
+		if rec.status != "D" {
+			worktreePath = abs
+		}
+		out = append(out, types.FolderFixFileResult{
+			WorkspacePath: abs,
+			WorktreePath:  worktreePath,
+			Diff:          diff,
+		})
+	}
+	return out, nil
 }
 
 // buildWorkspaceEdits enumerates files changed in the worktree relative to HEAD

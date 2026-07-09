@@ -20,9 +20,11 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
@@ -32,22 +34,43 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+// createDetachedWorktree creates a detached git worktree from mainRepo at a
+// temporary path and returns the canonical path. It registers a t.Cleanup to
+// remove the worktree so test isolation is guaranteed.
+func createDetachedWorktree(t *testing.T, mainRepo string) string {
+	t.Helper()
+	wtDir := t.TempDir()
+	cmd := exec.Command("git", "-C", mainRepo, "worktree", "add", "--detach", wtDir, "HEAD")
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "git worktree add --detach: %s", string(out))
+	t.Cleanup(func() {
+		_ = exec.Command("git", "-C", mainRepo, "worktree", "remove", "--force", wtDir).Run()
+	})
+	canonical, evalErr := filepath.EvalSymlinks(wtDir)
+	if evalErr == nil {
+		return canonical
+	}
+	return wtDir
+}
+
 // ---------------------------------------------------------------------------
-// FixFolder returns edits keyed under the passed folder
+// UNIT-101: FixFolder returns one result per changed file
 // ---------------------------------------------------------------------------
 
-// TestFixFolder_ReturnsEditsKeyedUnderFolder verifies that when the fake runner
-// modifies a tracked file inside the passed folder, FixFolder returns a
-// WorkspaceEdit whose only key is <folder>/<file>.
-func TestFixFolder_ReturnsEditsKeyedUnderFolder(t *testing.T) {
+// TestFixFolder_ReturnsResultForChangedFile verifies that when the fake runner
+// modifies a tracked file, FixFolder returns one FolderFixFileResult whose
+// WorkspacePath == WorktreePath == <folder>/main.go and whose Diff contains
+// the changed content. The runner must be called with (folder, "").
+func TestFixFolder_ReturnsResultForChangedFile(t *testing.T) {
 	repo := initGitRepo(t)
 	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
 
 	mainAbs := filepath.Join(repo, "main.go")
 
+	var runnerDir, runnerFindingID string
 	runner := func(_ context.Context, _ workflow.Engine, root, findingID string) error {
-		// findingID must be empty for the folder path
-		assert.Empty(t, findingID, "runner must be called with empty findingID for folder path")
+		runnerDir = root
+		runnerFindingID = findingID
 		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0644)
 	}
 
@@ -55,22 +78,25 @@ func TestFixFolder_ReturnsEditsKeyedUnderFolder(t *testing.T) {
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok, "remyProvider must implement FolderRemediator")
 
-	edit, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
 	require.NoError(t, err)
-	require.NotNil(t, edit, "expected a WorkspaceEdit when a tracked file was modified")
-	assert.Contains(t, edit.Changes, mainAbs, "edit key must be <folder>/<file>")
-	// Every key in the edit must be under the passed folder.
-	for key := range edit.Changes {
-		assert.True(t, len(key) > len(repo) && key[:len(repo)] == repo,
-			"edit key %q must be under passed folder %q", key, repo)
-	}
+	require.Len(t, results, 1, "expected one result for one changed file")
+
+	r := results[0]
+	assert.Equal(t, mainAbs, r.WorktreePath, "WorktreePath must be <folder>/main.go")
+	assert.Equal(t, mainAbs, r.WorkspacePath, "WorkspacePath must be <folder>/main.go")
+	assert.Contains(t, r.Diff, "var x = 2", "Diff must contain the changed line")
+
+	// Runner must be called with exactly the passed folder and empty findingID.
+	assert.Equal(t, repo, runnerDir, "runner must be called with the passed folder")
+	assert.Empty(t, runnerFindingID, "runner must be called with empty findingID for folder path")
 }
 
 // ---------------------------------------------------------------------------
-// FixFolder returns (nil, nil) when runner makes no changes
+// UNIT-102: FixFolder returns empty slice when runner makes no changes
 // ---------------------------------------------------------------------------
 
-func TestFixFolder_NoChangesReturnsNil(t *testing.T) {
+func TestFixFolder_NoChangesReturnsEmpty(t *testing.T) {
 	repo := initGitRepo(t)
 	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
 
@@ -78,13 +104,13 @@ func TestFixFolder_NoChangesReturnsNil(t *testing.T) {
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok)
 
-	edit, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
 	require.NoError(t, err)
-	assert.Nil(t, edit, "no-change run must return nil edit")
+	assert.Empty(t, results, "no-change run must return empty slice")
 }
 
 // ---------------------------------------------------------------------------
-// FixFolder propagates runner errors
+// UNIT-103: FixFolder propagates runner errors
 // ---------------------------------------------------------------------------
 
 func TestFixFolder_PropagatesRunnerError(t *testing.T) {
@@ -96,14 +122,14 @@ func TestFixFolder_PropagatesRunnerError(t *testing.T) {
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok)
 
-	edit, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
 	require.Error(t, err)
 	assert.ErrorIs(t, err, sentinel)
-	assert.Nil(t, edit)
+	assert.Nil(t, results)
 }
 
 // ---------------------------------------------------------------------------
-// FixFolder rejects non-absolute / empty paths
+// UNIT-104: FixFolder rejects non-absolute / empty paths
 // ---------------------------------------------------------------------------
 
 func TestFixFolder_RejectsNonAbsolutePath(t *testing.T) {
@@ -118,35 +144,27 @@ func TestFixFolder_RejectsNonAbsolutePath(t *testing.T) {
 	require.True(t, ok)
 
 	// Relative path
-	edit, err := fr.FixFolder(context.Background(), types.FilePath("relative/path"))
+	results, err := fr.FixFolder(context.Background(), types.FilePath("relative/path"))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "absolute")
-	assert.Nil(t, edit)
+	assert.Nil(t, results)
 	assert.False(t, runnerCalled, "runner must NOT be called on invalid path")
 
 	// Empty path
-	edit2, err2 := fr.FixFolder(context.Background(), types.FilePath(""))
+	results2, err2 := fr.FixFolder(context.Background(), types.FilePath(""))
 	require.Error(t, err2)
 	assert.Contains(t, err2.Error(), "absolute")
-	assert.Nil(t, edit2)
+	assert.Nil(t, results2)
 	assert.False(t, runnerCalled, "runner must NOT be called on empty path")
 }
 
 // ---------------------------------------------------------------------------
-// FixFolder rejects a subdirectory of a git repo with an error
+// UNIT-105: FixFolder rejects subdirectory of a git root
 // ---------------------------------------------------------------------------
 
-// TestFixFolder_SubdirOfGitRoot_ReturnEdits verifies that FixFolder returns a
-// non-nil error (and no edits) when the passed path is a subdirectory of the
-// git root. The contract requires the caller to pass the git repository root
-// itself (e.g. a detached-HEAD worktree created by the daemon); passing a
-// subdirectory is rejected so the fix runner cannot silently escape its
-// isolation boundary.
-func TestFixFolder_SubdirOfGitRoot_ReturnEdits(t *testing.T) {
-	// Create a git repo with a tracked file inside a subdirectory.
+func TestFixFolder_SubdirOfGitRoot_ReturnsError(t *testing.T) {
 	repo := initGitRepo(t)
 	commitFile(t, repo, "sub/main.go", "package main\nvar x = 1\n")
-
 	subdir := filepath.Join(repo, "sub")
 
 	var runnerCalled bool
@@ -157,23 +175,19 @@ func TestFixFolder_SubdirOfGitRoot_ReturnEdits(t *testing.T) {
 
 	p := remediation.NewRemyProvider(nil, runner)
 	fr, ok := p.(remediation.FolderRemediator)
-	require.True(t, ok, "remyProvider must implement FolderRemediator")
+	require.True(t, ok)
 
-	// Call FixFolder with the SUBDIRECTORY path — must return an error.
-	edit, err := fr.FixFolder(context.Background(), types.FilePath(subdir))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(subdir))
 	require.Error(t, err, "FixFolder must return an error when passed a subdirectory of a git root")
-	assert.Nil(t, edit, "FixFolder must return nil edit when returning an error")
+	assert.Nil(t, results)
 	assert.False(t, runnerCalled, "runner must NOT be called when the precondition guard fires")
 }
 
 // ---------------------------------------------------------------------------
-// FixFolder rejects a directory that is not a git repository
+// UNIT-106: FixFolder rejects a non-git directory
 // ---------------------------------------------------------------------------
 
-// TestFixFolder_NonGitDirectory_ReturnsError verifies that FixFolder returns a
-// non-nil error when the passed path is not inside any git repository.
 func TestFixFolder_NonGitDirectory_ReturnsError(t *testing.T) {
-	// Use a temp dir that has no git init — it is not a git repo.
 	nonGit := t.TempDir()
 
 	var runnerCalled bool
@@ -186,19 +200,52 @@ func TestFixFolder_NonGitDirectory_ReturnsError(t *testing.T) {
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok)
 
-	edit, err := fr.FixFolder(context.Background(), types.FilePath(nonGit))
-	require.Error(t, err, "FixFolder must return an error for a non-git directory")
-	assert.Nil(t, edit)
-	assert.False(t, runnerCalled, "runner must NOT be called when the precondition guard fires")
+	results, err := fr.FixFolder(context.Background(), types.FilePath(nonGit))
+	require.Error(t, err)
+	assert.Nil(t, results)
+	assert.False(t, runnerCalled)
 }
 
-// TestFixFolder_GitRoot_EditsKeyedUnderPassedRoot asserts the daemon contract:
-// when the passed folder IS the git root, edits are keyed under that folder.
-func TestFixFolder_GitRoot_EditsKeyedUnderPassedRoot(t *testing.T) {
+// ---------------------------------------------------------------------------
+// UNIT-107: FixFolder rejects dirty tracked files
+// ---------------------------------------------------------------------------
+
+func TestFixFolder_TrackedFileModified_StillErrors(t *testing.T) {
 	repo := initGitRepo(t)
 	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
 
-	mainAbs := filepath.Join(repo, "main.go")
+	err := os.WriteFile(filepath.Join(repo, "main.go"), []byte("package main\nvar x = 99\n"), 0644)
+	require.NoError(t, err)
+
+	err = os.WriteFile(filepath.Join(repo, "artifact.bin"), []byte("binary"), 0644)
+	require.NoError(t, err)
+
+	var runnerCalled bool
+	runner := func(_ context.Context, _ workflow.Engine, _, _ string) error {
+		runnerCalled = true
+		return nil
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+	fr, ok := p.(remediation.FolderRemediator)
+	require.True(t, ok)
+
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	require.Error(t, err)
+	assert.Nil(t, results)
+	assert.False(t, runnerCalled)
+}
+
+// ---------------------------------------------------------------------------
+// UNIT-108: FixFolder succeeds when the only dirty state is untracked files
+// ---------------------------------------------------------------------------
+
+func TestFixFolder_UntrackedFileOnly_DoesNotError(t *testing.T) {
+	repo := initGitRepo(t)
+	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
+
+	err := os.WriteFile(filepath.Join(repo, "artifact.bin"), []byte("binary"), 0644)
+	require.NoError(t, err)
 
 	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
 		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0644)
@@ -208,19 +255,91 @@ func TestFixFolder_GitRoot_EditsKeyedUnderPassedRoot(t *testing.T) {
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok)
 
-	edit, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	require.NoError(t, err, "FixFolder must not error when the only dirty state is untracked files")
+	assert.NotEmpty(t, results, "FixFolder must return results when the runner modifies a tracked file")
+}
+
+// ---------------------------------------------------------------------------
+// UNIT-109: WorktreePath / WorkspacePath keyed under the PASSED (non-canonical) path
+// ---------------------------------------------------------------------------
+
+// TestFixFolder_SymlinkPath_KeyedUnderPassedPath locks the daemon contract:
+// when the caller passes a symlinked folder path, every WorktreePath and
+// WorkspacePath must be prefixed by the EXACT passed (non-canonical) path, not
+// the resolved path. The daemon remaps by the prefix it passed; canonicalizing
+// inside FixFolder would break the daemon's prefix match.
+func TestFixFolder_SymlinkPath_KeyedUnderPassedPath(t *testing.T) {
+	realDir := t.TempDir()
+	var err error
+	realDir, err = filepath.EvalSymlinks(realDir)
 	require.NoError(t, err)
-	require.NotNil(t, edit)
-	// Daemon contract: key must be under the passed folder (repo root here).
-	assert.Contains(t, edit.Changes, mainAbs)
-	for key := range edit.Changes {
-		assert.True(t, len(key) > len(repo) && key[:len(repo)] == repo,
-			"edit key %q must be under passed folder %q", key, repo)
+	initGitRepoInDir(t, realDir)
+	commitFileInDir(t, realDir, "main.go", "package main\nvar x = 1\n")
+
+	linkDir := filepath.Join(t.TempDir(), "link")
+	if symlinkErr := os.Symlink(realDir, linkDir); symlinkErr != nil {
+		t.Skipf("cannot create symlink (os restriction): %v", symlinkErr)
+	}
+
+	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0644)
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+	fr, ok := p.(remediation.FolderRemediator)
+	require.True(t, ok)
+
+	results, err := fr.FixFolder(context.Background(), types.FilePath(linkDir))
+	require.NoError(t, err)
+	require.NotEmpty(t, results, "FixFolder must return results when a file was modified")
+
+	sep := string(filepath.Separator)
+	for _, r := range results {
+		assert.True(t, strings.HasPrefix(r.WorktreePath, linkDir+sep),
+			"WorktreePath %q must be prefixed by the passed symlinked path %q (daemon contract)", r.WorktreePath, linkDir)
+		assert.True(t, strings.HasPrefix(r.WorkspacePath, linkDir+sep),
+			"WorkspacePath %q must be prefixed by the passed symlinked path %q (daemon contract)", r.WorkspacePath, linkDir)
 	}
 }
 
 // ---------------------------------------------------------------------------
-// FixFolder runs directly in the passed folder (no nested worktree)
+// UNIT-110: FixFolder returns one result per changed file (multi-file)
+// ---------------------------------------------------------------------------
+
+func TestFixFolder_MultiFile_OneResultPerFile(t *testing.T) {
+	repo := initGitRepo(t)
+	commitFile(t, repo, "a.go", "package main\nvar a = 1\n")
+	commitFile(t, repo, "b.go", "package main\nvar b = 1\n")
+	commitFile(t, repo, "c.go", "package main\nvar c = 1\n")
+
+	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+		_ = os.WriteFile(filepath.Join(root, "a.go"), []byte("package main\nvar a = 2\n"), 0644)
+		_ = os.WriteFile(filepath.Join(root, "b.go"), []byte("package main\nvar b = 2\n"), 0644)
+		_ = os.WriteFile(filepath.Join(root, "c.go"), []byte("package main\nvar c = 2\n"), 0644)
+		return nil
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+	fr, ok := p.(remediation.FolderRemediator)
+	require.True(t, ok)
+
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	require.NoError(t, err)
+	require.Len(t, results, 3, "must return one result per changed file")
+
+	paths := make(map[string]bool)
+	for _, r := range results {
+		paths[r.WorktreePath] = true
+		assert.NotEmpty(t, r.Diff, "each result must have a non-empty Diff")
+	}
+	assert.Contains(t, paths, filepath.Join(repo, "a.go"))
+	assert.Contains(t, paths, filepath.Join(repo, "b.go"))
+	assert.Contains(t, paths, filepath.Join(repo, "c.go"))
+}
+
+// ---------------------------------------------------------------------------
+// UNIT-111: FixFolder invokes runner with exactly the passed folder
 // ---------------------------------------------------------------------------
 
 func TestFixFolder_RunsDirectlyInPassedFolder(t *testing.T) {
@@ -240,7 +359,6 @@ func TestFixFolder_RunsDirectlyInPassedFolder(t *testing.T) {
 	_, err := fr.FixFolder(context.Background(), types.FilePath(repo))
 	require.NoError(t, err)
 
-	// Runner must be invoked with exactly the passed folder.
 	assert.Equal(t, repo, invokedWith, "runner must be invoked with the passed folder, not a child dir")
 
 	// No snyk-remy-* temp directories must have been created inside the folder.
@@ -250,118 +368,39 @@ func TestFixFolder_RunsDirectlyInPassedFolder(t *testing.T) {
 		assert.NotContains(t, e.Name(), "snyk-remy-",
 			"no nested snyk-remy-* temp dir must be created inside the passed folder")
 	}
-
-	// Also assert no worktree child exists as a sibling with "wt" suffix.
-	parent := filepath.Dir(repo)
-	siblings, _ := os.ReadDir(parent)
-	for _, s := range siblings {
-		if s.IsDir() && s.Name() != filepath.Base(repo) {
-			assert.NotContains(t, s.Name(), "wt",
-				"no nested worktree dir must be created as a sibling of the passed folder")
-		}
-	}
 }
 
 // ---------------------------------------------------------------------------
-// DAEMON CONTRACT: FixFolder edit keys must be under the PASSED (non-canonical) path
+// Retained: clean worktree succeeds
 // ---------------------------------------------------------------------------
 
-// TestFixFolder_UncommittedChanges_ReturnsError verifies that FixFolder returns a
-// clear error when the passed worktree already has uncommitted working-tree changes.
-// The caller contract requires a fresh detached-HEAD worktree; a dirty worktree
-// would silently include pre-existing changes in the returned edit, making the fix
-// unpredictable and violating the isolation guarantee.
+func TestFixFolder_CleanWorktree_Succeeds(t *testing.T) {
+	repo := initGitRepo(t)
+	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
+
+	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0644)
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+	fr, ok := p.(remediation.FolderRemediator)
+	require.True(t, ok)
+
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	require.NoError(t, err, "FixFolder must succeed on a clean worktree")
+	assert.NotEmpty(t, results, "FixFolder must return results when the runner modifies files")
+}
+
+// ---------------------------------------------------------------------------
+// Retained: uncommitted changes returns error
+// ---------------------------------------------------------------------------
+
 func TestFixFolder_UncommittedChanges_ReturnsError(t *testing.T) {
 	repo := initGitRepo(t)
 	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
 
-	// Introduce an uncommitted working-tree change (tracked file, modified but not staged).
 	err := os.WriteFile(filepath.Join(repo, "main.go"), []byte("package main\nvar x = 99\n"), 0644)
-	require.NoError(t, err, "test setup: writing dirty file")
-
-	var runnerCalled bool
-	runner := func(_ context.Context, _ workflow.Engine, _, _ string) error {
-		runnerCalled = true
-		return nil
-	}
-
-	p := remediation.NewRemyProvider(nil, runner)
-	fr, ok := p.(remediation.FolderRemediator)
-	require.True(t, ok, "remyProvider must implement FolderRemediator")
-
-	edit, err := fr.FixFolder(context.Background(), types.FilePath(repo))
-	require.Error(t, err, "FixFolder must return an error when the worktree has uncommitted changes")
-	assert.Nil(t, edit, "FixFolder must return nil edit when returning an error")
-	assert.False(t, runnerCalled, "runner must NOT be called when the precondition guard fires")
-}
-
-// TestFixFolder_CleanWorktree_Succeeds verifies that FixFolder proceeds normally
-// when the passed worktree has no uncommitted changes.
-func TestFixFolder_CleanWorktree_Succeeds(t *testing.T) {
-	repo := initGitRepo(t)
-	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
-	// No uncommitted changes — worktree is clean.
-
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
-		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0644)
-	}
-
-	p := remediation.NewRemyProvider(nil, runner)
-	fr, ok := p.(remediation.FolderRemediator)
-	require.True(t, ok)
-
-	edit, err := fr.FixFolder(context.Background(), types.FilePath(repo))
-	require.NoError(t, err, "FixFolder must succeed on a clean worktree")
-	assert.NotNil(t, edit, "FixFolder must return an edit when the runner modifies files")
-}
-
-// TestFixFolder_UntrackedFileOnly_DoesNotError verifies that a worktree containing
-// only untracked files (e.g. build artifacts) is NOT rejected by the dirty-worktree
-// guard. The guard's purpose is to prevent pre-existing modifications to TRACKED
-// files from being silently included in the fix; untracked files are irrelevant to
-// the fix output and must be ignored.
-//
-// Previously, the guard ran "git status --porcelain" which includes "?? <file>"
-// lines for untracked files, causing FixFolder to return an error for any worktree
-// that contains untracked build artifacts.
-func TestFixFolder_UntrackedFileOnly_DoesNotError(t *testing.T) {
-	repo := initGitRepo(t)
-	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
-
-	// Add an untracked file (not committed, not staged) — simulates a build artifact.
-	err := os.WriteFile(filepath.Join(repo, "artifact.bin"), []byte("binary"), 0644)
-	require.NoError(t, err, "test setup: writing untracked artifact file")
-
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
-		// Verify the runner can see the untracked file (it is in the worktree).
-		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0644)
-	}
-
-	p := remediation.NewRemyProvider(nil, runner)
-	fr, ok := p.(remediation.FolderRemediator)
-	require.True(t, ok, "remyProvider must implement FolderRemediator")
-
-	// Must NOT return an error — an untracked-only worktree is considered clean.
-	edit, err := fr.FixFolder(context.Background(), types.FilePath(repo))
-	require.NoError(t, err, "FixFolder must not error when the only dirty state is untracked files")
-	// Runner modified main.go, so a non-nil edit is expected.
-	assert.NotNil(t, edit, "FixFolder must return an edit when the runner modifies a tracked file")
-}
-
-// TestFixFolder_TrackedFileModified_StillErrors verifies that the dirty-worktree
-// guard still fires when a tracked file has uncommitted working-tree changes,
-// even after switching to --untracked-files=no.
-func TestFixFolder_TrackedFileModified_StillErrors(t *testing.T) {
-	repo := initGitRepo(t)
-	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
-
-	// Modify the tracked file without staging or committing.
-	err := os.WriteFile(filepath.Join(repo, "main.go"), []byte("package main\nvar x = 99\n"), 0644)
-	require.NoError(t, err, "test setup: writing dirty tracked file")
-
-	// Also add an untracked file to confirm it is ignored.
-	err = os.WriteFile(filepath.Join(repo, "artifact.bin"), []byte("binary"), 0644)
-	require.NoError(t, err, "test setup: writing untracked artifact file")
+	require.NoError(t, err)
 
 	var runnerCalled bool
 	runner := func(_ context.Context, _ workflow.Engine, _, _ string) error {
@@ -373,59 +412,332 @@ func TestFixFolder_TrackedFileModified_StillErrors(t *testing.T) {
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok)
 
-	edit, err := fr.FixFolder(context.Background(), types.FilePath(repo))
-	require.Error(t, err, "FixFolder must return an error when a tracked file has uncommitted changes")
-	assert.Nil(t, edit, "FixFolder must return nil edit when returning an error")
-	assert.False(t, runnerCalled, "runner must NOT be called when the dirty-worktree guard fires")
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	require.Error(t, err)
+	assert.Nil(t, results)
+	assert.False(t, runnerCalled)
 }
 
-// TestFixFolder_SymlinkPath_EditsKeyedUnderPassedPath locks the daemon contract:
-// when the caller passes a symlinked folder path as ContentRoot, FixFolder must
-// return edit keys under the EXACT passed path (not the canonicalized/resolved
-// path). The external daemon remaps edits by the prefix of the path it passed;
-// canonicalizing `r` inside FixFolder would make edits key under the resolved
-// path, breaking the daemon's prefix match on any path with a symlink component.
+// ---------------------------------------------------------------------------
+// UNIT-112: Runner that consumes the caller context budget — results still returned
+// ---------------------------------------------------------------------------
+
+// TestFixFolder_RunnerConsumesContextBudget_ResultsStillReturned verifies that
+// when the runner completes (writing file changes) but exhausts the caller's
+// context deadline in the process, the git enumeration phase still succeeds and
+// the completed fix is returned — not discarded as a context error.
 //
-// On Linux we reproduce the macOS /var→/private/var class by creating an
-// explicit symlink. The test is skipped gracefully if symlink creation fails.
-func TestFixFolder_SymlinkPath_EditsKeyedUnderPassedPath(t *testing.T) {
-	// Set up a real git repo under a canonical dir.
-	realDir := t.TempDir()
-	var err error
-	realDir, err = filepath.EvalSymlinks(realDir)
-	require.NoError(t, err)
-	initGitRepoInDir(t, realDir)
-	commitFileInDir(t, realDir, "main.go", "package main\nvar x = 1\n")
+// The implementation decouples the git enumeration from the runner's timeout
+// by giving enumeration its own fresh context after the runner returns.
+// Without this decoupling, an expired caller context causes gitChangedFiles
+// the git enumeration to fail immediately and the completed fix to be lost.
+func TestFixFolder_RunnerConsumesContextBudget_ResultsStillReturned(t *testing.T) {
+	repo := initGitRepo(t)
+	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
 
-	// Create a symlink to the real dir — the daemon-like caller passes this.
-	linkDir := filepath.Join(t.TempDir(), "link")
-	if symlinkErr := os.Symlink(realDir, linkDir); symlinkErr != nil {
-		t.Skipf("cannot create symlink (os restriction): %v", symlinkErr)
-	}
+	const runnerDelay = 120 * time.Millisecond
+	const callerBudget = 80 * time.Millisecond
 
-	// The runner writes a change so we get a non-nil edit back.
 	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
-		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0644)
+		// Write the fix first, then sleep past the caller budget.
+		// This simulates a real runner that completes its work but whose context
+		// has expired by the time it returns — the fix IS done, so the results
+		// must not be thrown away.
+		if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0644); err != nil {
+			return err
+		}
+		time.Sleep(runnerDelay)
+		return nil
 	}
 
 	p := remediation.NewRemyProvider(nil, runner)
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok)
 
-	// Call FixFolder with the SYMLINKED (non-canonical) path.
-	edit, err := fr.FixFolder(context.Background(), types.FilePath(linkDir))
-	require.NoError(t, err)
-	require.NotNil(t, edit, "FixFolder must return a non-nil edit when a file was modified")
+	ctx, cancel := context.WithTimeout(context.Background(), callerBudget)
+	defer cancel()
 
-	// Daemon contract: every edit key must begin with the PASSED path (linkDir),
-	// not the canonical resolved path (realDir). Canonicalizing inside FixFolder
-	// would produce keys under realDir, breaking the daemon's prefix remap.
-	// Use a path-separator-aware check so a sibling directory whose name merely
-	// starts with linkDir cannot produce a false pass.
-	for key := range edit.Changes {
-		assert.True(t, strings.HasPrefix(key, linkDir+string(filepath.Separator)),
-			"edit key %q must be prefixed by the passed symlinked path %q (daemon contract); "+
-				"if it is prefixed by the canonical path %q, FixFolder incorrectly canonicalized r",
-			key, linkDir, realDir)
+	results, err := fr.FixFolder(ctx, types.FilePath(repo))
+	require.NoError(t, err,
+		"FixFolder must return results even when the runner exhausts the caller context: "+
+			"git enumeration must use its own fresh context, not the expired caller context")
+	require.NotEmpty(t, results, "completed fix must produce at least one file result")
+
+	found := false
+	for _, r := range results {
+		if r.WorkspacePath == filepath.Join(repo, "main.go") && r.Diff != "" {
+			found = true
+		}
 	}
+	assert.True(t, found, "result must contain main.go with a non-empty Diff")
+}
+
+// ---------------------------------------------------------------------------
+// UNIT-113: All changed files appear in results — no silent drops
+// ---------------------------------------------------------------------------
+
+// TestFixFolder_AllChangedFilesPresent_NoSilentDrop verifies that every file
+// the runner modifies appears in the results. No file may be silently dropped
+// due to a per-file diff error. The single-pass git diff approach eliminates the
+// previous N×gitFileDiff pattern where a per-file error would silently omit the file.
+func TestFixFolder_AllChangedFilesPresent_NoSilentDrop(t *testing.T) {
+	repo := initGitRepo(t)
+	commitFile(t, repo, "a.go", "package main\nvar a = 1\n")
+	commitFile(t, repo, "b.go", "package main\nvar b = 1\n")
+	commitFile(t, repo, "c.go", "package main\nvar c = 1\n")
+
+	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+		_ = os.WriteFile(filepath.Join(root, "a.go"), []byte("package main\nvar a = 2\n"), 0644)
+		_ = os.WriteFile(filepath.Join(root, "b.go"), []byte("package main\nvar b = 2\n"), 0644)
+		_ = os.WriteFile(filepath.Join(root, "c.go"), []byte("package main\nvar c = 2\n"), 0644)
+		return nil
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+	fr := p.(remediation.FolderRemediator)
+
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	require.NoError(t, err)
+	require.Len(t, results, 3, "all three changed files must appear in results; none silently dropped")
+
+	paths := make(map[string]bool)
+	for _, r := range results {
+		paths[r.WorkspacePath] = true
+		assert.NotEmpty(t, r.Diff, "each result must have a non-empty Diff")
+	}
+	assert.Contains(t, paths, filepath.Join(repo, "a.go"), "a.go must not be silently dropped")
+	assert.Contains(t, paths, filepath.Join(repo, "b.go"), "b.go must not be silently dropped")
+	assert.Contains(t, paths, filepath.Join(repo, "c.go"), "c.go must not be silently dropped")
+}
+
+// ---------------------------------------------------------------------------
+// UNIT-114: Runner that deletes a tracked file — entry has empty WorktreePath
+// ---------------------------------------------------------------------------
+
+// TestFixFolder_DeletedFile_HasEmptyWorktreePath verifies that when the runner
+// deletes a tracked file, the result entry has:
+//   - non-empty Diff (the deletion diff from HEAD showing the removed lines)
+//   - non-empty WorkspacePath (the workspace path the daemon must delete)
+//   - empty WorktreePath (signals deletion to the daemon — no file to copy)
+//
+// Without this fix, deleted files would carry a non-empty WorktreePath pointing
+// to a file that no longer exists in the worktree, causing the daemon's
+// copy-based landing to fail.
+func TestFixFolder_DeletedFile_HasEmptyWorktreePath(t *testing.T) {
+	repo := initGitRepo(t)
+	commitFile(t, repo, "todelete.go", "package main\nvar x = 1\n")
+
+	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+		return os.Remove(filepath.Join(root, "todelete.go"))
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+	fr := p.(remediation.FolderRemediator)
+
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	require.NoError(t, err)
+	require.Len(t, results, 1, "deleted file must produce exactly one result entry")
+
+	r := results[0]
+	assert.NotEmpty(t, r.Diff,
+		"deletion diff must be non-empty (contains the removed lines)")
+	assert.NotEmpty(t, r.WorkspacePath,
+		"WorkspacePath must be non-empty for a deletion (daemon needs it to delete the workspace file)")
+	assert.Empty(t, r.WorktreePath,
+		"WorktreePath must be empty for a deletion — the file no longer exists in the worktree; "+
+			"daemon deletes the workspace file rather than copying from the worktree")
+	assert.Equal(t, filepath.Join(repo, "todelete.go"), r.WorkspacePath,
+		"WorkspacePath must be the absolute path of the deleted file")
+}
+
+// ---------------------------------------------------------------------------
+// UNIT-115: color.diff=always does not corrupt diffs (--no-color required)
+// ---------------------------------------------------------------------------
+
+// TestFixFolder_ColorDiffConfig_ReturnsValidDiff verifies that git color.diff=always
+// in the local config does not corrupt the returned diffs. Without --no-color, ANSI
+// escape sequences are injected into "diff --git" header lines, breaking any parser
+// that looks for the literal prefix. With --no-color the output is plain text.
+func TestFixFolder_ColorDiffConfig_ReturnsValidDiff(t *testing.T) {
+	mainRepo := initGitRepo(t)
+	commitFile(t, mainRepo, "main.go", "package main\nvar x = 1\n")
+	wt := createDetachedWorktree(t, mainRepo)
+
+	// Configure color.diff=always in the worktree's git config so git will inject
+	// ANSI escape sequences into diff output unless explicitly suppressed.
+	configCmd := exec.Command("git", "-C", wt, "config", "color.diff", "always")
+	configOut, configErr := configCmd.CombinedOutput()
+	require.NoError(t, configErr, "git config color.diff always: %s", string(configOut))
+
+	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0o644)
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+	fr := p.(remediation.FolderRemediator)
+
+	results, err := fr.FixFolder(context.Background(), types.FilePath(wt))
+	require.NoError(t, err)
+	require.NotEmpty(t, results, "color.diff=always must not suppress results; --no-color must be used")
+
+	for _, r := range results {
+		// ANSI escape sequences start with ESC (\x1b); a properly --no-color diff has none.
+		assert.NotContains(t, r.Diff, "\x1b",
+			"diff must not contain ANSI escape sequences when --no-color is used")
+		assert.Contains(t, r.Diff, "@@", "diff must contain a valid unified-diff hunk header")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// UNIT-116: diff.external config does not suppress diffs (--no-ext-diff required)
+// ---------------------------------------------------------------------------
+
+// TestFixFolder_ExternalDiffConfig_ReturnsValidDiff verifies that a diff.external
+// config (e.g. a custom pager like delta or difftastic) does not prevent FixFolder
+// from returning valid unified diffs. Without --no-ext-diff, git invokes the external
+// tool, which may emit non-unified output or exit non-zero, silently dropping results.
+func TestFixFolder_ExternalDiffConfig_ReturnsValidDiff(t *testing.T) {
+	mainRepo := initGitRepo(t)
+	commitFile(t, mainRepo, "main.go", "package main\nvar x = 1\n")
+	wt := createDetachedWorktree(t, mainRepo)
+
+	// Configure a bogus external differ that always exits non-zero.
+	configCmd := exec.Command("git", "-C", wt, "config", "diff.external", "/bin/false")
+	configOut, configErr := configCmd.CombinedOutput()
+	require.NoError(t, configErr, "git config diff.external /bin/false: %s", string(configOut))
+
+	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0o644)
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+	fr := p.(remediation.FolderRemediator)
+
+	results, err := fr.FixFolder(context.Background(), types.FilePath(wt))
+	require.NoError(t, err, "--no-ext-diff must bypass the external differ; FixFolder must not error")
+	require.NotEmpty(t, results, "diff.external config must not suppress results")
+
+	for _, r := range results {
+		assert.Contains(t, r.Diff, "@@", "diff must be a valid unified diff with hunk headers")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// UNIT-117: Rename surfaces as deletion of the old path (--no-renames)
+// ---------------------------------------------------------------------------
+
+// TestFixFolder_Rename_OldPathIsDeletedEntry verifies that when the runner renames
+// a tracked file, the old path appears in results with WorktreePath=="" — signaling
+// a deletion to the daemon so it removes the old workspace file. With --no-renames,
+// git reports a rename as D<old> (and the new path as untracked, outside the contract).
+func TestFixFolder_Rename_OldPathIsDeletedEntry(t *testing.T) {
+	mainRepo := initGitRepo(t)
+	commitFile(t, mainRepo, "old.go", "package main\nvar x = 1\n")
+	wt := createDetachedWorktree(t, mainRepo)
+
+	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+		return os.Rename(filepath.Join(root, "old.go"), filepath.Join(root, "new.go"))
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+	fr := p.(remediation.FolderRemediator)
+
+	results, err := fr.FixFolder(context.Background(), types.FilePath(wt))
+	require.NoError(t, err)
+
+	// old.go must appear as a deletion (WorktreePath=="").
+	var oldEntry *types.FolderFixFileResult
+	for i := range results {
+		if strings.HasSuffix(results[i].WorkspacePath, "old.go") {
+			oldEntry = &results[i]
+		}
+	}
+	require.NotNil(t, oldEntry, "old.go must appear in results as a deletion entry after rename")
+	assert.Empty(t, oldEntry.WorktreePath,
+		"renamed-away (deleted) path must have WorktreePath==\"\" so the daemon deletes the workspace file")
+	assert.NotEmpty(t, oldEntry.Diff, "deletion entry for old.go must have a non-empty diff")
+}
+
+// ---------------------------------------------------------------------------
+// UNIT-118: Non-ASCII filename handled correctly (NUL-separated, no octal escaping)
+// ---------------------------------------------------------------------------
+
+// TestFixFolder_NonASCIIFilename_CorrectEditEntry verifies that a file with a
+// non-ASCII name (café.go) is returned as a correct edit entry, not misclassified
+// as a deletion. Git quotes non-ASCII filenames by default (core.quotePath=true),
+// turning café.go into "caf\303\251.go". With -z, paths are NUL-separated and
+// never quoted, so the raw UTF-8 name is preserved.
+func TestFixFolder_NonASCIIFilename_CorrectEditEntry(t *testing.T) {
+	mainRepo := initGitRepo(t)
+	commitFile(t, mainRepo, "café.go", "package main\nvar x = 1\n")
+	wt := createDetachedWorktree(t, mainRepo)
+
+	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+		return os.WriteFile(filepath.Join(root, "café.go"), []byte("package main\nvar x = 2\n"), 0o644)
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+	fr := p.(remediation.FolderRemediator)
+
+	results, err := fr.FixFolder(context.Background(), types.FilePath(wt))
+	require.NoError(t, err)
+
+	var cafeEntry *types.FolderFixFileResult
+	for i := range results {
+		if strings.HasSuffix(results[i].WorkspacePath, "café.go") {
+			cafeEntry = &results[i]
+		}
+	}
+	require.NotNil(t, cafeEntry, "café.go must appear in results; non-ASCII filename must not be lost")
+	assert.NotEmpty(t, cafeEntry.WorktreePath,
+		"café.go was modified (not deleted); WorktreePath must be non-empty")
+	assert.NotEmpty(t, cafeEntry.Diff, "café.go result must have a non-empty diff")
+}
+
+// ---------------------------------------------------------------------------
+// UNIT-119: textconv gitattribute does not suppress diffs (--no-textconv required)
+// ---------------------------------------------------------------------------
+
+// TestFixFolder_TextconvIgnored_FileAppearsInResults verifies that --no-textconv is
+// passed when computing per-file diffs. A textconv filter configured to output nothing
+// (/bin/true) makes textconv-filtered diff empty: both old and new blobs appear as
+// empty, so git diff (without --no-textconv) would produce no output for the file.
+//
+// Without --no-textconv the file would yield an empty diff → previously silently
+// dropped (now an error). With --no-textconv (the current implementation), git diffs
+// the raw blob bytes instead, the change is detected, and the file correctly appears
+// in results with a non-empty Diff.
+//
+// Regression: if --no-textconv is removed, FixFolder returns an error (empty diff for
+// a listed file is now an error), and this test fails on require.NoError.
+func TestFixFolder_TextconvIgnored_FileAppearsInResults(t *testing.T) {
+	repo := initGitRepo(t)
+	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
+
+	// Configure a textconv that always outputs nothing: git runs "/bin/true <blob-path>"
+	// which exits 0 with no output. Both old and new blobs appear as empty through the
+	// filter, so without --no-textconv git diff produces an empty result for the file.
+	attrsPath := filepath.Join(repo, ".gitattributes")
+	err := os.WriteFile(attrsPath, []byte("*.go diff=testconv\n"), 0o644)
+	require.NoError(t, err, "write .gitattributes")
+
+	configCmd := exec.Command("git", "-C", repo, "config", "diff.testconv.textconv", "/bin/true")
+	configOut, configErr := configCmd.CombinedOutput()
+	require.NoError(t, configErr, "git config diff.testconv.textconv: %s", string(configOut))
+
+	// Runner modifies the tracked file.
+	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0o644)
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+	fr, ok := p.(remediation.FolderRemediator)
+	require.True(t, ok)
+
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	require.NoError(t, err,
+		"FixFolder must not error when a textconv is configured; --no-textconv must bypass the filter")
+	require.Len(t, results, 1, "modified file must appear in results despite textconv configuration")
+	assert.Contains(t, results[0].Diff, "var x = 2",
+		"Diff must reflect the raw blob change, not the empty textconv output")
 }
