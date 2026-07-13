@@ -23,11 +23,14 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/infrastructure/secrets"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -42,6 +45,78 @@ import (
 func realIacKey(absPath types.FilePath, lineNumber int, publicID string) string {
 	sum := sha256.Sum256([]byte(string(absPath) + strconv.Itoa(lineNumber) + publicID))
 	return hex.EncodeToString(sum[:16])
+}
+
+// INT-003: the Secrets grouping key must be the stable rule identity, never the
+// per-scan UUID (attrs.Key). The backend mints a NEW attrs.Key for every scan, so
+// folding it into the identity made the same finding change identity each scan
+// (violating R1). This wires the REAL secrets converter (infrastructure/secrets)
+// to the REAL domain converter and proves the composite FindingId is IDENTICAL
+// across two scans whose UUID differs, and instance-unique across rules/locations.
+func TestToDiagnostics_Secrets_FindingIdStable_DespiteUUIDChange(t *testing.T) {
+	testutil.UnitTest(t)
+
+	root := types.FilePath("/project")
+	logger := zerolog.Nop()
+	ip := func(v int) *int { return &v }
+
+	// Builds a testapi secrets finding for one rule at one location, with a
+	// caller-supplied per-scan Key (UUID) so it can be varied between scans.
+	newSecretFinding := func(scanUUID, ruleID, ruleName, file string, fromLine int) testapi.FindingData {
+		id := uuid.New()
+		var loc testapi.FindingLocation
+		_ = loc.FromSourceLocation(testapi.SourceLocation{
+			FilePath: file, FromLine: fromLine,
+			FromColumn: ip(1), ToLine: ip(fromLine), ToColumn: ip(20),
+		})
+		var prob testapi.Problem
+		_ = prob.FromSecretsRuleProblem(testapi.SecretsRuleProblem{Id: ruleID, Name: ruleName})
+		return testapi.FindingData{
+			Id: &id,
+			Attributes: &testapi.FindingAttributes{
+				Key:         scanUUID,
+				Title:       "Secret",
+				Description: "d",
+				Rating:      testapi.Rating{Severity: testapi.SeverityHigh},
+				Locations:   []testapi.FindingLocation{loc},
+				Problems:    []testapi.Problem{prob},
+			},
+		}
+	}
+
+	sc := secrets.NewFindingsConverter(&logger)
+
+	scan1 := sc.ToIssues([]testapi.FindingData{newSecretFinding("uuid-scan-1", "aws-access-key", "AWS Access Key", "src/config.yml", 10)}, "", root)
+	scan2 := sc.ToIssues([]testapi.FindingData{newSecretFinding("uuid-scan-2-DIFFERENT", "aws-access-key", "AWS Access Key", "src/config.yml", 10)}, "", root)
+	require.Len(t, scan1, 1)
+	require.Len(t, scan2, 1)
+
+	// Precondition: the per-scan UUID (surfaced as the fingerprint) really differs
+	// across the two scans, so the stability assertion below cannot pass trivially.
+	require.NotEqual(t, scan1[0].GetFingerprint(), scan2[0].GetFingerprint(),
+		"precondition: attrs.Key (fingerprint) must differ across scans")
+
+	d1 := ToDiagnosticsForFolder(scan1, root, &logger)
+	d2 := ToDiagnosticsForFolder(scan2, root, &logger)
+	require.Len(t, d1, 1)
+	require.Len(t, d2, 1)
+
+	assert.NotEmpty(t, d1[0].Data.FindingId, "Secrets FindingId must be non-empty")
+	assert.Equal(t, d1[0].Data.FindingId, d2[0].Data.FindingId,
+		"Secrets FindingId must be identical across scans despite the per-scan UUID changing")
+
+	// Instance-uniqueness: a different rule at the same location, and the same rule
+	// at a different location, must both differ from the first finding's identity.
+	dDiffRule := ToDiagnosticsForFolder(
+		sc.ToIssues([]testapi.FindingData{newSecretFinding("uuid-x", "github-token", "GitHub Token", "src/config.yml", 10)}, "", root), root, &logger)
+	dDiffLoc := ToDiagnosticsForFolder(
+		sc.ToIssues([]testapi.FindingData{newSecretFinding("uuid-y", "aws-access-key", "AWS Access Key", "src/config.yml", 42)}, "", root), root, &logger)
+	require.Len(t, dDiffRule, 1)
+	require.Len(t, dDiffLoc, 1)
+	assert.NotEqual(t, d1[0].Data.FindingId, dDiffRule[0].Data.FindingId,
+		"a different secret rule at the same location must yield a different FindingId")
+	assert.NotEqual(t, d1[0].Data.FindingId, dDiffLoc[0].Data.FindingId,
+		"the same secret rule at a different location must yield a different FindingId")
 }
 
 // Fix 2: when root!="" but filepath.Rel cannot relate the file to it, the fallback
