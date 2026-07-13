@@ -58,6 +58,12 @@ type CodeActionsService struct {
 type cachedAction struct {
 	issue  types.Issue
 	action types.CodeAction
+	// canonicalRoot is the canonical registered workspace-folder root captured at
+	// GetCodeActions time. It is used at resolve time so the resolved action's
+	// FindingId anchors to the same root publishDiagnostics used, even if the
+	// folder is removed between GetCodeActions and ResolveCodeAction (a
+	// resolve-time workspace lookup would then return nil).
+	canonicalRoot types.FilePath
 }
 
 func NewService(engine workflow.Engine, provider snyk.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) *CodeActionsService {
@@ -113,7 +119,7 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 		c.logger.Debug().Any("path", path).Any("range", r).Msgf("Filtered to %d issues", len(issues))
 	}
 
-	quickFixGroupables := c.getQuickFixGroupablesAndCache(filteredIssues)
+	quickFixGroupables := c.getQuickFixGroupablesAndCache(filteredIssues, folder.Path())
 
 	var updatedIssues []types.Issue
 	if len(quickFixGroupables) != 0 {
@@ -122,7 +128,7 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 		updatedIssues = filteredIssues
 	}
 
-	actions := converter.ToCodeActions(updatedIssues)
+	actions := converter.ToCodeActions(updatedIssues, folder.Path())
 	c.logger.Debug().Msg(fmt.Sprint("Returning ", len(actions), " code actions"))
 	return actions
 }
@@ -178,24 +184,25 @@ func (c *CodeActionsService) getQuickFixAction(quickFixGroupables []types.Groupa
 	return quickFix
 }
 
-func (c *CodeActionsService) getQuickFixGroupablesAndCache(issues []types.Issue) []types.Groupable {
+func (c *CodeActionsService) getQuickFixGroupablesAndCache(issues []types.Issue, canonicalRoot types.FilePath) []types.Groupable {
 	quickFixGroupables := []types.Groupable{}
 	for _, issue := range issues {
 		for _, action := range issue.GetCodeActions() {
 			if action.GetGroupingType() == types.Quickfix {
 				quickFixGroupables = append(quickFixGroupables, action)
 			}
-			c.cacheCodeAction(action, issue)
+			c.cacheCodeAction(action, issue, canonicalRoot)
 		}
 	}
 	return quickFixGroupables
 }
 
-func (c *CodeActionsService) cacheCodeAction(action types.CodeAction, issue types.Issue) {
+func (c *CodeActionsService) cacheCodeAction(action types.CodeAction, issue types.Issue, canonicalRoot types.FilePath) {
 	if action.GetUuid() != nil {
 		cached := cachedAction{
-			issue:  issue,
-			action: action,
+			issue:         issue,
+			action:        action,
+			canonicalRoot: canonicalRoot,
 		}
 		c.actionsCache[*action.GetUuid()] = cached
 	}
@@ -229,7 +236,15 @@ func (c *CodeActionsService) ResolveCodeAction(action types.LSPCodeAction) (type
 	resolvedAction.SetEdit(edit)
 	elapsed := time.Since(t)
 	elapsedSeconds := int(elapsed.Seconds())
-	codeAction := converter.ToCodeAction(cached.issue, resolvedAction)
+
+	// Use the canonical registered folder root captured at GetCodeActions time so
+	// the resolved action's embedded FindingId matches the one published for the
+	// same finding via publishDiagnostics (both anchor to the folder root). Reading
+	// it from the cache — rather than re-deriving it via a workspace lookup — keeps
+	// the id correct even if the folder was removed between GetCodeActions and this
+	// resolve (the lookup would then return nil and the id would silently fall back
+	// to the issue's sub-path ContentRoot, diverging from what was published).
+	codeAction := converter.ToCodeAction(cached.issue, resolvedAction, cached.canonicalRoot)
 
 	c.logger.Debug().Msg(fmt.Sprint("Resolved code action in ", elapsedSeconds, " seconds:\n", codeAction))
 	return codeAction, nil
