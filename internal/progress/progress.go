@@ -46,7 +46,11 @@ type Tracker struct {
 	// the summary-panel reset to scan cancellations only (IDE-1035).
 	// Written under trackersMutex when the tracker is registered; only ever
 	// read via IsScanToken under the same lock.
-	isScan               bool
+	isScan bool
+	// folderPath is the workspace folder this scan tracker belongs to, set
+	// only for isScan trackers. Lets the cancel handler scope a reset to the
+	// canceled folder instead of every open folder.
+	folderPath           types.FilePath
 	lastReport           time.Time
 	lastReportPercentage int
 	finished             bool
@@ -89,12 +93,15 @@ func NewTracker(cancellable bool, logger *zerolog.Logger) *Tracker {
 // NewScanTracker creates a progress tracker tagged as a scan token so
 // IsScanToken returns true for it. Use this for scan operations (OSS, Code,
 // IaC) instead of NewTracker. Download/install operations must continue to
-// use NewTracker so their cancel events do not reset the summary panel
-// (IDE-1035).
-func NewScanTracker(cancellable bool, logger *zerolog.Logger) *Tracker {
+// use NewTracker so their cancel events do not reset the summary panel.
+// folderPath is the workspace folder this scan belongs to; pass it through
+// FolderForScanToken so a cancel handler can scope a reset to this folder
+// alone.
+func NewScanTracker(cancellable bool, logger *zerolog.Logger, folderPath types.FilePath) *Tracker {
 	t := NewTracker(cancellable, logger)
 	trackersMutex.Lock()
 	t.isScan = true
+	t.folderPath = folderPath
 	trackersMutex.Unlock()
 	return t
 }
@@ -111,6 +118,21 @@ func IsScanToken(token types.ProgressToken) bool {
 		return false
 	}
 	return t.isScan
+}
+
+// FolderForScanToken reports the workspace folder token belongs to, for
+// tokens registered via NewScanTracker. The second return value is false if
+// the token is unknown, already consumed (e.g. by Cancel), or belongs to a
+// non-scan tracker — callers must not fall back to resetting every folder in
+// that case.
+func FolderForScanToken(token types.ProgressToken) (types.FilePath, bool) {
+	trackersMutex.RLock()
+	defer trackersMutex.RUnlock()
+	t, ok := trackers[token]
+	if !ok || !t.isScan {
+		return "", false
+	}
+	return t.folderPath, true
 }
 
 func (t *Tracker) GetChannel() chan types.ProgressParams {

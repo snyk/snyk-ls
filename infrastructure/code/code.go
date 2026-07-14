@@ -263,7 +263,7 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, l
 		Int("fileCount", len(filesToBeScanned)).
 		Msg("Code scanner: files to be scanned")
 
-	t := progress.NewScanTracker(true, sc.engine.GetLogger())
+	t := progress.NewScanTracker(true, sc.engine.GetLogger(), folderPath)
 	go func() { t.CancelOrDone(cancel, ctx.Done()) }()
 
 	t.BeginWithMessage(string("Snyk Code: scanning "+folderPath), "starting scan")

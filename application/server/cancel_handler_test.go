@@ -61,10 +61,11 @@ func (f *fakeScanner) registered() map[types.FilePath]func() {
 	return out
 }
 
-// Handler contract: a scan token registers reset-on-cancel for every
-// workspace folder via the Scanner interface, then progress.Cancel fires
-// (defer). The registration happens BEFORE the cancel — that is the
-// IDE-1035 register-vs-consume race fix exercised end-to-end.
+// Handler contract: a scan token registers reset-on-cancel for exactly the
+// workspace folder it belongs to via the Scanner interface (never any other
+// open folder), then progress.Cancel fires (defer). The registration
+// happens BEFORE the cancel — that is the register-vs-consume race fix
+// exercised end-to-end.
 func TestHandleWindowWorkDoneProgressCancel_ScanToken_RegistersBeforeCancel(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()
@@ -81,7 +82,7 @@ func TestHandleWindowWorkDoneProgressCancel_ScanToken_RegistersBeforeCancel(t *t
 	})
 
 	logger := engine.GetLogger()
-	tracker := progress.NewScanTracker(true, logger)
+	tracker := progress.NewScanTracker(true, logger, folderA)
 	token := tracker.GetToken()
 	require.True(t, progress.IsScanToken(token), "precondition: NewScanTracker must register a scan token")
 
@@ -91,11 +92,12 @@ func TestHandleWindowWorkDoneProgressCancel_ScanToken_RegistersBeforeCancel(t *t
 	)
 	require.NoError(t, err)
 
-	// Both workspace folders must have had a callback registered.
+	// Only the canceled token's own folder must have had a callback
+	// registered — the other open folder must be left untouched.
 	got := scanner.registered()
-	assert.Contains(t, got, folderA, "callback must be registered for folder A")
-	assert.Contains(t, got, folderB, "callback must be registered for folder B")
-	assert.Len(t, got, 2, "exactly one callback per folder")
+	assert.Contains(t, got, folderA, "callback must be registered for the canceled token's folder")
+	assert.NotContains(t, got, folderB, "callback must NOT be registered for an untouched folder")
+	assert.Len(t, got, 1, "exactly one callback, for the canceled token's folder")
 
 	// The deferred progress.Cancel must have run by the time the handler returns,
 	// so the scan token is no longer recognized. This is the ordering guarantee
@@ -154,7 +156,7 @@ func TestHandleWindowWorkDoneProgressCancel_ScanToken_NoScanner_NoSyncFallback(t
 	})
 
 	logger := engine.GetLogger()
-	tracker := progress.NewScanTracker(true, logger)
+	tracker := progress.NewScanTracker(true, logger, folderA)
 	token := tracker.GetToken()
 
 	_, err := handleWindowWorkDoneProgressCancel(ctx,

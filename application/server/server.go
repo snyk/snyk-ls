@@ -1215,21 +1215,29 @@ func handleWindowWorkDoneProgressCancel(ctx context.Context, params types.Workdo
 			Msg("scan state aggregator not found in context; summary panel will not be reset")
 		return nil, nil
 	}
+	// Scope the reset to the folder the canceled token actually belongs to.
+	// Canceling folder A's scan must never arm a pending reset on folder B
+	// or C.
+	folderPath, folderOk := progress.FolderForScanToken(params.Token)
+	if !folderOk {
+		logger.Debug().Str("method", "WindowWorkDoneProgressCancelHandler").
+			Msg("scan token's folder not found; summary panel will not be reset")
+		return nil, nil
+	}
+
 	// Register the reset callback on the scanner so it fires AFTER all
 	// per-product goroutines have finished their SetScanDone writes
-	// (IDE-1035). The reset is keyed to each workspace folder so that
-	// concurrent folder scans reset independently.
+	// (IDE-1035). The reset is keyed to the canceled token's own workspace
+	// folder so that concurrent folder scans reset independently.
 	sc, scOk := scannerFromContext(ctx)
 	if !scOk {
 		logger.Debug().Str("method", "WindowWorkDoneProgressCancelHandler").
 			Msg("scanner not in context; summary panel will not be reset")
 		return nil, nil
 	}
-	for _, fp := range workspaceFolderPaths(conf) {
-		sc.RegisterCancelCallback(fp, func() {
-			resetSummaryPanel(scanAgg, []types.FilePath{fp})
-		})
-	}
+	sc.RegisterCancelCallback(folderPath, func() {
+		resetSummaryPanel(scanAgg, []types.FilePath{folderPath})
+	})
 	return nil, nil
 }
 

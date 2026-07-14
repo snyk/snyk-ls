@@ -314,6 +314,51 @@ func TestScan_CancelCallback_CalledAfterGoroutinesFinish(t *testing.T) {
 	assert.Less(t, setDoneIdx, initIdx, "SetScanDone must be called before Init (no late writes after reset)")
 }
 
+// Multi-folder blast-radius regression: a reset callback registered for
+// folder A (as if its scan were canceled) must never surface in folder B's
+// state. Folder B's own real, successful scan must be reflected as-is.
+func TestScan_CancelCallbackForFolderA_DoesNotAffectFolderB(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	tokenService.SetToken(engine.GetConfiguration(), uuid.New().String())
+
+	mockProductScanner := mock_types.NewMockProductScanner(ctrl)
+	mockProductScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
+	mockProductScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
+	mockProductScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
+
+	emitter := scanstates.NewMockScanStateChangeEmitter(ctrl)
+	emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
+
+	resolver := defaultResolver(t, engine)
+	agg := scanstates.NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, resolver, engine)
+
+	folderA := types.FilePath(t.TempDir())
+	folderB := types.FilePath(t.TempDir())
+	agg.Init([]types.FilePath{folderA, folderB})
+
+	sc, _ := setupScannerWithResolverAndAgg(t, engine, tokenService, resolver, agg, mockProductScanner)
+
+	// Simulate a stop-scan cancel on folder A: register exactly the reset
+	// the LSP cancel handler performs (resetSummaryPanel calls agg.Init).
+	sc.(*DelegatingConcurrentScanner).RegisterCancelCallback(folderA, func() {
+		agg.Init([]types.FilePath{folderA})
+	})
+
+	// Drive a real, successful scan for folder B — unrelated to folder A.
+	fc := &types.FolderConfig{FolderPath: folderB}
+	ctx := ctx2.NewContextWithFolderConfig(t.Context(), fc)
+	sc.Scan(ctx, folderB, types.NoopResultProcessor, nil)
+
+	snapshot := agg.StateSnapshot()
+	inProgress, ok := snapshot.ProductScanStates[folderB][product.ProductOpenSource]
+	assert.True(t, ok, "folder B's scan result must be recorded, not reset to NotStarted")
+	assert.False(t, inProgress, "folder B's scan must show as finished, not reset back to in-progress/not-started")
+	assert.Empty(t, snapshot.ProductScanErrors[folderB], "folder B's scan must not show as errored")
+}
+
 // recordingOrderAggregator wraps NoopStateAggregator and calls SetScanDoneFn on SetScanDone.
 type recordingOrderAggregator struct {
 	scanstates.NoopStateAggregator

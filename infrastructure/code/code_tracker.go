@@ -37,7 +37,12 @@ func NewCodeTrackerFactory(logger *zerolog.Logger) codeClientScan.TrackerFactory
 }
 
 func (t trackerFactory) GenerateTracker() codeClientScan.Tracker {
-	newTracker := progress.NewScanTracker(true, t.logger)
+	// No folder path in scope here, and it wouldn't matter: newCodeTracker
+	// below mints its own token and reports Cancellable: false, so this
+	// NewScanTracker's token/folder is never the one the IDE echoes back on
+	// cancel. This call site cannot be the target of a cancellation today;
+	// it only needs to keep compiling.
+	newTracker := progress.NewScanTracker(true, t.logger, "")
 	return newCodeTracker(newTracker.GetChannel(), newTracker.GetCancelChannel())
 }
 
