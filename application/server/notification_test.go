@@ -50,7 +50,7 @@ func TestRegisterNotifier_NilNotifier_Panics(t *testing.T) {
 	srv := mock_types.NewMockServer(ctrl)
 
 	assert.Panics(t, func() {
-		registerNotifier(conf, logger, srv, nil)
+		registerNotifier(conf, engine, testutil.DefaultConfigResolver(engine), logger, srv, nil)
 	}, "registerNotifier must panic when notifier is nil")
 }
 
@@ -347,6 +347,31 @@ func TestShowMessageRequest(t *testing.T) {
 			time.Millisecond,
 		)
 	})
+}
+
+func Test_registerNotifier_AuthenticationSendsConfiguration(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
+
+	// Trigger via real auth service so the full registerNotifier path fires.
+	di.AuthenticationService().UpdateCredentials("config-send-test-token", true, false)
+
+	assert.Eventually(
+		t,
+		func() bool {
+			return len(jsonRPCRecorder.FindNotificationsByMethod("$/snyk.hasAuthenticated")) > 0 &&
+				len(jsonRPCRecorder.FindNotificationsByMethod("$/snyk.configuration")) > 0
+		},
+		2*time.Second,
+		time.Millisecond,
+		"expected both $/snyk.hasAuthenticated and $/snyk.configuration after authentication",
+	)
 }
 
 func Test_NotifierWaitsForLspInitializedChannel(t *testing.T) {

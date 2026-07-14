@@ -27,6 +27,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/erni27/imcache"
@@ -90,6 +91,20 @@ type AuthenticationServiceImpl struct {
 	credentialUpdateChan chan credentialUpdate
 	// credentialUpdateCancel cancels the credential update worker on shutdown.
 	credentialUpdateCancel context.CancelFunc
+	// writingToken holds a pointer to the token string that the credentialUpdateWorker
+	// is currently writing to conf via updateCredentials → tokenService.SetToken →
+	// WriteTokenToConfig → conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, …).  When the conf key
+	// is persisted, that conf.Set call flows back through the storage's Set method, which
+	// fires the registered OAuth storage-bridge callback, which calls QueueCredentialUpdate
+	// again — re-enqueueing the same token the worker is already applying.  The re-enqueued
+	// copy lands after newer tokens in the channel and, on Windows where time.Now() has
+	// 15 ms resolution and all three rapid-rotation tokens share the same expiry, the
+	// shouldUpdateToken expiry check allows the stale copy to overwrite the final token.
+	//
+	// QueueCredentialUpdate skips the enqueue when the value matches writingToken, breaking
+	// the re-entrancy cycle.  External updates (from GAF refreshing the OAuth token) always
+	// carry a different token string and are never silently dropped by this guard.
+	writingToken atomic.Pointer[string]
 }
 
 func NewAuthenticationService(engine workflow.Engine, tokenService types.TokenService, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier, configResolver types.ConfigResolverInterface) AuthenticationService {
@@ -128,14 +143,42 @@ func (a *AuthenticationServiceImpl) credentialUpdateWorker(ctx context.Context) 
 		case <-ctx.Done():
 			return
 		case update := <-a.credentialUpdateChan:
-			a.updateCredentials(update.token, update.sendNotification, update.updateApiUrl)
+			// Advertise which token we are about to write so QueueCredentialUpdate can
+			// recognize and drop the re-entrant callback that fires when
+			// WriteTokenToConfig calls conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, …) and
+			// the key is persisted in storage (which triggers the bridge callback again).
+			// The clear is deferred so it always runs even if updateCredentials panics,
+			// preventing the guard from staying permanently armed for that token string.
+			func() {
+				a.writingToken.Store(&update.token)
+				defer a.writingToken.Store(nil)
+				a.updateCredentials(update.token, update.sendNotification, update.updateApiUrl)
+			}()
 		}
 	}
 }
 
 // QueueCredentialUpdate queues a credential update for sequential processing.
 // This is used by the OAuth storage bridge callback to serialize updates.
+//
+// Re-entrancy guard: when WriteTokenToConfig calls conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, …)
+// and the key is persisted in storage, the storage fires the bridge callback again with the
+// exact same token the worker is currently applying.  Enqueueing that copy would let a stale
+// token overwrite a newer one after the main sequence has already finished (observable on
+// Windows where time.Now() has 15 ms resolution and rapid-rotation tokens share the same
+// expiry, making shouldUpdateToken return true for the stale copy).  We drop the re-entrant
+// call by comparing the incoming token against writingToken; external updates from GAF always
+// carry a different token string and are never silently dropped by this guard.
 func (a *AuthenticationServiceImpl) QueueCredentialUpdate(token string, sendNotification bool, updateApiUrl bool) {
+	if w := a.writingToken.Load(); w != nil && *w == token {
+		// Re-entrant call: the worker is already applying this exact token via
+		// conf.Set → storage.Set → callback.  Drop it to prevent the stale copy
+		// from landing behind newer tokens in the channel.
+		a.engine.GetLogger().Debug().
+			Str("method", "AuthenticationService.QueueCredentialUpdate").
+			Msg("dropping duplicate credential update for token already being written")
+		return
+	}
 	select {
 	case a.credentialUpdateChan <- credentialUpdate{
 		token:            token,

@@ -35,6 +35,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
@@ -837,91 +838,6 @@ func Test_initialize_autoAuthenticateSetCorrectly(t *testing.T) {
 	})
 }
 
-func Test_initialize_handlesUntrustedFoldersWhenAutomaticAuthentication(t *testing.T) {
-	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
-	initializationOptions := types.InitializationOptions{
-		Settings: map[string]*types.ConfigSetting{
-			types.SettingTrustEnabled: {Value: true, Changed: true},
-			types.SettingCliPath:      {Value: filepath.Join(t.TempDir(), "cli"), Changed: true},
-		},
-	}
-	params := types.InitializeParams{
-		InitializationOptions: initializationOptions,
-		WorkspaceFolders:      []types.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}},
-	}
-	_, err := loc.Client.Call(t.Context(), "initialize", params)
-	if err != nil {
-		t.Fatal(err, "couldn't send initialized")
-	}
-
-	_, err = loc.Client.Call(t.Context(), "initialized", nil)
-	if err != nil {
-		t.Fatal(err, "couldn't send initialized")
-	}
-
-	assert.Nil(t, err)
-	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder, engine) }, time.Second*5, time.Millisecond)
-}
-
-func Test_initialize_handlesUntrustedFoldersWhenAuthenticated(t *testing.T) {
-	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
-	initializationOptions := types.InitializationOptions{
-		Settings: map[string]*types.ConfigSetting{
-			types.SettingTrustEnabled: {Value: true, Changed: true},
-			types.SettingToken:        {Value: "token", Changed: true},
-			types.SettingCliPath:      {Value: filepath.Join(t.TempDir(), "cli"), Changed: true},
-		},
-	}
-
-	fakeAuthenticationProvider := di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider)
-	fakeAuthenticationProvider.IsAuthenticated = true
-
-	params := types.InitializeParams{
-		InitializationOptions: initializationOptions,
-		WorkspaceFolders:      []types.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}},
-	}
-	_, err := loc.Client.Call(t.Context(), "initialize", params)
-	if err != nil {
-		t.Fatal(err, "couldn't send initialized")
-	}
-
-	_, err = loc.Client.Call(t.Context(), "initialized", nil)
-	if err != nil {
-		t.Fatal(err, "couldn't send initialized")
-	}
-
-	assert.Nil(t, err)
-	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder, engine) }, time.Second*5, time.Millisecond)
-}
-
-func Test_initialize_doesnotHandleUntrustedFolders(t *testing.T) {
-	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
-	initializationOptions := types.InitializationOptions{
-		Settings: map[string]*types.ConfigSetting{
-			types.SettingTrustEnabled: {Value: true, Changed: true},
-			types.SettingCliPath:      {Value: filepath.Join(t.TempDir(), "cli"), Changed: true},
-		},
-	}
-	params := types.InitializeParams{
-		InitializationOptions: initializationOptions,
-		WorkspaceFolders:      []types.WorkspaceFolder{{Uri: uri.PathToUri("/untrusted/dummy"), Name: "dummy"}},
-	}
-	_, err := loc.Client.Call(t.Context(), "initialize", params)
-	if err != nil {
-		t.Fatal(err, "couldn't send initialized")
-	}
-	_, err = loc.Client.Call(t.Context(), "initialized", nil)
-	if err != nil {
-		t.Fatal(err, "couldn't send initialized")
-	}
-
-	assert.NoError(t, err)
-	assert.Eventually(t, func() bool { return checkTrustMessageRequest(jsonRPCRecorder, engine) }, time.Second, time.Millisecond)
-}
-
 func Test_textDocumentDidSaveHandler_shouldAcceptDocumentItemAndPublishDiagnostics(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
@@ -1315,6 +1231,118 @@ func Test_initialized_CallsRefreshConfigFromLdxSync(t *testing.T) {
 	// Initialize with workspace folders
 	params := types.InitializeParams{
 		WorkspaceFolders: []types.WorkspaceFolder{folder1, folder2},
+	}
+
+	_, err := loc.Client.Call(t.Context(), "initialize", params)
+	assert.NoError(t, err)
+}
+
+// Init ordering: feature flags and SAST settings are populated during initialized (HandleFolders),
+// not while merging folder config during initialize. See processSingleLspFolderConfig.
+func Test_initializedHandler_PopulatesFeatureFlagsAndSastSettingsForWorkspaceFolders(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+
+	folderPaths := []types.FilePath{types.FilePath(t.TempDir()), types.FilePath(t.TempDir())}
+	params := types.InitializeParams{
+		WorkspaceFolders: []types.WorkspaceFolder{
+			{Uri: uri.PathToUri(folderPaths[0]), Name: "workspace1"},
+			{Uri: uri.PathToUri(folderPaths[1]), Name: "workspace2"},
+		},
+	}
+
+	fakeFF := featureflag.NewFakeService()
+	fakeFF.Flags[featureflag.SnykCodeConsistentIgnores] = true
+	fakeFF.Conf = engine.GetConfiguration()
+	fakeFF.SastSettings = &sast_contract.SastResponse{SastEnabled: true}
+
+	loc, _, _ := setupServer(t, engine, tokenService, WithDeps(di.Dependencies{
+		FeatureFlagService: fakeFF,
+	}))
+
+	configResolver := testutil.DefaultConfigResolver(engine)
+
+	// Call initialize and assert that FFs and SAST settings are not set.
+	_, err := loc.Client.Call(t.Context(), "initialize", params)
+	require.NoError(t, err)
+
+	assert.Equal(t, 0, fakeFF.PopulateFolderConfigCallCount, "PopulateFolderConfig must not run during initialize")
+	for _, p := range folderPaths {
+		fc := config.GetFolderConfigFromEngine(engine, configResolver, p, engine.GetLogger())
+		require.NotNil(t, fc)
+		assert.False(t, fc.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores),
+			"processSingleLspFolderConfig must skip flag population before SettingIsLspInitialized")
+		assert.Nil(t, types.GetSastSettings(fc.Conf(), p))
+	}
+
+	disableAutoScan(t, engine.GetConfiguration())
+
+	// Call initialized and assert that FFs and SAST settings are now set correctly.
+	_, err = loc.Client.Call(t.Context(), "initialized", types.InitializedParams{})
+	require.NoError(t, err)
+
+	assert.Equal(t, len(folderPaths), fakeFF.PopulateFolderConfigCallCount,
+		"PopulateFolderConfig must be called once per workspace folder")
+	for _, p := range folderPaths {
+		fc := config.GetFolderConfigFromEngine(engine, configResolver, p, engine.GetLogger())
+		require.NotNil(t, fc)
+		assert.True(t, fc.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores))
+		sastSettings := types.GetSastSettings(fc.Conf(), p)
+		require.NotNil(t, sastSettings)
+		assert.True(t, sastSettings.SastEnabled)
+	}
+}
+
+// Test_initialize_UsesIdeGlobalOrgNotCliOrg verifies that when the IDE sends a global org
+// in initialization options, that org is available when LDX-Sync refresh is called.
+// This ensures InitializeSettings runs BEFORE RefreshConfigFromLdxSync.
+func Test_initialize_UsesIdeGlobalOrgNotCliOrg(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+
+	// Setup workspace folder
+	folderPath := t.TempDir()
+	folder := types.WorkspaceFolder{
+		Uri:  uri.PathToUri(types.FilePath(folderPath)),
+		Name: "test-workspace",
+	}
+
+	// Setup: Folder config with OrgSetByUser=true, PreferredOrg="" (will use global org fallback)
+	types.SetPreferredOrgAndOrgSetByUser(engine.GetConfiguration(), types.FilePath(folderPath), "", true)
+
+	// Setup mock LdxSyncService to capture what org is used
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+	mockLdxSyncService := mock_command.NewMockLdxSyncService(ctrl)
+
+	// IDE sends its global org in initialization options (use UUID to avoid slug resolution)
+	ideGlobalOrg := "00000000-0000-0000-0000-000000000099"
+
+	// Expect: RefreshConfigFromLdxSync should see IDE's org
+	// This will FAIL if RefreshConfigFromLdxSync runs before InitializeSettings
+	mockLdxSyncService.EXPECT().
+		RefreshConfigFromLdxSync(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Times(1).
+		Do(func(_ interface{}, c configuration.Configuration, _ interface{}, _ interface{}, _ interface{}, _ interface{}) {
+			// At this point, the global org should be the IDE's org
+			actualGlobalOrg := types.GetGlobalOrganization(c)
+			assert.Equal(t, ideGlobalOrg, actualGlobalOrg,
+				"LDX-Sync should see IDE's global org. "+
+					"This means InitializeSettings must run BEFORE RefreshConfigFromLdxSync.")
+		})
+
+	// Setup server with mock LdxSyncService injected via dependency configuration
+	loc, _, _ := setupServer(t, engine, tokenService,
+		WithDeps(di.Dependencies{
+			LdxSyncService: mockLdxSyncService,
+		}))
+
+	// Initialize with IDE's global org in initialization options
+	params := types.InitializeParams{
+		WorkspaceFolders: []types.WorkspaceFolder{folder},
+		InitializationOptions: types.InitializationOptions{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingOrganization: {Value: ideGlobalOrg, Changed: true},
+			},
+		},
 	}
 
 	_, err := loc.Client.Call(t.Context(), "initialize", params)

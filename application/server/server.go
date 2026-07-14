@@ -589,7 +589,7 @@ func workspaceDidChangeWorkspaceFoldersHandler(conf configuration.Configuration,
 			ldxSyncSvc.RefreshConfigFromLdxSync(bgCtx, conf, engine, &logger, changedFolders, notifier)
 		}
 
-		command.HandleFolders(conf, engine, &logger, bgCtx, srv, notifier, scanPersister, scanStateAgg, featureFlags, configResolver)
+		command.HandleFolders(conf, engine, &logger, notifier, scanPersister, scanStateAgg, featureFlags, configResolver)
 		for _, f := range changedFolders {
 			if f.IsAutoScanEnabled() {
 				go f.ScanFolder(bgCtx)
@@ -638,15 +638,18 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		if err := addWorkspaceFolders(ctx, conf, &logger, engine, params); err != nil {
 			return nil, err
 		}
+
 		// Prime ORGANIZATION for hot-path GlobalOrg(); see GetGlobalOrganization.
 		// Must run before RefreshConfigFromLdxSync and HandleFolders, which rely
 		// on the resolver's global-org fallback for folders without a preferred org.
 		_ = types.GetGlobalOrganization(conf)
-		// withContext guarantees LdxSyncService is non-nil before any handler runs.
-		mustLdxSyncServiceFromContext(ctx).RefreshConfigFromLdxSync(ctx, conf, engine, &logger, config.GetWorkspace(conf).Folders(), nil)
+
 		if err := InitializeSettings(ctx, conf, engine, &logger, params.InitializationOptions); err != nil {
 			return nil, err
 		}
+
+		// withContext guarantees LdxSyncService is non-nil before any handler runs.
+		mustLdxSyncServiceFromContext(ctx).RefreshConfigFromLdxSync(ctx, conf, engine, &logger, config.GetWorkspace(conf).Folders(), nil)
 
 		startClientMonitor(params, logger)
 
@@ -654,7 +657,7 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		// goroutine reads this channel on its first message.
 		types.NewLspInitializedChannel(conf)
 		go createProgressListener(progress.ToServerProgressChannel, srv, &logger)
-		registerNotifier(conf, &logger, srv, mustNotifierFromContext(ctx))
+		registerNotifier(conf, engine, mustConfigResolverFromContext(ctx), &logger, srv, mustNotifierFromContext(ctx))
 
 		result := types.InitializeResult{
 			ServerInfo: types.ServerInfo{
@@ -724,6 +727,8 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 						types.SetNodeExpanded,
 						types.ShowScanErrorDetails,
 						types.UpdateFolderConfig,
+						types.DismissFeedbackBanner,
+						types.FeedbackBannerInteracted,
 					},
 				},
 			},
@@ -871,7 +876,7 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 		scanPersister := mustScanPersisterFromContext(ctx)
 		scanStateAgg := mustScanStateAggregatorFromContext(ctx)
 		ffService := mustFeatureFlagServiceFromContext(ctx)
-		command.HandleFolders(conf, engine, &logger, context.Background(), srv, notifier, scanPersister, scanStateAgg, ffService, configRes)
+		command.HandleFolders(conf, engine, &logger, notifier, scanPersister, scanStateAgg, ffService, configRes)
 
 		deleteExpiredCache(conf)
 		cacheCtx, cancel := context.WithCancel(context.Background())

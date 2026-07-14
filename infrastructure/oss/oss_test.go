@@ -159,7 +159,7 @@ func Test_FindRange(t *testing.T) {
 	const content = "0\n1\n2\n  implementation 'a:test:4.17.4'"
 
 	var p = "build.gradle"
-	node := getDependencyNode(engine.GetLogger(), types.FilePath(p), issue.PackageManager, issue.From, []byte(content))
+	node := getDependencyNode(engine.GetLogger(), types.FilePath(p), issue.PackageManager, issue.From, []byte(content), "")
 	foundRange := getRangeFromNode(node)
 
 	assert.Equal(t, 3, foundRange.Start.Line)
@@ -717,7 +717,7 @@ func TestCLIScanner_ostestScan_AddsFlagSetAndAllowsUnknownFlags(t *testing.T) {
 	}
 
 	workDir := types.FilePath(t.TempDir())
-	folderConfig := &types.FolderConfig{FolderPath: workDir}
+	folderConfig := &types.FolderConfig{FolderPath: workDir, ConfigResolver: testutil.DefaultConfigResolver(engine)}
 	path := types.FilePath(filepath.Join(string(workDir), "package.json"))
 
 	cmdWithoutFlag := []string{"snyk", "test"}
@@ -762,7 +762,7 @@ func TestCLIScanner_ostestScan_SetsSubprocessEnvironment(t *testing.T) {
 	}
 
 	workDir := types.FilePath(t.TempDir())
-	folderConfig := &types.FolderConfig{FolderPath: workDir}
+	folderConfig := &types.FolderConfig{FolderPath: workDir, ConfigResolver: testutil.DefaultConfigResolver(engine)}
 	targetPath := types.FilePath(filepath.Join(string(workDir), "package.json"))
 	cmd := []string{"snyk", "test"}
 	inputEnv := gotenv.Env{

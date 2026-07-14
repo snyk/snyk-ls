@@ -149,4 +149,11 @@ const (
 	// SettingConfigFileLegacy is the GAF-internal key for the config file path.
 	// GAF reads this key natively; we also write to UserGlobalKey(SettingConfigFile) for precedence.
 	SettingConfigFileLegacy = "configfile"
+	// SettingFeedbackBannerDismissed records that the user dismissed the tree view
+	// feedback banner. Persisted to storage so the dismissal survives restarts.
+	SettingFeedbackBannerDismissed = "internal.feedback.treeViewBanner.dismissed"
+	// SettingFeedbackBannerInteracted records that the user has interacted with the
+	// tree view this session. Not persisted: it keeps the feedback banner visible
+	// across re-renders once shown, and resets on restart.
+	SettingFeedbackBannerInteracted = "internal.feedback.treeViewBanner.interacted"
 )

@@ -43,6 +43,11 @@ type FolderData struct {
 	ReferenceFolderPath      string
 	IssueViewOptions         types.IssueViewOptions
 	ConsistentIgnoresEnabled bool
+	// AgentFixEnabled reports whether Snyk Agent Fix (Code autofix) is enabled for
+	// this folder's SAST settings. It gates the Snyk Code product's "fixable" info
+	// line: when Agent Fix is off we hide the line entirely rather than surface a
+	// fix the user cannot action.
+	AgentFixEnabled bool
 }
 
 // fileIconProvider is satisfied by issue data types that can supply a file-node icon
@@ -91,8 +96,22 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 		return TreeViewData{}
 	}
 
+	// Untrusted folders are represented only by the workspace-trust banner at the
+	// top of the tree (IDE-1882); they are not scanned, so we exclude them from
+	// the tree body. GetFolderTrust already accounts for trust_enabled (every
+	// folder is trusted when the feature is off), so this is a no-op banner-wise
+	// when trust is disabled.
+	_, untrusted := workspace.GetFolderTrust()
+	untrustedSet := make(map[types.FilePath]bool, len(untrusted))
+	for _, f := range untrusted {
+		untrustedSet[f.Path()] = true
+	}
+
 	var folderDataList []FolderData
 	for _, f := range folders {
+		if untrustedSet[f.Path()] {
+			continue
+		}
 		fip, ok := f.(snyk.FilteringIssueProvider)
 		if !ok {
 			continue
@@ -116,9 +135,21 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 		}
 		if cfg != nil {
 			fd.ConsistentIgnoresEnabled = cfg.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores)
-			if fd.DeltaEnabled {
-				conf := cfg.Conf()
-				if conf != nil {
+			if conf := cfg.Conf(); conf != nil {
+				// Agent Fix is gated per-folder here (each folder's Code node reflects its
+				// own SAST settings). This intentionally differs from the summary panel,
+				// which is workspace-wide and uses any-folder enablement
+				// (scanstates.HtmlRenderer.isAutofixEnabledInAnyFolder); in a multi-root
+				// workspace with mixed settings the two surfaces can legitimately disagree.
+				// Absent/nil SAST settings deliberately fall through to AgentFixEnabled=false
+				// (unknown == hidden). This is safe: the fixable line only renders after a
+				// completed Code scan (see buildProductNodes' enabled/scanRegistered gate),
+				// which cannot succeed without SAST settings being populated first.
+				if sast := types.GetSastSettings(conf, cfg.FolderPath); sast != nil {
+					fd.AgentFixEnabled = sast.AutofixEnabled
+				}
+
+				if fd.DeltaEnabled {
 					snapshot := types.ReadFolderConfigSnapshot(conf, cfg.FolderPath)
 					fd.BaseBranch = snapshot.BaseBranch
 					fd.LocalBranches = snapshot.LocalBranches
@@ -129,13 +160,75 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 		folderDataList = append(folderDataList, fd)
 	}
 
-	return b.BuildTreeFromFolderData(folderDataList)
+	// Force folder root nodes when the workspace has more than one folder, counting
+	// untrusted folders too. Otherwise excluding an untrusted folder could drop the
+	// trusted-folder count to one and collapse its root node (single-folder mode),
+	// hiding which projects are open while the trust banner is shown. (IDE-1882)
+	forceFolderNodes := len(folders) > 1
+	data := b.buildTreeBody(folderDataList, forceFolderNodes)
+
+	if len(untrusted) > 0 {
+		// Untrusted folders appear as dimmed, non-expandable folder nodes (no
+		// children -> no chevron) so the user can see every open project. The trust
+		// action lives in the banner, which is prepended above all folder nodes.
+		// (IDE-1882)
+		data.Nodes = append(data.Nodes, buildUntrustedFolderNodes(untrusted)...)
+		data.Nodes = append([]TreeNode{buildUntrustedFolderBanner(untrusted)}, data.Nodes...)
+	}
+
+	return data
+}
+
+// untrustedFolderRationale is the banner copy explaining why a folder must be
+// trusted before it is scanned. (IDE-1882)
+const untrustedFolderRationale = "When scanning for issues, Snyk may automatically execute code such as " +
+	"invoking the package manager to get dependency information. You should only scan folders you trust."
+
+// buildUntrustedFolderBanner builds the workspace-trust info banner node listing
+// the untrusted folder paths. The template renders the rationale, a Learn-more
+// link, and a per-folder Trust button keyed off FolderPaths. (IDE-1882)
+func buildUntrustedFolderBanner(untrusted []types.Folder) TreeNode {
+	paths := make([]string, 0, len(untrusted))
+	for _, f := range untrusted {
+		paths = append(paths, string(f.Path()))
+	}
+	return NewTreeNode(NodeTypeInfo, untrustedFolderRationale,
+		WithID("info:untrusted-folder"),
+		WithInfoVariant("untrusted-folder"),
+		WithFolderPaths(paths),
+	)
+}
+
+// buildUntrustedFolderNodes builds a dimmed, non-expandable folder node per
+// untrusted folder. They carry no children, so the template renders no chevron
+// and they cannot be expanded; the banner remains the place to trust them. The
+// node IDs match the trusted folder convention so expand/selection state stays
+// consistent if a folder is later trusted. (IDE-1882)
+func buildUntrustedFolderNodes(untrusted []types.Folder) []TreeNode {
+	nodes := make([]TreeNode, 0, len(untrusted))
+	for _, f := range untrusted {
+		nodes = append(nodes, NewTreeNode(NodeTypeFolder, f.Name(),
+			WithID(fmt.Sprintf("folder:%s", f.Path())),
+			WithFilePath(f.Path()),
+			WithUntrusted(true),
+		))
+	}
+	return nodes
 }
 
 // BuildTreeFromFolderData builds the tree from pre-fetched folder data.
 func (b *TreeBuilder) BuildTreeFromFolderData(folders []FolderData) TreeViewData {
+	return b.buildTreeBody(folders, false)
+}
+
+// buildTreeBody builds the folder/product node hierarchy. forceFolderNodes makes
+// every folder render with its own root node even in single-folder mode; BuildTree
+// sets it when the workspace has more than one folder so excluding untrusted
+// folders (shown only in the banner) doesn't collapse the remaining trusted
+// folder's root node. (IDE-1882)
+func (b *TreeBuilder) buildTreeBody(folders []FolderData, forceFolderNodes bool) TreeViewData {
 	b.pendingAutoExpand = nil
-	multiRoot := len(folders) > 1
+	multiRoot := len(folders) > 1 || forceFolderNodes
 	data := TreeViewData{
 		MultiRoot: multiRoot,
 	}
@@ -209,6 +302,19 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 		}
 	}
 
+	// Group unfiltered issues by product too, so we can tell when the active
+	// filters are hiding every issue for a product (→ filter-aware empty state).
+	allByProduct := make(map[product.Product]snyk.IssuesByFile)
+	for path, issues := range fd.AllIssues {
+		for _, issue := range issues {
+			p := issue.GetProduct()
+			if allByProduct[p] == nil {
+				allByProduct[p] = make(snyk.IssuesByFile)
+			}
+			allByProduct[p][path] = append(allByProduct[p][path], issue)
+		}
+	}
+
 	// Product ordering matches native IntelliJ tree: Open Source → Code Security Infrastructure As Code + Secrets
 	productOrder := []product.Product{
 		product.ProductOpenSource,
@@ -223,6 +329,10 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 		allIssues := flattenIssues(pIssues)
 		stats := computeIssueStats(allIssues)
 		totalIssues := len(stats.uniqueIssues)
+
+		// True when this scanner has findings but the active filters hide them all.
+		unfilteredCount := len(computeIssueStats(flattenIssues(allByProduct[p])).uniqueIssues)
+		hiddenByFilter := totalIssues == 0 && unfilteredCount > 0
 
 		// Determine whether this product is enabled via SupportedIssueTypes
 		enabled := isProductEnabled(p, fd.SupportedIssueTypes)
@@ -255,21 +365,46 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 		} else if scanError != "" {
 			desc = productScanErrorDescription(scanError)
 		} else if scanRegistered {
-			desc = "- " + productDescription(p, totalIssues, stats.severityCounts)
+			if totalIssues == 0 {
+				// Zero visible issues: the row shows just a ✅ tick (with a
+				// "No issues found" tooltip). The explanatory text — including the
+				// filter-aware variant — lives on the expandable child info node.
+				desc = "✅"
+			} else {
+				desc = "- " + productDescription(p, totalIssues, stats.severityCounts)
+			}
 		}
 		// else: no scan registered yet → empty description (initial state)
+
+		// Hover tooltip explaining a non-running scanner. The copy is tailored to
+		// *why* it isn't running so the user knows what (if anything) they can do
+		// about it. Mirrors the description precedence above (settings-disabled
+		// wins over error, since a product turned off in settings never scans).
+		var tooltip string
+		if !enabled {
+			tooltip = productSettingsDisabledTooltip(p)
+		} else if scanError != "" {
+			tooltip = productDisabledTooltip(p, scanError)
+		} else if scanRegistered && !scanning && totalIssues == 0 {
+			// Surfaces the ✅ tick's meaning on hover; the child node carries any
+			// filter-aware detail.
+			tooltip = "No issues found"
+		}
 
 		// Build children: info nodes first, then file nodes (only for enabled products with completed scans)
 		productKey := fmt.Sprintf("product:%s:%s", fd.FolderPath, p)
 		var children []TreeNode
 		if enabled && scanRegistered && !scanning && scanError == "" {
 			children = append(children, b.buildInfoNodes(infoNodeContext{
+				product:                  p,
 				parentKey:                productKey,
 				totalIssues:              totalIssues,
 				fixableCount:             stats.fixableCount,
 				ignoredCount:             stats.ignoredCount,
 				issueViewOptions:         fd.IssueViewOptions,
 				consistentIgnoresEnabled: fd.ConsistentIgnoresEnabled,
+				agentFixEnabled:          fd.AgentFixEnabled,
+				hiddenByFilter:           hiddenByFilter,
 			})...)
 
 			if totalIssues > 0 {
@@ -288,6 +423,7 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 			WithIssueCount(totalIssues),
 			WithEnabled(&enabled),
 			WithErrorMessage(scanError),
+			WithTooltip(tooltip),
 			WithChildren(children),
 		)
 		productNodes = append(productNodes, productNode)
@@ -314,12 +450,19 @@ func isProductEnabled(p product.Product, supportedTypes map[product.FilterableIs
 
 // infoNodeContext carries the data needed to build info child nodes for a product.
 type infoNodeContext struct {
+	product                  product.Product
 	parentKey                string
 	totalIssues              int
 	fixableCount             int
 	ignoredCount             int
 	issueViewOptions         types.IssueViewOptions
 	consistentIgnoresEnabled bool
+	// agentFixEnabled reflects FolderData.AgentFixEnabled; only consulted for the
+	// Snyk Code product (see showFixableLine).
+	agentFixEnabled bool
+	// hiddenByFilter is true when the scanner has issues but the active filters
+	// hide all of them, so the empty-state text reads "...with these filters".
+	hiddenByFilter bool
 }
 
 // buildInfoNodes creates info child nodes for a product, matching IntelliJ addInfoTreeNodes().
@@ -327,50 +470,84 @@ func (b *TreeBuilder) buildInfoNodes(ctx infoNodeContext) []TreeNode {
 	var infoNodes []TreeNode
 
 	if ctx.totalIssues == 0 {
+		// Single empty-state row. zeroIssuesText already conveys the filter/
+		// issue-view situation ("No issues found", "...with these filters",
+		// "...open issues are disabled"), so no separate "Adjust your settings"
+		// hint is needed.
 		infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, b.zeroIssuesText(ctx),
 			WithID(fmt.Sprintf("info:%s:congrats", ctx.parentKey))))
-
-		if hint := b.issueViewOptionsHint(ctx); hint != "" {
-			infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, hint,
-				WithID(fmt.Sprintf("info:%s:ivo-hint", ctx.parentKey))))
-		}
 	} else {
 		infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, b.issueCountText(ctx),
 			WithID(fmt.Sprintf("info:%s:count", ctx.parentKey))))
 
-		// Fixable line
-		if ctx.fixableCount > 0 {
-			fixWord := "issues are"
-			if ctx.fixableCount == 1 {
-				fixWord = "issue is"
+		// Fixable line — only shown for scanners where automatic fixing is something
+		// the user can action (see showFixableLine).
+		if showFixableLine(ctx) {
+			if ctx.fixableCount > 0 {
+				fixWord := "issues are"
+				if ctx.fixableCount == 1 {
+					fixWord = "issue is"
+				}
+				infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo,
+					fmt.Sprintf("⚡ %d %s fixable automatically.", ctx.fixableCount, fixWord),
+					WithID(fmt.Sprintf("info:%s:fixable", ctx.parentKey))))
+			} else {
+				infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, "There are no issues automatically fixable.",
+					WithID(fmt.Sprintf("info:%s:fixable", ctx.parentKey))))
 			}
-			infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo,
-				fmt.Sprintf("⚡ %d %s fixable automatically.", ctx.fixableCount, fixWord),
-				WithID(fmt.Sprintf("info:%s:fixable", ctx.parentKey))))
-		} else {
-			infoNodes = append(infoNodes, NewTreeNode(NodeTypeInfo, "There are no issues automatically fixable.",
-				WithID(fmt.Sprintf("info:%s:fixable", ctx.parentKey))))
 		}
 	}
 
 	return infoNodes
 }
 
+// showFixableLine decides whether a scanner's "fixable" info line is shown. We
+// only surface it where automatic fixing is something the user can act on:
+//   - Snyk Code: only when Agent Fix (autofix) is enabled for the folder. When it
+//     is disabled the line is hidden entirely, since the "fixable automatically"
+//     count is not actionable.
+//   - Open Source: always — upgrade-based fixability is available whenever OSS
+//     scanning runs, independent of Agent Fix.
+//   - IaC / Secrets: never — they have no automatic-fix concept (IsFixable is
+//     always false), so the line would only ever read "no issues automatically
+//     fixable", which is noise.
+//
+// This switch encodes per-product fixability knowledge. When a new product or fix
+// mechanism is added, update this switch — and keep it consistent with the
+// summary panel's Agent-Fix logic (scanstates/summary_html.go), which makes the
+// equivalent decision for the workspace-wide summary.
+func showFixableLine(ctx infoNodeContext) bool {
+	switch ctx.product {
+	case product.ProductCode:
+		return ctx.agentFixEnabled
+	case product.ProductOpenSource:
+		return true
+	default:
+		return false
+	}
+}
+
+// zeroIssuesText is the label for the child info node shown under a scanner with
+// no visible issues. No emoji — the ✅ tick lives on the parent scanner row; this
+// is the explanatory text revealed on expand.
 func (b *TreeBuilder) zeroIssuesText(ctx infoNodeContext) string {
+	if ctx.hiddenByFilter {
+		return "No issues found with these filters"
+	}
 	if !ctx.consistentIgnoresEnabled {
-		return "✅ Congrats! No issues found!"
+		return "No issues found"
 	}
 	ivo := ctx.issueViewOptions
 	if ivo.OpenIssues && !ivo.IgnoredIssues {
-		return "✅ Congrats! No open issues found!"
+		return "No open issues found"
 	}
 	if !ivo.OpenIssues && ivo.IgnoredIssues {
-		return "✋ No ignored issues, open issues are disabled"
+		return "No ignored issues, open issues are disabled"
 	}
 	if !ivo.OpenIssues && !ivo.IgnoredIssues {
 		return "Open and Ignored issues are disabled!"
 	}
-	return "✅ Congrats! No issues found!"
+	return "No issues found"
 }
 
 func (b *TreeBuilder) issueCountText(ctx infoNodeContext) string {
@@ -401,19 +578,6 @@ func (b *TreeBuilder) issueCountText(ctx infoNodeContext) string {
 	return "Open and Ignored issues are disabled!"
 }
 
-func (b *TreeBuilder) issueViewOptionsHint(ctx infoNodeContext) string {
-	if !ctx.consistentIgnoresEnabled {
-		return ""
-	}
-	if !ctx.issueViewOptions.OpenIssues {
-		return "Adjust your settings to view Open issues."
-	}
-	if !ctx.issueViewOptions.IgnoredIssues {
-		return "Adjust your settings to view Ignored issues."
-	}
-	return ""
-}
-
 func pluralize(count int, singular string) string {
 	if count == 1 {
 		return fmt.Sprintf("%d %s", count, singular)
@@ -428,7 +592,7 @@ func productDescription(p product.Product, totalIssues int, counts *SeverityCoun
 		return "No issues found"
 	}
 
-	countWord := productCountWord(p, totalIssues)
+	word := countWord(totalIssues)
 	var parts []string
 	if counts.Critical > 0 {
 		parts = append(parts, fmt.Sprintf("%d critical", counts.Critical))
@@ -444,19 +608,15 @@ func productDescription(p product.Product, totalIssues int, counts *SeverityCoun
 	}
 
 	if len(parts) == 0 {
-		return fmt.Sprintf("%d %s", totalIssues, countWord)
+		return fmt.Sprintf("%d %s", totalIssues, word)
 	}
-	return fmt.Sprintf("%d %s: %s", totalIssues, countWord, strings.Join(parts, ", "))
+	return fmt.Sprintf("%d %s: %s", totalIssues, word, strings.Join(parts, ", "))
 }
 
-// productCountWord returns "vulnerabilities"/"vulnerability" for OSS, "issues"/"issue" for Code/IaC.
-func productCountWord(p product.Product, count int) string {
-	if p == product.ProductOpenSource {
-		if count == 1 {
-			return "unique vulnerability"
-		}
-		return "unique vulnerabilities"
-	}
+// countWord returns the singular/plural noun for an issue count. All products
+// use "issue"/"issues" for consistency across scanner rows (OSS previously said
+// "unique vulnerabilities").
+func countWord(count int) string {
 	if count == 1 {
 		return "issue"
 	}
@@ -529,7 +689,7 @@ func (b *TreeBuilder) buildFileNodes(issuesByFile snyk.IssuesByFile, folderPath 
 		uniqueCount := len(types.DeduplicateByFingerprint(issues))
 
 		relPath := computeRelativePath(path, folderPath)
-		desc := fileDescription(p, uniqueCount)
+		desc := fileDescription(uniqueCount)
 
 		// Only Open Source file nodes get a file icon (package manager SVG).
 		// Non-OSS products (Code, IaC, Secrets) intentionally omit the icon.
@@ -557,10 +717,9 @@ func (b *TreeBuilder) buildFileNodes(issuesByFile snyk.IssuesByFile, folderPath 
 	return fileNodes
 }
 
-// fileDescription returns product-aware text: "N vulnerabilities" for OSS, "N issues" for Code/IaC.
-func fileDescription(p product.Product, count int) string {
-	word := productCountWord(p, count)
-	return fmt.Sprintf("%d %s", count, word)
+// fileDescription returns the issue-count text for a file node, e.g. "3 issues".
+func fileDescription(count int) string {
+	return fmt.Sprintf("%d %s", count, countWord(count))
 }
 
 // buildIssueNodes creates issue-level nodes, sorted by priority (severity + product score).
@@ -728,7 +887,10 @@ func computeRelativePath(filePath types.FilePath, folderPath types.FilePath) str
 	if err != nil {
 		return string(filePath)
 	}
-	return rel
+	// relPath is display-only (node label). Convert backslashes to forward
+	// slashes so the JS middle-truncation logic (which scans for '/') works
+	// correctly on Windows.
+	return filepath.ToSlash(rel)
 }
 
 // sortIssuesByPriority sorts issues by descending priority (highest severity first,
@@ -774,4 +936,33 @@ func productScanErrorDescription(scanError string) string {
 		return "- " + meta.TreeRootSuffix
 	}
 	return "- (scan failed)"
+}
+
+// productSettingsDisabledTooltip is the hint for a scanner turned off via plugin
+// settings. Used both when the product toggle is off (enabled == false) and when
+// a scanner reports it's disabled for the folder — folder config is part of the
+// plugin settings, so the user sees one consistent message either way.
+func productSettingsDisabledTooltip(p product.Product) string {
+	return fmt.Sprintf("%s scanning is disabled in Snyk plugin settings. Click the gear icon to re-enable it.", productDisplayName(p))
+}
+
+// productDisabledTooltip returns the hover hint for a scanner that produced a
+// scan error. The wording is tailored to *why* it didn't run so the user knows
+// whether they can act on it:
+//   - org/entitlement disablement ("…not enabled for this organization") is not
+//     self-serve, so the copy points the user at their org admin.
+//   - folder-level disablement is a plugin-settings choice (folder config), so it
+//     reuses the same settings message as the product toggle being off.
+//   - anything else is a genuine scan failure the user can inspect via the
+//     click-to-open error overlay.
+func productDisabledTooltip(p product.Product, scanError string) string {
+	switch scanError {
+	case utils.ErrSnykCodeNotEnabled, utils.ErrSnykSecretsNotEnabled:
+		return fmt.Sprintf("%s is disabled for your Snyk organization. Contact your org admin if you expected it to be available.", productDisplayName(p))
+	case utils.ErrSnykCodeNotEnabledForFolder, utils.ErrSnykSecretsNotEnabledForFolder,
+		utils.ErrSnykIacNotEnabledForFolder, utils.ErrSnykOssNotEnabledForFolder:
+		return productSettingsDisabledTooltip(p)
+	default:
+		return fmt.Sprintf("%s couldn't be scanned. Click for details.", productDisplayName(p))
+	}
 }

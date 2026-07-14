@@ -156,6 +156,26 @@ func Test_Scan_CancelledContext_DoesNotScan(t *testing.T) {
 	assert.False(t, cliMock.WasExecuted())
 }
 
+// Test_Scan_EmptyCliOutput_ReturnsNoIssues verifies that when the CLI exits 0 with empty
+// stdout (e.g. the scanned directory contains no IaC files), Scan returns an empty issue
+// list rather than a "Cannot unmarshal: unexpected end of JSON input" error.
+// Regression test for IDE-2105.
+func Test_Scan_EmptyCliOutput_ReturnsNoIssues(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	dir := t.TempDir()
+
+	cliMock := cli.NewTestExecutorWithResponse(engine, "")
+	scanner := New(engine.GetConfiguration(), engine.GetLogger(), performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, defaultResolver(engine))
+	ctx := ctx2.NewContextWithFolderConfig(t.Context(), &types.FolderConfig{FolderPath: types.FilePath(dir)})
+
+	issues, err := scanner.Scan(ctx, types.FilePath(dir))
+
+	assert.NoError(t, err)
+	assert.NotNil(t, issues)
+	assert.Empty(t, issues)
+	assert.True(t, cliMock.WasExecuted(), "CLI should be invoked before the empty-output guard fires")
+}
+
 func Test_Scan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
 	engine := testutil.UnitTest(t)
 

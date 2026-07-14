@@ -737,7 +737,7 @@ func setupMockOrgSetAndGet(t *testing.T, setCallCounter *int, fakeSlugToUUIDReso
 	// Track last_set_organization in GAF. SetOrganization writes wrap values in
 	// *configresolver.LocalConfigField{Changed:true}; the redundant-set check reads via
 	// types.GetGlobalString, which walks remote-machine -> user-global -> default. We
-	// stub the wrapper-internal Get calls accordingly.
+	// stub the wrapper-internal Get calls accordingly for last_set_organization.
 	var lastSetOrg string
 	lastSetOrgKey := configresolver.UserGlobalKey(types.SettingLastSetOrganization)
 	mockConfig.EXPECT().
@@ -770,11 +770,6 @@ func setupMockOrgSetAndGet(t *testing.T, setCallCounter *int, fakeSlugToUUIDReso
 				lastSetOrg = s
 			}
 		}).
-		AnyTimes()
-
-	// SetOrganization also sets UserGlobalKey(SettingOrganization) for /rest/self-free reads.
-	mockConfig.EXPECT().
-		Set(configresolver.UserGlobalKey(types.SettingOrganization), gomock.Any()).
 		AnyTimes()
 
 	return mockConfig
@@ -979,6 +974,38 @@ func TestSetupStorage_FlushesPreInitOAuthTokenToNewStorage(t *testing.T) {
 		// Assert: file has fresh token (syncTokenRefresh will read this file directly)
 		assertFileHasFreshToken(t, s)
 	})
+}
+
+// TestFeedbackBanner_DismissedPersists_InteractedSessionOnly verifies the load-bearing split:
+// the dismissal flag is written to storage (so it survives a restart) while the interacted flag
+// is kept in memory only (so the banner reappears in a later session until dismissed).
+func TestFeedbackBanner_DismissedPersists_InteractedSessionOnly(t *testing.T) {
+	engine, _ := initEngineForConfigTest(t)
+	conf := engine.GetConfiguration()
+	logger := zerolog.Nop()
+
+	storageFile := filepath.Join(t.TempDir(), "ls-config.json")
+	s, err := storage.NewStorageWithCallbacks(storage.WithStorageFile(storageFile))
+	require.NoError(t, err)
+
+	SetupStorage(conf, s, &logger)
+
+	SetFeedbackBannerInteracted(conf)
+	SetFeedbackBannerDismissed(conf)
+
+	// Read the backing file through a fresh configuration to simulate a restart.
+	require.Eventually(t, func() bool {
+		fileConf := configuration.NewWithOpts()
+		if refreshErr := s.Refresh(fileConf, types.SettingFeedbackBannerDismissed); refreshErr != nil {
+			return false
+		}
+		return fileConf.GetBool(types.SettingFeedbackBannerDismissed)
+	}, 5*time.Second, 10*time.Millisecond, "dismissal must persist to storage so it survives a restart")
+
+	fileConf := configuration.NewWithOpts()
+	require.NoError(t, s.Refresh(fileConf, types.SettingFeedbackBannerInteracted))
+	assert.False(t, fileConf.GetBool(types.SettingFeedbackBannerInteracted),
+		"interacted flag must not persist; it resets each session")
 }
 
 // TestSetupStorage_EmptyPreInitToken_LoadsFromFile verifies that when no pre-init refresh

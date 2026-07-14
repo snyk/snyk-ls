@@ -22,6 +22,14 @@ import (
 	"github.com/spf13/pflag"
 )
 
+// AnnotationAlwaysSend marks a folder-scope setting that must be included in the
+// LspFolderConfig payload even when its value is the (zero) default — see
+// ToLspFolderConfig. Without it, isMeaningfulValue would drop a zero-valued
+// numeric setting, so e.g. resetting the risk-score threshold to 0 would never
+// reach an open settings window. Set to "true" at registration so the policy
+// lives with the setting rather than as a hardcoded name in the shared converter.
+const AnnotationAlwaysSend = "config.alwaysSend"
+
 // RegisterAllConfigurations registers all snyk-ls configuration flags with their annotations
 // into the given FlagSet. Flags are annotated with config.scope, config.remoteKey,
 // config.displayName, config.description, and config.ideKey for framework integration.
@@ -214,6 +222,8 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationRemoteKey:   {"risk_score_threshold"},
 		configresolver.AnnotationDisplayName: {"Risk Score Threshold"},
 		configresolver.AnnotationDescription: {"Minimum risk score for findings (0-1000)"},
+		// Always send, even at its 0 default, so a reset to 0 syncs to the IDE.
+		AnnotationAlwaysSend: {"true"},
 	})
 	registerFlag(fs, SettingCweIds, "", "CWE IDs filter", map[string][]string{
 		configresolver.AnnotationScope:       {folderScope},
