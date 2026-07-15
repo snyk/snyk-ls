@@ -248,13 +248,13 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	ctx, cancel := context.WithCancel(s.Context())
 	defer cancel()
 
-	p := progress.NewTracker(true, cliScanner.engine.GetLogger())
+	// Use workspace folder from folderConfig for CLI execution (org lookup, etc.)
+	workspaceFolder := folderConfig.FolderPath
+
+	p := progress.NewScanTracker(true, cliScanner.engine.GetLogger(), workspaceFolder)
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
 	p.BeginUnquantifiableLength("Scanning for Snyk Open Source issues", string(path))
 	defer p.EndWithMessage("Snyk Open Source scan completed.")
-
-	// Use workspace folder from folderConfig for CLI execution (org lookup, etc.)
-	workspaceFolder := folderConfig.FolderPath
 
 	// cancel running scans on same workspace folder
 	cliScanner.mutex.Lock()
