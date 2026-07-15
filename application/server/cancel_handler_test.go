@@ -68,7 +68,6 @@ func (f *fakeScanner) registered() map[types.FilePath]func() {
 // exercised end-to-end.
 func TestHandleWindowWorkDoneProgressCancel_ScanToken_RegistersBeforeCancel(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
 
 	folderA := types.FilePath(t.TempDir())
 	folderB := types.FilePath(t.TempDir())
@@ -88,7 +87,6 @@ func TestHandleWindowWorkDoneProgressCancel_ScanToken_RegistersBeforeCancel(t *t
 
 	_, err := handleWindowWorkDoneProgressCancel(ctx,
 		types.WorkdoneProgressCancelParams{Token: token},
-		conf,
 	)
 	require.NoError(t, err)
 
@@ -110,7 +108,6 @@ func TestHandleWindowWorkDoneProgressCancel_ScanToken_RegistersBeforeCancel(t *t
 // callback. The cancel must still fire so the download stops.
 func TestHandleWindowWorkDoneProgressCancel_NonScanToken_NoRegistration(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
 
 	folderA := types.FilePath(t.TempDir())
 	_, _ = workspaceutil.SetupWorkspace(t, engine, folderA)
@@ -129,7 +126,6 @@ func TestHandleWindowWorkDoneProgressCancel_NonScanToken_NoRegistration(t *testi
 
 	_, err := handleWindowWorkDoneProgressCancel(ctx,
 		types.WorkdoneProgressCancelParams{Token: token},
-		conf,
 	)
 	require.NoError(t, err)
 
@@ -144,7 +140,6 @@ func TestHandleWindowWorkDoneProgressCancel_NonScanToken_NoRegistration(t *testi
 // in-flight SetScanDone writes. It should log and return cleanly.
 func TestHandleWindowWorkDoneProgressCancel_ScanToken_NoScanner_NoSyncFallback(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	conf := engine.GetConfiguration()
 
 	folderA := types.FilePath(t.TempDir())
 	_, _ = workspaceutil.SetupWorkspace(t, engine, folderA)
@@ -161,7 +156,6 @@ func TestHandleWindowWorkDoneProgressCancel_ScanToken_NoScanner_NoSyncFallback(t
 
 	_, err := handleWindowWorkDoneProgressCancel(ctx,
 		types.WorkdoneProgressCancelParams{Token: token},
-		conf,
 	)
 	require.NoError(t, err)
 

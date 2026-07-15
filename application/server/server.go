@@ -1183,14 +1183,14 @@ func textDocumentHover() jrpc2.Handler {
 
 func windowWorkDoneProgressCancelHandler(conf configuration.Configuration) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params types.WorkdoneProgressCancelParams) (any, error) {
-		return handleWindowWorkDoneProgressCancel(ctx, params, conf)
+		return handleWindowWorkDoneProgressCancel(ctx, params)
 	})
 }
 
 // handleWindowWorkDoneProgressCancel is the testable body of
 // windowWorkDoneProgressCancelHandler. Kept as a free function so integration
 // tests can drive it without going through jrpc2.Handler indirection.
-func handleWindowWorkDoneProgressCancel(ctx context.Context, params types.WorkdoneProgressCancelParams, conf configuration.Configuration) (any, error) {
+func handleWindowWorkDoneProgressCancel(ctx context.Context, params types.WorkdoneProgressCancelParams) (any, error) {
 	logger := ctx2.LoggerFromContext(ctx)
 	logger.Debug().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
 
