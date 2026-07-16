@@ -380,6 +380,62 @@ func TestIsAuthenticated_ConcurrentCallsSendOnlyOneNotification(t *testing.T) {
 		"concurrent IsAuthenticated() calls should make exactly one auth API call via singleflight, not one per caller")
 }
 
+// reentrantAuthCheckProvider's check function calls back into the same
+// AuthenticationService.IsAuthenticated(), synchronously and from the same goroutine,
+// before returning. This simulates the OAuth token refresher closure
+// (auth_configuration.go) calling authenticationService.IsAuthenticated() when a token
+// refresh fails while the original IsAuthenticated() call is still in flight for the
+// same token (IDE-2178).
+type reentrantAuthCheckProvider struct {
+	service AuthenticationService
+}
+
+func (p *reentrantAuthCheckProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
+	return func(_ workflow.Engine) (string, error) {
+		p.service.IsAuthenticated()
+		return "", pkgerrors.New("token refresh failed")
+	}
+}
+
+func (p *reentrantAuthCheckProvider) Authenticate(_ context.Context) (string, error) { return "", nil }
+func (p *reentrantAuthCheckProvider) ClearAuthentication(_ context.Context) error    { return nil }
+func (p *reentrantAuthCheckProvider) AuthURL(_ context.Context) string               { return "" }
+func (p *reentrantAuthCheckProvider) setAuthUrl(_ string)                            {}
+func (p *reentrantAuthCheckProvider) AuthenticationMethod() types.AuthenticationMethod {
+	return types.FakeAuthentication
+}
+
+// TestIsAuthenticated_ReentrantCallDoesNotDeadlock proves/disproves the theory that a
+// reentrant call into IsAuthenticated() for the same token, made from within the
+// authCheckGroup.Do() closure in doAuthCheck() (as the OAuth refresher closure does on
+// refresh failure), self-deadlocks on the singleflight.Group: the inner call blocks
+// waiting for the outer, still-executing call for the same key to finish, but the outer
+// call can't finish until the inner one (running on the same goroutine) returns.
+func TestIsAuthenticated_ReentrantCallDoesNotDeadlock(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
+	ts.SetToken(engine.GetConfiguration(), "some-test-token")
+
+	provider := &reentrantAuthCheckProvider{}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+	provider.service = service
+
+	done := make(chan bool, 1)
+	go func() {
+		done <- service.IsAuthenticated()
+	}()
+
+	select {
+	case <-done:
+		// IsAuthenticated() returned - no deadlock.
+	case <-time.After(3 * time.Second):
+		t.Fatal("IsAuthenticated() did not return within 3s: a reentrant call into " +
+			"IsAuthenticated() for the same token, from within doAuthCheck()'s " +
+			"authCheckGroup.Do() closure, deadlocks on singleflight.Group because the " +
+			"outer call can never complete while the same goroutine blocks waiting on it")
+	}
+}
+
 func Test_IsAuthenticated(t *testing.T) {
 	t.Run("User is authenticated", func(t *testing.T) {
 		engine, ts := testutil.UnitTestWithEngine(t)
