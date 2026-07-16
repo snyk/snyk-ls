@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"reflect"
 	"strings"
@@ -32,6 +33,7 @@ import (
 
 	"github.com/erni27/imcache"
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -836,6 +838,14 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 	errMsg := strings.ToLower(err.Error())
 
 	if isPermanentOAuthRefreshError(errMsg) {
+		return true
+	}
+
+	// A structured Snyk API error with a definitive auth status code is a permanent failure,
+	// even though http.Client.Do always wraps it in a *url.Error (which isTransientNetworkError
+	// would otherwise treat as transient network noise).
+	var snykErr snyk_errors.Error
+	if errors.As(err, &snykErr) && (snykErr.StatusCode == http.StatusUnauthorized || snykErr.StatusCode == http.StatusBadRequest) {
 		return true
 	}
 

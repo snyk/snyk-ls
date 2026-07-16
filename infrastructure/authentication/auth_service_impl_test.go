@@ -32,6 +32,7 @@ import (
 	"github.com/golang/mock/gomock"
 	pkgerrors "github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -549,6 +550,14 @@ func Test_shouldCauseLogout(t *testing.T) {
 		tokenURLErr := &url.Error{Op: "Post", URL: "https://api.snyk.io/oauth2/token", Err: netErr}
 		selfURLErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: tokenURLErr}
 		assert.False(t, shouldCauseLogout(buildWhoamiErr(selfURLErr), &logger))
+	})
+
+	t.Run("permanent 401 snyk_errors.Error wrapped in url.Error causes logout", func(t *testing.T) {
+		// Mirrors what http.Client.Do returns for a real, permanent 401: it always wraps the
+		// RoundTripper error in *url.Error, regardless of whether the cause is transient or not.
+		snykErr := snyk_errors.Error{StatusCode: 401, Title: "Authentication error"}
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self?version=2024-04-22", Err: snykErr}
+		assert.True(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
 	})
 }
 
