@@ -88,12 +88,6 @@ type AuthenticationServiceImpl struct {
 	// authCheckGroup coalesces concurrent auth API calls so only one in-flight request
 	// is made at a time; all waiters share the same result.
 	authCheckGroup singleflight.Group
-	// inFlightAuthChecks tracks tokens currently inside authCheckGroup.Do. A reentrant
-	// IsAuthenticated() call for the same token (e.g. the OAuth refresher invoking it again
-	// after a failed refresh, while the original check for that token is still running)
-	// would block forever on singleflight.Group, since the "in-flight" call is the very
-	// goroutine waiting on it. Detect that case here and short-circuit instead of deadlocking.
-	inFlightAuthChecks sync.Map
 	// credentialUpdateChan serializes credential updates from the OAuth storage bridge
 	// to prevent race conditions where older tokens overwrite newer ones during rapid rotations.
 	credentialUpdateChan chan credentialUpdate
@@ -715,12 +709,6 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 
 	// Coalesce concurrent auth API calls: all in-flight callers share one result.
 	token := config.GetToken(conf)
-	if _, alreadyInFlight := a.inFlightAuthChecks.LoadOrStore(token, struct{}{}); alreadyInFlight {
-		logger.Debug().Msg("auth check already in flight for this token, skipping reentrant call")
-		return false
-	}
-	defer a.inFlightAuthChecks.Delete(token)
-
 	v, _, _ := a.authCheckGroup.Do(token, func() (interface{}, error) {
 		u, e := a.authProvider.GetCheckAuthenticationFunction()(a.engine)
 		return &authCheckResult{user: u, err: e}, nil

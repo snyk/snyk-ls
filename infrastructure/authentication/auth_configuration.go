@@ -81,9 +81,6 @@ func Default(engine workflow.Engine, authenticationService AuthenticationService
 		refreshToken, err := auth.RefreshToken(ctx, oauthConfig, token)
 		if err != nil {
 			logger.Err(err).Msg("failed to refresh oauth2 token")
-			// call authservice to handle notifications and such
-			// we don't need the returned values, as we know it will either return false, nil or false, err
-			_ = authenticationService.IsAuthenticated()
 		}
 		return refreshToken, err
 	}
