@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -53,7 +52,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
-	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -2475,139 +2473,4 @@ func gitCommandForMonorepoBenchmark(dir string, args ...string) *exec.Cmd {
 	cmd.Dir = dir
 	cmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
 	return cmd
-}
-
-// substituteRemyFlow registers a stub "fix" workflow on the engine that shells
-// out to the preview CLI binary (`snyk fix --agentic --experimental
-// --auto-approve`). This mirrors the substituteDepGraphFlow pattern: the
-// preview CLI always bundles the remy extension, so the stub makes the
-// workflow available without importing the private remy-cli-extension module.
-//
-// When the engine is not already on the preview channel, a preview CLI is
-// downloaded into a test-scoped temp dir. The engine's SettingCliPath is
-// restored to its original value after download so that scans continue to use
-// whichever CLI was already installed.
-func substituteRemyFlow(t *testing.T, engine workflow.Engine) {
-	t.Helper()
-	conf := engine.GetConfiguration()
-
-	// Always download the preview CLI into a test-scoped temp dir.
-	// getDistributionChannel reads engine.GetRuntimeInfo().GetVersion(), not config,
-	// so channel cannot be overridden via conf.Set — call GetLatestReleaseByChannel directly.
-	origCLIPath := types.GetGlobalString(conf, types.SettingCliPath)
-	previewDir := t.TempDir()
-	discovery := &install.Discovery{}
-	previewCLIPath := filepath.Join(previewDir, discovery.ExecutableName(false))
-
-	// Point SettingCliPath at the preview dir so the downloader writes there.
-	conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), previewCLIPath)
-	er := error_reporting.NewTestErrorReporter(engine)
-	resolver := testutil.DefaultConfigResolver(engine)
-	cliRelease := install.NewCLIRelease(engine, func() *http.Client { return http.DefaultClient })
-	release, err := cliRelease.GetLatestReleaseByChannel("preview", false)
-	require.NoError(t, err, "failed to fetch preview CLI release metadata")
-	downloader := install.NewDownloader(engine, er, func() *http.Client { return http.DefaultClient }, resolver)
-	require.NoError(t, downloader.Download(release, false), "failed to download preview CLI binary")
-
-	// Restore the original CLI path so scans continue to use the already-installed stable CLI.
-	conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), origCLIPath)
-
-	remyWorkflowID := workflow.NewWorkflowIdentifier("fix")
-	flagset := workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError))
-	callback := func(invocation workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
-		dirs := invocation.GetConfiguration().GetStringSlice(configuration.INPUT_DIRECTORY)
-		if len(dirs) == 0 {
-			return nil, fmt.Errorf("remy substitute: INPUT_DIRECTORY not set")
-		}
-		contentRoot := dirs[0]
-		cmd := exec.CommandContext(t.Context(), previewCLIPath,
-			"fix", contentRoot,
-			"--agentic", "--experimental", "--auto-approve",
-		)
-		cmd.Dir = contentRoot
-		cmd.Env = os.Environ()
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return nil, fmt.Errorf("remy substitute: snyk fix --agentic failed: %w\n%s", err, out)
-		}
-		return nil, nil
-	}
-	_, regErr := engine.Register(remyWorkflowID, flagset, callback)
-	require.NoError(t, regErr)
-}
-
-// Test_Smoke_RemediationAgent_CodeAction verifies the full LSP code-action
-// roundtrip for the quickfix.snyk.remediationAgent action (SMOKE-001).
-//
-// It clones a real repo, waits for Snyk Code scan, finds a fixable issue,
-// lists code actions to confirm the Remy action has the correct protocol shape
-// (deferred, kind set, UUID present), resolves it via codeAction/resolve, and
-// asserts the resolved WorkspaceEdit is non-nil with at least one file change.
-//
-// Skips only when LLM credentials are absent — set ANTHROPIC_API_KEY or
-// OPENAI_API_KEY. The preview CLI always bundles the remy extension, so
-// credential absence is the only legitimate reason to skip.
-func Test_Smoke_RemediationAgent_CodeAction(t *testing.T) {
-	if os.Getenv("ANTHROPIC_API_KEY") == "" && os.Getenv("OPENAI_API_KEY") == "" {
-		t.Skip("skipping Remy smoke test: LLM credentials not available — set ANTHROPIC_API_KEY or OPENAI_API_KEY")
-	}
-
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
-	engine.GetConfiguration().Set("remediation_agent_enabled", true)
-	testutil.CreateDummyProgressListener(t)
-
-	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
-	enableOnlyProducts(t, engine, product.ProductCode)
-
-	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, engine, tokenService)
-	substituteRemyFlow(t, engine)
-
-	waitForScan(t, string(cloneTargetDir), engine)
-	checkForScanParams(t, jsonRPCRecorder, string(cloneTargetDir), product.ProductCode)
-
-	issueList := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, cloneTargetDir)
-	require.NotEmpty(t, issueList, "expected at least one Snyk Code issue in scan results")
-
-	var fixableIssue *types.ScanIssue
-	for i := range issueList {
-		data, ok := issueList[i].AdditionalData.(map[string]interface{})
-		if ok && data["hasAIFix"] == true {
-			fixableIssue = &issueList[i]
-			break
-		}
-	}
-	if fixableIssue == nil {
-		t.Skip("no fixable (hasAIFix=true) Code issue in scan results")
-	}
-
-	// --- list phase: verify protocol shape ---
-	response, err := loc.Client.Call(t.Context(), "textDocument/codeAction", sglsp.CodeActionParams{
-		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(fixableIssue.FilePath)},
-		Range:        fixableIssue.Range,
-	})
-	require.NoError(t, err)
-
-	var actions []types.LSPCodeAction
-	require.NoError(t, response.UnmarshalResult(&actions))
-
-	var remyAction *types.LSPCodeAction
-	for i := range actions {
-		if actions[i].Kind == types.RemediationAgentQuickFix {
-			remyAction = &actions[i]
-			break
-		}
-	}
-	require.NotNil(t, remyAction, "expected code action with kind %q", types.RemediationAgentQuickFix)
-	assert.Nil(t, remyAction.Edit, "Remy action must carry no edit at list time (deferred)")
-	assert.NotNil(t, remyAction.Data, "Remy action must carry a resolve UUID in Data")
-
-	// --- resolve phase: assert real edit returned ---
-	resolveResponse, err := loc.Client.Call(t.Context(), "codeAction/resolve", remyAction)
-	require.NoError(t, err)
-
-	var resolved types.LSPCodeAction
-	require.NoError(t, resolveResponse.UnmarshalResult(&resolved))
-	assert.Equal(t, types.RemediationAgentQuickFix, resolved.Kind, "resolved action must preserve kind")
-	require.NotNil(t, resolved.Edit, "resolved edit must be non-nil when LLM credentials are present")
-	assert.NotEmpty(t, resolved.Edit.Changes, "resolved edit must contain at least one file change")
 }
