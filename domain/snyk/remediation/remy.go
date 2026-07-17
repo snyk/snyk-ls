@@ -21,7 +21,6 @@ package remediation
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -94,35 +93,6 @@ func NewRemyProvider(engine workflow.Engine, runner remyRunner) *remyProvider {
 		runner = gafRunner
 	}
 	return &remyProvider{opts: opts, runner: runner, engine: engine, log: log}
-}
-
-// gitChangedFiles returns the relative paths of files that differ from HEAD in
-// the working tree at root.
-func gitChangedFiles(ctx context.Context, root string) ([]string, error) {
-	cmd := exec.CommandContext(ctx, "git", "-C", root, "diff", "--name-only", "HEAD")
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("git diff --name-only: %w", err)
-	}
-	var paths []string
-	for _, p := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if p != "" {
-			paths = append(paths, p)
-		}
-	}
-	return paths, nil
-}
-
-// gitFileDiff returns the unified diff for relPath from HEAD to the working
-// tree in the repository at root. Returns an empty string if the file is
-// unchanged.
-func gitFileDiff(ctx context.Context, root, relPath string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", "-C", root, "diff", "HEAD", "--", relPath)
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("git diff HEAD -- %s: %w", relPath, err)
-	}
-	return string(out), nil
 }
 
 // workspaceEditFromContent converts a unified diff into a WorkspaceEdit keyed
