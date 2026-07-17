@@ -236,6 +236,7 @@ func getOssIssue(issue types.Issue) types.ScanIssue {
 
 	scanIssue := types.ScanIssue{
 		Id:                  additionalData.Key,
+		FindingId:           issue.GetFindingId(),
 		Title:               additionalData.Title,
 		Severity:            issue.GetSeverity().String(),
 		FilePath:            issue.GetAffectedFilePath(),
@@ -287,6 +288,7 @@ func getIacIssue(issue types.Issue) types.ScanIssue {
 
 	scanIssue := types.ScanIssue{
 		Id:                  additionalData.Key,
+		FindingId:           issue.GetFindingId(),
 		Title:               additionalData.Title,
 		Severity:            issue.GetSeverity().String(),
 		FilePath:            issue.GetAffectedFilePath(),
@@ -348,6 +350,7 @@ func getCodeIssue(issue types.Issue) types.ScanIssue {
 
 	scanIssue := types.ScanIssue{
 		Id:                  additionalData.Key,
+		FindingId:           issue.GetFindingId(),
 		Title:               issue.GetMessage(),
 		Severity:            issue.GetSeverity().String(),
 		FilePath:            issue.GetAffectedFilePath(),
@@ -396,6 +399,7 @@ func getSecretIssue(issue types.Issue) types.ScanIssue {
 
 	scanIssue := types.ScanIssue{
 		Id:                  additionalData.Key,
+		FindingId:           issue.GetFindingId(),
 		Title:               additionalData.Title,
 		Severity:            issue.GetSeverity().String(),
 		FilePath:            issue.GetAffectedFilePath(),

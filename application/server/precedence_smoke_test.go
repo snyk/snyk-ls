@@ -686,7 +686,7 @@ func waitForScanCompletion(t *testing.T, agg scanstates.Aggregator) {
 	t.Helper()
 	require.Eventually(t, func() bool {
 		return agg.StateSnapshot().AllScansFinishedWorkingDirectory
-	}, 120*time.Second, time.Millisecond, "scans did not complete in time")
+	}, maxIntegTestDuration, time.Millisecond, "scans did not complete in time")
 }
 
 // Test_SmokeScanPrecedence_OSSEnabled_CodeDisabled verifies that when OSS is enabled
