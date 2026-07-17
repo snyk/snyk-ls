@@ -47,12 +47,12 @@ type CodeActionsService struct {
 
 	// actionsCache holds all the issues that were returns by the GetCodeActions method.
 	// This is used to resolve the code actions later on in ResolveCodeAction.
-	actionsCache        map[uuid.UUID]cachedAction
-	engine              workflow.Engine
-	logger              zerolog.Logger
-	fileWatcher         dirtyFilesWatcher
-	notifier            noti.Notifier
-	configResolver      types.ConfigResolverInterface
+	actionsCache   map[uuid.UUID]cachedAction
+	engine         workflow.Engine
+	logger         zerolog.Logger
+	fileWatcher    dirtyFilesWatcher
+	notifier       noti.Notifier
+	configResolver types.ConfigResolverInterface
 }
 
 type cachedAction struct {
