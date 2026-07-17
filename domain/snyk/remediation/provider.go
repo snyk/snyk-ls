@@ -16,4 +16,3 @@
 
 // Package remediation defines the interface for autonomous finding remediation.
 package remediation
-
