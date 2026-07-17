@@ -25,6 +25,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/treeview"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -52,6 +53,7 @@ func CreateFromCommandData(
 	ldxSyncService LdxSyncService,
 	configResolver types.ConfigResolverInterface,
 	scanStateFunc func() scanstates.StateSnapshot,
+	remediationProvider remediation.FolderRemediator,
 ) (types.Command, error) {
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
@@ -151,6 +153,13 @@ func CreateFromCommandData(
 		return &dismissFeedbackBanner{command: commandData, engine: engine}, nil
 	case types.FeedbackBannerInteracted:
 		return &feedbackBannerInteracted{command: commandData, engine: engine}, nil
+	case types.RemediationAgentFixFolderCommand:
+		return &remediationFixFolderCommand{
+			command:  commandData,
+			notifier: notifier,
+			provider: remediationProvider,
+			engine:   engine,
+		}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)
