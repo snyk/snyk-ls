@@ -1133,7 +1133,7 @@ func textDocumentDidOpenHandler(conf configuration.Configuration) jrpc2.Handler 
 			logger.Debug().Msg("Sending cached issues")
 			diagnosticParams := types.PublishDiagnosticsParams{
 				URI:         params.TextDocument.URI,
-				Diagnostics: converter.ToDiagnostics(filteredIssues[filePath]),
+				Diagnostics: converter.ToDiagnosticsForFolder(filteredIssues[filePath], folder.Path(), &logger),
 			}
 			mustNotifierFromContext(ctx).Send(diagnosticParams)
 		}
