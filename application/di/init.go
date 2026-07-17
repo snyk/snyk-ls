@@ -43,6 +43,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/treeview"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	scanner2 "github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
@@ -59,6 +60,8 @@ import (
 	er "github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	performance2 "github.com/snyk/snyk-ls/internal/observability/performance"
 )
+
+const remediationAgentEnabledKey = "remediation_agent_enabled"
 
 var (
 	snykApiClient               snyk_api.SnykApiClient
@@ -228,8 +231,13 @@ func initApplication(conf configuration.Configuration, engine workflow.Engine, l
 	config.SetWorkspace(conf, w)
 	fileWatcher = watcher.NewFileWatcher()
 
+	var folderRemediator remediation.FolderRemediator
+	if conf.GetBool(remediationAgentEnabledKey) {
+		folderRemediator = remediation.NewRemyProvider(engine, nil)
+	}
+
 	codeActionService = codeaction.NewService(engine, w, fileWatcher, notifier, featureFlagService, configResolver)
-	command.SetService(command.NewService(engine, logger, authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, ldxSyncService, configResolver, scanStateAggregator.StateSnapshot))
+	command.SetService(command.NewService(engine, logger, authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, ldxSyncService, configResolver, scanStateAggregator.StateSnapshot, folderRemediator))
 }
 
 /*

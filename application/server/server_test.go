@@ -1737,3 +1737,70 @@ func TestInitializeHandler_MissingDep_PropagatesLSPError(t *testing.T) {
 		})
 	}
 }
+
+// Test_textDocumentDidChange_WithRemediationEnabled_NoRPCError verifies that a
+// textDocument/didChange notification reaches the onFileChange callback and
+// returns no RPC error when the remediation agent is enabled (INTEG-006).
+func Test_textDocumentDidChange_WithRemediationEnabled_NoRPCError(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	engine.GetConfiguration().Set("remediation_agent_enabled", true)
+	loc, _, _ := setupServer(t, engine, tokenService)
+	testutil.CreateDummyProgressListener(t)
+
+	dir := t.TempDir()
+	file := testsupport.CreateTempFile(t, dir)
+	fileURI := uri.PathToUri(types.FilePath(file.Name()))
+	folderURI := uri.PathToUri(types.FilePath(dir))
+
+	// Add the folder so the file is inside a known workspace folder.
+	_, err := loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
+		Event: types.WorkspaceFoldersChangeEvent{
+			Added: []types.WorkspaceFolder{{Name: dir, Uri: folderURI}},
+		},
+	})
+	require.NoError(t, err)
+
+	// didChange must reach onFileChange and return no RPC error.
+	_, err = loc.Client.Call(t.Context(), "textDocument/didChange", sglsp.DidChangeTextDocumentParams{
+		TextDocument:   sglsp.VersionedTextDocumentIdentifier{TextDocumentIdentifier: sglsp.TextDocumentIdentifier{URI: fileURI}, Version: 1},
+		ContentChanges: []sglsp.TextDocumentContentChangeEvent{{Text: "package main\n\nfunc main() {}\n"}},
+	})
+	require.NoError(t, err, "textDocument/didChange must not return an RPC error")
+}
+
+// Test_workspaceDidChangeWorkspaceFolders_RemediationAction_WorksInDynamicFolder verifies that a
+// textDocument/codeAction request against a file in a folder added via workspace/didChangeWorkspaceFolders
+// succeeds without error (INTEG-005: worktree-root code-action reachability).
+func Test_workspaceDidChangeWorkspaceFolders_RemediationAction_WorksInDynamicFolder(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	// Enable the remediation-agent flag so the provider is wired in by TestInit path.
+	engine.GetConfiguration().Set("remediation_agent_enabled", true)
+	loc, _, _ := setupServer(t, engine, tokenService)
+	testutil.CreateDummyProgressListener(t)
+
+	dir := t.TempDir()
+	file := testsupport.CreateTempFile(t, dir)
+	filePath := types.FilePath(file.Name())
+	folderUri := uri.PathToUri(types.FilePath(dir))
+
+	// Add the folder dynamically, mirroring what ambient-canary does for a worktree root.
+	_, err := loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
+		Event: types.WorkspaceFoldersChangeEvent{
+			Added: []types.WorkspaceFolder{{Name: dir, Uri: folderUri}},
+		},
+	})
+	require.NoError(t, err)
+
+	// textDocument/codeAction must return a valid (possibly empty) response — no RPC error.
+	params := types.CodeActionParams{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(filePath)},
+		Range:        sglsp.Range{Start: sglsp.Position{Line: 0, Character: 0}, End: sglsp.Position{Line: 0, Character: 1}},
+	}
+	resp, err := loc.Client.Call(t.Context(), "textDocument/codeAction", params)
+	require.NoError(t, err, "codeAction must not return an RPC error for a dynamically-added folder")
+
+	var actions []types.LSPCodeAction
+	require.NoError(t, resp.UnmarshalResult(&actions))
+	// No assertion on count: the file is empty, so no issues and no actions.
+	// The test's value is that the call succeeds rather than returning a "folder not found" error.
+}
