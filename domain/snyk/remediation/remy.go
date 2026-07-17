@@ -145,6 +145,23 @@ func (p *remyProvider) FixFolder(ctx context.Context, root types.FilePath) (*typ
 	if prefix := strings.TrimSpace(string(out)); prefix != "" {
 		return nil, fmt.Errorf("remy: FixFolder: %q is a subdirectory of a git repository (prefix %q); the caller must pass the git repository root", r, prefix)
 	}
+	// Guard: the passed worktree must be clean of tracked-file changes.
+	// --untracked-files=no excludes "??" lines for untracked files (e.g. build
+	// artifacts) so they do not falsely trip the guard. Only uncommitted
+	// modifications to tracked files matter: they would be silently included in
+	// the returned edit, making the fix unpredictable and violating the isolation
+	// guarantee that the caller must pass a fresh detached-HEAD worktree.
+	statusOut, err := exec.CommandContext(ctx, "git", "-C", r, "status", "--porcelain", "--untracked-files=no").Output()
+	if err != nil {
+		return nil, fmt.Errorf("remy: FixFolder: failed to check worktree status of %q: %w", r, err)
+	}
+	if status := strings.TrimSpace(string(statusOut)); status != "" {
+		return nil, fmt.Errorf("remy: FixFolder: %q has uncommitted changes to tracked files; the caller must pass a clean detached-HEAD worktree:\n%s", r, status)
+	}
+	// Bound the folder-wide run with the configured timeout so a hung fix
+	// cannot stall the caller indefinitely.
+	ctx, cancel := context.WithTimeout(ctx, p.opts.Timeout)
+	defer cancel()
 	// findingID is "" because FixFolder targets the whole folder, not a single finding.
 	// fileHashes is ignored: FixFolder returns a one-shot WorkspaceEdit and does not cache.
 	changes, _, err := p.collectFixEdits(ctx, r, r, "")
