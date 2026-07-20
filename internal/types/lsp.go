@@ -206,6 +206,7 @@ type ServerCapabilities struct {
 	SemanticHighlighting             *sglsp.SemanticHighlightingOptions     `json:"semanticHighlighting,omitempty"`
 	Workspace                        *WorkspaceCapabilities                 `json:"workspace,omitempty"`
 	InlineValueProvider              bool                                   `json:"inlineValueProvider,omitempty"`
+	DiagnosticProvider               *DiagnosticOptions                     `json:"diagnosticProvider,omitempty"`
 }
 
 type ClientCapabilities struct {
@@ -1292,4 +1293,57 @@ type SecretIssueData struct {
 	Rows           Point    `json:"rows"`
 	Fingerprint    string   `json:"fingerprint"`
 	LocationsCount int      `json:"locationsCount"`
+}
+
+// LSP 3.17 pull-diagnostic types (sourcegraph/go-lsp predates 3.17, so defined here).
+
+// DiagnosticOptions is advertised in ServerCapabilities.DiagnosticProvider.
+type DiagnosticOptions struct {
+	Identifier            string `json:"identifier,omitempty"`
+	InterFileDependencies bool   `json:"interFileDependencies"`
+	WorkspaceDiagnostics  bool   `json:"workspaceDiagnostics"`
+}
+
+// DocumentDiagnosticParams is the request body for textDocument/diagnostic.
+type DocumentDiagnosticParams struct {
+	TextDocument     sglsp.TextDocumentIdentifier `json:"textDocument"`
+	Identifier       string                       `json:"identifier,omitempty"`
+	PreviousResultID string                       `json:"previousResultId,omitempty"`
+}
+
+// RelatedFullDocumentDiagnosticReport is the response for textDocument/diagnostic.
+// Kind is always "full" in v1.
+type RelatedFullDocumentDiagnosticReport struct {
+	Kind     string       `json:"kind"`
+	ResultID string       `json:"resultId,omitempty"`
+	Items    []Diagnostic `json:"items"`
+}
+
+// PreviousResultID is one entry in WorkspaceDiagnosticParams.PreviousResultIDs.
+// The field tag is "value" (not "resultId") per the LSP 3.17 spec.
+type PreviousResultID struct {
+	URI   sglsp.DocumentURI `json:"uri"`
+	Value string            `json:"value"`
+}
+
+// WorkspaceDiagnosticParams is the request body for workspace/diagnostic.
+type WorkspaceDiagnosticParams struct {
+	Identifier        string             `json:"identifier,omitempty"`
+	PreviousResultIDs []PreviousResultID `json:"previousResultIds"`
+}
+
+// WorkspaceDiagnosticReport is the response for workspace/diagnostic.
+// Items is a list of per-document reports (one per file with findings).
+type WorkspaceDiagnosticReport struct {
+	Items []WorkspaceDocumentDiagnosticReport `json:"items"`
+}
+
+// WorkspaceDocumentDiagnosticReport is one entry in WorkspaceDiagnosticReport.Items.
+// Version uses *int with no omitempty so nil serializes as JSON null per the spec.
+type WorkspaceDocumentDiagnosticReport struct {
+	Kind     string            `json:"kind"`
+	URI      sglsp.DocumentURI `json:"uri"`
+	Version  *int              `json:"version"`
+	ResultID string            `json:"resultId,omitempty"`
+	Items    []Diagnostic      `json:"items"`
 }
