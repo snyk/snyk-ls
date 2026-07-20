@@ -126,7 +126,6 @@ func buildRemyFixConfig(base configuration.Configuration, contentRoot string) co
 	conf := base.Clone()
 	conf.Set("agentic", true)
 	conf.Set("auto-approve", true)
-	conf.Set("quiet", true)
 	// Select the Snyk Code (SAST) agentic flow. Without an explicit product flow
 	// the fix workflow defaults to SCA, detects no changes, and no-ops. These keys
 	// mirror the proven CLI invocation `snyk fix <dir> --agentic --sast --experimental --auto-approve`.

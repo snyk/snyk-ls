@@ -39,7 +39,7 @@ func TestBuildRemyFixConfig_SelectsSastAgenticFlow(t *testing.T) {
 	assert.True(t, conf.GetBool("sast"), "sast must be enabled to select the Snyk Code agentic flow")
 	assert.True(t, conf.GetBool("experimental"), "experimental must be enabled")
 	assert.True(t, conf.GetBool("auto-approve"), "auto-approve must be enabled for non-interactive use")
-	assert.True(t, conf.GetBool("quiet"), "quiet must be enabled")
+	assert.False(t, conf.IsSet("quiet"), "quiet must not be set (not a valid config key)")
 	assert.Equal(t, []string{contentRoot}, conf.GetStringSlice(configuration.INPUT_DIRECTORY),
 		"INPUT_DIRECTORY must be exactly the content root")
 	assert.False(t, conf.IsSet(""), "no empty-string key may be set")
