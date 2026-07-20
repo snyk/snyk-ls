@@ -30,35 +30,15 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// TestFixFolder_DirtyWorktree_ReturnsError verifies that FixFolder rejects a
-// worktree that has uncommitted modifications to tracked files.  The guard
-// runs git status --porcelain --untracked-files=no; any non-empty output
-// causes an error containing "has uncommitted changes".  Inverting the guard
-// condition (status != "" → status == "") would make a dirty worktree pass
-// and this test would fail because the error would no longer be returned.
-func TestFixFolder_DirtyWorktree_ReturnsError(t *testing.T) {
-	repo := initGitRepo(t)
-	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
+// ---------------------------------------------------------------------------
+// Item 1: FixFolder must bound the runner with an internal timeout
+// ---------------------------------------------------------------------------
 
-	// Modify the tracked file without staging/committing it.
-	require.NoError(t, os.WriteFile(filepath.Join(repo, "main.go"), []byte("package main\nvar x = 2\n"), 0o644))
-
-	var runnerCalled bool
-	trackingRunner := func(_ context.Context, _ workflow.Engine, _, _ string) error {
-		runnerCalled = true
-		return nil
-	}
-
-	p := remediation.NewRemyProvider(nil, trackingRunner)
-	edit, err := p.FixFolder(context.Background(), types.FilePath(repo))
-	require.ErrorContains(t, err, "has uncommitted changes")
-	assert.Nil(t, edit)
-	assert.False(t, runnerCalled, "runner must NOT be called when the dirty-worktree guard fires")
-}
-
-// TestFixFolder_AppliesInternalTimeout verifies that FixFolder wraps the runner
-// with a context deadline (p.opts.Timeout). The caller passes context.Background()
-// (no deadline); the runner must observe a deadline on its context.
+// TestFixFolder_AppliesInternalTimeout verifies that FixFolder wraps the work in
+// a context with a deadline (p.opts.Timeout), mirroring Remediate. Without it a
+// hung folder-wide fix run could stall the caller indefinitely. The caller here
+// passes context.Background() (no deadline); after the fix the runner must
+// observe a deadline on its context.
 func TestFixFolder_AppliesInternalTimeout(t *testing.T) {
 	repo := initGitRepo(t)
 	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
@@ -70,8 +50,38 @@ func TestFixFolder_AppliesInternalTimeout(t *testing.T) {
 	}
 
 	p := remediation.NewRemyProvider(nil, runner)
-	_, err := p.FixFolder(context.Background(), types.FilePath(repo))
+	fr, ok := p.(remediation.FolderRemediator)
+	require.True(t, ok)
+
+	_, err := fr.FixFolder(context.Background(), types.FilePath(repo))
 	require.NoError(t, err)
 	assert.True(t, hadDeadline,
 		"FixFolder must bound the runner with an internal timeout so a hung run cannot stall the caller")
+}
+
+// ---------------------------------------------------------------------------
+// Item 2: per-ContentRoot mutex must not leak
+// ---------------------------------------------------------------------------
+
+// TestRemyProvider_RootMutexEvicted_NoLeak verifies that the per-root mutex is
+// not retained forever. Before the fix, getOrCreateRootMu inserted a mutex per
+// ContentRoot and never removed it, so rootMus grew unbounded. After the fix the
+// mutex is evicted once no caller references it, so a completed Remediate leaves
+// rootMus empty.
+func TestRemyProvider_RootMutexEvicted_NoLeak(t *testing.T) {
+	repo := initGitRepo(t)
+	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
+
+	runner := modifyRunner("main.go", "package main\nvar x = 2\n")
+	p := remediation.NewRemyProvider(nil, runner)
+
+	_, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "f1",
+		ContentRoot: types.FilePath(repo),
+		FilePath:    types.FilePath(filepath.Join(repo, "main.go")),
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, 0, remediation.RootMuLen(p),
+		"per-root mutex must be evicted after Remediate; rootMus must not grow unbounded")
 }

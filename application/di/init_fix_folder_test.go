@@ -34,13 +34,13 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-// INT-002: DI passes the gated provider into the command service.
+// INT-102: DI always wires the real remyProvider into the command service.
 //
-// When remediation_agent_enabled=true, the real remyProvider (which implements
-// FolderRemediator) must reach the fixFolder command handler. We verify this
-// by constructing the command service directly via command.NewService and
-// wiring a fake FolderRemediator — removing the wiring call makes this RED.
-func TestDI_FixFolderCommand_WiredWhenEnabled(t *testing.T) {
+// The remediationProvider is always created regardless of the feature flag
+// (the flag only gates RemediationAgentFixFolderCommand advertisement in
+// server capabilities). The FolderRemediator role extracted from remyProvider
+// must reach the fixFolder command handler — removing that wiring makes this RED.
+func TestDI_FixFolderCommand_AlwaysWired(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	_ = tokenService
 
@@ -48,16 +48,13 @@ func TestDI_FixFolderCommand_WiredWhenEnabled(t *testing.T) {
 	repo := initGitRepoForDI(t)
 	folderURI := string(uri.PathToUri(types.FilePath(repo)))
 
-	// Set the flag so initApplication builds the real remediationProvider.
-	engine.GetConfiguration().Set("remediation_agent_enabled", true)
-
 	// Call di.Init to exercise the real wiring path.
 	deps := di.Init(engine, tokenService)
 	_ = deps
 
 	// The real command.Service singleton was set by di.Init. Verify it handles
 	// the fixFolder command without panicking on a nil provider.
-	// With the gate ON the provider is wired; with gate OFF it returns an error.
+	// Provider is always wired; a nil provider would return "not enabled".
 	svc := command.Service()
 	require.NotNil(t, svc, "command.Service() must be non-nil after di.Init")
 
@@ -73,21 +70,16 @@ func TestDI_FixFolderCommand_WiredWhenEnabled(t *testing.T) {
 	// If the provider is nil the error is "not enabled"; if wired it is a runner error.
 	if err != nil {
 		assert.NotContains(t, err.Error(), "not enabled",
-			"provider must be wired when gate is ON; 'not enabled' means provider is nil")
+			"provider must be always wired; 'not enabled' means provider is nil")
 	}
 }
 
-// INT-002b: Wiring test that is RED if the FolderRemediator param is removed
+// INT-102b: Wiring test that is RED if the FolderRemediator param is removed
 // from NewService. Constructs a service with a non-nil provider and verifies
 // the fixFolder command reaches the provider.
 func TestDI_NewService_FixFolderProvider_Wired(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	_ = tokenService
-
-	// Enable workspace/applyEdit so the capability guard in the handler passes.
-	caps := types.ClientCapabilities{}
-	caps.Workspace.ApplyEdit = true
-	engine.GetConfiguration().Set(types.SettingClientCapabilities, caps)
 
 	repo := initGitRepoForDI(t)
 	folderURI := string(uri.PathToUri(types.FilePath(repo)))
@@ -114,7 +106,7 @@ type diTestFolderRemediator struct {
 	called bool
 }
 
-func (d *diTestFolderRemediator) FixFolder(_ context.Context, _ types.FilePath) (*types.WorkspaceEdit, error) {
+func (d *diTestFolderRemediator) FixFolder(_ context.Context, _ types.FilePath) ([]types.FolderFixFileResult, error) {
 	d.called = true
 	return nil, nil
 }
@@ -134,6 +126,12 @@ func initGitRepoForDI(t *testing.T) string {
 	run("init")
 	run("config", "user.email", "test@example.com")
 	run("config", "user.name", "Test")
+	// overlay-FS write-ordering delays cause git to report "not a valid object" or
+	// false "local changes would be overwritten" errors during rebase/cherry-pick
+	// on this overlay filesystem. core.checkStat=minimal suppresses those
+	// false-negative stat reads by skipping the ctime/size comparison that
+	// overlayfs cannot guarantee to be coherent immediately after a write.
+	run("config", "core.checkStat", "minimal")
 	f := filepath.Join(dir, "main.go")
 	require.NoError(t, os.WriteFile(f, []byte("package main\n"), 0644))
 	run("add", ".")

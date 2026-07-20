@@ -22,16 +22,16 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sync"
+	"strings"
 	"sync/atomic"
 	"testing"
 
-	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/snyk/remediation"
+	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -41,62 +41,22 @@ import (
 // Shared test infrastructure
 // ---------------------------------------------------------------------------
 
-// fakeNotifier records all values sent via Send.
-type fakeNotifier struct {
-	mu   sync.Mutex
-	sent []any
-}
-
-func (f *fakeNotifier) Send(msg any) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.sent = append(f.sent, msg)
-}
-
-func (f *fakeNotifier) SendShowMessage(_ sglsp.MessageType, _ string) {}
-func (f *fakeNotifier) SendError(_ error)                             {}
-func (f *fakeNotifier) SendErrorDiagnostic(_ types.FilePath, _ error) {}
-func (f *fakeNotifier) Receive() (any, bool)                          { return nil, true }
-func (f *fakeNotifier) CreateListener(_ func(params any))             {}
-func (f *fakeNotifier) DisposeListener()                              {}
-
-func (f *fakeNotifier) Sent() []any {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	cp := make([]any, len(f.sent))
-	copy(cp, f.sent)
-	return cp
-}
-
-func (f *fakeNotifier) ApplyEditsSent() []types.ApplyWorkspaceEditParams {
-	var out []types.ApplyWorkspaceEditParams
-	for _, s := range f.Sent() {
-		if p, ok := s.(types.ApplyWorkspaceEditParams); ok {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
 // fakeFolderRemediator is a fake FolderRemediator for handler unit tests.
 type fakeFolderRemediator struct {
-	edit *types.WorkspaceEdit
-	err  error
+	results []types.FolderFixFileResult
+	err     error
 }
 
-func (f *fakeFolderRemediator) FixFolder(_ context.Context, _ types.FilePath) (*types.WorkspaceEdit, error) {
-	return f.edit, f.err
+func (f *fakeFolderRemediator) FixFolder(_ context.Context, _ types.FilePath) ([]types.FolderFixFileResult, error) {
+	return f.results, f.err
 }
 
 // initGitRepoForCmd creates a minimal git repo in a temp dir for tests that
 // need a real directory on disk. Returns the CANONICAL path (symlinks resolved)
-// so test assertions against edit keys agree with what git and the production
-// code produce — on macOS t.TempDir returns /var/... but git resolves symlinks
-// to /private/var/...; canonicalizing here avoids false assertion failures.
+// so test assertions agree with what git and the production code produce.
 func initGitRepoForCmd(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	// Resolve symlinks so the returned path is canonical.
 	if canonical, err := filepath.EvalSymlinks(dir); err == nil {
 		dir = canonical
 	}
@@ -110,7 +70,7 @@ func initGitRepoForCmd(t *testing.T) string {
 	run("init")
 	run("config", "user.email", "test@example.com")
 	run("config", "user.name", "Test")
-	// Commit an initial file so HEAD is valid.
+	run("config", "core.checkStat", "minimal")
 	f := filepath.Join(dir, "main.go")
 	require.NoError(t, os.WriteFile(f, []byte("package main\n"), 0644))
 	run("add", ".")
@@ -127,55 +87,152 @@ func makeFixFolderCommandData(args ...any) types.CommandData {
 }
 
 // ---------------------------------------------------------------------------
-// Acceptance tests (ACC-001..005): round-trip through real serviceImpl
+// Acceptance tests (ACC-101..105): round-trip through real serviceImpl
 // ---------------------------------------------------------------------------
 
 // buildFixFolderService constructs a real serviceImpl wired with the given
-// provider and notifier, routing through the real ExecuteCommandData →
-// CreateFromCommandData dispatch. The engine has workspace/applyEdit enabled so
-// the capability guard inside Execute passes.
-func buildFixFolderService(t *testing.T, provider remediation.FolderRemediator, notifier *fakeNotifier) types.CommandService {
+// provider, routing through the real ExecuteCommandData → CreateFromCommandData
+// dispatch.
+func buildFixFolderService(t *testing.T, provider remediation.FolderRemediator, notifier noti.Notifier) types.CommandService {
 	t.Helper()
 	engine, _ := testutil.UnitTestWithEngine(t)
-	conf := engine.GetConfiguration()
-	caps := types.ClientCapabilities{}
-	caps.Workspace.ApplyEdit = true
-	conf.Set(types.SettingClientCapabilities, caps)
 	logger := engine.GetLogger()
 	return command.NewService(engine, logger, nil, nil, notifier, nil, nil, nil, nil, nil, nil, nil, provider)
 }
 
-// ACC-001: gate ON; fake runner edits a file; applyEdit sent with keys under folder.
-func TestFixFolder_Acceptance_SendsApplyEditUnderPassedFolder(t *testing.T) {
+// ACC-101: gate ON; fake runner edits 2 files; response is FolderFixResult with 2 entries;
+// no applyEdit sent.
+func TestFixFolder_Acceptance_ReturnsPerFileResults(t *testing.T) {
 	repo := initGitRepoForCmd(t)
 	folderURI := string(uri.PathToUri(types.FilePath(repo)))
 
 	mainAbs := filepath.Join(repo, "main.go")
-	edit := &types.WorkspaceEdit{
-		Changes: map[string][]types.TextEdit{
-			mainAbs: {{Range: types.Range{}, NewText: "package main\nvar x = 2\n"}},
-		},
+	utilAbs := filepath.Join(repo, "util.go")
+	fakeResults := []types.FolderFixFileResult{
+		{WorkspacePath: mainAbs, WorktreePath: mainAbs, Diff: "--- a/main.go\n+++ b/main.go\n@@ -1 +1 @@\n-old\n+new\n"},
+		{WorkspacePath: utilAbs, WorktreePath: utilAbs, Diff: "--- a/util.go\n+++ b/util.go\n@@ -1 +1 @@\n-old\n+new\n"},
 	}
-	provider := &fakeFolderRemediator{edit: edit}
-	notifier := &fakeNotifier{}
+	provider := &fakeFolderRemediator{results: fakeResults}
+	notifier := noti.NewMockNotifier()
 	svc := buildFixFolderService(t, provider, notifier)
 
-	_, err := svc.ExecuteCommandData(context.Background(), makeFixFolderCommandData(folderURI), nil)
+	result, err := svc.ExecuteCommandData(context.Background(), makeFixFolderCommandData(folderURI), nil)
 	require.NoError(t, err)
 
-	applyEdits := notifier.ApplyEditsSent()
-	require.Len(t, applyEdits, 1, "exactly one applyEdit must be sent")
-	for key := range applyEdits[0].Edit.Changes {
-		// Key must be under the passed folder (as a file:// URI or path).
-		// The notifier receives sglsp.WorkspaceEdit whose keys are document URIs.
-		assert.True(t,
-			len(key) >= len(repo) && key[:len(repo)] == repo ||
-				len(key) >= len(folderURI) && key[:len(folderURI)] == folderURI,
-			"applyEdit key %q must be under passed folder %q", key, repo)
+	// Response body must be FolderFixResult with 2 entries.
+	ffr, ok := result.(types.FolderFixResult)
+	require.True(t, ok, "result must be types.FolderFixResult, got %T", result)
+	require.Len(t, ffr.Files, 2, "FolderFixResult must have 2 file entries")
+
+	// Each entry must have WorktreePath under the folder.
+	for _, f := range ffr.Files {
+		assert.True(t, strings.HasPrefix(f.WorktreePath, repo+string(filepath.Separator)),
+			"WorktreePath %q must be under passed folder %q", f.WorktreePath, repo)
+		assert.NotEmpty(t, f.Diff, "each file entry must have a non-empty Diff")
 	}
 }
 
-// ACC-002: fake runner records the dir it was invoked with; no nested worktree.
+// ACC-102: gate ON; fake runner edits one file; result body carries the file entry AND
+// no workspace/applyEdit was dispatched through the notifier.
+func TestFixFolder_Acceptance_SendsNoApplyEdit(t *testing.T) {
+	repo := initGitRepoForCmd(t)
+	folderURI := string(uri.PathToUri(types.FilePath(repo)))
+
+	mainAbs := filepath.Join(repo, "main.go")
+	fakeResults := []types.FolderFixFileResult{
+		{WorkspacePath: mainAbs, WorktreePath: mainAbs, Diff: "diff content"},
+	}
+	provider := &fakeFolderRemediator{results: fakeResults}
+	// Use MockNotifier (records every Send call) so we can assert no
+	// ApplyWorkspaceEditParams slipped through.
+	notifier := noti.NewMockNotifier()
+	svc := buildFixFolderService(t, provider, notifier)
+
+	result, err := svc.ExecuteCommandData(context.Background(), makeFixFolderCommandData(folderURI), nil)
+	require.NoError(t, err)
+
+	// Response body must carry the file entry from the fake provider.
+	ffr, ok := result.(types.FolderFixResult)
+	require.True(t, ok, "result must be types.FolderFixResult, got %T", result)
+	require.Len(t, ffr.Files, 1, "FolderFixResult must have 1 file entry")
+	assert.Equal(t, mainAbs, ffr.Files[0].WorkspacePath)
+	assert.NotEmpty(t, ffr.Files[0].Diff)
+
+	// fixFolder must NOT send an ApplyWorkspaceEditParams — the daemon applies
+	// changes directly from the worktree, so the LS must never call
+	// workspace/applyEdit for folder fixes.
+	for _, msg := range notifier.SentMessages() {
+		_, isApplyEdit := msg.(types.ApplyWorkspaceEditParams)
+		assert.False(t, isApplyEdit, "fixFolder must not send ApplyWorkspaceEditParams, got: %#v", msg)
+	}
+}
+
+// ACC-103 (retained): gate OFF (provider nil) → error, no applyEdit.
+func TestFixFolder_Acceptance_FeatureOff_ReturnsError(t *testing.T) {
+	repo := initGitRepoForCmd(t)
+	folderURI := string(uri.PathToUri(types.FilePath(repo)))
+
+	notifier := noti.NewMockNotifier()
+	svc := buildFixFolderService(t, nil /* nil provider = feature off */, notifier)
+
+	_, err := svc.ExecuteCommandData(context.Background(), makeFixFolderCommandData(folderURI), nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not enabled")
+}
+
+// ACC-104: gate ON; runner makes no changes → FolderFixResult{Files: []} (empty, not null); no error.
+func TestFixFolder_Acceptance_NoChanges_EmptyResult(t *testing.T) {
+	repo := initGitRepoForCmd(t)
+	folderURI := string(uri.PathToUri(types.FilePath(repo)))
+
+	provider := &fakeFolderRemediator{results: nil} // nil returned by provider
+	notifier := noti.NewMockNotifier()
+	svc := buildFixFolderService(t, provider, notifier)
+
+	result, err := svc.ExecuteCommandData(context.Background(), makeFixFolderCommandData(folderURI), nil)
+	require.NoError(t, err)
+
+	ffr, ok := result.(types.FolderFixResult)
+	require.True(t, ok, "result must be types.FolderFixResult, got %T", result)
+	assert.Empty(t, ffr.Files, "FolderFixResult.Files must be empty (not nil) when no changes")
+	// Must be non-nil (so JSON marshals as [] not null).
+	assert.NotNil(t, ffr.Files, "FolderFixResult.Files must be non-nil even with no changes")
+}
+
+// ACC-105: folder OUTSIDE any open workspace folders is accepted; success; entries keyed there.
+func TestFixFolder_Acceptance_ExternalFolderAccepted(t *testing.T) {
+	repo := initGitRepoForCmd(t)
+	folderURI := string(uri.PathToUri(types.FilePath(repo)))
+
+	mainAbs := filepath.Join(repo, "main.go")
+	fakeResults := []types.FolderFixFileResult{
+		{WorkspacePath: mainAbs, WorktreePath: mainAbs, Diff: "diff content"},
+	}
+	provider := &fakeFolderRemediator{results: fakeResults}
+	notifier := noti.NewMockNotifier()
+	svc := buildFixFolderService(t, provider, notifier)
+
+	result, err := svc.ExecuteCommandData(context.Background(), makeFixFolderCommandData(folderURI), nil)
+	require.NoError(t, err, "external folder must be accepted")
+
+	ffr, ok := result.(types.FolderFixResult)
+	require.True(t, ok)
+	require.Len(t, ffr.Files, 1)
+	assert.True(t, strings.HasPrefix(ffr.Files[0].WorktreePath, repo+string(filepath.Separator)),
+		"result entry must be keyed under the external folder")
+}
+
+// trackingFolderRemediator is a FolderRemediator that delegates to a closure.
+type trackingFolderRemediator struct {
+	fn func(ctx context.Context, root types.FilePath) ([]types.FolderFixFileResult, error)
+}
+
+func (tr *trackingFolderRemediator) FixFolder(ctx context.Context, root types.FilePath) ([]types.FolderFixFileResult, error) {
+	return tr.fn(ctx, root)
+}
+
+// TestFixFolder_Acceptance_RunsInPassedFolderNoNestedWorktree verifies the
+// provider is invoked with the passed folder and no nested worktrees appear.
 func TestFixFolder_Acceptance_RunsInPassedFolderNoNestedWorktree(t *testing.T) {
 	repo := initGitRepoForCmd(t)
 	folderURI := string(uri.PathToUri(types.FilePath(repo)))
@@ -183,13 +240,13 @@ func TestFixFolder_Acceptance_RunsInPassedFolderNoNestedWorktree(t *testing.T) {
 	var invokedRoot string
 	var runnerCallCount int32
 	provider := &trackingFolderRemediator{
-		fn: func(_ context.Context, root types.FilePath) (*types.WorkspaceEdit, error) {
+		fn: func(_ context.Context, root types.FilePath) ([]types.FolderFixFileResult, error) {
 			atomic.AddInt32(&runnerCallCount, 1)
 			invokedRoot = string(root)
 			return nil, nil
 		},
 	}
-	notifier := &fakeNotifier{}
+	notifier := noti.NewMockNotifier()
 	svc := buildFixFolderService(t, provider, notifier)
 
 	_, err := svc.ExecuteCommandData(context.Background(), makeFixFolderCommandData(folderURI), nil)
@@ -198,7 +255,6 @@ func TestFixFolder_Acceptance_RunsInPassedFolderNoNestedWorktree(t *testing.T) {
 	assert.Equal(t, repo, invokedRoot, "provider must be invoked with the passed folder")
 	assert.Equal(t, int32(1), atomic.LoadInt32(&runnerCallCount))
 
-	// No nested snyk-remy-* or worktree dir inside the folder.
 	entries, _ := os.ReadDir(repo)
 	for _, e := range entries {
 		assert.NotContains(t, e.Name(), "snyk-remy-")
@@ -206,242 +262,130 @@ func TestFixFolder_Acceptance_RunsInPassedFolderNoNestedWorktree(t *testing.T) {
 	}
 }
 
-// trackingFolderRemediator is a FolderRemediator that delegates to a closure.
-type trackingFolderRemediator struct {
-	fn func(ctx context.Context, root types.FilePath) (*types.WorkspaceEdit, error)
-}
-
-func (tr *trackingFolderRemediator) FixFolder(ctx context.Context, root types.FilePath) (*types.WorkspaceEdit, error) {
-	return tr.fn(ctx, root)
-}
-
-// ACC-003: gate OFF (provider nil) → error, no applyEdit, runner never invoked.
-func TestFixFolder_Acceptance_FeatureOff_ReturnsError(t *testing.T) {
-	repo := initGitRepoForCmd(t)
-	folderURI := string(uri.PathToUri(types.FilePath(repo)))
-
-	notifier := &fakeNotifier{}
-	svc := buildFixFolderService(t, nil /* nil provider = feature off */, notifier)
-
-	_, err := svc.ExecuteCommandData(context.Background(), makeFixFolderCommandData(folderURI), nil)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not enabled")
-	assert.Empty(t, notifier.ApplyEditsSent(), "no applyEdit must be sent when feature is off")
-}
-
-// ACC-004: folder OUTSIDE open workspace folders is accepted.
-func TestFixFolder_Acceptance_ExternalFolderAccepted(t *testing.T) {
-	// The folder is outside any "workspace" — the command must not do a membership check.
-	repo := initGitRepoForCmd(t)
-	folderURI := string(uri.PathToUri(types.FilePath(repo)))
-
-	mainAbs := filepath.Join(repo, "main.go")
-	edit := &types.WorkspaceEdit{
-		Changes: map[string][]types.TextEdit{
-			mainAbs: {{Range: types.Range{}, NewText: "package main\nvar x = 99\n"}},
-		},
-	}
-	provider := &fakeFolderRemediator{edit: edit}
-	notifier := &fakeNotifier{}
-	svc := buildFixFolderService(t, provider, notifier)
-
-	_, err := svc.ExecuteCommandData(context.Background(), makeFixFolderCommandData(folderURI), nil)
-	require.NoError(t, err, "external folder must be accepted")
-	applyEdits := notifier.ApplyEditsSent()
-	require.Len(t, applyEdits, 1)
-}
-
-// ACC-005: gate ON; fake runner makes NO changes → no applyEdit sent.
-func TestFixFolder_Acceptance_NoChanges_NoApplyEdit(t *testing.T) {
-	repo := initGitRepoForCmd(t)
-	folderURI := string(uri.PathToUri(types.FilePath(repo)))
-
-	provider := &fakeFolderRemediator{edit: nil} // nil = no changes
-	notifier := &fakeNotifier{}
-	svc := buildFixFolderService(t, provider, notifier)
-
-	_, err := svc.ExecuteCommandData(context.Background(), makeFixFolderCommandData(folderURI), nil)
-	require.NoError(t, err)
-	assert.Empty(t, notifier.ApplyEditsSent(), "no applyEdit must be sent when there are no changes")
-}
-
 // ---------------------------------------------------------------------------
-// Unit tests for remediationFixFolderCommand.Execute (UNIT-006..010)
+// Unit tests for remediationFixFolderCommand.Execute (UNIT-120..126)
 // ---------------------------------------------------------------------------
 
-// newFixFolderCmd constructs a remediationFixFolderCommand for unit testing via
-// the exported constructor.
-func newFixFolderCmd(args []any, provider remediation.FolderRemediator, notifier *fakeNotifier) types.Command {
+// newFixFolderCmd constructs a remediationFixFolderCommand for unit testing.
+func newFixFolderCmd(args []any, provider remediation.FolderRemediator) types.Command {
 	return command.NewRemediationFixFolderCommand(types.CommandData{
 		CommandId: types.RemediationAgentFixFolderCommand,
 		Arguments: args,
-	}, provider, notifier)
+	}, provider)
 }
 
-// UNIT-006: wrong arg count → error.
+// UNIT-120: wrong arg count → error.
 func TestFixFolder_Execute_WrongArgCount(t *testing.T) {
-	notifier := &fakeNotifier{}
-	cmd := newFixFolderCmd([]any{}, &fakeFolderRemediator{}, notifier)
+	cmd := newFixFolderCmd([]any{}, &fakeFolderRemediator{})
 	_, err := cmd.Execute(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "one folder URI argument")
-	assert.Empty(t, notifier.ApplyEditsSent())
 }
 
-// UNIT-007: invalid arg (empty / non-string) → error.
+// UNIT-121: invalid arg (empty / non-string) → error.
 func TestFixFolder_Execute_InvalidArg(t *testing.T) {
-	notifier := &fakeNotifier{}
-
 	// non-string arg
-	cmd := newFixFolderCmd([]any{42}, &fakeFolderRemediator{}, notifier)
+	cmd := newFixFolderCmd([]any{42}, &fakeFolderRemediator{})
 	_, err := cmd.Execute(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "non-empty string")
 
 	// empty string arg
-	cmd2 := newFixFolderCmd([]any{""}, &fakeFolderRemediator{}, notifier)
+	cmd2 := newFixFolderCmd([]any{""}, &fakeFolderRemediator{})
 	_, err2 := cmd2.Execute(context.Background())
 	require.Error(t, err2)
 	assert.Contains(t, err2.Error(), "non-empty string")
-
-	assert.Empty(t, notifier.ApplyEditsSent())
 }
 
-// UNIT-008: URI for nonexistent path → "not a directory" error before dispatch.
+// UNIT-122: URI for nonexistent path → "not a directory" error.
 func TestFixFolder_Execute_NonexistentFolder(t *testing.T) {
-	notifier := &fakeNotifier{}
 	nonexistent := "file:///tmp/this-path-should-not-exist-ever-12345xyz"
-	cmd := newFixFolderCmd([]any{nonexistent}, &fakeFolderRemediator{}, notifier)
+	cmd := newFixFolderCmd([]any{nonexistent}, &fakeFolderRemediator{})
 	_, err := cmd.Execute(context.Background())
 	require.Error(t, err)
-	assert.Empty(t, notifier.ApplyEditsSent())
 }
 
-// UNIT-009: provider nil → "not enabled" error; no applyEdit.
+// UNIT-123: provider nil → "not enabled" error.
 func TestFixFolder_Execute_NilProviderReturnsError(t *testing.T) {
 	repo := initGitRepoForCmd(t)
 	folderURI := string(uri.PathToUri(types.FilePath(repo)))
-	notifier := &fakeNotifier{}
-	cmd := newFixFolderCmd([]any{folderURI}, nil /* nil provider */, notifier)
+	cmd := newFixFolderCmd([]any{folderURI}, nil /* nil provider */)
 	_, err := cmd.Execute(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not enabled")
-	assert.Empty(t, notifier.ApplyEditsSent())
 }
 
-// UNIT-010: provider returns nil edit → (nil, nil); no applyEdit.
-func TestFixFolder_Execute_NilEdit_NoApplyEdit(t *testing.T) {
+// UNIT-124: provider returns empty/nil slice → (FolderFixResult{Files: []}, nil); no panic.
+func TestFixFolder_Execute_EmptyResults(t *testing.T) {
 	repo := initGitRepoForCmd(t)
 	folderURI := string(uri.PathToUri(types.FilePath(repo)))
-	notifier := &fakeNotifier{}
-	provider := &fakeFolderRemediator{edit: nil}
-	cmd := newFixFolderCmd([]any{folderURI}, provider, notifier)
+	provider := &fakeFolderRemediator{results: nil} // nil slice
+	cmd := newFixFolderCmd([]any{folderURI}, provider)
+
 	result, err := cmd.Execute(context.Background())
 	require.NoError(t, err)
-	assert.Nil(t, result)
-	assert.Empty(t, notifier.ApplyEditsSent(), "no applyEdit must be sent for nil edit")
+	require.NotNil(t, result, "result must not be nil even when provider returns no files")
+
+	ffr, ok := result.(types.FolderFixResult)
+	require.True(t, ok, "result must be FolderFixResult")
+	assert.NotNil(t, ffr.Files, "Files must be non-nil (so JSON serializes as [])")
+	assert.Empty(t, ffr.Files, "Files must be empty")
 }
 
-// ---------------------------------------------------------------------------
-// Handler error propagation
-// ---------------------------------------------------------------------------
-
+// UNIT-125: provider error propagated.
 func TestFixFolder_Execute_ProviderError_Propagated(t *testing.T) {
 	repo := initGitRepoForCmd(t)
 	folderURI := string(uri.PathToUri(types.FilePath(repo)))
-	notifier := &fakeNotifier{}
 	sentinel := errors.New("fix failed")
 	provider := &fakeFolderRemediator{err: sentinel}
-	cmd := newFixFolderCmd([]any{folderURI}, provider, notifier)
+	cmd := newFixFolderCmd([]any{folderURI}, provider)
+
 	_, err := cmd.Execute(context.Background())
 	require.Error(t, err)
 	assert.ErrorIs(t, err, sentinel)
-	assert.Empty(t, notifier.ApplyEditsSent())
 }
 
-// ---------------------------------------------------------------------------
-// Fix 1: ApplyEdit capability guard (UNIT-011, UNIT-012)
-// ---------------------------------------------------------------------------
-
-// newFixFolderCmdWithEngine constructs a remediationFixFolderCommand with an
-// engine so that the capability guard can be exercised.
-func newFixFolderCmdWithEngine(t *testing.T, args []any, provider remediation.FolderRemediator, notifier *fakeNotifier, applyEdit bool) types.Command {
-	t.Helper()
-	engine, _ := testutil.UnitTestWithEngine(t)
-	if applyEdit {
-		conf := engine.GetConfiguration()
-		caps := types.ClientCapabilities{}
-		caps.Workspace.ApplyEdit = true
-		conf.Set(types.SettingClientCapabilities, caps)
-	}
-	return command.NewRemediationFixFolderCommandWithEngine(types.CommandData{
-		CommandId: types.RemediationAgentFixFolderCommand,
-		Arguments: args,
-	}, provider, notifier, engine)
-}
-
-// UNIT-011: when ApplyEdit capability is false AND provider returns a non-empty
-// edit, Execute must return a non-nil error and notifier.Send must NEVER be called.
-func TestFixFolder_Execute_ApplyEditCapabilityFalse_ReturnsErrorNoSend(t *testing.T) {
+// UNIT-126: provider returns 2 files; response is FolderFixResult with those 2
+// files verbatim; notifier received nothing (applyEdit-removal guard).
+func TestFixFolder_Execute_ReturnsProviderResultsNoNotify(t *testing.T) {
 	repo := initGitRepoForCmd(t)
 	folderURI := string(uri.PathToUri(types.FilePath(repo)))
-	notifier := &fakeNotifier{}
 
 	mainAbs := filepath.Join(repo, "main.go")
-	edit := &types.WorkspaceEdit{
-		Changes: map[string][]types.TextEdit{
-			mainAbs: {{Range: types.Range{}, NewText: "package main\nvar x = 2\n"}},
-		},
+	utilAbs := filepath.Join(repo, "util.go")
+	fakeResults := []types.FolderFixFileResult{
+		{WorkspacePath: mainAbs, WorktreePath: mainAbs, Diff: "diff1"},
+		{WorkspacePath: utilAbs, WorktreePath: utilAbs, Diff: "diff2"},
 	}
-	provider := &fakeFolderRemediator{edit: edit}
+	provider := &fakeFolderRemediator{results: fakeResults}
 
-	// Build command with ApplyEdit=false (capability not set)
-	cmd := newFixFolderCmdWithEngine(t, []any{folderURI}, provider, notifier, false /* applyEdit=false */)
-	_, err := cmd.Execute(context.Background())
+	svc := buildFixFolderService(t, provider, noti.NewMockNotifier())
 
-	require.Error(t, err, "must return error when ApplyEdit capability is false")
-	assert.Contains(t, err.Error(), "applyEdit", "error must mention the missing capability")
-	assert.Empty(t, notifier.ApplyEditsSent(), "notifier.Send must NOT be called when capability is absent")
-}
-
-// UNIT-012b: when provider is nil AND client lacks applyEdit, Execute must
-// return the "not enabled" error — NOT the capability error. The feature-gate
-// check (provider nil) must precede the applyEdit capability check.
-func TestFixFolder_Execute_NilProvider_BeforeCapabilityCheck(t *testing.T) {
-	repo := initGitRepoForCmd(t)
-	folderURI := string(uri.PathToUri(types.FilePath(repo)))
-	notifier := &fakeNotifier{}
-
-	// Build command with nil provider AND applyEdit=false.
-	cmd := newFixFolderCmdWithEngine(t, []any{folderURI}, nil /* nil provider */, notifier, false /* applyEdit=false */)
-	_, err := cmd.Execute(context.Background())
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not enabled",
-		"when provider is nil, Execute must return 'not enabled' regardless of applyEdit capability; got: %v", err)
-	assert.NotContains(t, err.Error(), "applyEdit",
-		"capability error must NOT be surfaced when the feature is off (provider nil)")
-}
-
-// UNIT-012: when ApplyEdit capability is true AND provider returns a non-empty
-// edit, Execute must succeed and notifier.Send must be called.
-func TestFixFolder_Execute_ApplyEditCapabilityTrue_SendsEdit(t *testing.T) {
-	repo := initGitRepoForCmd(t)
-	folderURI := string(uri.PathToUri(types.FilePath(repo)))
-	notifier := &fakeNotifier{}
-
-	mainAbs := filepath.Join(repo, "main.go")
-	edit := &types.WorkspaceEdit{
-		Changes: map[string][]types.TextEdit{
-			mainAbs: {{Range: types.Range{}, NewText: "package main\nvar x = 2\n"}},
-		},
-	}
-	provider := &fakeFolderRemediator{edit: edit}
-
-	// Build command with ApplyEdit=true
-	cmd := newFixFolderCmdWithEngine(t, []any{folderURI}, provider, notifier, true /* applyEdit=true */)
-	_, err := cmd.Execute(context.Background())
-
+	result, err := svc.ExecuteCommandData(context.Background(), makeFixFolderCommandData(folderURI), nil)
 	require.NoError(t, err)
-	require.Len(t, notifier.ApplyEditsSent(), 1, "notifier.Send must be called exactly once when capability is present")
+
+	ffr, ok := result.(types.FolderFixResult)
+	require.True(t, ok)
+	require.Len(t, ffr.Files, 2, "response must carry both file entries verbatim")
+	assert.Equal(t, mainAbs, ffr.Files[0].WorkspacePath)
+	assert.Equal(t, utilAbs, ffr.Files[1].WorkspacePath)
+}
+
+// ---------------------------------------------------------------------------
+// Engine-less test: command must not require engine at all
+// ---------------------------------------------------------------------------
+
+// TestFixFolder_Execute_WorksWithoutEngine verifies the command executes correctly
+// without an engine (the field was removed). With the provider returning empty results
+// the command must succeed.
+func TestFixFolder_Execute_WorksWithoutEngine(t *testing.T) {
+	repo := initGitRepoForCmd(t)
+	folderURI := string(uri.PathToUri(types.FilePath(repo)))
+	provider := &fakeFolderRemediator{results: []types.FolderFixFileResult{}}
+	cmd := newFixFolderCmd([]any{folderURI}, provider)
+
+	result, err := cmd.Execute(context.Background())
+	require.NoError(t, err)
+	_, ok := result.(types.FolderFixResult)
+	assert.True(t, ok, "result must be FolderFixResult")
 }
