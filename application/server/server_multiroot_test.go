@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -114,4 +115,114 @@ func TestFinding_RootAttribution_MultiRoot(t *testing.T) {
 		"finding in rootA must be attributed to rootA")
 	assert.Equal(t, rootB, contentRootForFile(t, jsonRPCRecorder, fileB),
 		"finding in rootB must be attributed to its own canonical root, not the first root")
+}
+
+// ACC-006: workspace/diagnostic must attribute every finding to the canonical
+// registered folder root, not to the ContentRoot on the issue itself. Without
+// ToDiagnosticsForFolder the pull path would echo the issue's own (wrong)
+// ContentRoot instead of the folder's canonical path.
+func Test_workspaceDiagnostic_usesCanonicalFolderRoot(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, _, _ := setupServer(t, engine, tokenService)
+
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
+	require.NoError(t, err)
+	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
+
+	rootA := types.FilePath(t.TempDir())
+	rootB := types.FilePath(t.TempDir())
+	fileB := types.FilePath(filepath.Join(string(rootB), "b.go"))
+
+	newFolder := func(root types.FilePath, name string) *workspace.Folder {
+		return workspace.NewFolder(
+			engine.GetConfiguration(), engine.GetLogger(), root, name,
+			di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(),
+			di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(),
+			di.ConfigResolver(), engine,
+		)
+	}
+	folderB := newFolder(rootB, "rootB")
+	ws := config.GetWorkspace(engine.GetConfiguration())
+	ws.AddFolder(newFolder(rootA, "rootA"))
+	ws.AddFolder(folderB)
+
+	// Issue's ContentRoot is wrong (rootA), but the file lives under rootB.
+	// workspace/diagnostic must override it with folderB's canonical path.
+	issue := testutil.NewMockIssue("issueB", fileB)
+	issue.ContentRoot = rootA // deliberately mis-attributed
+
+	folderB.ProcessResults(t.Context(), types.ScanData{
+		Product:           product.ProductOpenSource,
+		Issues:            []types.Issue{issue},
+		UpdateGlobalCache: true,
+	})
+
+	rsp, err := loc.Client.Call(t.Context(), "workspace/diagnostic", types.WorkspaceDiagnosticParams{})
+	require.NoError(t, err)
+
+	var wsResult types.WorkspaceDiagnosticReport
+	require.NoError(t, rsp.UnmarshalResult(&wsResult))
+
+	fileUri := uri.PathToUri(fileB)
+	var gotRoot types.FilePath
+	for _, item := range wsResult.Items {
+		if item.URI == fileUri && len(item.Items) > 0 {
+			gotRoot = item.Items[0].Data.ContentRoot
+		}
+	}
+	require.NotEmpty(t, gotRoot, "workspace/diagnostic must return findings for fileB")
+	assert.Equal(t, rootB, gotRoot,
+		"workspace/diagnostic must use the canonical folder root, not the issue's ContentRoot")
+}
+
+// ACC-007: textDocument/diagnostic must attribute every finding to the canonical
+// registered folder root, not to the ContentRoot on the issue itself.
+func Test_textDocumentDiagnostic_usesCanonicalFolderRoot(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, _, _ := setupServer(t, engine, tokenService)
+
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
+	require.NoError(t, err)
+	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
+
+	rootA := types.FilePath(t.TempDir())
+	rootB := types.FilePath(t.TempDir())
+	fileB := types.FilePath(filepath.Join(string(rootB), "b.go"))
+
+	newFolder := func(root types.FilePath, name string) *workspace.Folder {
+		return workspace.NewFolder(
+			engine.GetConfiguration(), engine.GetLogger(), root, name,
+			di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(),
+			di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(),
+			di.ConfigResolver(), engine,
+		)
+	}
+	folderB := newFolder(rootB, "rootB")
+	ws := config.GetWorkspace(engine.GetConfiguration())
+	ws.AddFolder(newFolder(rootA, "rootA"))
+	ws.AddFolder(folderB)
+
+	// Issue's ContentRoot is wrong (rootA), but the file lives under rootB.
+	// textDocument/diagnostic must override it with folderB's canonical path.
+	issue := testutil.NewMockIssue("issueB", fileB)
+	issue.ContentRoot = rootA // deliberately mis-attributed
+
+	folderB.ProcessResults(t.Context(), types.ScanData{
+		Product:           product.ProductOpenSource,
+		Issues:            []types.Issue{issue},
+		UpdateGlobalCache: true,
+	})
+
+	fileUri := uri.PathToUri(fileB)
+	rsp, err := loc.Client.Call(t.Context(), "textDocument/diagnostic", types.DocumentDiagnosticParams{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: fileUri},
+	})
+	require.NoError(t, err)
+
+	var result types.RelatedFullDocumentDiagnosticReport
+	require.NoError(t, rsp.UnmarshalResult(&result))
+
+	require.NotEmpty(t, result.Items, "textDocument/diagnostic must return findings for fileB")
+	assert.Equal(t, rootB, result.Items[0].Data.ContentRoot,
+		"textDocument/diagnostic must use the canonical folder root, not the issue's ContentRoot")
 }

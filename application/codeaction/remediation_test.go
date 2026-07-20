@@ -67,7 +67,27 @@ func setupWithIssueAndProvider(
 	provider remediation.RemediationProvider,
 ) (*codeaction.CodeActionsService, types.CodeActionParams) {
 	t.Helper()
+	return setupWithIssueAndProviderFlag(t, issue, provider, false)
+}
+
+func setupWithIssueAndProviderFlagEnabled(
+	t *testing.T,
+	issue types.Issue,
+	provider remediation.RemediationProvider,
+) (*codeaction.CodeActionsService, types.CodeActionParams) {
+	t.Helper()
+	return setupWithIssueAndProviderFlag(t, issue, provider, true)
+}
+
+func setupWithIssueAndProviderFlag(
+	t *testing.T,
+	issue types.Issue,
+	provider remediation.RemediationProvider,
+	remediationFlagEnabled bool,
+) (*codeaction.CodeActionsService, types.CodeActionParams) {
+	t.Helper()
 	engine := testutil.UnitTest(t)
+	engine.GetConfiguration().Set("remediation_agent_enabled", remediationFlagEnabled)
 	r := exampleRange
 	uriPath := documentUriExample
 	path := uri.PathFromUri(uriPath)
@@ -100,6 +120,26 @@ func setupWithIssueAndProvider(
 	return service, params
 }
 
+// TestGetCodeActions_RemediationAgent_FlagDisabled_NoAction verifies that when
+// remediation_agent_enabled is not set (default false), no RemediationAgentQuickFix
+// action is emitted, even for an otherwise-eligible fixable Code issue. This keeps
+// the code-action surface consistent with the command advertised in server capabilities,
+// which is also gated behind the same flag.
+func TestGetCodeActions_RemediationAgent_FlagDisabled_NoAction(t *testing.T) {
+	fake := &fakeRemediationProvider{edit: &types.WorkspaceEdit{}}
+	issue := buildFixableIssue("finding-flag-off")
+	// setupWithIssueAndProvider does NOT set remediation_agent_enabled, so it defaults
+	// to false. The flag gate in remediationCodeActions must suppress the action.
+	service, params := setupWithIssueAndProvider(t, issue, fake)
+
+	actions := service.GetCodeActions(params)
+
+	for _, a := range actions {
+		assert.NotEqual(t, types.RemediationAgentQuickFix, a.Kind,
+			"flag remediation_agent_enabled=false must suppress RemediationAgentQuickFix actions")
+	}
+}
+
 func TestGetCodeActions_RemediationAgent_OfferedForFixableIssue(t *testing.T) {
 	mockEdit := &types.WorkspaceEdit{
 		Changes: map[string][]types.TextEdit{
@@ -114,7 +154,7 @@ func TestGetCodeActions_RemediationAgent_OfferedForFixableIssue(t *testing.T) {
 	fake := &fakeRemediationProvider{edit: mockEdit}
 	issue := buildFixableIssue("finding-abc")
 
-	service, params := setupWithIssueAndProvider(t, issue, fake)
+	service, params := setupWithIssueAndProviderFlagEnabled(t, issue, fake)
 
 	actions := service.GetCodeActions(params)
 
@@ -168,7 +208,7 @@ func TestResolveCodeAction_RemediationAgent_InvokesProvider(t *testing.T) {
 	fake := &fakeRemediationProvider{edit: mockEdit}
 	issue := buildFixableIssue("finding-resolve")
 
-	service, params := setupWithIssueAndProvider(t, issue, fake)
+	service, params := setupWithIssueAndProviderFlagEnabled(t, issue, fake)
 
 	actions := service.GetCodeActions(params)
 
@@ -264,7 +304,7 @@ func TestGetCodeActions_RemediationAgent_DoesNotMutateIssueCodeActions(t *testin
 	fake := &fakeRemediationProvider{edit: &types.WorkspaceEdit{}}
 	issue := buildFixableIssue("finding-mutate")
 
-	service, params := setupWithIssueAndProvider(t, issue, fake)
+	service, params := setupWithIssueAndProviderFlagEnabled(t, issue, fake)
 
 	// Record the number of code actions on the issue before calling GetCodeActions.
 	beforeCount := len(issue.GetCodeActions())
@@ -329,7 +369,7 @@ func TestGetCodeActions_RemediationAgent_IaCIssue_WithFindingId_OfferedAction(t 
 		AdditionalData: snyk.IaCIssueData{},
 	}
 
-	service, params := setupWithIssueAndProvider(t, issue, fake)
+	service, params := setupWithIssueAndProviderFlagEnabled(t, issue, fake)
 
 	actions := service.GetCodeActions(params)
 
@@ -348,6 +388,7 @@ func TestGetCodeActions_RemediationAgent_IaCIssue_WithFindingId_OfferedAction(t 
 // multiple identical-titled quickfix entries.
 func TestGetCodeActions_RemediationAgent_DedupsMultipleFixableIssues(t *testing.T) {
 	engine := testutil.UnitTest(t)
+	engine.GetConfiguration().Set("remediation_agent_enabled", true)
 	r := exampleRange
 	uriPath := documentUriExample
 	path := uri.PathFromUri(uriPath)
@@ -410,7 +451,7 @@ func TestResolveCodeAction_RemediationAgent_PropagatesContext(t *testing.T) {
 	recorder := &recordingRemediationProvider{}
 	issue := buildFixableIssue("finding-ctx")
 
-	service, params := setupWithIssueAndProvider(t, issue, recorder)
+	service, params := setupWithIssueAndProviderFlagEnabled(t, issue, recorder)
 
 	actions := service.GetCodeActions(params)
 

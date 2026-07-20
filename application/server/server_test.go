@@ -1853,6 +1853,9 @@ func Test_codeActionResolve_RemediationAgent_ReturnsEdit(t *testing.T) {
 	}
 	fakeProvider := &serverTestRemediationProvider{edit: mockEdit}
 
+	// Enable the feature flag so remediationCodeActions is not gated out.
+	engine.GetConfiguration().Set("remediation_agent_enabled", true)
+
 	// Build a custom CodeActionsService wired with the mocks.
 	fw := watcher.NewFileWatcher()
 	customCAService := codeaction.NewService(

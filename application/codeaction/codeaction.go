@@ -151,6 +151,12 @@ func (c *CodeActionsService) remediationCodeActions(issues []types.Issue, path t
 	if c.remediationProvider == nil {
 		return nil
 	}
+	// Gate behind the same feature flag that controls whether RemediationAgentFixFolderCommand
+	// is advertised in server capabilities. When the flag is off, neither the command nor the
+	// code action is surfaced, keeping the two entry-points consistent.
+	if !c.engine.GetConfiguration().GetBool("remediation_agent_enabled") {
+		return nil
+	}
 	const remediationActionTitle = "Fix with Snyk Remediation Agent"
 	var actions []types.LSPCodeAction
 	// De-duplicate by title: IssuesForRange can return several fixable issues for

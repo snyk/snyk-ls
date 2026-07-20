@@ -185,3 +185,54 @@ func TestRemediate_EmptyFile_ProducesInsertionEdit(t *testing.T) {
 	assert.Equal(t, 0, te.Range.End.Line, "pure insertion: end line must equal start line")
 	assert.Contains(t, te.NewText, "package main", "NewText must contain the inserted content")
 }
+
+// ---------------------------------------------------------------------------
+// HARDEN-4: gitFileDiff must pass --no-color, --no-ext-diff, --no-textconv
+//
+// collectFileDiffs (the FixFolder path) explicitly documents all three flags.
+// gitFileDiff (the Remediate path) omitted them. With color.diff=always in
+// the repo gitconfig, git diff emits ANSI escape sequences even through a
+// pipe — parseDiffHunks then fails to match the "@@ ... @@" hunk header and
+// returns an empty hunk list, causing workspaceEditFromContent to return an
+// error and buildWorkspaceEdits to silently drop the file. The result is a
+// nil WorkspaceEdit for an otherwise successful remy run.
+// ---------------------------------------------------------------------------
+
+// TestRemediate_ColorDiffAlways_ProducesEdit verifies that when the git repo
+// has color.diff=always configured, Remediate still returns a correct
+// WorkspaceEdit. Without --no-color in gitFileDiff the ANSI codes corrupt
+// parseDiffHunks and the edit is nil.
+func TestRemediate_ColorDiffAlways_ProducesEdit(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := initGitRepo(t)
+	// Force ANSI color output even through a pipe, simulating a developer's
+	// global gitconfig with color.diff=always.  git diff then emits escape
+	// sequences unless explicitly suppressed with --no-color.
+	setLocalGitConfig(t, repoRoot, "color.diff", "always")
+	commitFile(t, repoRoot, "main.go", "package main\nvar x = 1\n")
+	absPath := filepath.Join(repoRoot, "main.go")
+
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ string) error {
+		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0o644)
+	}
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	edit, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "f1",
+		ContentRoot: types.FilePath(repoRoot),
+		FilePath:    types.FilePath(absPath),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, edit, "color.diff=always must not corrupt the diff — edit must be non-nil")
+	assert.Contains(t, edit.Changes, absPath, "edit must include the modified file")
+}
+
+// setLocalGitConfig sets a key-value pair in the local git config of repoRoot.
+func setLocalGitConfig(t *testing.T, repoRoot, key, value string) {
+	t.Helper()
+	cmd := exec.Command("git", "-C", repoRoot, "config", "--local", key, value)
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "git config --local %s %s: %s", key, value, string(out))
+}

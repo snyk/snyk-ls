@@ -1306,7 +1306,7 @@ func workspaceDiagnosticHandler(conf configuration.Configuration) jrpc2.Handler 
 					Kind:    "full",
 					URI:     uri.PathToUri(filePath),
 					Version: nil,
-					Items:   converter.ToDiagnostics(issues),
+					Items:   converter.ToDiagnosticsForFolder(issues, folder.Path(), nil),
 				})
 			}
 		}
@@ -1327,7 +1327,7 @@ func textDocumentDiagnosticHandler(conf configuration.Configuration) jrpc2.Handl
 			return report, nil
 		}
 		filtered := fip.FilterIssues(fip.Issues(), folder.DisplayableIssueTypes())
-		report.Items = converter.ToDiagnostics(filtered[filePath])
+		report.Items = converter.ToDiagnosticsForFolder(filtered[filePath], folder.Path(), nil)
 		return report, nil
 	})
 }

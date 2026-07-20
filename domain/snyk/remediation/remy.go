@@ -904,7 +904,14 @@ func gitChangedFiles(ctx context.Context, root string) ([]string, error) {
 // tree in the repository at root. Returns an empty string if the file is
 // unchanged.
 func gitFileDiff(ctx context.Context, root, relPath string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", "-C", root, "diff", "HEAD", "--", relPath)
+	// --no-color: suppresses ANSI codes even when color.diff=always is set.
+	// --no-ext-diff: bypasses any diff.external / delta / difftastic config.
+	// --no-textconv: diffs raw blob bytes, bypassing any .gitattributes textconv
+	//   filter (e.g. word-count drivers) that would corrupt parseDiffHunks.
+	// Matches the flags documented in collectFileDiffs for the same reasons.
+	cmd := exec.CommandContext(ctx, "git", "-C", root,
+		"diff", "--no-color", "--no-ext-diff", "--no-textconv",
+		"HEAD", "--", relPath)
 	out, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("git diff HEAD -- %s: %w", relPath, err)

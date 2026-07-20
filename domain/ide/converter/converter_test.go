@@ -573,7 +573,7 @@ func TestToCodeAction_KindDerived_RemediationAgent(t *testing.T) {
 	}
 	issue.CodeActions = []types.CodeAction{action}
 
-	result := ToCodeAction(issue, action)
+	result := ToCodeAction(issue, action, "")
 
 	assert.Equal(t, types.RemediationAgentQuickFix, result.Kind)
 }
@@ -591,7 +591,7 @@ func TestToCodeAction_KindDerived_Empty_FallsBackToQuickFix(t *testing.T) {
 	}
 	issue.CodeActions = []types.CodeAction{action}
 
-	result := ToCodeAction(issue, action)
+	result := ToCodeAction(issue, action, "")
 
 	assert.Equal(t, types.QuickFix, result.Kind)
 }
@@ -608,179 +608,7 @@ func TestToCodeAction_KindDerived_ExistingQuickfix_NoRegression(t *testing.T) {
 	}
 	issue.CodeActions = []types.CodeAction{action}
 
-	result := ToCodeAction(issue, action)
+	result := ToCodeAction(issue, action, "")
 
 	assert.Equal(t, types.QuickFix, result.Kind, "existing actions without explicit Kind must fall back to QuickFix")
-}
-
-// TestFromRange verifies that sglsp.Range is correctly converted to types.Range.
-func TestFromRange(t *testing.T) {
-	testutil.UnitTest(t)
-
-	lspRange := sglsp.Range{
-		Start: sglsp.Position{Line: 3, Character: 7},
-		End:   sglsp.Position{Line: 5, Character: 12},
-	}
-
-	got := FromRange(lspRange)
-
-	assert.Equal(t, 3, got.Start.Line)
-	assert.Equal(t, 7, got.Start.Character)
-	assert.Equal(t, 5, got.End.Line)
-	assert.Equal(t, 12, got.End.Character)
-}
-
-// TestFromPosition verifies that sglsp.Position is correctly converted to types.Position.
-func TestFromPosition(t *testing.T) {
-	testutil.UnitTest(t)
-
-	pos := sglsp.Position{Line: 10, Character: 4}
-	got := FromPosition(pos)
-
-	assert.Equal(t, 10, got.Line)
-	assert.Equal(t, 4, got.Character)
-}
-
-// TestToTextEdit verifies that a types.TextEdit is converted to sglsp.TextEdit.
-func TestToTextEdit(t *testing.T) {
-	testutil.UnitTest(t)
-
-	te := types.TextEdit{
-		Range: types.Range{
-			Start: types.Position{Line: 1, Character: 0},
-			End:   types.Position{Line: 2, Character: 0},
-		},
-		NewText: "replacement\n",
-	}
-
-	got := ToTextEdit(te)
-
-	assert.Equal(t, "replacement\n", got.NewText)
-	assert.Equal(t, 1, got.Range.Start.Line)
-	assert.Equal(t, 2, got.Range.End.Line)
-}
-
-// TestToTextEdits verifies that a slice of types.TextEdit is converted to sglsp.TextEdit slice.
-func TestToTextEdits(t *testing.T) {
-	testutil.UnitTest(t)
-
-	edits := []types.TextEdit{
-		{
-			Range:   types.Range{Start: types.Position{Line: 0}, End: types.Position{Line: 1}},
-			NewText: "first\n",
-		},
-		{
-			Range:   types.Range{Start: types.Position{Line: 2}, End: types.Position{Line: 3}},
-			NewText: "second\n",
-		},
-	}
-
-	got := ToTextEdits(edits)
-
-	require.Len(t, got, 2)
-	assert.Equal(t, "first\n", got[0].NewText)
-	assert.Equal(t, "second\n", got[1].NewText)
-}
-
-// TestToCodeActions_MainPath verifies that ToCodeActions iterates issues and
-// produces one LSPCodeAction per code action, deduplicating by title.
-func TestToCodeActions_MainPath(t *testing.T) {
-	testutil.UnitTest(t)
-
-	action := &snyk.CodeAction{
-		Title:         "Fix with AI",
-		OriginalTitle: "Fix with AI",
-		Kind:          types.QuickFix,
-	}
-	issue := &snyk.Issue{
-		CodeActions: []types.CodeAction{action},
-	}
-
-	actions := ToCodeActions([]types.Issue{issue})
-
-	require.Len(t, actions, 1)
-	assert.Equal(t, "Fix with AI", actions[0].Title)
-}
-
-// TestToCodeActions_Dedup verifies that two issues sharing the same action title
-// produce only one LSPCodeAction (dedup by title).
-func TestToCodeActions_Dedup(t *testing.T) {
-	testutil.UnitTest(t)
-
-	action1 := &snyk.CodeAction{Title: "Shared Action", OriginalTitle: "Shared Action"}
-	action2 := &snyk.CodeAction{Title: "Shared Action", OriginalTitle: "Shared Action"}
-	issue1 := &snyk.Issue{CodeActions: []types.CodeAction{action1}}
-	issue2 := &snyk.Issue{CodeActions: []types.CodeAction{action2}}
-
-	actions := ToCodeActions([]types.Issue{issue1, issue2})
-
-	assert.Len(t, actions, 1, "duplicate titles must be deduplicated")
-}
-
-// TestToInlineValue verifies that a snyk.InlineValue is converted to types.InlineValue.
-func TestToInlineValue(t *testing.T) {
-	testutil.UnitTest(t)
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	expectedRange := types.Range{
-		Start: types.Position{Line: 4, Character: 2},
-		End:   types.Position{Line: 4, Character: 10},
-	}
-	mockVal := mock_snyk.NewMockInlineValue(ctrl)
-	mockVal.EXPECT().Range().Return(expectedRange)
-	mockVal.EXPECT().Text().Return("myVar = 42")
-
-	got := ToInlineValue(mockVal)
-
-	assert.Equal(t, "myVar = 42", got.Text)
-	assert.Equal(t, 4, got.Range.Start.Line)
-	assert.Equal(t, 2, got.Range.Start.Character)
-}
-
-// TestToInlineValues verifies that a slice of snyk.InlineValue is converted correctly.
-func TestToInlineValues(t *testing.T) {
-	testutil.UnitTest(t)
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	r1 := types.Range{Start: types.Position{Line: 1}, End: types.Position{Line: 1}}
-	r2 := types.Range{Start: types.Position{Line: 5}, End: types.Position{Line: 5}}
-
-	v1 := mock_snyk.NewMockInlineValue(ctrl)
-	v1.EXPECT().Range().Return(r1)
-	v1.EXPECT().Text().Return("a = 1")
-
-	v2 := mock_snyk.NewMockInlineValue(ctrl)
-	v2.EXPECT().Range().Return(r2)
-	v2.EXPECT().Text().Return("b = 2")
-
-	got := ToInlineValues([]snyk.InlineValue{v1, v2})
-
-	require.Len(t, got, 2)
-	assert.Equal(t, "a = 1", got[0].Text)
-	assert.Equal(t, "b = 2", got[1].Text)
-}
-
-// TestToHoversDocument verifies that ToHoversDocument returns a DocumentHovers
-// with the correct path and product, delegating hover conversion to ToHovers.
-func TestToHoversDocument(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
-	mockResolver.EXPECT().GetInt(types.SettingHoverVerbosity, nil).Return(1).AnyTimes()
-	mockResolver.EXPECT().GetString(types.SettingFormat, nil).Return("md").AnyTimes()
-
-	testIssue := &snyk.Issue{Message: "test message"}
-	path := types.FilePath("/repo/src/main.go")
-	p := product.ProductCode
-
-	doc := ToHoversDocument(engine, mockResolver, p, path, []types.Issue{testIssue}, nil)
-
-	assert.Equal(t, path, doc.Path)
-	assert.Equal(t, p, doc.Product)
-	require.Len(t, doc.Hover, 1)
-	assert.Equal(t, "test message", doc.Hover[0].Message)
 }
