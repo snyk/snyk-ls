@@ -458,7 +458,11 @@ func TestIsAuthenticated_PermanentAuthErrorStillTriggersReAuthNotification(t *te
 	var mu sync.RWMutex
 	messageRequestReceived := false
 	go notifier.CreateListener(func(params any) {
-		if _, ok := params.(types.ShowMessageRequest); ok {
+		if p, ok := params.(types.ShowMessageRequest); ok {
+			keys := p.Actions.Keys()
+			loginAction, ok := p.Actions.Get(keys[0])
+			require.True(t, ok)
+			require.Equal(t, types.LoginCommand, loginAction.CommandId)
 			mu.Lock()
 			messageRequestReceived = true
 			mu.Unlock()
@@ -594,6 +598,12 @@ func Test_shouldCauseLogout(t *testing.T) {
 		// Mirrors what http.Client.Do returns for a real, permanent 401: it always wraps the
 		// RoundTripper error in *url.Error, regardless of whether the cause is transient or not.
 		snykErr := snyk_errors.Error{StatusCode: 401, Title: "Authentication error"}
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self?version=2024-04-22", Err: snykErr}
+		assert.True(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
+	})
+
+	t.Run("permanent 400 snyk_errors.Error wrapped in url.Error causes logout", func(t *testing.T) {
+		snykErr := snyk_errors.Error{StatusCode: 400, Title: "Bad request"}
 		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self?version=2024-04-22", Err: snykErr}
 		assert.True(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
 	})
