@@ -72,7 +72,10 @@ func ToCodeAction(issue types.Issue, action types.CodeAction) types.LSPCodeActio
 		i := types.CodeActionData(*action.GetUuid())
 		id = &i
 	}
-	kind := types.QuickFix
+	kind := action.GetKind()
+	if kind == types.Empty {
+		kind = types.QuickFix
+	}
 	return types.LSPCodeAction{
 		Title:       action.GetTitle(),
 		Kind:        kind,

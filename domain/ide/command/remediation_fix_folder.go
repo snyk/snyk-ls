@@ -18,17 +18,12 @@ package command
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path/filepath"
 
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
-	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk/remediation"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -36,14 +31,13 @@ import (
 // remediationFixFolderCommand implements workspace/executeCommand for
 // snyk.remediationAgent.fixFolder. It validates the folder URI argument, runs
 // the fix workflow directly in that folder (which is already an isolated git
-// worktree created by the caller), and delivers any resulting edits to the
-// client via workspace/applyEdit. The command is blocking — the caller waits
-// for the full fix duration.
+// worktree created by the caller), and returns a FolderFixResult with one entry
+// per changed file. The command is blocking — the caller waits for the full fix
+// duration. It does NOT send workspace/applyEdit; the daemon lands changes by
+// copying each WorktreePath over the corresponding workspace file.
 type remediationFixFolderCommand struct {
 	command  types.CommandData
-	notifier notification.Notifier
 	provider remediation.FolderRemediator // nil when feature is off
-	engine   workflow.Engine
 }
 
 func (cmd *remediationFixFolderCommand) Command() types.CommandData {
@@ -73,25 +67,13 @@ func (cmd *remediationFixFolderCommand) Execute(ctx context.Context) (any, error
 		return nil, fmt.Errorf("snyk.remediationAgent.fixFolder: remediation agent is not enabled")
 	}
 
-	if cmd.engine != nil {
-		key := types.SettingClientCapabilities
-		capabilities, _ := cmd.engine.GetConfiguration().Get(key).(types.ClientCapabilities)
-		if !capabilities.Workspace.ApplyEdit {
-			return nil, errors.New("snyk.remediationAgent.fixFolder: client does not support workspace/applyEdit capability")
-		}
-	}
-
-	edit, err := cmd.provider.FixFolder(ctx, path)
+	files, err := cmd.provider.FixFolder(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("snyk.remediationAgent.fixFolder: %w", err)
 	}
-	if edit == nil || len(edit.Changes) == 0 {
-		return nil, nil
+	// Ensure Files is never nil so JSON marshals as [] not null.
+	if files == nil {
+		files = []types.FolderFixFileResult{}
 	}
-
-	cmd.notifier.Send(types.ApplyWorkspaceEditParams{
-		Label: "Snyk Remediation Agent fix",
-		Edit:  converter.ToWorkspaceEdit(edit),
-	})
-	return nil, nil
+	return types.FolderFixResult{Files: files}, nil
 }

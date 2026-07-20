@@ -17,10 +17,7 @@
 package command
 
 import (
-	"github.com/snyk/go-application-framework/pkg/workflow"
-
 	"github.com/snyk/snyk-ls/domain/snyk/remediation"
-	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -30,27 +27,9 @@ import (
 func NewRemediationFixFolderCommand(
 	cmd types.CommandData,
 	provider remediation.FolderRemediator,
-	notifier notification.Notifier,
 ) types.Command {
 	return &remediationFixFolderCommand{
 		command:  cmd,
-		notifier: notifier,
 		provider: provider,
-	}
-}
-
-// NewRemediationFixFolderCommandWithEngine constructs a remediationFixFolderCommand
-// with an engine for tests that exercise the ApplyEdit capability guard.
-func NewRemediationFixFolderCommandWithEngine(
-	cmd types.CommandData,
-	provider remediation.FolderRemediator,
-	notifier notification.Notifier,
-	engine workflow.Engine,
-) types.Command {
-	return &remediationFixFolderCommand{
-		command:  cmd,
-		notifier: notifier,
-		provider: provider,
-		engine:   engine,
 	}
 }

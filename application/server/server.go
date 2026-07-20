@@ -264,6 +264,9 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv))
 	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv))
 	var onFileChange func(types.FilePath)
+	if deps.RemediationNotifier != nil {
+		onFileChange = deps.RemediationNotifier.InvalidateFile
+	}
 	handlers["textDocument/didChange"] = enrich(textDocumentDidChangeHandler(conf, onFileChange))
 	handlers["textDocument/didClose"] = enrich(noOpHandler())
 	handlers[textDocumentDidOpenOperation] = enrich(textDocumentDidOpenHandler(conf))
@@ -700,41 +703,7 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 				CodeLensProvider:    &sglsp.CodeLensOptions{ResolveProvider: false},
 				InlineValueProvider: true,
 				ExecuteCommandProvider: &sglsp.ExecuteCommandOptions{
-					Commands: []string{
-						types.NavigateToRangeCommand,
-						types.WorkspaceScanCommand,
-						types.WorkspaceFolderScanCommand,
-						types.OpenBrowserCommand,
-						types.LoginCommand,
-						types.CopyAuthLinkCommand,
-						types.LogoutCommand,
-						types.TrustWorkspaceFoldersCommand,
-						types.OpenLearnLesson,
-						types.GetLearnLesson,
-						types.SubmitIgnoreRequest,
-						types.GetSettingsSastEnabled,
-						types.GetFeatureFlagStatus,
-						types.GetActiveUserCommand,
-						types.CodeFixCommand,
-						types.CodeSubmitFixFeedback,
-						types.CodeFixDiffsCommand,
-						types.CodeFixApplyEditCommand,
-						types.ExecuteCLICommand,
-						types.ConnectivityCheckCommand,
-						types.DirectoryDiagnosticsCommand,
-						types.ClearCacheCommand,
-						types.GenerateIssueDescriptionCommand,
-						types.ReportAnalyticsCommand,
-						types.WorkspaceConfigurationCommand,
-						types.GetTreeView,
-						types.ToggleTreeFilter,
-						types.SetNodeExpanded,
-						types.ShowScanErrorDetails,
-						types.UpdateFolderConfig,
-						types.DismissFeedbackBanner,
-						types.FeedbackBannerInteracted,
-						types.RemediationAgentFixFolderCommand,
-					},
+					Commands: commands(conf),
 				},
 			},
 		}
@@ -743,6 +712,47 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		logger.Debug().Str("method", method).Any("result", result).Msg("SENDING")
 		return result, nil
 	})
+}
+
+func commands(conf configuration.Configuration) []string {
+	cmds := []string{
+		types.NavigateToRangeCommand,
+		types.WorkspaceScanCommand,
+		types.WorkspaceFolderScanCommand,
+		types.OpenBrowserCommand,
+		types.LoginCommand,
+		types.CopyAuthLinkCommand,
+		types.LogoutCommand,
+		types.TrustWorkspaceFoldersCommand,
+		types.OpenLearnLesson,
+		types.GetLearnLesson,
+		types.SubmitIgnoreRequest,
+		types.GetSettingsSastEnabled,
+		types.GetFeatureFlagStatus,
+		types.GetActiveUserCommand,
+		types.CodeFixCommand,
+		types.CodeSubmitFixFeedback,
+		types.CodeFixDiffsCommand,
+		types.CodeFixApplyEditCommand,
+		types.ExecuteCLICommand,
+		types.ConnectivityCheckCommand,
+		types.DirectoryDiagnosticsCommand,
+		types.ClearCacheCommand,
+		types.GenerateIssueDescriptionCommand,
+		types.ReportAnalyticsCommand,
+		types.WorkspaceConfigurationCommand,
+		types.GetTreeView,
+		types.ToggleTreeFilter,
+		types.SetNodeExpanded,
+		types.ShowScanErrorDetails,
+		types.UpdateFolderConfig,
+		types.DismissFeedbackBanner,
+		types.FeedbackBannerInteracted,
+	}
+	if conf.GetBool("remediation_agent_enabled") {
+		cmds = append(cmds, types.RemediationAgentFixFolderCommand)
+	}
+	return cmds
 }
 
 func startClientMonitor(params types.InitializeParams, logger zerolog.Logger) {

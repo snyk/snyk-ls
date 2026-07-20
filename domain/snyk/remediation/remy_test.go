@@ -17,28 +17,35 @@
 package remediation_test
 
 import (
+	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/snyk/remediation"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// initGitRepo sets up a minimal git repository under a temp dir and returns
-// the repo root.
+// initGitRepo sets up a minimal git repository under dir so the provider can
+// use git-based change detection. Returns the CANONICAL repo root (symlinks
+// resolved) so that test assertions against edit keys match the paths that the
+// production code and git produce — on macOS t.TempDir returns /var/... but
+// git resolves symlinks to /private/var/...; using the canonical path here
+// prevents false "expected key not found" assertion failures.
 func initGitRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	// Canonicalize so the returned path matches git's view (git rev-parse
-	// --show-toplevel resolves symlinks). On macOS t.TempDir() is under /var
-	// (a symlink to /private/var); without this the production canonicalization
-	// produces cache keys the test's non-canonical paths never match.
-	if canonical, err := filepath.EvalSymlinks(dir); err == nil {
+	// Resolve symlinks so the returned path is canonical.
+	canonical, err := filepath.EvalSymlinks(dir)
+	if err == nil {
 		dir = canonical
 	}
 
@@ -53,47 +60,312 @@ func initGitRepo(t *testing.T) string {
 	run("init")
 	run("config", "user.email", "test@example.com")
 	run("config", "user.name", "Test")
+	// Overlay filesystems (e.g. Docker on Linux) have write-ordering delays that
+	// can cause git to report "not a valid object" when the object database is
+	// read immediately after a write. core.checkStat=minimal tells git not to
+	// recheck filesystem timestamps for objects it has already cached in memory,
+	// which suppresses the false-negative reads on overlayfs.
 	run("config", "core.checkStat", "minimal")
 	return dir
 }
 
 // commitFile writes content to path (relative to repo root), stages, and commits it.
+// git commands are retried a few times on overlayfs write-ordering errors ("not a
+// valid object") that can occur when the kernel page cache hasn't flushed a freshly
+// written git object before the next git command reads the object store.
 func commitFile(t *testing.T, repoRoot, relPath, content string) {
 	t.Helper()
-	absPath := filepath.Join(repoRoot, relPath)
-	require.NoError(t, os.MkdirAll(filepath.Dir(absPath), 0o755))
-	require.NoError(t, os.WriteFile(absPath, []byte(content), 0o644))
-
-	run := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = repoRoot
-		out, err := cmd.CombinedOutput()
-		require.NoError(t, err, "git %v: %s", args, string(out))
-	}
-
-	run("add", relPath)
-	run("commit", "-m", "initial")
+	commitFileInDir(t, repoRoot, relPath, content)
 }
 
-// TestMakeLineEdit_NegativeStartLine verifies that a hunk starting at line 0
-// (which translates to currentLine = -1 in 0-indexed) produces an error.
+// fakeRunner is a test remyRunner that accepts (and ignores) a nil engine.
+// fn is the actual test logic to run.
+func fakeRunner(fn func(ctx context.Context, root string, findingID string) error) func(ctx context.Context, eng workflow.Engine, root string, findingID string) error {
+	return func(ctx context.Context, _ workflow.Engine, root string, findingID string) error {
+		return fn(ctx, root, findingID)
+	}
+}
+
+// TestRemyProvider_EmptyFindingId_ReturnsNil asserts that an empty FindingId
+// produces (nil, nil) and the runner is never called.
+func TestRemyProvider_EmptyFindingId_ReturnsNil(t *testing.T) {
+	called := false
+	runner := fakeRunner(func(_ context.Context, _ string, _ string) error {
+		called = true
+		return nil
+	})
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	edit, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "",
+		ContentRoot: "/some/path",
+		FilePath:    "/some/path/file.go",
+	})
+
+	require.NoError(t, err)
+	assert.Nil(t, edit)
+	assert.False(t, called, "runner must not be called when FindingId is empty")
+}
+
+// TestRemyProvider_EmptyContentRoot_ReturnsNil asserts that an empty ContentRoot
+// produces (nil, nil) and the runner is never called.
+func TestRemyProvider_EmptyContentRoot_ReturnsNil(t *testing.T) {
+	called := false
+	runner := fakeRunner(func(_ context.Context, _ string, _ string) error {
+		called = true
+		return nil
+	})
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	edit, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "some-finding-id",
+		ContentRoot: "",
+		FilePath:    "/some/path/file.go",
+	})
+
+	require.NoError(t, err)
+	assert.Nil(t, edit)
+	assert.False(t, called, "runner must not be called when ContentRoot is empty")
+}
+
+// TestRemyProvider_EmptyFilePath_ReturnsNil asserts that an empty FilePath
+// produces (nil, nil) and the runner is never called.
+func TestRemyProvider_EmptyFilePath_ReturnsNil(t *testing.T) {
+	called := false
+	runner := fakeRunner(func(_ context.Context, _ string, _ string) error {
+		called = true
+		return nil
+	})
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	edit, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "some-finding-id",
+		ContentRoot: "/some/path",
+		FilePath:    "",
+	})
+
+	require.NoError(t, err)
+	assert.Nil(t, edit)
+	assert.False(t, called, "runner must not be called when FilePath is empty")
+}
+
+// TestRemyProvider_CallsRunnerWithCorrectArgs verifies that the runner receives
+// an isolated worktree path (not the real workspace) and the correct FindingId.
+func TestRemyProvider_CallsRunnerWithCorrectArgs(t *testing.T) {
+	repoRoot := initGitRepo(t)
+	commitFile(t, repoRoot, "main.go", "package main\n\nfunc main() {}\n")
+
+	var gotRoot, gotFindingID string
+	runner := fakeRunner(func(_ context.Context, root string, findingID string) error {
+		gotRoot = root
+		gotFindingID = findingID
+		return nil
+	})
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	_, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "finding-abc",
+		ContentRoot: types.FilePath(repoRoot),
+		FilePath:    types.FilePath(filepath.Join(repoRoot, "main.go")),
+	})
+	require.NoError(t, err)
+
+	// Runner receives the temporary worktree path, not the real workspace root.
+	assert.NotEqual(t, repoRoot, gotRoot, "runner must receive isolated worktree, not real workspace")
+	assert.True(t, filepath.IsAbs(gotRoot), "worktree path must be absolute")
+	assert.Equal(t, "finding-abc", gotFindingID)
+}
+
+// TestRemyProvider_RunnerError_Propagated verifies that errors from the runner
+// are returned to the caller.
+func TestRemyProvider_RunnerError_Propagated(t *testing.T) {
+	repoRoot := initGitRepo(t)
+	commitFile(t, repoRoot, "main.go", "package main\n\nfunc main() {}\n")
+
+	runnerErr := errors.New("remy subprocess failed")
+	runner := fakeRunner(func(_ context.Context, _ string, _ string) error {
+		return runnerErr
+	})
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	edit, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "finding-abc",
+		ContentRoot: types.FilePath(repoRoot),
+		FilePath:    types.FilePath(filepath.Join(repoRoot, "main.go")),
+	})
+
+	assert.ErrorIs(t, err, runnerErr)
+	assert.Nil(t, edit)
+}
+
+// TestRemyProvider_NoChanges_ReturnsNil verifies that when the runner makes no
+// changes to the ContentRoot, Remediate returns (nil, nil).
+func TestRemyProvider_NoChanges_ReturnsNil(t *testing.T) {
+	repoRoot := initGitRepo(t)
+	commitFile(t, repoRoot, "main.go", "package main\n\nfunc main() {}\n")
+
+	runner := fakeRunner(func(_ context.Context, _ string, _ string) error {
+		return nil
+	})
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	edit, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "finding-abc",
+		ContentRoot: types.FilePath(repoRoot),
+		FilePath:    types.FilePath(filepath.Join(repoRoot, "main.go")),
+	})
+
+	require.NoError(t, err)
+	assert.Nil(t, edit, "no changes should produce nil edit")
+}
+
+// TestRemyProvider_ReturnsWorkspaceEdit verifies that when the fake runner
+// writes a known change to a file in the worktree, Remediate returns a
+// WorkspaceEdit keyed by the real workspace path (not the temp worktree path).
+func TestRemyProvider_ReturnsWorkspaceEdit(t *testing.T) {
+	repoRoot := initGitRepo(t)
+	original := "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n"
+	commitFile(t, repoRoot, "main.go", original)
+
+	modified := "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"world\")\n}\n"
+	// The Changes key must use the real workspace path, not the worktree path.
+	absPath := filepath.Join(repoRoot, "main.go")
+
+	runner := fakeRunner(func(_ context.Context, root string, _ string) error {
+		// Write to the worktree root the runner received, not repoRoot.
+		return os.WriteFile(filepath.Join(root, "main.go"), []byte(modified), 0o644)
+	})
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	edit, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "finding-abc",
+		ContentRoot: types.FilePath(repoRoot),
+		FilePath:    types.FilePath(absPath),
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, edit, "changed file should produce a non-nil WorkspaceEdit")
+	require.Contains(t, edit.Changes, absPath, "Changes should be keyed by absolute path")
+
+	textEdits := edit.Changes[absPath]
+	require.NotEmpty(t, textEdits, "should have at least one TextEdit")
+
+	// The edit should affect line 5 (0-indexed). The unified diff for a
+	// single-line replacement produces a deletion TextEdit (NewText="") followed
+	// by an insertion TextEdit (NewText contains "world"). Verify that at least
+	// one TextEdit touches line 5 and that collectively the edits reference "world".
+	var affectsLine5 bool
+	var hasWorld bool
+	for _, te := range textEdits {
+		if te.Range.Start.Line == 5 {
+			affectsLine5 = true
+		}
+		if strings.Contains(te.NewText, "world") {
+			hasWorld = true
+		}
+	}
+	assert.True(t, affectsLine5, "expected at least one TextEdit on line 5")
+	assert.True(t, hasWorld, "expected a TextEdit whose NewText contains 'world'")
+}
+
+// TestRemyProvider_MultiFileChange_PartitionsAndCaches verifies that when remy
+// changes multiple files:
+//   - the first Remediate call returns only the changes for req.FilePath
+//   - changes for the other files are cached
+//   - the second Remediate call (for another file) is served from cache without
+//     re-invoking the runner
+func TestRemyProvider_MultiFileChange_PartitionsAndCaches(t *testing.T) {
+	repoRoot := initGitRepo(t)
+	commitFile(t, repoRoot, "a.go", "package main\n\nvar X = 1\n")
+	commitFile(t, repoRoot, "b.go", "package main\n\nvar Y = 2\n")
+
+	absA := filepath.Join(repoRoot, "a.go")
+	absB := filepath.Join(repoRoot, "b.go")
+
+	runnerCalls := 0
+	runner := fakeRunner(func(_ context.Context, root string, _ string) error {
+		runnerCalls++
+		if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package main\n\nvar X = 10\n"), 0o644); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(root, "b.go"), []byte("package main\n\nvar Y = 20\n"), 0o644)
+	})
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	// First call: code action invoked at a.go — should return only a.go changes.
+	editA, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "finding-a",
+		ContentRoot: types.FilePath(repoRoot),
+		FilePath:    types.FilePath(absA),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, editA, "first call must return changes for a.go")
+	assert.Contains(t, editA.Changes, absA, "first edit must be keyed by a.go workspace path")
+	assert.NotContains(t, editA.Changes, absB, "first edit must not include b.go")
+	assert.Equal(t, 1, runnerCalls, "runner must be called exactly once")
+
+	// Second call: code action invoked at b.go — must be served from cache.
+	editB, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "finding-b",
+		ContentRoot: types.FilePath(repoRoot),
+		FilePath:    types.FilePath(absB),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, editB, "second call must return cached changes for b.go")
+	assert.Contains(t, editB.Changes, absB, "second edit must be keyed by b.go workspace path")
+	assert.NotContains(t, editB.Changes, absA, "second edit must not include a.go")
+	assert.Equal(t, 1, runnerCalls, "runner must NOT be called again on cache hit")
+}
+
+// TestMakeLineEdit_NegativeStartLine verifies that makeLineEdit returns an error
+// when startLine is negative. We test this by constructing a diff that would
+// trigger a negative cursor position. Since makeLineEdit is unexported, we test
+// it indirectly via workspaceEditFromContent with a crafted diff hunk.
 func TestMakeLineEdit_NegativeStartLine(t *testing.T) {
+	// A diff hunk that references line 0 (which translates to currentLine = -1
+	// when 1-indexed is converted to 0-indexed) followed by a deletion triggers
+	// the negative-index guard in makeLineEdit.
+	// @@ -0,1 +0,0 @@ means startLine=0 in diff (1-indexed), which becomes -1 (0-indexed).
+	// We set up real git fixtures to drive the full path.
+	repoRoot := initGitRepo(t)
+	// Use a file with content to commit.
+	commitFile(t, repoRoot, "x.go", "line1\nline2\n")
+
+	// Craft a diff that has hunk starting at line 0 (malformed: should start at 1).
+	// parseDiffHunks converts "0" to currentLine = -1, and the "-" deletion
+	// calls applyDeletion(s, lastLine) which then calls makeLineEdit(-1, 0, "", lastLine).
+	// That must return an error; parseDiffHunks returns it; workspaceEditFromContent
+	// propagates it.
 	diff := "@@ -0,1 +0,0 @@\n-line1\n"
 	original := []byte("line1\nline2\n")
+	absPath := filepath.Join(repoRoot, "x.go")
 
-	edit, err := remediation.ExportedWorkspaceEditFromContent("/tmp/x.go", original, diff)
+	edit, err := remediation.ExportedWorkspaceEditFromContent(absPath, original, diff)
 	assert.Error(t, err, "negative startLine must produce an error")
 	assert.Nil(t, edit)
 }
 
 // TestMakeLineEdit_StartLineExceedsFileLength verifies that a hunk referencing
-// a line beyond the file's length produces an error.
+// a line beyond the file's length produces an error via workspaceEditFromContent.
 func TestMakeLineEdit_StartLineExceedsFileLength(t *testing.T) {
+	repoRoot := initGitRepo(t)
+	commitFile(t, repoRoot, "y.go", "only one line\n")
+
+	// File has 2 lines after split (["only one line", ""]). lastLine = 2.
+	// A hunk at line 100 means currentLine = 99 which exceeds lastLine.
 	diff := "@@ -100,1 +100,0 @@\n-phantom line\n"
 	original := []byte("only one line\n")
+	absPath := filepath.Join(repoRoot, "y.go")
 
-	edit, err := remediation.ExportedWorkspaceEditFromContent("/tmp/y.go", original, diff)
+	edit, err := remediation.ExportedWorkspaceEditFromContent(absPath, original, diff)
 	assert.Error(t, err, "startLine exceeding file length must produce an error")
 	assert.Nil(t, edit)
 }
@@ -101,7 +373,11 @@ func TestMakeLineEdit_StartLineExceedsFileLength(t *testing.T) {
 // TestWorkspaceEditFromContent_EmptyOriginalContent verifies that an empty
 // original content produces an error.
 func TestWorkspaceEditFromContent_EmptyOriginalContent(t *testing.T) {
-	edit, err := remediation.ExportedWorkspaceEditFromContent("/tmp/z.go", []byte{}, "@@ -1,1 +1,0 @@\n-something\n")
+	repoRoot := initGitRepo(t)
+	commitFile(t, repoRoot, "z.go", "something\n")
+	absPath := filepath.Join(repoRoot, "z.go")
+
+	edit, err := remediation.ExportedWorkspaceEditFromContent(absPath, []byte{}, "@@ -1,1 +1,0 @@\n-something\n")
 	assert.Error(t, err, "empty original content must produce an error")
 	assert.Nil(t, edit)
 }
@@ -109,7 +385,14 @@ func TestWorkspaceEditFromContent_EmptyOriginalContent(t *testing.T) {
 // TestWorkspaceEditFromContent_EmptyDiff verifies that an empty diff string
 // produces an error.
 func TestWorkspaceEditFromContent_EmptyDiff(t *testing.T) {
-	edit, err := remediation.ExportedWorkspaceEditFromContent("/tmp/w.go", []byte("hello\n"), "")
+	repoRoot := initGitRepo(t)
+	commitFile(t, repoRoot, "w.go", "hello\n")
+	absPath := filepath.Join(repoRoot, "w.go")
+
+	// An empty string diff: strings.Split("", "\n") produces [""] which has
+	// length 1, and after removing the trailing empty element we get length 0,
+	// triggering the "diff is empty" guard.
+	edit, err := remediation.ExportedWorkspaceEditFromContent(absPath, []byte("hello\n"), "")
 	assert.Error(t, err, "empty diff must produce an error")
 	assert.Nil(t, edit)
 }
@@ -118,10 +401,15 @@ func TestWorkspaceEditFromContent_EmptyDiff(t *testing.T) {
 // lines at the same source position are merged into a single TextEdit.
 func TestApplyInsertion_MergeConsecutive(t *testing.T) {
 	repoRoot := initGitRepo(t)
+	// Commit a file so we can compute a real diff.
 	original := "package main\n\nfunc foo() {}\n"
 	commitFile(t, repoRoot, "merge.go", original)
+
 	absPath := filepath.Join(repoRoot, "merge.go")
 
+	// The diff inserts two consecutive lines before line 3 (0-indexed line 2).
+	// In unified diff format, "+line" lines at the same hunk position before any
+	// context or deletion line should be merged.
 	diff := "@@ -3,0 +3,2 @@\n+// inserted line 1\n+// inserted line 2\n"
 
 	edit, err := remediation.ExportedWorkspaceEditFromContent(absPath, []byte(original), diff)
@@ -131,6 +419,7 @@ func TestApplyInsertion_MergeConsecutive(t *testing.T) {
 	textEdits := edit.Changes[absPath]
 	require.NotEmpty(t, textEdits)
 
+	// Both insertions must be merged into one TextEdit.
 	merged := false
 	for _, te := range textEdits {
 		if strings.Contains(te.NewText, "// inserted line 1") && strings.Contains(te.NewText, "// inserted line 2") {
@@ -140,29 +429,227 @@ func TestApplyInsertion_MergeConsecutive(t *testing.T) {
 	assert.True(t, merged, "consecutive insertions at same source line must be merged into one TextEdit")
 }
 
+// TestRemyProvider_InvalidateFile_EvictsFromCache verifies that calling
+// InvalidateFile removes the specified path from the cache so that the next
+// Remediate call for that file triggers a new remy run rather than serving
+// stale cached diffs.
+func TestRemyProvider_InvalidateFile_EvictsFromCache(t *testing.T) {
+	repoRoot := initGitRepo(t)
+	commitFile(t, repoRoot, "a.go", "package main\n\nvar X = 1\n")
+	commitFile(t, repoRoot, "b.go", "package main\n\nvar Y = 2\n")
+
+	absA := filepath.Join(repoRoot, "a.go")
+	absB := filepath.Join(repoRoot, "b.go")
+
+	runnerCalls := 0
+	runner := fakeRunner(func(_ context.Context, root string, _ string) error {
+		runnerCalls++
+		if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package main\n\nvar X = 10\n"), 0o644); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(root, "b.go"), []byte("package main\n\nvar Y = 20\n"), 0o644)
+	})
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	// First call populates cache with b.go changes.
+	_, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "finding-a",
+		ContentRoot: types.FilePath(repoRoot),
+		FilePath:    types.FilePath(absA),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, runnerCalls)
+
+	// Invalidate b.go as if didChange fired for it.
+	inv, ok := p.(remediation.FileChangeNotifier)
+	require.True(t, ok, "remyProvider must implement FileChangeNotifier")
+	inv.InvalidateFile(types.FilePath(absB))
+
+	// Second call for b.go must re-run remy, not serve from (now-evicted) cache.
+	editB, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "finding-b",
+		ContentRoot: types.FilePath(repoRoot),
+		FilePath:    types.FilePath(absB),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 2, runnerCalls, "runner must be called again after cache eviction")
+	require.NotNil(t, editB)
+	assert.Contains(t, editB.Changes, absB)
+}
+
+// TestRemediate_GitRoot_SubdirWorkspace verifies that when ContentRoot is a
+// subdirectory of a git repo, Remediate resolves the git root and produces
+// Changes keyed by the correct absolute workspace paths (gitRoot/relPath),
+// not by subdirRoot/relPath.
+func TestRemediate_GitRoot_SubdirWorkspace(t *testing.T) {
+	// Set up a repo at the parent level.
+	repoRoot := initGitRepo(t)
+	commitFile(t, repoRoot, "pkg/main.go", "package main\n\nvar X = 1\n")
+
+	// Simulate a workspace folder that is a subdirectory of the repo.
+	subdir := filepath.Join(repoRoot, "pkg")
+	absMain := filepath.Join(repoRoot, "pkg", "main.go")
+
+	runner := fakeRunner(func(_ context.Context, root string, _ string) error {
+		return os.WriteFile(filepath.Join(root, "pkg", "main.go"), []byte("package main\n\nvar X = 10\n"), 0o644)
+	})
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	edit, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "finding-subdir",
+		ContentRoot: types.FilePath(subdir),
+		FilePath:    types.FilePath(absMain),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, edit, "subdir workspace must produce a non-nil edit")
+	assert.Contains(t, edit.Changes, absMain,
+		"Changes must be keyed by the real workspace path (gitRoot/relPath), not subdir/relPath")
+}
+
+// TestNewRemyProvider_NilEngineNonNilRunner_RemediateEmptyFindingId_ReturnsNil
+// verifies that constructing with a nil engine and a non-nil runner succeeds, and
+// that calling Remediate with an empty FindingId short-circuits to (nil, nil)
+// without invoking the runner. This is distinct from
+// TestNewRemyProvider_NilEngineNonNilRunner_Succeeds in remy_provider_test.go,
+// which only asserts the provider is non-nil; this test additionally exercises the
+// Remediate empty-FindingId short-circuit path.
+func TestNewRemyProvider_NilEngineNonNilRunner_RemediateEmptyFindingId_ReturnsNil(t *testing.T) {
+	p := remediation.NewRemyProvider(nil, noopRunner)
+	require.NotNil(t, p)
+	edit, err := p.Remediate(context.Background(), remediation.RemediationRequest{})
+	require.NoError(t, err)
+	assert.Nil(t, edit)
+}
+
+// TestRemyProvider_ContentRootNotGitRepo_ReturnsError verifies that when
+// ContentRoot is not inside a git repository, Remediate returns an error from
+// the git root resolution step.
+func TestRemyProvider_ContentRootNotGitRepo_ReturnsError(t *testing.T) {
+	runner := fakeRunner(func(_ context.Context, _ string, _ string) error { return nil })
+	p := remediation.NewRemyProvider(nil, runner)
+
+	notARepo := t.TempDir() // plain directory, no .git
+	_, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "finding-x",
+		ContentRoot: types.FilePath(notARepo),
+		FilePath:    types.FilePath(filepath.Join(notARepo, "file.go")),
+	})
+	assert.Error(t, err, "ContentRoot not in a git repo must produce an error")
+}
+
+// TestRemyProvider_NonAbsoluteContentRoot_ReturnsError verifies that a relative
+// ContentRoot path produces an error.
+func TestRemyProvider_NonAbsoluteContentRoot_ReturnsError(t *testing.T) {
+	runner := fakeRunner(func(_ context.Context, _ string, _ string) error { return nil })
+	p := remediation.NewRemyProvider(nil, runner)
+
+	_, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "finding-x",
+		ContentRoot: "relative/path",
+		FilePath:    "/abs/file.go",
+	})
+	assert.Error(t, err, "non-absolute ContentRoot must produce an error")
+}
+
+// TestRemyProvider_FilePathNotInChanges_ReturnsNil verifies that when remy only
+// changes files other than req.FilePath, Remediate returns (nil, nil).
+func TestRemyProvider_FilePathNotInChanges_ReturnsNil(t *testing.T) {
+	repoRoot := initGitRepo(t)
+	commitFile(t, repoRoot, "a.go", "package main\n\nvar X = 1\n")
+	commitFile(t, repoRoot, "b.go", "package main\n\nvar Y = 2\n")
+
+	absA := filepath.Join(repoRoot, "a.go")
+
+	runner := fakeRunner(func(_ context.Context, root string, _ string) error {
+		return os.WriteFile(filepath.Join(root, "b.go"), []byte("package main\n\nvar Y = 20\n"), 0o644)
+	})
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	edit, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "finding-a",
+		ContentRoot: types.FilePath(repoRoot),
+		FilePath:    types.FilePath(absA),
+	})
+	require.NoError(t, err)
+	assert.Nil(t, edit, "remy did not touch req.FilePath, so edit must be nil")
+}
+
+// TestCacheValid_StatError_InvalidatesCache verifies that when a cached file is
+// deleted on disk, cacheValid returns false and the next Remediate re-runs remy.
+func TestCacheValid_StatError_InvalidatesCache(t *testing.T) {
+	repoRoot := initGitRepo(t)
+	commitFile(t, repoRoot, "a.go", "package main\n\nvar X = 1\n")
+	commitFile(t, repoRoot, "b.go", "package main\n\nvar Y = 2\n")
+
+	absA := filepath.Join(repoRoot, "a.go")
+	absB := filepath.Join(repoRoot, "b.go")
+
+	runnerCalls := 0
+	runner := fakeRunner(func(_ context.Context, root string, _ string) error {
+		runnerCalls++
+		if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package main\n\nvar X = 10\n"), 0o644); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(root, "b.go"), []byte("package main\n\nvar Y = 20\n"), 0o644)
+	})
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	_, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "finding-a",
+		ContentRoot: types.FilePath(repoRoot),
+		FilePath:    types.FilePath(absA),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, runnerCalls)
+
+	// Delete b.go from workspace so os.Stat fails in cacheValid → cache evicted.
+	require.NoError(t, os.Remove(absB))
+
+	_, err = p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "finding-b",
+		ContentRoot: types.FilePath(repoRoot),
+		FilePath:    types.FilePath(absB),
+	})
+	// Runner re-invoked because cache was invalidated by Stat failure.
+	assert.Equal(t, 2, runnerCalls, "runner must re-run after Stat-based cache invalidation")
+	_ = err
+}
+
 // TestParseDiffHunks_MalformedHunkHeader_ReturnsError verifies that a @@ line
 // that does not match the expected pattern produces an error.
 func TestParseDiffHunks_MalformedHunkHeader_ReturnsError(t *testing.T) {
+	repoRoot := initGitRepo(t)
+	commitFile(t, repoRoot, "m.go", "hello\n")
+	absPath := filepath.Join(repoRoot, "m.go")
+
 	diff := "@@ not-valid @@\n-hello\n"
-	edit, err := remediation.ExportedWorkspaceEditFromContent("/tmp/m.go", []byte("hello\n"), diff)
+	edit, err := remediation.ExportedWorkspaceEditFromContent(absPath, []byte("hello\n"), diff)
 	assert.Error(t, err, "malformed hunk header must produce an error")
 	assert.Nil(t, edit)
 }
 
-// TestParseDiffHunks_DeletionOfDashDashLine verifies that a deletion of a line
+// TestParseDiffHunks_DeleteionOfDashDashLine verifies that a deletion of a line
 // starting with "--" (e.g. a SQL comment "-- old query") is recorded correctly.
+// The diff line for that deletion is "--- old query", which must NOT be confused
+// with a file header and must produce a TextEdit deleting the original line.
 func TestParseDiffHunks_DeletionOfDashDashLine(t *testing.T) {
 	repoRoot := initGitRepo(t)
 	original := "-- old query\n"
 	commitFile(t, repoRoot, "q.sql", original)
 	absPath := filepath.Join(repoRoot, "q.sql")
 
+	// Diff: delete "-- old query" (→ diff line "--- old query"), insert "-- new query".
 	diff := "@@ -1 +1 @@\n--- old query\n+-- new query\n"
 	edit, err := remediation.ExportedWorkspaceEditFromContent(absPath, []byte(original), diff)
 	require.NoError(t, err, "deletion of a '--' line must not be treated as a file header")
-	require.NotNil(t, edit)
+	require.NotNil(t, edit, "deletion of '--' line must produce a non-nil edit")
 	edits := edit.Changes[absPath]
-	require.NotEmpty(t, edits)
+	require.NotEmpty(t, edits, "must have at least one TextEdit")
+	// The deletion TextEdit must target line 0 and have empty NewText.
 	found := false
 	for _, te := range edits {
 		if te.Range.Start.Line == 0 && te.NewText == "" {
@@ -172,17 +659,287 @@ func TestParseDiffHunks_DeletionOfDashDashLine(t *testing.T) {
 	assert.True(t, found, "expected a deletion TextEdit on line 0")
 }
 
+// mustEvalSymlinks is a test helper that resolves symlinks in path and fails the
+// test if resolution fails (e.g. the path does not exist). On Linux with no
+// symlinks EvalSymlinks is a no-op; on macOS /var→/private/var it returns the
+// real path.
+func mustEvalSymlinks(t *testing.T, path string) string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(path)
+	require.NoError(t, err, "EvalSymlinks(%q) must succeed", path)
+	return resolved
+}
+
+// TestRemediate_SymlinkContentRoot_ReturnsCanonicalEdit is a regression test
+// for the macOS/Windows cross-platform bug where t.TempDir() (or os.TempDir())
+// returns a non-canonical path (e.g. /var/... on macOS, which resolves to
+// /private/var/...). When ContentRoot is a non-canonical path containing a
+// symlink component, Remediate must still return a WorkspaceEdit keyed under
+// the CANONICAL path — matching git's canonical view — rather than a nil edit.
+//
+// On Linux we reproduce the macOS class by explicitly creating a symlink to the
+// real temp dir and passing the symlinked path as ContentRoot. Without the
+// filepath.EvalSymlinks fix, the edit keys (from git --show-toplevel, canonical)
+// do not match the lookup key (non-canonical symlink path), so the test fails
+// with a nil edit even though the runner modified a file.
+func TestRemediate_SymlinkContentRoot_ReturnsCanonicalEdit(t *testing.T) {
+	// Create the real repo under a canonical temp dir.
+	realDir := t.TempDir()
+	realDir = mustEvalSymlinks(t, realDir) // ensure realDir itself is canonical
+	initGitRepoInDir(t, realDir)
+	commitFileInDir(t, realDir, "main.go", "package main\nvar x = 1\n")
+
+	// Create a symlink pointing to the real dir so we can pass a non-canonical
+	// path as ContentRoot, reproducing the macOS /var → /private/var class.
+	linkDir := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(realDir, linkDir); err != nil {
+		t.Skipf("cannot create symlink (os restriction): %v", err)
+	}
+
+	// ContentRoot is the non-canonical symlinked path.
+	symlinkRoot := linkDir
+	// The canonical path (what git rev-parse --show-toplevel returns).
+	canonicalRoot := realDir
+
+	modified := "package main\nvar x = 99\n"
+	runner := fakeRunner(func(_ context.Context, root string, _ string) error {
+		return os.WriteFile(filepath.Join(root, "main.go"), []byte(modified), 0o644)
+	})
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	edit, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "finding-symlink",
+		ContentRoot: types.FilePath(symlinkRoot),
+		FilePath:    types.FilePath(filepath.Join(symlinkRoot, "main.go")),
+	})
+
+	require.NoError(t, err)
+	// Before the fix, edit is nil because the key (canonical) does not match the
+	// non-canonical lookup. After the fix, the canonical key is used throughout
+	// and the edit is non-nil.
+	require.NotNil(t, edit,
+		"Remediate must return a non-nil edit even when ContentRoot contains a symlink component; "+
+			"symlink root=%q canonical root=%q", symlinkRoot, canonicalRoot)
+
+	// The edit key must use the canonical path, not the symlinked path.
+	canonicalFilePath := filepath.Join(canonicalRoot, "main.go")
+	assert.Contains(t, edit.Changes, canonicalFilePath,
+		"edit must be keyed under the canonical path %q, not the symlink path %q",
+		canonicalFilePath, filepath.Join(symlinkRoot, "main.go"))
+}
+
+// initGitRepoInDir initializes a git repo in an already-existing directory dir.
+// Unlike initGitRepo (which creates a new t.TempDir), this takes an existing dir.
+func initGitRepoInDir(t *testing.T, dir string) {
+	t.Helper()
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, "git %v: %s", args, string(out))
+	}
+	run("init")
+	run("config", "user.email", "test@example.com")
+	run("config", "user.name", "Test")
+	run("config", "core.checkStat", "minimal")
+}
+
+// commitFileInDir writes content to relPath (relative to dir), stages, and
+// commits it. git commands are retried a few times on overlayfs write-ordering
+// errors ("not a valid object") that can occur when the kernel page cache
+// hasn't flushed a freshly written git object before the next git command
+// reads the object store.
+func commitFileInDir(t *testing.T, dir, relPath, content string) {
+	t.Helper()
+	absPath := filepath.Join(dir, relPath)
+	require.NoError(t, os.MkdirAll(filepath.Dir(absPath), 0o755))
+	require.NoError(t, os.WriteFile(absPath, []byte(content), 0o644))
+
+	runWithRetry := func(args ...string) {
+		t.Helper()
+		const maxRetries = 8
+		for attempt := 0; attempt < maxRetries; attempt++ {
+			cmd := exec.Command("git", args...)
+			cmd.Dir = dir
+			out, err := cmd.CombinedOutput()
+			if err == nil {
+				return
+			}
+			// Network- and overlay-filesystem write-ordering delays: a freshly
+			// written git object or ref is not yet visible for reading due to page
+			// cache coherence. Two known manifestations:
+			//   "not a valid object" — object written but not yet readable
+			//   "nonexistent object" — ref update races object write
+			isWriteOrderingDelay := strings.Contains(string(out), "not a valid object") ||
+				strings.Contains(string(out), "nonexistent object")
+			if attempt < maxRetries-1 && isWriteOrderingDelay {
+				time.Sleep(50 * time.Millisecond)
+				continue
+			}
+			require.NoError(t, err, "git %v: %s", args, string(out))
+		}
+	}
+	runWithRetry("add", relPath)
+	runWithRetry("commit", "-m", "initial")
+}
+
 // TestParseDiffHunks_NoNewlineAtEndOfFile verifies that the "\ No newline at end
-// of file" diff marker is handled without error.
+// of file" diff marker is handled without error by adjusting the line cursor.
 func TestParseDiffHunks_NoNewlineAtEndOfFile(t *testing.T) {
 	repoRoot := initGitRepo(t)
 	original := "hello"
 	commitFile(t, repoRoot, "n.go", original)
 	absPath := filepath.Join(repoRoot, "n.go")
 
+	// Unified diff for changing "hello" (no newline) to "world" (no newline).
 	diff := "@@ -1 +1 @@\n-hello\n\\ No newline at end of file\n+world\n\\ No newline at end of file\n"
 	edit, err := remediation.ExportedWorkspaceEditFromContent(absPath, []byte(original), diff)
 	require.NoError(t, err, "no-newline marker must be parsed without error")
 	require.NotNil(t, edit)
 	assert.Contains(t, edit.Changes, absPath)
+}
+
+// TestInvalidateFile_DeletedFile_SymlinkPath_EvictsCanonicalKey tests Fix 1:
+// when a file has been deleted (e.g. a fix removed it) and then the LSP
+// didClose/didChange handler calls InvalidateFile with the non-canonical
+// (symlinked) path, filepath.EvalSymlinks(path) FAILS because the file no
+// longer exists on disk. The implementation must fall back to resolving the
+// PARENT DIRECTORY (which still exists) and re-joining the base name, so the
+// resulting canonical path matches the key that Remediate wrote into the cache
+// (which used EvalSymlinks while the file still existed).
+//
+// Without the Dir+Base fallback, InvalidateFile falls back to the raw
+// (non-canonical) path, misses the canonical cache key, and the stale entry
+// survives. The next Remediate call then incorrectly serves stale edits.
+//
+// The test is skipped gracefully if the OS disallows symlink creation.
+func TestInvalidateFile_DeletedFile_SymlinkPath_EvictsCanonicalKey(t *testing.T) {
+	// Create a real git repo under a canonical temp dir with two files.
+	realDir := t.TempDir()
+	realDir = mustEvalSymlinks(t, realDir)
+	initGitRepoInDir(t, realDir)
+	commitFileInDir(t, realDir, "a.go", "package main\nvar a = 1\n")
+	commitFileInDir(t, realDir, "b.go", "package main\nvar b = 1\n")
+
+	// Create a symlink to the real dir — the "LSP handler" path is non-canonical.
+	linkDir := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(realDir, linkDir); err != nil {
+		t.Skipf("cannot create symlink (os restriction): %v", err)
+	}
+
+	symlinkRoot := linkDir
+	symlinkA := filepath.Join(symlinkRoot, "a.go")
+	symlinkB := filepath.Join(symlinkRoot, "b.go")
+
+	var runnerCalls int
+	runner := fakeRunner(func(_ context.Context, root string, _ string) error {
+		runnerCalls++
+		// Modify both files so b.go ends up in the cache after the a.go request.
+		if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package main\nvar a = 2\n"), 0o644); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(root, "b.go"), []byte("package main\nvar b = 2\n"), 0o644)
+	})
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	// First Remediate populates cache: a.go edits returned, b.go edits cached
+	// under the CANONICAL key (realDir/b.go).
+	_, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "finding-del-symlink",
+		ContentRoot: types.FilePath(symlinkRoot),
+		FilePath:    types.FilePath(symlinkA),
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, runnerCalls, "runner must run once on first call")
+
+	// NOW delete b.go from disk — simulating a fix that removed the file.
+	// After deletion, filepath.EvalSymlinks(symlinkB) FAILS because the target
+	// no longer exists. The Dir+Base fallback must resolve the parent (linkDir →
+	// realDir) and re-join "b.go" to produce the canonical path for the delete.
+	require.NoError(t, os.Remove(filepath.Join(realDir, "b.go")))
+
+	// Invalidate using the non-canonical symlinked path of the now-deleted file.
+	inv, ok := p.(remediation.FileChangeNotifier)
+	require.True(t, ok, "remyProvider must implement FileChangeNotifier")
+	inv.InvalidateFile(types.FilePath(symlinkB))
+
+	// The cache entry (keyed under the canonical path realDir) must now be empty
+	// (b.go was the only remaining cached file). CacheLen must be 0.
+	assert.Equal(t, 0, remediation.CacheLen(p),
+		"InvalidateFile with a non-canonical path of a DELETED file must evict the cache entry; "+
+			"Dir+Base fallback required when EvalSymlinks(file) fails but EvalSymlinks(dir) succeeds; "+
+			"symlink=%q canonical dir=%q", symlinkB, realDir)
+}
+
+// TestInvalidateFile_SymlinkPath_EvictsCanonicalKey is a regression test for
+// the macOS/Windows class of bug where the LSP textDocument/didChange handler
+// calls InvalidateFile with the raw URI path (non-canonical, e.g. the symlinked
+// path) while the cache was populated by Remediate using the canonical path
+// (after filepath.EvalSymlinks). Without the fix, the delete misses the
+// canonical key and the stale cache entry survives, causing the next Remediate
+// to serve stale edits instead of re-running remy.
+//
+// On Linux we reproduce this by creating a symlink to a real temp dir.
+// The test is skipped gracefully if the OS disallows symlink creation.
+func TestInvalidateFile_SymlinkPath_EvictsCanonicalKey(t *testing.T) {
+	// Create the real repo under a canonical temp dir (two files so one gets cached).
+	realDir := t.TempDir()
+	realDir = mustEvalSymlinks(t, realDir)
+	initGitRepoInDir(t, realDir)
+	commitFileInDir(t, realDir, "a.go", "package main\nvar a = 1\n")
+	commitFileInDir(t, realDir, "b.go", "package main\nvar b = 1\n")
+
+	// Create a symlink pointing to the real dir.
+	linkDir := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(realDir, linkDir); err != nil {
+		t.Skipf("cannot create symlink (os restriction): %v", err)
+	}
+
+	// Non-canonical (symlinked) paths — what the LSP handler would supply.
+	symlinkRoot := linkDir
+	symlinkA := filepath.Join(symlinkRoot, "a.go")
+	symlinkB := filepath.Join(symlinkRoot, "b.go")
+
+	var runnerCalls int
+	runner := fakeRunner(func(_ context.Context, root string, _ string) error {
+		runnerCalls++
+		if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package main\nvar a = 2\n"), 0o644); err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(root, "b.go"), []byte("package main\nvar b = 2\n"), 0o644)
+	})
+
+	p := remediation.NewRemyProvider(nil, runner)
+
+	// First call with symlinked ContentRoot — Remediate canonicalizes internally.
+	// a.go edits are returned; b.go edits are cached under the CANONICAL key.
+	_, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "finding-symlink-invalidate",
+		ContentRoot: types.FilePath(symlinkRoot),
+		FilePath:    types.FilePath(symlinkA),
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, runnerCalls, "runner must be called exactly once on first Remediate")
+
+	// Invalidate b.go via the NON-canonical (symlinked) path — the path a
+	// real LSP handler would pass from uri.PathFromUri.
+	inv, ok := p.(remediation.FileChangeNotifier)
+	require.True(t, ok, "remyProvider must implement FileChangeNotifier")
+	inv.InvalidateFile(types.FilePath(symlinkB))
+
+	// Second call for b.go via the symlinked path. The cache entry (keyed under
+	// canonical path) must have been evicted by InvalidateFile, so the runner
+	// must fire again.
+	_, err = p.Remediate(context.Background(), remediation.RemediationRequest{
+		FindingId:   "finding-symlink-invalidate",
+		ContentRoot: types.FilePath(symlinkRoot),
+		FilePath:    types.FilePath(symlinkB),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 2, runnerCalls,
+		"runner must be re-invoked after InvalidateFile with the non-canonical (symlinked) path; "+
+			"symlink=%q canonical=%q", symlinkB, filepath.Join(realDir, "b.go"))
 }

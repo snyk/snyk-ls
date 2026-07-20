@@ -61,8 +61,6 @@ import (
 	performance2 "github.com/snyk/snyk-ls/internal/observability/performance"
 )
 
-const remediationAgentEnabledKey = "remediation_agent_enabled"
-
 var (
 	snykApiClient               snyk_api.SnykApiClient
 	snykCodeScanner             *code.Scanner
@@ -82,6 +80,7 @@ var (
 	scanNotifier                scanner2.ScanNotifier
 	codeActionService           *codeaction.CodeActionsService
 	fileWatcher                 *watcher.FileWatcher
+	remediationNotifier         remediation.FileChangeNotifier
 	initMutex                   = &sync.Mutex{}
 	notifier                    domainNotify.Notifier
 	codeInstrumentor            codeClientObservability.Instrumentor
@@ -110,13 +109,14 @@ type Dependencies struct {
 	// process-lifecycle dependencies used during startup, not per-request.
 	// Access them via di.Installer() / di.Initializer() until those global
 	// accessors are retired.
-	Scanner           scanner2.Scanner
-	HoverService      hover.Service
-	ScanNotifier      scanner2.ScanNotifier
-	ScanPersister     persistence.ScanSnapshotPersister
-	FileWatcher       *watcher.FileWatcher
-	ErrorReporter     er.ErrorReporter
-	CodeActionService *codeaction.CodeActionsService
+	Scanner             scanner2.Scanner
+	HoverService        hover.Service
+	ScanNotifier        scanner2.ScanNotifier
+	ScanPersister       persistence.ScanSnapshotPersister
+	FileWatcher         *watcher.FileWatcher
+	ErrorReporter       er.ErrorReporter
+	CodeActionService   *codeaction.CodeActionsService
+	RemediationNotifier remediation.FileChangeNotifier
 }
 
 func currentDependencies() Dependencies {
@@ -135,13 +135,14 @@ func currentDependencies() Dependencies {
 		InlineValueProvider:   inlineValueProvider,
 		TreeEmitter:           treeEmitterInstance,
 		// Handler-accessed dependencies:
-		Scanner:           scanner,
-		HoverService:      hoverService,
-		ScanNotifier:      scanNotifier,
-		ScanPersister:     scanPersister,
-		FileWatcher:       fileWatcher,
-		ErrorReporter:     errorReporter,
-		CodeActionService: codeActionService,
+		Scanner:             scanner,
+		HoverService:        hoverService,
+		ScanNotifier:        scanNotifier,
+		ScanPersister:       scanPersister,
+		FileWatcher:         fileWatcher,
+		ErrorReporter:       errorReporter,
+		CodeActionService:   codeActionService,
+		RemediationNotifier: remediationNotifier,
 	}
 }
 
@@ -231,12 +232,19 @@ func initApplication(conf configuration.Configuration, engine workflow.Engine, l
 	config.SetWorkspace(conf, w)
 	fileWatcher = watcher.NewFileWatcher()
 
+	var remediationProvider remediation.RemediationProvider
 	var folderRemediator remediation.FolderRemediator
-	if conf.GetBool(remediationAgentEnabledKey) {
-		folderRemediator = remediation.NewRemyProvider(engine, nil)
+	remediationNotifier = nil
+	p := remediation.NewRemyProvider(engine, nil)
+	remediationProvider = p
+	if n, ok := p.(remediation.FileChangeNotifier); ok {
+		remediationNotifier = n
+	}
+	if fr, ok := p.(remediation.FolderRemediator); ok {
+		folderRemediator = fr
 	}
 
-	codeActionService = codeaction.NewService(engine, w, fileWatcher, notifier, featureFlagService, configResolver)
+	codeActionService = codeaction.NewService(engine, w, fileWatcher, notifier, featureFlagService, configResolver, remediationProvider)
 	command.SetService(command.NewService(engine, logger, authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, ldxSyncService, configResolver, scanStateAggregator.StateSnapshot, folderRemediator))
 }
 

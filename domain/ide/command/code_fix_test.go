@@ -17,6 +17,7 @@
 package command
 
 import (
+	"context"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -76,7 +77,7 @@ func setupCommand(t *testing.T, engine workflow.Engine, mockNotifier *notificati
 	return cmd
 }
 
-func setupMockEdit() (edit *types.WorkspaceEdit, deferredEdit func() *types.WorkspaceEdit) {
+func setupMockEdit() (edit *types.WorkspaceEdit, deferredEdit func(context.Context) *types.WorkspaceEdit) {
 	var mockTextEdit = types.TextEdit{
 		Range: types.Range{
 			Start: types.Position{Line: 1, Character: 2},
@@ -88,7 +89,7 @@ func setupMockEdit() (edit *types.WorkspaceEdit, deferredEdit func() *types.Work
 			"someUri": {mockTextEdit},
 		},
 	}
-	var deferredMockEdit = func() *types.WorkspaceEdit {
+	var deferredMockEdit = func(_ context.Context) *types.WorkspaceEdit {
 		return mockEdit
 	}
 	return mockEdit, deferredMockEdit
@@ -181,7 +182,7 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 	require.True(t, ok)
 	issueRange, err := cmd.toRange(rangeDto)
 	require.NoError(t, err)
-	deferredMockEdit := func() *types.WorkspaceEdit {
+	deferredMockEdit := func(_ context.Context) *types.WorkspaceEdit {
 		return nil
 	}
 	codeAction := snyk.CodeAction{
@@ -208,6 +209,45 @@ func Test_fixCodeIssue_noEdit(t *testing.T) {
 	var sentMessages []any
 	// Verify no workspace edit is sent to the client
 	assert.Equal(t, sentMessages, mockNotifier.SentMessages())
+}
+
+func Test_fixCodeIssue_nilDeferredEdit_noOp(t *testing.T) {
+	// A CodeAction that has no DeferredEdit (nil) should not panic and should
+	// return a no-op result — matching the guard already present in ResolveCodeAction.
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	setupClientCapability(engine)
+
+	mockNotifier := notification.NewMockNotifier()
+	cmd := setupCommand(t, engine, mockNotifier)
+
+	filePath := sampleArgs[1].(string)
+	path := types.FilePath(filePath)
+	issueRange, err := cmd.toRange(sampleArgs[2])
+	require.NoError(t, err)
+
+	// CodeAction with nil DeferredEdit — simulates a command-only CodeAction
+	codeAction := snyk.CodeAction{
+		Uuid:         &codeActionId,
+		DeferredEdit: nil,
+	}
+	issues := setupSampleIssues(issueRange, codeAction, cmd.command)
+	issueMap := snyk.IssuesByFile{
+		path: issues,
+	}
+
+	issueProviderMock := mock_snyk.NewMockIssueProvider(ctrl)
+	issueProviderMock.EXPECT().Issues().Return(issueMap)
+	cmd.issueProvider = issueProviderMock
+
+	// Must not panic; must return no-op (nil, nil)
+	res, err := cmd.Execute(t.Context())
+
+	assert.NoError(t, err)
+	assert.Nil(t, res)
+	// No edit notification should be sent
+	var expectedMessages []any
+	assert.Equal(t, expectedMessages, mockNotifier.SentMessages())
 }
 
 func Test_fixCodeIssue_NoIssueFound(t *testing.T) {
