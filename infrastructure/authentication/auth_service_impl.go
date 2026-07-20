@@ -671,6 +671,10 @@ func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 	}
 	a.updateCredentials("", true, false)
 	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())
+
+	a.lastUsedTokenMu.Lock()
+	a.lastUsedToken = ""
+	a.lastUsedTokenMu.Unlock()
 }
 
 // IsAuthenticated returns true if the token is verified

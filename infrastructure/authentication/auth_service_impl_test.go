@@ -704,6 +704,19 @@ func Test_Logout_CallsClearAuthentication(t *testing.T) {
 	assert.True(t, provider.ClearAuthenticationCalled, "Logout() must call ClearAuthentication on the provider")
 }
 
+func Test_Logout_ResetsLastUsedToken(t *testing.T) {
+	// Without this reset, re-authenticating with the same PAT/API token after logout
+	// leaves isNewToken false in doAuthCheck, silently skipping sendAuthenticationAnalytics.
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+	service.lastUsedToken = "some-previously-seen-token"
+
+	service.Logout(t.Context())
+
+	assert.Empty(t, service.lastUsedToken, "Logout() must reset lastUsedToken so re-auth with the same token is treated as new")
+}
+
 func Test_ConfigureProviders_CredentialMismatch_CallsClearAuthentication(t *testing.T) {
 	// When configureProviders detects a credential mismatch it must call ClearAuthentication
 	// to remove stale credentials from provider-specific storage (e.g. CLI config file).
