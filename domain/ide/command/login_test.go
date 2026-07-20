@@ -169,6 +169,59 @@ func TestLoginCommand_Execute_InvalidAuthMethodArg_ReturnsError(t *testing.T) {
 	assert.Nil(t, result)
 }
 
+func TestLoginCommand_Execute_CanceledAuth_NotReportedToUser(t *testing.T) {
+	// When the IDE cancels an in-flight login via $/cancelRequest, Authenticate returns a
+	// cancellation. Execute must treat it as expected: return the error without notifying the user.
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	setMockWorkspace(t, ctrl, conf)
+
+	blockingProvider := authentication.NewBlockingFakeAuthProvider()
+	notifier := notification.NewMockNotifier()
+	authService := authentication.NewAuthenticationService(engine, ts, blockingProvider, error_reporting.NewTestErrorReporter(engine), notifier, testutil.DefaultConfigResolver(engine))
+
+	cmd := loginCommand{
+		command:            types.CommandData{CommandId: types.LoginCommand},
+		authService:        authService,
+		featureFlagService: featureflag.NewFakeService(),
+		notifier:           notifier,
+		engine:             engine,
+		ldxSyncService:     mock_command.NewMockLdxSyncService(ctrl),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan struct{})
+	var result any
+	var err error
+	go func() {
+		result, err = cmd.Execute(ctx)
+		close(done)
+	}()
+
+	// Cancel once the provider's Authenticate has entered and is blocking on the context.
+	select {
+	case <-blockingProvider.Started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("auth did not start in time")
+	}
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Execute did not return after cancellation")
+	}
+
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Nil(t, result)
+	assert.Zero(t, notifier.SendErrorCount(), "a canceled login must not be surfaced to the user")
+}
+
 func TestApplyAuthConfig_EndpointChange_LogsOutAndClearsWorkspace(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()

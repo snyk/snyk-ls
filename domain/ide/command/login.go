@@ -91,9 +91,13 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 
 	if n == 3 {
 		// Cancel any in-progress auth before reconfiguring providers. ConfigureProviders
-		// (called inside applyAuthConfig) acquires the same mutex as Authenticate. Without
-		// canceling first, a blocking Authenticate holds the mutex and ConfigureProviders
-		// deadlocks — preventing the new login from ever starting.
+		// (called unconditionally inside applyAuthConfig → ApplyAuthMethodChange) acquires the same
+		// mutex as Authenticate. Without canceling first, a blocking Authenticate holds the mutex and
+		// ConfigureProviders deadlocks — preventing the new login from ever starting.
+		//
+		// This is required in addition to the cancel inside ApplyAuthMethodChange: that one only fires
+		// when the auth method actually changes, but a login command supersedes any in-flight auth even
+		// when the method is unchanged, and ConfigureProviders still runs. This cancel covers that case.
 		cmd.authService.CancelOngoingAuth()
 		if err := cmd.applyAuthConfig(ctx, conf, logger); err != nil {
 			logger.Err(err).Msg("Error applying auth config from login command arguments")
@@ -116,6 +120,13 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 
 	token, err := cmd.authService.Authenticate(ctx)
 	if err != nil {
+		// A canceled login (e.g. the IDE canceled it via $/cancelRequest when the user switched auth
+		// method, retried Authenticate, or logged out) is expected, not a failure: log at debug and
+		// don't notify the user.
+		if util.IsCancellation(err) {
+			logger.Debug().Str("method", "loginCommand.Execute").Msg("login canceled")
+			return nil, err
+		}
 		logger.Err(err).Msg("Error on snyk.login command")
 		cmd.notifier.SendError(err)
 	}

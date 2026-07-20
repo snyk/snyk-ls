@@ -52,6 +52,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
@@ -953,6 +954,29 @@ func Test_authenticate_PropagatesEndpointWhenTokenAudDiffers(t *testing.T) {
 	assert.Equal(t, "https://api.snyk.io", capturedAuthParams.ApiUrl, "AuthenticationParams.ApiUrl must carry the aud-derived host")
 	assert.Equal(t, token, capturedAuthParams.Token)
 	assert.Equal(t, 1, endpointUpdateMsgCount, "exactly one endpoint-update Info message must be sent")
+}
+
+// A canceled OAuth login (GAF returns ErrAuthCanceled, normalized to context.Canceled by the
+// provider) must propagate through authenticate() as a cancellation: recognized by
+// util.IsCancellation, logged at debug, and not surfaced to the user — not the WARN
+// "Failed to authenticate" that the previously swallowed ("", nil) return produced here.
+func Test_authenticate_OAuthCanceled_TreatedAsCancellation(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true)
+	authenticator.canceled = true
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	token, err := service.Authenticate(t.Context())
+
+	assert.Empty(t, token)
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.True(t, util.IsCancellation(err), "a canceled OAuth login must be recognized as a cancellation")
+	assert.Zero(t, mockNotifier.SendErrorCount(), "a canceled OAuth login must not be surfaced to the user")
 }
 
 // When the new OAuth token's `aud` matches the configured custom endpoint,

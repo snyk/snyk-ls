@@ -45,6 +45,7 @@ import (
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 const ExpirationMsg = "Your authentication failed due to token expiration. Please re-authenticate to continue using Snyk."
@@ -234,7 +235,13 @@ func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token str
 	token, err = a.authProvider.Authenticate(ctx)
 
 	if token == "" || err != nil {
-		a.engine.GetLogger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.authProvider))
+		// A canceled authentication (e.g. the IDE canceled the login via $/cancelRequest) is expected,
+		// not a failure: log at debug rather than warning.
+		if util.IsCancellation(err) {
+			a.engine.GetLogger().Debug().Str("method", "authenticate").Msg("authentication canceled")
+		} else {
+			a.engine.GetLogger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.authProvider))
+		}
 		a.authCache.RemoveAll()
 		return token, err
 	}

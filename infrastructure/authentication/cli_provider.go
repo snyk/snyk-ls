@@ -32,6 +32,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 type CliAuthenticationProvider struct {
@@ -54,15 +55,26 @@ func (a *CliAuthenticationProvider) setAuthUrl(url string) {
 }
 
 func (a *CliAuthenticationProvider) Authenticate(ctx context.Context) (string, error) {
+	logger := a.engine.GetLogger()
 	err := a.authenticate(ctx)
 	if err != nil {
-		a.engine.GetLogger().Err(err).Str("method", "Authenticate").Msg("error while authenticating")
+		// A canceled authentication (e.g. the IDE canceled the login via $/cancelRequest) is an
+		// expected outcome, not a failure: log at debug and don't report it.
+		if util.IsCancellation(err) {
+			logger.Debug().Str("method", "Authenticate").Msg("authentication canceled")
+			return "", err
+		}
+		logger.Err(err).Str("method", "Authenticate").Msg("error while authenticating")
 		a.errorReporter.CaptureError(err)
 	}
 	token, err := a.getToken(ctx)
-	a.engine.GetLogger().Debug().Str("method", "Authenticate").Int("length", len(token)).Msg("got creds")
+	logger.Debug().Str("method", "Authenticate").Int("length", len(token)).Msg("got creds")
 	if err != nil {
-		a.engine.GetLogger().Err(err).Str("method", "Authenticate").Msg("error getting creds after authenticating")
+		if util.IsCancellation(err) {
+			logger.Debug().Str("method", "Authenticate").Msg("get creds canceled")
+			return "", err
+		}
+		logger.Err(err).Str("method", "Authenticate").Msg("error getting creds after authenticating")
 		a.errorReporter.CaptureError(err)
 	}
 
@@ -214,8 +226,14 @@ func (a *CliAuthenticationProvider) runCLICmd(ctx context.Context, cmd *exec.Cmd
 	}
 
 	err := cmd.Run()
-	if err == nil && ctx.Err() != nil {
-		err = ctx.Err()
+	// When the context is done (the IDE cancels the login via $/cancelRequest, or a deadline fires),
+	// exec kills the CLI subprocess and cmd.Run() returns "signal: killed". Normalize that to the
+	// context error so callers can detect it with errors.Is and treat it as expected rather than a
+	// failure. The underlying cmd.Run() error is logged at debug (not discarded silently) for
+	// diagnosability when a real CLI failure races the cancellation/timeout.
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		a.engine.GetLogger().Debug().Err(err).Str("method", "runCLICmd").Msgf("Snyk CLI command aborted (%v); discarding subprocess error", ctxErr)
+		return ctxErr
 	}
 	if err != nil {
 		a.engine.GetLogger().Err(err).Msg("error while calling Snyk CLI command")
