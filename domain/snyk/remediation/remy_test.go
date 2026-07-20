@@ -370,16 +370,19 @@ func TestMakeLineEdit_StartLineExceedsFileLength(t *testing.T) {
 	assert.Nil(t, edit)
 }
 
-// TestWorkspaceEditFromContent_EmptyOriginalContent verifies that an empty
-// original content produces an error.
+// TestWorkspaceEditFromContent_EmptyOriginalContent verifies that empty original
+// content is valid: the empty-content guard was removed so that committed-empty
+// files can receive edits. A deletion hunk against empty content (lastLine=1,
+// currentLine=0) is well-formed and must produce a deletion edit.
 func TestWorkspaceEditFromContent_EmptyOriginalContent(t *testing.T) {
 	repoRoot := initGitRepo(t)
 	commitFile(t, repoRoot, "z.go", "something\n")
 	absPath := filepath.Join(repoRoot, "z.go")
 
 	edit, err := remediation.ExportedWorkspaceEditFromContent(absPath, []byte{}, "@@ -1,1 +1,0 @@\n-something\n")
-	assert.Error(t, err, "empty original content must produce an error")
-	assert.Nil(t, edit)
+	require.NoError(t, err, "empty original content must not produce an error")
+	require.NotNil(t, edit)
+	assert.Contains(t, edit.Changes, absPath)
 }
 
 // TestWorkspaceEditFromContent_EmptyDiff verifies that an empty diff string

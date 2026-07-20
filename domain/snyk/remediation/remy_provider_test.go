@@ -965,10 +965,12 @@ func TestWorkspaceEditFromContent_SimpleEdit(t *testing.T) {
 	require.NotEmpty(t, edits)
 }
 
-// TestWorkspaceEditFromContent_EmptyOriginal returns an error for empty content.
+// TestWorkspaceEditFromContent_EmptyOriginal verifies that empty original content
+// is no longer rejected. "some diff" has no @@ headers so parseDiffHunks finds
+// no hunks and returns (nil, nil) — no error, no edit.
 func TestWorkspaceEditFromContent_EmptyOriginal(t *testing.T) {
 	edit, err := remediation.ExportedWorkspaceEditFromContent("/tmp/file.go", []byte{}, "some diff")
-	require.Error(t, err)
+	require.NoError(t, err)
 	assert.Nil(t, edit)
 }
 
