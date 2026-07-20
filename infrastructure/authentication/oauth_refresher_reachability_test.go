@@ -127,6 +127,10 @@ func Test_IsAuthenticated_DoesNotUseOAuth2ProviderCustomRefresherFunc(t *testing
 		"expected the expired-token real-traffic path to attempt a token refresh against /oauth2/token")
 	assert.Greater(t, int(atomic.LoadInt32(&selfEndpointHits)), 0,
 		"expected the real whoami workflow to hit /rest/self")
+	// IDE-2178's actual symptom is the stale token surviving in storage, not merely
+	// IsAuthenticated() returning false for one call - assert the token was cleared.
+	assert.Empty(t, conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN),
+		"invalid_grant refresh failure must clear the stale token from storage, not just report not-authenticated")
 
 	customRefresherFired := strings.Contains(logOutput, "oauth.refresherFunc") ||
 		strings.Contains(logOutput, "refreshing oauth2 token")
