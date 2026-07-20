@@ -207,7 +207,7 @@ func TestAuthenticateUsesAuthenticator(t *testing.T) {
 func TestAuthenticate_Canceled_NormalizesToContextCanceled(t *testing.T) {
 	// GAF returns ErrAuthCanceled (a plain sentinel) when a login is canceled. The provider must
 	// normalize it to context.Canceled so util.IsCancellation classifies it as an expected
-	// cancellation rather than the WARN "Failed to authenticate" it would otherwise trigger upstream.
+	// cancellation.
 	engine := testutil.UnitTest(t)
 	config := engine.GetConfiguration()
 	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, config, true)

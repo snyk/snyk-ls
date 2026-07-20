@@ -54,11 +54,10 @@ func (p *OAuth2Provider) Authenticate(ctx context.Context) (string, error) {
 	switch {
 	case errors.Is(err, auth.ErrAuthCanceled):
 		p.logger.Debug().Msg("authentication canceled")
-		// GAF's ErrAuthCanceled is a plain sentinel that does not wrap context.Canceled. Normalize
-		// it here (the CLI provider does the same for "signal: killed") so the shared
-		// util.IsCancellation helper treats a canceled OAuth login as an expected cancellation
-		// across the auth/login stack — debug log, no Sentry report, no user notification — rather
-		// than the WARN "Failed to authenticate" that a swallowed ("", nil) would trigger upstream.
+		// GAF's ErrAuthCanceled is a plain sentinel that does not wrap context.Canceled. Normalize it
+		// to context.Canceled so the shared util.IsCancellation helper classifies a canceled OAuth
+		// login as an expected cancellation across the auth/login stack — debug log, no Sentry report,
+		// no user notification.
 		return "", fmt.Errorf("oauth authentication canceled: %w", context.Canceled)
 	case err != nil:
 		return "", err

@@ -29,8 +29,7 @@ import (
 // reported to Sentry, and not surfaced to the user.
 //
 // context.DeadlineExceeded is deliberately excluded: a deadline firing is a genuine
-// timeout (the very failure IDE-2247 concerns), so it must stay visible to the user
-// and to telemetry rather than being silently swallowed.
+// timeout, which must stay visible to the user and to telemetry.
 func IsCancellation(err error) bool {
 	return errors.Is(err, context.Canceled)
 }

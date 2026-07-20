@@ -227,12 +227,11 @@ func (a *CliAuthenticationProvider) runCLICmd(ctx context.Context, cmd *exec.Cmd
 
 	err := cmd.Run()
 	// When the context is done (the IDE cancels the login via $/cancelRequest, or a deadline fires),
-	// exec kills the CLI subprocess and cmd.Run() returns "signal: killed". Normalize that to the
-	// context error so callers can detect it with errors.Is and treat it as expected rather than a
-	// failure. The underlying cmd.Run() error is logged at debug (not discarded silently) for
-	// diagnosability when a real CLI failure races the cancellation/timeout.
+	// exec kills the CLI subprocess and cmd.Run() returns "signal: killed". Return the context error
+	// so callers can detect the cancellation or timeout with errors.Is; the subprocess error is
+	// logged at debug for diagnosability.
 	if ctxErr := ctx.Err(); ctxErr != nil {
-		a.engine.GetLogger().Debug().Err(err).Str("method", "runCLICmd").Msgf("Snyk CLI command aborted (%v); discarding subprocess error", ctxErr)
+		a.engine.GetLogger().Debug().Err(err).Str("method", "runCLICmd").Msgf("Snyk CLI command aborted (%v)", ctxErr)
 		return ctxErr
 	}
 	if err != nil {

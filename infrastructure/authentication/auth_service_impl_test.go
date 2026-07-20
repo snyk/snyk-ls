@@ -956,10 +956,8 @@ func Test_authenticate_PropagatesEndpointWhenTokenAudDiffers(t *testing.T) {
 	assert.Equal(t, 1, endpointUpdateMsgCount, "exactly one endpoint-update Info message must be sent")
 }
 
-// A canceled OAuth login (GAF returns ErrAuthCanceled, normalized to context.Canceled by the
-// provider) must propagate through authenticate() as a cancellation: recognized by
-// util.IsCancellation, logged at debug, and not surfaced to the user — not the WARN
-// "Failed to authenticate" that the previously swallowed ("", nil) return produced here.
+// A canceled OAuth login must propagate through authenticate() as a cancellation (recognized by
+// util.IsCancellation) and not an error.
 func Test_authenticate_OAuthCanceled_TreatedAsCancellation(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()

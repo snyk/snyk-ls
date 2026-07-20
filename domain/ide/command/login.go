@@ -94,10 +94,6 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 		// (called unconditionally inside applyAuthConfig → ApplyAuthMethodChange) acquires the same
 		// mutex as Authenticate. Without canceling first, a blocking Authenticate holds the mutex and
 		// ConfigureProviders deadlocks — preventing the new login from ever starting.
-		//
-		// This is required in addition to the cancel inside ApplyAuthMethodChange: that one only fires
-		// when the auth method actually changes, but a login command supersedes any in-flight auth even
-		// when the method is unchanged, and ConfigureProviders still runs. This cancel covers that case.
 		cmd.authService.CancelOngoingAuth()
 		if err := cmd.applyAuthConfig(ctx, conf, logger); err != nil {
 			logger.Err(err).Msg("Error applying auth config from login command arguments")

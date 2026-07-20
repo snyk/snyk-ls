@@ -31,11 +31,7 @@ import (
 // logs out and clears workspace. Returns true if endpoints changed.
 // Logout internally calls configureProviders, so no explicit ConfigureProviders call is needed.
 //
-// Unlike ApplyAuthMethodChange (which trusts the validated non-nil authService), this function
-// keeps an explicit nil guard as deliberate defense-in-depth: proceeding with a nil authService
-// after LSP init would skip Logout and leave new-endpoint config with old-environment credentials
-// — a session-leakage security risk — so the guard degrades safely rather than relying solely on
-// the boundary validation. The asymmetry between the two functions is intentional.
+// Requires a non-nil authService, so that logout can be called.
 func ApplyEndpointChange(ctx context.Context, conf gafConfig.Configuration, authService authentication.AuthenticationService, logger *zerolog.Logger, endpoint string) bool {
 	oldEndpoint := types.GetGlobalString(conf, types.SettingApiEndpoint)
 	// When LSP is initialized, an endpoint switch requires logout to clear credentials.
