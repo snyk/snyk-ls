@@ -85,6 +85,20 @@ func CacheLen(p RemediationProvider) int {
 	return len(rp.cache)
 }
 
+// NewRemyProviderWithTimeout constructs a remyProvider with a configurable
+// runner timeout. Used by tests that need to exercise the git-enumeration
+// context survival path (buildWorkspaceEdits must use a fresh context even
+// when the caller's ctx is expired after a long runner).
+func NewRemyProviderWithTimeout(runner remyRunner, timeout time.Duration) RemediationProvider {
+	return &remyProvider{
+		opts:    remyOptions{Timeout: timeout},
+		runner:  runner,
+		log:     zerolog.Nop(),
+		cache:   make(map[string]*remyCacheEntry),
+		rootMus: make(map[string]*rootMutex),
+	}
+}
+
 // RootMuLen returns the number of per-ContentRoot mutex entries currently held
 // in the provider's rootMus map. Tests use it to assert that per-root mutexes
 // are evicted once no caller references them, so the map cannot grow unbounded.

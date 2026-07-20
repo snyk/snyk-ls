@@ -743,15 +743,15 @@ func TestFixFolder_TextconvIgnored_FileAppearsInResults(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// UNIT-120: Pre-flight git guards succeed even with an already-cancelled caller context
+// UNIT-120: Pre-flight git guards succeed even with an already-canceled caller context
 // ---------------------------------------------------------------------------
 
 // TestFixFolder_CancelledCallerContext_GuardsStillSucceed verifies that the
 // pre-flight git integrity checks (rev-parse --show-prefix and git status) are
-// not bound to the caller's context. When the caller passes an already-cancelled
+// not bound to the caller's context. When the caller passes an already-canceled
 // context, the guards must still run successfully so the fix can proceed.
 //
-// On Linux the cancelled context causes the git subprocess to receive SIGKILL;
+// On Linux the canceled context causes the git subprocess to receive SIGKILL;
 // on Windows the equivalent TerminateProcess call fails with "Access is denied".
 // Both surface as an error from the guard, making the test deterministically RED
 // on any OS before the fix.
@@ -767,14 +767,14 @@ func TestFixFolder_CancelledCallerContext_GuardsStillSucceed(t *testing.T) {
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok)
 
-	// Use an already-cancelled context to simulate a tight/expired caller deadline.
+	// Use an already-canceled context to simulate a tight/expired caller deadline.
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
 	results, err := fr.FixFolder(ctx, types.FilePath(repo))
 	require.NoError(t, err,
 		"FixFolder's git integrity guards must not be tied to the caller context: "+
-			"an already-cancelled caller context must not prevent the pre-flight guards from running")
+			"an already-canceled caller context must not prevent the pre-flight guards from running")
 	require.NotEmpty(t, results,
-		"FixFolder must return results even when the caller context is already cancelled before the call")
+		"FixFolder must return results even when the caller context is already canceled before the call")
 }

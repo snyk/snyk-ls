@@ -410,7 +410,7 @@ func (p *remyProvider) collectFixEdits(ctx context.Context, runDir, keyRoot, fin
 	if err = p.runner(ctx, p.engine, runDir, findingID); err != nil {
 		return nil, nil, err
 	}
-	return buildWorkspaceEdits(ctx, p.log, runDir, keyRoot, snapshot)
+	return buildWorkspaceEdits(p.log, runDir, keyRoot, snapshot)
 }
 
 // runRemyInWorktree creates an isolated git worktree, runs the remy runner, and
@@ -655,8 +655,14 @@ func (p *remyProvider) collectFileDiffs(ctx context.Context, runDir string) ([]t
 // SHA-256 of each file's pre-run HEAD content (from snapshot). That hash is the
 // correct cache baseline: it is the content the edits were computed against, so
 // it detects any concurrent edit made while remy was running.
-func buildWorkspaceEdits(ctx context.Context, log zerolog.Logger, worktreeDir, gitRoot string, snapshot map[string][]byte) (map[string][]types.TextEdit, map[string]string, error) {
-	changedPaths, err := gitChangedFiles(ctx, worktreeDir)
+func buildWorkspaceEdits(log zerolog.Logger, worktreeDir, gitRoot string, snapshot map[string][]byte) (map[string][]types.TextEdit, map[string]string, error) {
+	// A fresh context rooted at context.Background() is intentional: git enumeration
+	// must survive the caller's context being near-expiry after a long runner so a
+	// COMPLETED fix is never discarded as context.DeadlineExceeded.
+	enumCtx, enumCancel := context.WithTimeout(context.Background(), gitEnumerationTimeout)
+	defer enumCancel()
+
+	changedPaths, err := gitChangedFiles(enumCtx, worktreeDir)
 	if err != nil {
 		return nil, nil, fmt.Errorf("remy: enumerate changed files: %w", err)
 	}
@@ -665,7 +671,7 @@ func buildWorkspaceEdits(ctx context.Context, log zerolog.Logger, worktreeDir, g
 		// worktree contents. This surfaces path-canonicalization mismatches (e.g.
 		// macOS /var→/private/var symlink, Windows 8.3 short names) where the
 		// snapshot keys and worktree paths diverge and git sees no diff.
-		statusOut, statusErr := exec.CommandContext(ctx, "git", "-C", worktreeDir, "status", "--porcelain").Output()
+		statusOut, statusErr := exec.CommandContext(enumCtx, "git", "-C", worktreeDir, "status", "--porcelain").Output()
 		log.Debug().
 			Str("worktreeDir", worktreeDir).
 			Str("gitRoot", gitRoot).
@@ -681,7 +687,7 @@ func buildWorkspaceEdits(ctx context.Context, log zerolog.Logger, worktreeDir, g
 		if !ok {
 			continue
 		}
-		diff, err := gitFileDiff(ctx, worktreeDir, relPath)
+		diff, err := gitFileDiff(enumCtx, worktreeDir, relPath)
 		if err != nil {
 			log.Debug().Err(err).Str("path", relPath).Msg("remy: failed to get diff for file")
 			continue
@@ -833,17 +839,21 @@ func resolveGitRoot(ctx context.Context, path string) (string, error) {
 
 // snapshotGitFiles returns a map of relative path → original bytes for every
 // file currently tracked in the git repository at root.
+// -z gives NUL-separated paths so filenames with embedded newlines or
+// non-ASCII characters are handled correctly (same key-space convention as
+// gitChangedFiles, so snapshot keys and changed-path keys always agree).
 func snapshotGitFiles(ctx context.Context, root string) (map[string][]byte, error) {
 	// List all tracked files via git ls-files so we know which ones were
 	// present before remy runs.
-	cmd := exec.CommandContext(ctx, "git", "-C", root, "ls-files")
+	cmd := exec.CommandContext(ctx, "git", "-C", root, "ls-files", "-z")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("git ls-files: %w", err)
 	}
 
 	snapshot := make(map[string][]byte)
-	for _, relPath := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+	for _, f := range bytes.Split(out, []byte{0}) {
+		relPath := string(f)
 		if relPath == "" {
 			continue
 		}
@@ -870,15 +880,21 @@ func gitShowHEAD(ctx context.Context, root, relPath string) ([]byte, error) {
 
 // gitChangedFiles returns the relative paths of files that differ from HEAD in
 // the working tree at root.
+// -z gives NUL-separated records so filenames with embedded newlines or
+// non-ASCII characters are handled correctly (same convention as collectFileDiffs).
+// --no-renames prevents a rename from being collapsed to only the destination
+// path: without it, git diff omits the source path when rename detection fires,
+// causing the old-name snapshot lookup to miss and the deletion to be silently
+// dropped.
 func gitChangedFiles(ctx context.Context, root string) ([]string, error) {
-	cmd := exec.CommandContext(ctx, "git", "-C", root, "diff", "--name-only", "HEAD")
+	cmd := exec.CommandContext(ctx, "git", "-C", root, "diff", "-z", "--name-only", "--no-renames", "HEAD")
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("git diff --name-only: %w", err)
+		return nil, fmt.Errorf("git diff -z --name-only --no-renames: %w", err)
 	}
 	var paths []string
-	for _, p := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if p != "" {
+	for _, f := range bytes.Split(out, []byte{0}) {
+		if p := string(f); p != "" {
 			paths = append(paths, p)
 		}
 	}
@@ -900,11 +916,10 @@ func gitFileDiff(ctx context.Context, root, relPath string) (string, error) {
 // workspaceEditFromContent converts a unified diff into a WorkspaceEdit keyed
 // by absPath. originalContent is used as the source of truth for line counts
 // (the file at absPath may already contain the new content after the runner ran).
+// Empty originalContent (a committed-empty file) is valid: the diff hunk will be
+// "@@ -0,0 +1,N @@" and parseDiffHunks clamps currentLine to 0 so that
+// insertions land at line 0 without a negative-index error.
 func workspaceEditFromContent(absPath string, originalContent []byte, diff string) (*types.WorkspaceEdit, error) {
-	if len(originalContent) == 0 {
-		return nil, fmt.Errorf("original content for %s is empty", absPath)
-	}
-
 	originalLines := strings.Split(string(originalContent), "\n")
 	lastLine := len(originalLines)
 
@@ -998,6 +1013,13 @@ func parseDiffHunks(diffLines []string, lastLine int) ([]types.TextEdit, error) 
 			}
 			n, _ := strconv.Atoi(m[1])
 			s.currentLine = n - 1 // convert to 0-indexed
+			// Only clamp for the empty-file insertion case: "@@ -0,0 +1,N @@"
+			// where both the old start (n=0) and old count (m[2]="0") are zero.
+			// Any other hunk with n=0 (e.g. "@@ -0,1 +0,0 @@") is malformed;
+			// leave currentLine negative so makeLineEdit returns an error.
+			if n == 0 && m[2] == "0" {
+				s.currentLine = 0
+			}
 			s.lastWasInsertion = false
 			continue
 		}
