@@ -187,7 +187,7 @@ func TestGetCodeActions_RemediationAgent_EmptyFindingId_NoAction(t *testing.T) {
 	// FindingId is empty — provider set, but no action should be generated.
 	issue := buildFixableIssue("")
 
-	service, params := setupWithIssueAndProvider(t, issue, fake)
+	service, params := setupWithIssueAndProviderFlagEnabled(t, issue, fake)
 
 	actions := service.GetCodeActions(params)
 
@@ -241,7 +241,7 @@ func TestGetCodeActions_RemediationAgent_NonCodeProduct_NoAction(t *testing.T) {
 		},
 	}
 
-	service, params := setupWithIssueAndProvider(t, ossIssue, fake)
+	service, params := setupWithIssueAndProviderFlagEnabled(t, ossIssue, fake)
 	actions := service.GetCodeActions(params)
 
 	for _, a := range actions {
@@ -270,7 +270,7 @@ func TestGetCodeActions_RemediationAgent_FullyFixableOSS_NoAction(t *testing.T) 
 		},
 	}
 
-	service, params := setupWithIssueAndProvider(t, ossIssue, fake)
+	service, params := setupWithIssueAndProviderFlagEnabled(t, ossIssue, fake)
 	actions := service.GetCodeActions(params)
 
 	for _, a := range actions {
@@ -291,7 +291,7 @@ func TestGetCodeActions_RemediationAgent_NotAIFixable_NoAction(t *testing.T) {
 		},
 	}
 
-	service, params := setupWithIssueAndProvider(t, issue, fake)
+	service, params := setupWithIssueAndProviderFlagEnabled(t, issue, fake)
 	actions := service.GetCodeActions(params)
 
 	for _, a := range actions {
@@ -333,7 +333,7 @@ func TestGetCodeActions_RemediationAgent_SecretsIssue_NoAction(t *testing.T) {
 		AdditionalData: snyk.SecretsIssueData{},
 	}
 
-	service, params := setupWithIssueAndProvider(t, issue, fake)
+	service, params := setupWithIssueAndProviderFlagEnabled(t, issue, fake)
 
 	actions := service.GetCodeActions(params)
 
@@ -351,7 +351,7 @@ func TestGetCodeActions_RemediationAgent_UnknownProduct_NoAction(t *testing.T) {
 		AdditionalData: snyk.CodeIssueData{HasAIFix: true},
 	}
 
-	service, params := setupWithIssueAndProvider(t, issue, fake)
+	service, params := setupWithIssueAndProviderFlagEnabled(t, issue, fake)
 
 	actions := service.GetCodeActions(params)
 
