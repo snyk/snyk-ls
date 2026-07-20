@@ -286,6 +286,8 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	handlers["window/workDoneProgress/cancel"] = enrich(windowWorkDoneProgressCancelHandler(conf))
 	handlers["workspace/executeCommand"] = enrich(executeCommandHandler(srv))
 	handlers["$/cancelRequest"] = cancelRequestHandler(srv)
+	handlers["textDocument/diagnostic"] = enrich(textDocumentDiagnosticHandler(conf))
+	handlers["workspace/diagnostic"] = enrich(workspaceDiagnosticHandler(conf))
 }
 
 func authenticationServiceFromContext(ctx context.Context) (authentication.AuthenticationService, bool) {
@@ -704,6 +706,10 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 				InlineValueProvider: true,
 				ExecuteCommandProvider: &sglsp.ExecuteCommandOptions{
 					Commands: commands(conf),
+				},
+				DiagnosticProvider: &types.DiagnosticOptions{
+					InterFileDependencies: false,
+					WorkspaceDiagnostics:  true,
 				},
 			},
 		}
@@ -1279,6 +1285,50 @@ func noOpHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidCloseTextDocumentParams) (any, error) {
 		ctx2.LoggerFromContext(ctx).Debug().Str("method", "NoOpHandler").Interface("params", params).Msg("RECEIVING")
 		return nil, nil
+	})
+}
+
+func workspaceDiagnosticHandler(conf configuration.Configuration) jrpc2.Handler {
+	// Always returns full results; previousResultIds is not used.
+	return handler.New(func(_ context.Context, _ types.WorkspaceDiagnosticParams) (any, error) {
+		reports := []types.WorkspaceDocumentDiagnosticReport{}
+		for _, folder := range config.GetWorkspace(conf).Folders() {
+			if !folder.IsTrusted() {
+				continue
+			}
+			fip, ok := folder.(snyk.FilteringIssueProvider)
+			if !ok {
+				continue
+			}
+			filtered := fip.FilterIssues(fip.Issues(), folder.DisplayableIssueTypes())
+			for filePath, issues := range filtered {
+				reports = append(reports, types.WorkspaceDocumentDiagnosticReport{
+					Kind:    "full",
+					URI:     uri.PathToUri(filePath),
+					Version: nil,
+					Items:   converter.ToDiagnostics(issues),
+				})
+			}
+		}
+		return types.WorkspaceDiagnosticReport{Items: reports}, nil
+	})
+}
+
+func textDocumentDiagnosticHandler(conf configuration.Configuration) jrpc2.Handler {
+	return handler.New(func(_ context.Context, params types.DocumentDiagnosticParams) (any, error) {
+		report := types.RelatedFullDocumentDiagnosticReport{Kind: "full", Items: []types.Diagnostic{}}
+		filePath := uri.PathFromUri(params.TextDocument.URI)
+		folder := config.GetWorkspace(conf).GetFolderContaining(filePath)
+		if folder == nil || !folder.IsTrusted() {
+			return report, nil
+		}
+		fip, ok := folder.(snyk.FilteringIssueProvider)
+		if !ok {
+			return report, nil
+		}
+		filtered := fip.FilterIssues(fip.Issues(), folder.DisplayableIssueTypes())
+		report.Items = converter.ToDiagnostics(filtered[filePath])
+		return report, nil
 	})
 }
 
