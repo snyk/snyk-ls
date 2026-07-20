@@ -809,11 +809,11 @@ func Test_extractAudHost(t *testing.T) {
 	logger := zerolog.Nop()
 
 	type tc struct {
-		name         string
-		token        string
-		overrideRgx  bool
-		regexValue   string
-		expectedHost string
+		name          string
+		token         string
+		overrideHosts bool
+		hostsValue    []string
+		expectedHost  string
 	}
 
 	cases := []tc{
@@ -824,18 +824,21 @@ func Test_extractAudHost(t *testing.T) {
 		{name: "opaque token", token: "opaque-pat-style", expectedHost: ""},
 		{name: "empty aud", token: testutil.OauthTokenJSONWithAud(t, ""), expectedHost: ""},
 		{name: "invalid host", token: testutil.OauthTokenJSONWithAud(t, "api.malicious.io"), expectedHost: ""},
-		// "empty regex" exercises overrideRgx=true with regexValue="" — i.e.
-		// the user explicitly cleared the allowed-host regex. A truly *unset*
-		// regex is hard to test cleanly because GAF's app initializer wires a
-		// default-value function for CONFIG_KEY_ALLOWED_HOST_REGEXP at engine
-		// creation, so the only way to observe an empty string from
-		// conf.GetString is to set it back to "".
-		{name: "empty regex", token: testutil.OauthTokenJSONWithAud(t, "api.eu.snyk.io"), overrideRgx: true, regexValue: "", expectedHost: ""},
+		// "empty allowlist" exercises overrideHosts=true with hostsValue=nil —
+		// i.e. the user (or a private-cloud deployment) explicitly cleared
+		// CONFIG_KEY_ALLOWED_HOSTS. IsValidSnykHost fails closed: an empty
+		// allowlist means no host is ever considered valid.
+		{name: "empty allowlist", token: testutil.OauthTokenJSONWithAud(t, "api.eu.snyk.io"), overrideHosts: true, hostsValue: nil, expectedHost: ""},
 		{name: "FedRAMP", token: testutil.OauthTokenJSONWithAud(t, "api.fedramp.snykgov.io"), expectedHost: "api.fedramp.snykgov.io"},
 		{name: "ftp scheme", token: testutil.OauthTokenJSONWithAud(t, "ftp://api.snyk.io"), expectedHost: ""},
 		{name: "http scheme", token: testutil.OauthTokenJSONWithAud(t, "http://api.snyk.io"), expectedHost: "api.snyk.io"},
 		{name: "null aud", token: testutil.OauthTokenJSONWithAud(t, nil), expectedHost: ""},
-		{name: "regex compile error", token: testutil.OauthTokenJSONWithAud(t, "api.snyk.io"), overrideRgx: true, regexValue: "[invalid", expectedHost: ""},
+		// Ticket IDE-1896 attack: a naive suffix match (without enforcing a
+		// label boundary) would let "evilsnyk.io" pass as a "snyk.io" host
+		// because the raw string ends with "snyk.io". IsValidSnykHost
+		// requires the allowlisted domain to start at a label boundary
+		// ("." + domain), so this attacker-crafted host must be rejected.
+		{name: "attacker host defeats naive suffix match", token: testutil.OauthTokenJSONWithAud(t, "api.evilsnyk.io"), expectedHost: ""},
 		{name: "uppercase aud", token: testutil.OauthTokenJSONWithAud(t, "API.EU.SNYK.IO"), expectedHost: "api.eu.snyk.io"},
 		// Go's net/url.URL.Host includes the port (host:port) so a naive
 		// parsed.Host read would feed "api.snyk.io:8443" into swapHost,
@@ -856,19 +859,19 @@ func Test_extractAudHost(t *testing.T) {
 		// Path-only aud ("/path-only") survives parseCustomUrl with an
 		// empty Host on both the original and the re-parse, so Hostname()
 		// returns "" and the Path-fallback branch assigns host = "/path-only"
-		// which IsValidAuthHost then rejects. Locks in the fallback branch.
+		// which IsValidSnykHost then rejects. Locks in the fallback branch.
 		{name: "path-only aud", token: testutil.OauthTokenJSONWithAud(t, "/path-only"), expectedHost: ""},
 		// Query-only aud ("?x=y") yields an empty Host AND an empty Path
 		// (the value lives in RawQuery), so even after the Path fallback
 		// host stays "" and extractAudHost must return "" without invoking
-		// the regex check. Locks in the post-fallback empty-host guard.
+		// the IsValidSnykHost check. Locks in the post-fallback empty-host guard.
 		{name: "query-only aud", token: testutil.OauthTokenJSONWithAud(t, "?x=y"), expectedHost: ""},
 		// RFC 7519 says `aud` MAY be a single string OR an array, and when
 		// an array there is no guaranteed ordering. Snyk OAuth tokens can
 		// carry the API host in any position of the array (e.g. preceded
 		// by a client ID). extractAudHost must iterate every entry and
 		// return the first one that passes the full validation chain
-		// (parse -> scheme allowlist -> IsValidAuthHost), not just look
+		// (parse -> scheme allowlist -> IsValidSnykHost), not just look
 		// at index 0 — otherwise discovery silently fails for legitimate
 		// tokens whose host is at index >= 1.
 		{name: "aud array with host at second position",
@@ -885,15 +888,15 @@ func Test_extractAudHost(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()
 
-	defaultRegex := conf.GetString(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP)
-	require.NotEmpty(t, defaultRegex,
-		"GAF default CONFIG_KEY_ALLOWED_HOST_REGEXP must be present in test engine")
+	defaultHosts := conf.GetStringSlice(auth.CONFIG_KEY_ALLOWED_HOSTS)
+	require.NotEmpty(t, defaultHosts,
+		"GAF default CONFIG_KEY_ALLOWED_HOSTS must be present in test engine")
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.overrideRgx {
-				conf.Set(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, tt.regexValue)
-				t.Cleanup(func() { conf.Set(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, defaultRegex) })
+			if tt.overrideHosts {
+				conf.Set(auth.CONFIG_KEY_ALLOWED_HOSTS, tt.hostsValue)
+				t.Cleanup(func() { conf.Set(auth.CONFIG_KEY_ALLOWED_HOSTS, defaultHosts) })
 			}
 
 			actual := extractAudHost(tt.token, conf, &logger)
@@ -993,7 +996,8 @@ func Test_authenticate_DiscoveryNoOp_WhenAudMatches(t *testing.T) {
 }
 
 // A malicious / non-Snyk `aud` claim must be rejected by the allowed-host
-// regex check inside extractAudHost. Authenticate still succeeds (returning
+// (IsValidSnykHost / CONFIG_KEY_ALLOWED_HOSTS) check inside extractAudHost.
+// Authenticate still succeeds (returning
 // the token) but the override branch must NOT trigger: no "API Endpoint has
 // been updated" notification is sent, the user's pre-configured
 // SettingApiEndpoint is not overwritten by the new (rejected) host, and

@@ -357,10 +357,10 @@ func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
 
 // extractAudHost decodes the JWT `aud` claim of the access token and returns
 // the canonical lowercase host (e.g. "api.snyk.io") when the host is a valid
-// Snyk auth host (per CONFIG_KEY_ALLOWED_HOST_REGEXP). Returns "" for opaque
-// tokens, missing/empty/null claims, parse failures, an unset or
-// invalid-regex CONFIG_KEY_ALLOWED_HOST_REGEXP (fail-closed), or hosts that
-// fail the allowed-host regex check.
+// Snyk auth host (per CONFIG_KEY_ALLOWED_HOSTS, checked via
+// auth.IsValidSnykHost). Returns "" for opaque tokens, missing/empty/null
+// claims, parse failures, an unset/empty CONFIG_KEY_ALLOWED_HOSTS
+// (fail-closed), or hosts that fail the allowed-host check.
 //
 // RFC 7519 says `aud` MAY be a single string OR an array of strings, and
 // when an array there is no guaranteed ordering. Snyk OAuth tokens can
@@ -382,16 +382,15 @@ func extractAudHost(token string, conf configuration.Configuration, logger *zero
 		logger.Debug().Err(err).Msg("cannot decode oauth token aud claim; skipping API URL discovery")
 		return ""
 	}
-	// Read the regex once up front so the per-entry hot loop doesn't
-	// repeat the conf.GetString lookup, and so the fail-closed branch
+	// Check the allowlist once up front so the per-entry hot loop doesn't
+	// repeat the conf.GetStringSlice lookup, and so the fail-closed branch
 	// triggers regardless of how many audiences are present.
-	regex := conf.GetString(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP)
-	if regex == "" {
-		logger.Debug().Msg("CONFIG_KEY_ALLOWED_HOST_REGEXP unset; skipping API URL discovery")
+	if len(conf.GetStringSlice(auth.CONFIG_KEY_ALLOWED_HOSTS)) == 0 {
+		logger.Debug().Msg("CONFIG_KEY_ALLOWED_HOSTS unset; skipping API URL discovery")
 		return ""
 	}
 	for _, raw := range audiences {
-		if host := audHostFromClaim(raw, regex, logger); host != "" {
+		if host := audHostFromClaim(raw, conf, logger); host != "" {
 			return host
 		}
 	}
@@ -400,12 +399,13 @@ func extractAudHost(token string, conf configuration.Configuration, logger *zero
 
 // audHostFromClaim parses a single aud claim entry and returns its
 // canonical lowercase host iff it passes the scheme allowlist and the
-// CONFIG_KEY_ALLOWED_HOST_REGEXP check. Returns "" on any rejection so the
-// caller can move on to the next array entry. Per-entry rejections are
-// logged at Debug (not Warn) because most array-form aud claims contain
-// non-host entries (e.g. a client ID) that legitimately fail this check;
-// promoting them to Warn would flood production logs on every authenticate.
-func audHostFromClaim(raw, regex string, logger *zerolog.Logger) string {
+// auth.IsValidSnykHost check (CONFIG_KEY_ALLOWED_HOSTS). Returns "" on any
+// rejection so the caller can move on to the next array entry. Per-entry
+// rejections are logged at Debug (not Warn) because most array-form aud
+// claims contain non-host entries (e.g. a client ID) that legitimately fail
+// this check; promoting them to Warn would flood production logs on every
+// authenticate.
+func audHostFromClaim(raw string, conf configuration.Configuration, logger *zerolog.Logger) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return ""
@@ -434,16 +434,16 @@ func audHostFromClaim(raw, regex string, logger *zerolog.Logger) string {
 	if host == "" {
 		// Path fallback for inputs parseCustomUrl couldn't recover into
 		// a Host (e.g. "/path-only"). The result is still validated
-		// below by IsValidAuthHost, which enforces domain-suffix
-		// membership against CONFIG_KEY_ALLOWED_HOST_REGEXP (not
-		// generic host syntax).
+		// below by IsValidSnykHost, which enforces the "api." prefix
+		// and domain-suffix membership against CONFIG_KEY_ALLOWED_HOSTS
+		// (not generic host syntax).
 		host = parsed.Path
 	}
 	if host == "" {
 		return ""
 	}
 	host = strings.ToLower(host)
-	valid, verr := auth.IsValidAuthHost(host, regex)
+	valid, verr := auth.IsValidSnykHost(conf, host)
 	if verr != nil || !valid {
 		logger.Debug().Str("host", host).Str("aud_claim", raw).Msg("aud claim entry failed allowed-host check; trying next")
 		return ""
