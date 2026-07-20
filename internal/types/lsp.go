@@ -1122,7 +1122,11 @@ type SnykScanParams struct {
 
 type ScanIssue struct { // TODO - convert this to a generic type
 	// Unique key identifying an issue in the whole result set. Not the same as the Snyk issue ID.
-	Id                  string                      `json:"id"`
+	Id string `json:"id"`
+	// FindingId is stable across scans for the same underlying finding; sourced from Issue.GetFindingId().
+	// Unlike Id (which is per-result-set), this value is consistent between separate scan invocations
+	// and allows clients to correlate or deduplicate findings over time.
+	FindingId           string                      `json:"findingId"`
 	Title               string                      `json:"title"`
 	Severity            string                      `json:"severity"`
 	FilePath            FilePath                    `json:"filePath"`
