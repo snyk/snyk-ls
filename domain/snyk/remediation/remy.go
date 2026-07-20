@@ -471,11 +471,19 @@ func (p *remyProvider) FixFolder(ctx context.Context, root types.FilePath) ([]ty
 	if r == "" || !filepath.IsAbs(r) {
 		return nil, fmt.Errorf("remy: FixFolder requires an absolute path, got %q", r)
 	}
+	// Pre-flight guards use a fresh context rooted at Background so that a
+	// tight or already-expired caller deadline cannot cancel these quick git
+	// integrity checks. The same rationale applies here as to the enumeration
+	// phase (see collectFileDiffs): the caller's budget governs its own work,
+	// not FixFolder's internal sanity checks.
+	guardCtx, guardCancel := context.WithTimeout(context.Background(), gitEnumerationTimeout)
+	defer guardCancel()
+
 	// Guard: r must be the git repository root. git rev-parse --show-prefix
 	// is symlink-safe: it outputs empty string when run at the repo root, and
 	// a non-empty relative path (e.g. "sub/") when run inside a subdirectory.
 	// If the command errors, the directory is not inside any git repository.
-	out, err := exec.CommandContext(ctx, "git", "-C", r, "rev-parse", "--show-prefix").Output()
+	out, err := exec.CommandContext(guardCtx, "git", "-C", r, "rev-parse", "--show-prefix").Output()
 	if err != nil {
 		return nil, fmt.Errorf("remy: FixFolder: %q is not inside a git repository: %w", r, err)
 	}
@@ -487,7 +495,7 @@ func (p *remyProvider) FixFolder(ctx context.Context, root types.FilePath) ([]ty
 	// artifacts) so they do not falsely trip the guard. Only uncommitted
 	// modifications to tracked files matter: they would be silently included in
 	// the returned results, making the fix unpredictable.
-	statusOut, err := exec.CommandContext(ctx, "git", "-C", r, "status", "--porcelain", "--untracked-files=no").Output()
+	statusOut, err := exec.CommandContext(guardCtx, "git", "-C", r, "status", "--porcelain", "--untracked-files=no").Output()
 	if err != nil {
 		return nil, fmt.Errorf("remy: FixFolder: failed to check worktree status of %q: %w", r, err)
 	}
