@@ -313,6 +313,7 @@ Right now the language server supports the following actions:
     LicenceIssue = 2
     DependencyVulnerability = 3
     InfrastructureIssue = 4
+    SecretsIssue = 5
     ```
 - `GetLearnSession` returns the given lesson on the Snyk Learn website
   - command: `snyk.getLearnLesson`
@@ -328,6 +329,7 @@ Right now the language server supports the following actions:
     LicenceIssue = 2
     DependencyVulnerability = 3
     InfrastructureIssue = 4
+    SecretsIssue = 5
     ```
   - result: lesson json
   ```json5

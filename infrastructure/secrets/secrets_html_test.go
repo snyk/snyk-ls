@@ -240,6 +240,74 @@ func Test_Secrets_Html_NilFeatureFlagService(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// Test_Secrets_Html_RendersLessonLink_WhenSet verifies the secrets details panel
+// shows a Snyk Learn anchor when Issue.LessonUrl is populated. Mirrors the rendering
+// in infrastructure/code/template/details.html:66-74.
+func Test_Secrets_Html_RendersLessonLink_WhenSet(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	issue := createBasicSecretIssue()
+	const lessonURL = "https://learn.snyk.io/lesson/hardcoded-secrets/?loc=ide"
+	issue.LessonUrl = lessonURL
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
+	assert.NoError(t, err)
+
+	result := htmlRenderer.GetDetailsHtml(issue)
+
+	assert.Contains(t, result, `class="lesson-link styled-link is-external"`)
+	assert.Contains(t, result, `href="`+lessonURL+`"`)
+	assert.Contains(t, result, "Learn how to remediate Secrets securely")
+}
+
+// Test_Secrets_Html_OmitsLessonBlock_WhenEmpty verifies the lesson block is absent
+// when no LessonUrl is available (e.g. cache miss or lookup error). The bare
+// class name "lesson-link" is in the embedded CSS regardless, so the assertion
+// targets the anchor markup and the visible link text instead.
+func Test_Secrets_Html_OmitsLessonBlock_WhenEmpty(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	issue := createBasicSecretIssue()
+	// LessonUrl intentionally left empty.
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
+	assert.NoError(t, err)
+
+	result := htmlRenderer.GetDetailsHtml(issue)
+
+	assert.NotContains(t, result, `class="lesson-link styled-link is-external"`)
+	assert.NotContains(t, result, "Learn how to remediate Secrets securely")
+}
+
+// Test_Secrets_Html_RendersLocationsBanner_WhenMultipleInFile verifies the per-file
+// locations banner when LocationsCount is greater than one.
+func Test_Secrets_Html_RendersLocationsBanner_WhenMultipleInFile(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	issue := createBasicSecretIssue()
+	issue.AdditionalData = snyk.SecretsIssueData{
+		Key:            "secret-key-1",
+		Title:          "AWS Access Token",
+		Message:        "Detected a hardcoded AWS access token",
+		RuleId:         "aws-access-token",
+		RuleName:       "AWS Access Token Rule",
+		CWE:            []string{"CWE-798"},
+		Categories:     []string{"Security"},
+		LocationsCount: 2,
+	}
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
+	assert.NoError(t, err)
+
+	result := htmlRenderer.GetDetailsHtml(issue)
+
+	assert.Contains(t, result, "2 LOCATIONS IN THIS FILE")
+	assert.Contains(t, result, "Location:")
+}
+
 func createBasicSecretIssue() *snyk.Issue {
 	return &snyk.Issue{
 		ID:       "aws-access-token",
