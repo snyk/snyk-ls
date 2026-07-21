@@ -60,6 +60,9 @@ type fakeOauthAuthenticator struct {
 	// When true, CancelableAuthenticate returns GAF's ErrAuthCanceled sentinel to
 	// exercise the canceled-login path.
 	canceled bool
+	// When true, CancelableAuthenticate returns GAF's ErrAuthTimedOut sentinel to
+	// exercise the timed-out-login path.
+	timedOut bool
 }
 
 // WithJWTAud configures fakeAuthenticate to embed the given audience claim in
@@ -169,9 +172,13 @@ func (f *fakeOauthAuthenticator) CancelableAuthenticate(_ context.Context) error
 	f.addCall(nil, "CancelableAuthenticate")
 	f.m.Lock()
 	canceled := f.canceled
+	timedOut := f.timedOut
 	f.m.Unlock()
 	if canceled {
 		return auth.ErrAuthCanceled
+	}
+	if timedOut {
+		return auth.ErrAuthTimedOut
 	}
 	return f.fakeAuthenticate()
 }
@@ -220,6 +227,25 @@ func TestAuthenticate_Canceled_NormalizesToContextCanceled(t *testing.T) {
 	assert.Empty(t, token)
 	assert.ErrorIs(t, err, context.Canceled)
 	assert.True(t, util.IsCancellation(err), "a canceled OAuth login must be recognized as a cancellation")
+}
+
+func TestAuthenticate_TimedOut_NormalizesToDeadlineExceeded(t *testing.T) {
+	// GAF returns ErrAuthTimedOut (a plain sentinel) when a login times out. The provider must
+	// normalize it to context.DeadlineExceeded so util.IsTimeout recognizes it — a timeout is shown
+	// to the user but kept out of Sentry, and must not be classified as a cancellation.
+	engine := testutil.UnitTest(t)
+	config := engine.GetConfiguration()
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, config, true)
+	authenticator.timedOut = true
+
+	provider := newOAuthProvider(config, authenticator, engine.GetLogger())
+
+	token, err := provider.Authenticate(t.Context())
+
+	assert.Empty(t, token)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.True(t, util.IsTimeout(err), "a timed-out OAuth login must be recognized as a timeout")
+	assert.False(t, util.IsCancellation(err), "a timeout must not be classified as a cancellation")
 }
 
 func TestAuthURL_ShouldReturnURL(t *testing.T) {

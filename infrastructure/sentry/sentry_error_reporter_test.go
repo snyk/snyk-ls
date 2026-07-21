@@ -91,6 +91,18 @@ func TestErrorReporting_CaptureError_IgnoresCancellation(t *testing.T) {
 	}
 }
 
+func TestErrorReporting_CaptureError_NilNotifier_DoesNotPanic(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	// Reporting disabled so sendToSentry is a no-op; this only exercises the nil-notifier guard.
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), false)
+	var target = NewSentryErrorReporter(engine.GetConfiguration(), engine.GetLogger(), engine, nil, testutil.DefaultConfigResolver(engine))
+
+	assert.NotPanics(t, func() {
+		captured := target.CaptureError(errors.New("boom"))
+		assert.False(t, captured)
+	})
+}
+
 func TestErrorReporting_CaptureErrorAndReportAsIssue_IgnoresCancellation(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	path := types.FilePath("testPath")

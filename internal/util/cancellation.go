@@ -33,3 +33,11 @@ import (
 func IsCancellation(err error) bool {
 	return errors.Is(err, context.Canceled)
 }
+
+// IsTimeout reports whether err represents a deadline/timeout (context.DeadlineExceeded), as opposed
+// to a deliberate cancellation. A timeout is a genuine failure the user should be told about so they
+// can retry, but it is an expected, transient condition rather than a defect — callers may surface it
+// to the user while keeping it out of error tracking.
+func IsTimeout(err error) bool {
+	return errors.Is(err, context.DeadlineExceeded)
+}

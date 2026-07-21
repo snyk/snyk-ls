@@ -123,6 +123,14 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 			logger.Debug().Str("method", "loginCommand.Execute").Msg("login canceled")
 			return nil, err
 		}
+		// A login timeout (e.g. the user didn't complete the browser flow) is a user-facing, retryable
+		// outcome, not a defect: tell the user, but return no error so the command handler doesn't
+		// report it to Sentry. Scoping this here keeps genuine timeouts elsewhere reportable.
+		if util.IsTimeout(err) {
+			logger.Debug().Str("method", "loginCommand.Execute").Msg("login timed out")
+			cmd.notifier.SendError(err)
+			return nil, nil
+		}
 		logger.Err(err).Msg("Error on snyk.login command")
 		cmd.notifier.SendError(err)
 	}

@@ -213,34 +213,76 @@ func (a *AuthenticationServiceImpl) provider() AuthenticationProvider {
 func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token string, err error) {
 	a.CancelOngoingAuth()
 
-	a.m.Lock()
-	defer a.m.Unlock()
-
+	// Capture our own cancel func in a local: a.previousAuthCtxCancelFunc is written under its mutex by
+	// concurrent Authenticate calls, so deferring the field directly would both data-race and risk
+	// cancelling a newer login. The local always refers to this call's own cancel func.
+	//
+	// Concurrent Authenticate calls are not strictly single-flight: if two race past CancelOngoingAuth
+	// before either registers its cancel func, neither cancels the other and both proceed — they then
+	// resolve last-writer-wins in finishAuthenticate under a.m, which is acceptable (both apply
+	// legitimate credentials).
 	a.previousAuthCtxCancelFuncMu.Lock()
-	ctx, a.previousAuthCtxCancelFunc = context.WithCancel(ctx)
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithCancel(ctx)
+	a.previousAuthCtxCancelFunc = cancel
 	a.previousAuthCtxCancelFuncMu.Unlock()
+	defer cancel() // safe to double-call; cleans up if we weren't interrupted
 
-	defer a.previousAuthCtxCancelFunc() // need to clean up resources if we weren't interrupted, impl should ensure its safe to double call
-	return a.authenticate(ctx)
-}
+	// Snapshot the provider under the auth mutex, then release it for the interactive
+	// provider.Authenticate call, which can block for up to ~2 minutes waiting for the browser.
+	// Holding a.m across that wait blocks ConfigureProviders and every other a.m user — including a
+	// didChangeConfiguration notification handler, which would then stall the whole LSP request
+	// pipeline (jrpc2 serializes request dispatch behind an outstanding notification) and stop a
+	// subsequent login from cancelling this one.
+	//
+	// Supersession invariant: a caller that supersedes an in-flight login by clearing or reconfiguring
+	// provider state cancels the auth context first (via CancelOngoingAuth), so the ctx.Err() guard
+	// below discards this login's now-stale result. Logout does this directly; ConfigureProviders
+	// relies on its caller ApplyAuthMethodChange to cancel before reconfiguring. This is about
+	// correctness, not deadlock avoidance — releasing a.m above means nothing ever waits on the
+	// interactive provider call while holding a.m.
+	a.m.RLock()
+	provider := a.authProvider
+	a.m.RUnlock()
 
-func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token string, err error) {
-	if a.authProvider == nil {
+	if provider == nil {
 		err = errors.New("authentication provider is not configured")
 		a.engine.GetLogger().Warn().Err(err).Msg("Failed to authenticate: auth provider is nil")
+		a.m.Lock()
 		a.authCache.RemoveAll()
+		a.m.Unlock()
 		return "", err
 	}
 
-	token, err = a.authProvider.Authenticate(ctx)
+	token, err = provider.Authenticate(ctx)
 
+	a.m.Lock()
+	defer a.m.Unlock()
+
+	// While we waited without the lock, a concurrent Logout or a newer Authenticate may have run its
+	// own a.m critical section, cancelling our context. If so, this login has been superseded — do not
+	// apply its result, or we would re-establish credentials a Logout just cleared (or clobber a newer
+	// login). This deliberately discards even a token the provider had just successfully returned when
+	// a cancel coincides; that is the accepted trade-off. The cancellation propagates upward and is
+	// treated as expected by util.IsCancellation.
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		a.engine.GetLogger().Debug().Str("method", "Authenticate").Msg("authentication superseded before applying result; discarding")
+		return "", ctxErr
+	}
+
+	return a.finishAuthenticate(provider, token, err)
+}
+
+// finishAuthenticate applies the result of the provider's Authenticate call — caching, endpoint
+// discovery, credential update and provider reconfiguration. The caller must hold a.m.
+func (a *AuthenticationServiceImpl) finishAuthenticate(provider AuthenticationProvider, token string, err error) (string, error) {
 	if token == "" || err != nil {
 		// A canceled authentication (e.g. the IDE canceled the login via $/cancelRequest) is expected,
 		// not a failure: log at debug rather than warning.
 		if util.IsCancellation(err) {
-			a.engine.GetLogger().Debug().Str("method", "authenticate").Msg("authentication canceled")
+			a.engine.GetLogger().Debug().Str("method", "finishAuthenticate").Msg("authentication canceled")
 		} else {
-			a.engine.GetLogger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.authProvider))
+			a.engine.GetLogger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(provider))
 		}
 		a.authCache.RemoveAll()
 		return token, err

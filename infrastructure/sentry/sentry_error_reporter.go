@@ -68,7 +68,9 @@ func (s *GDPRAwareSentryErrorReporter) CaptureError(err error) bool {
 		s.logger.Debug().Err(err).Str("method", "CaptureError").Msg("ignoring canceled-operation error")
 		return false
 	}
-	s.notifier.SendError(err)
+	if s.notifier != nil {
+		s.notifier.SendError(err)
+	}
 	return s.sendToSentry(err)
 }
 

@@ -55,3 +55,25 @@ func TestIsCancellation(t *testing.T) {
 		assert.False(t, IsCancellation(errors.New("signal: killed")))
 	})
 }
+
+func TestIsTimeout(t *testing.T) {
+	t.Run("true for context.DeadlineExceeded", func(t *testing.T) {
+		assert.True(t, IsTimeout(context.DeadlineExceeded))
+	})
+
+	t.Run("true for a wrapped context.DeadlineExceeded", func(t *testing.T) {
+		assert.True(t, IsTimeout(fmt.Errorf("oauth authentication timed out: %w", context.DeadlineExceeded)))
+	})
+
+	t.Run("false for context.Canceled", func(t *testing.T) {
+		assert.False(t, IsTimeout(context.Canceled))
+	})
+
+	t.Run("false for nil", func(t *testing.T) {
+		assert.False(t, IsTimeout(nil))
+	})
+
+	t.Run("false for an unrelated error", func(t *testing.T) {
+		assert.False(t, IsTimeout(errors.New("boom")))
+	})
+}

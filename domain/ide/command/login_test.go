@@ -18,6 +18,7 @@ package command
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -220,6 +221,38 @@ func TestLoginCommand_Execute_CanceledAuth_NotReportedToUser(t *testing.T) {
 	assert.ErrorIs(t, err, context.Canceled)
 	assert.Nil(t, result)
 	assert.Zero(t, notifier.SendErrorCount(), "a canceled login must not be surfaced to the user")
+}
+
+func TestLoginCommand_Execute_TimedOut_NotifiesButReturnsNoError(t *testing.T) {
+	// A login timeout (e.g. the user didn't complete the OAuth browser flow) is a user-facing,
+	// retryable outcome, not a defect: the user is told, but no error is returned — returning one would
+	// be reported to Sentry by the command handler. Scoping the "don't report" decision here keeps
+	// genuine timeouts elsewhere (scans, API calls) visible in error tracking.
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+	setMockWorkspace(t, ctrl, conf)
+
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	provider.AuthenticateErr = fmt.Errorf("oauth authentication timed out: %w", context.DeadlineExceeded)
+	notifier := notification.NewMockNotifier()
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notifier, testutil.DefaultConfigResolver(engine))
+
+	cmd := loginCommand{
+		command:            types.CommandData{CommandId: types.LoginCommand},
+		authService:        authService,
+		featureFlagService: featureflag.NewFakeService(),
+		notifier:           notifier,
+		engine:             engine,
+		ldxSyncService:     mock_command.NewMockLdxSyncService(ctrl),
+	}
+
+	result, err := cmd.Execute(t.Context())
+
+	require.NoError(t, err, "a login timeout must not be returned as an error (would be reported to Sentry)")
+	assert.Nil(t, result)
+	assert.Equal(t, 1, notifier.SendErrorCount(), "the user must be told the login timed out")
 }
 
 func TestApplyAuthConfig_EndpointChange_LogsOutAndClearsWorkspace(t *testing.T) {

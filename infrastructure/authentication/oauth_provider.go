@@ -59,6 +59,11 @@ func (p *OAuth2Provider) Authenticate(ctx context.Context) (string, error) {
 		// login as an expected cancellation across the auth/login stack — debug log, no Sentry report,
 		// no user notification.
 		return "", fmt.Errorf("oauth authentication canceled: %w", context.Canceled)
+	case errors.Is(err, auth.ErrAuthTimedOut):
+		p.logger.Debug().Msg("authentication timed out")
+		// Normalize GAF's ErrAuthTimedOut to context.DeadlineExceeded so util.IsTimeout recognizes it:
+		// the timeout is surfaced to the user (so they can retry) but kept out of Sentry.
+		return "", fmt.Errorf("oauth authentication timed out: %w", context.DeadlineExceeded)
 	case err != nil:
 		return "", err
 	}

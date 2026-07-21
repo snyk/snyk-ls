@@ -956,6 +956,110 @@ func Test_authenticate_PropagatesEndpointWhenTokenAudDiffers(t *testing.T) {
 	assert.Equal(t, 1, endpointUpdateMsgCount, "exactly one endpoint-update Info message must be sent")
 }
 
+// With a.m released during the provider call, the deferred cleanup must not read
+// a.previousAuthCtxCancelFunc lock-free: a concurrent Authenticate writes it under its own mutex, so
+// an unsynchronized read both data-races and could cancel the wrong (newer) login. Run under -race.
+func Test_Authenticate_ConcurrentCalls_NoDataRaceOnCancelFunc(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{Engine: engine, AuthenticateErr: fmt.Errorf("boom")}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = service.Authenticate(context.Background())
+		}()
+	}
+	wg.Wait()
+}
+
+// tokenOnReleaseProvider enters Authenticate, signals via started, blocks until release is closed,
+// then returns a valid token regardless of ctx — modelling a provider that has already obtained a
+// token when a cancellation (e.g. Logout) arrives moments later.
+type tokenOnReleaseProvider struct {
+	token   string
+	started chan struct{}
+	release chan struct{}
+}
+
+func (p *tokenOnReleaseProvider) Authenticate(_ context.Context) (string, error) {
+	close(p.started)
+	<-p.release
+	return p.token, nil
+}
+func (p *tokenOnReleaseProvider) ClearAuthentication(_ context.Context) error { return nil }
+func (p *tokenOnReleaseProvider) AuthURL(_ context.Context) string            { return "" }
+func (p *tokenOnReleaseProvider) setAuthUrl(_ string)                         {}
+func (p *tokenOnReleaseProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
+	return func(_ workflow.Engine) (string, error) { return "", nil }
+}
+func (p *tokenOnReleaseProvider) AuthenticationMethod() types.AuthenticationMethod {
+	return types.FakeAuthentication
+}
+
+// A login whose provider returns a token just as the user logs out must not re-establish credentials.
+// With a.m released during the interactive provider call, finishAuthenticate races Logout for the
+// mutex; it must detect the cancelled context and discard its result rather than re-applying a token
+// that Logout just cleared.
+func Test_Authenticate_SupersededByLogout_DoesNotReapplyCredentials(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	provider := &tokenOnReleaseProvider{
+		token:   "e448dc1a-26c6-11ed-a261-0242ac120002",
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+
+	authDone := make(chan struct{})
+	go func() { _, _ = service.Authenticate(context.Background()); close(authDone) }()
+
+	<-provider.started // provider entered; the auth's cancel func is registered and a.m is released
+
+	// The user logs out while the browser flow is completing: this cancels the in-flight auth's
+	// context and clears credentials.
+	service.Logout(context.Background())
+
+	close(provider.release) // provider now returns a valid token; finishAuthenticate races for a.m
+	<-authDone
+
+	assert.Empty(t, config.GetToken(conf), "a login superseded by Logout must not re-establish credentials")
+}
+
+// Authenticate must not hold the auth mutex during the interactive provider call. If it does,
+// ConfigureProviders (called e.g. from a didChangeConfiguration notification handler) blocks behind
+// the in-flight login, which stalls the whole LSP request pipeline via jrpc2's notification barrier
+// and prevents a subsequent login from cancelling the stuck one.
+func Test_ConfigureProviders_NotBlockedByInFlightAuthenticate(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := NewBlockingFakeAuthProvider()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+	t.Cleanup(service.CancelOngoingAuth) // unblock the in-flight Authenticate goroutine at teardown
+
+	go func() { _, _ = service.Authenticate(context.Background()) }()
+
+	select {
+	case <-provider.Started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Authenticate did not start")
+	}
+
+	done := make(chan struct{})
+	go func() {
+		service.ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("ConfigureProviders blocked behind an in-flight Authenticate — the auth mutex must not be held during the interactive provider call")
+	}
+}
+
 // A canceled OAuth login must propagate through authenticate() as a cancellation (recognized by
 // util.IsCancellation) and not an error.
 func Test_authenticate_OAuthCanceled_TreatedAsCancellation(t *testing.T) {
