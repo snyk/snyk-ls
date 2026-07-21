@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"reflect"
 	"strings"
@@ -32,6 +33,7 @@ import (
 
 	"github.com/erni27/imcache"
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -69,7 +71,10 @@ type AuthenticationServiceImpl struct {
 	// key = token, value = isAuthenticated
 	authCache *imcache.Cache[string, bool]
 	// Last token that was successfully used for authentication. It might have expired (so not be present in authCache).
+	// Uses its own mutex (not m) because doAuthCheck runs under m.RLock, which allows
+	// concurrent writers here.
 	lastUsedToken               string
+	lastUsedTokenMu             sync.Mutex
 	m                           sync.RWMutex
 	previousAuthCtxCancelFunc   context.CancelFunc
 	previousAuthCtxCancelFuncMu sync.Mutex
@@ -715,6 +720,10 @@ func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 	}
 	a.updateCredentials("", true, false)
 	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())
+
+	a.lastUsedTokenMu.Lock()
+	a.lastUsedToken = ""
+	a.lastUsedTokenMu.Unlock()
 }
 
 // IsAuthenticated returns true if the token is verified
@@ -792,7 +801,7 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 			return false
 		}
 
-		invalidOAuth2Token, isLegacyTokenErr := config.ParseOAuthToken(config.GetToken(conf), a.engine.GetLogger())
+		invalidOAuth2Token, isLegacyTokenErr := config.ParseOAuthToken(token, a.engine.GetLogger())
 		isLegacyToken := isLegacyTokenErr != nil
 
 		a.handleEmptyUser(logger, isLegacyToken, invalidOAuth2Token)
@@ -800,17 +809,26 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 	}
 	// We cache the API auth ok for up to 1 minute after last access. If more than a minute has passed, a new check is
 	// performed.
-	a.authCache.Set(config.GetToken(conf), true, imcache.WithSlidingExpiration(time.Minute))
+	//
+	// Cache/track the token that was actually verified above (captured once at function
+	// entry), not a fresh config.GetToken(conf) read: a concurrent credentialUpdateWorker
+	// write (which bypasses a.m entirely, see lastUsedToken field doc) can rotate the config
+	// token between the API call and here, which would otherwise mark an unverified token as
+	// authenticated (cache poisoning) or, on the error path above, misjudge a freshly rotated
+	// valid token as the failed one and log out a valid session.
+	a.authCache.Set(token, true, imcache.WithSlidingExpiration(time.Minute))
 
 	// For API Token and PAT authentication, the user may not have authenticated as part of the authenticate flow; e.g.,
 	// they could have pasted the token or PAT in to the IDE. In those cases, this will be the first time they have
 	// authenticated using that token or PAT
-	if a.lastUsedToken != config.GetToken(conf) {
-		a.lastUsedToken = config.GetToken(conf)
-
-		if config.GetAuthenticationMethodFromConfig(a.engine.GetConfiguration()) != types.OAuthAuthentication {
-			a.sendAuthenticationAnalytics()
-		}
+	a.lastUsedTokenMu.Lock()
+	isNewToken := a.lastUsedToken != token
+	if isNewToken {
+		a.lastUsedToken = token
+	}
+	a.lastUsedTokenMu.Unlock()
+	if isNewToken && config.GetAuthenticationMethodFromConfig(a.engine.GetConfiguration()) != types.OAuthAuthentication {
+		a.sendAuthenticationAnalytics()
 	}
 	logger.Debug().Str("userId", user).Msg("Authenticated, adding to cache.")
 	return true
@@ -873,6 +891,14 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 	errMsg := strings.ToLower(err.Error())
 
 	if isPermanentOAuthRefreshError(errMsg) {
+		return true
+	}
+
+	// A structured Snyk API error with a definitive auth status code is a permanent failure,
+	// even though http.Client.Do always wraps it in a *url.Error (which isTransientNetworkError
+	// would otherwise treat as transient network noise).
+	var snykErr snyk_errors.Error
+	if errors.As(err, &snykErr) && (snykErr.StatusCode == http.StatusUnauthorized || snykErr.StatusCode == http.StatusBadRequest) {
 		return true
 	}
 
