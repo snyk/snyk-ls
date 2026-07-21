@@ -976,7 +976,7 @@ func Test_Authenticate_ConcurrentCalls_NoDataRaceOnCancelFunc(t *testing.T) {
 }
 
 // tokenOnReleaseProvider enters Authenticate, signals via started, blocks until release is closed,
-// then returns a valid token regardless of ctx — modelling a provider that has already obtained a
+// then returns a valid token regardless of ctx — modeling a provider that has already obtained a
 // token when a cancellation (e.g. Logout) arrives moments later.
 type tokenOnReleaseProvider struct {
 	token   string
@@ -1001,7 +1001,7 @@ func (p *tokenOnReleaseProvider) AuthenticationMethod() types.AuthenticationMeth
 
 // A login whose provider returns a token just as the user logs out must not re-establish credentials.
 // With a.m released during the interactive provider call, finishAuthenticate races Logout for the
-// mutex; it must detect the cancelled context and discard its result rather than re-applying a token
+// mutex; it must detect the canceled context and discard its result rather than re-applying a token
 // that Logout just cleared.
 func Test_Authenticate_SupersededByLogout_DoesNotReapplyCredentials(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
@@ -1032,7 +1032,7 @@ func Test_Authenticate_SupersededByLogout_DoesNotReapplyCredentials(t *testing.T
 // Authenticate must not hold the auth mutex during the interactive provider call. If it does,
 // ConfigureProviders (called e.g. from a didChangeConfiguration notification handler) blocks behind
 // the in-flight login, which stalls the whole LSP request pipeline via jrpc2's notification barrier
-// and prevents a subsequent login from cancelling the stuck one.
+// and prevents a subsequent login from canceling the stuck one.
 func Test_ConfigureProviders_NotBlockedByInFlightAuthenticate(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	provider := NewBlockingFakeAuthProvider()

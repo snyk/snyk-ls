@@ -215,7 +215,7 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 
 	// Capture our own cancel func in a local: a.previousAuthCtxCancelFunc is written under its mutex by
 	// concurrent Authenticate calls, so deferring the field directly would both data-race and risk
-	// cancelling a newer login. The local always refers to this call's own cancel func.
+	// canceling a newer login. The local always refers to this call's own cancel func.
 	//
 	// Concurrent Authenticate calls are not strictly single-flight: if two race past CancelOngoingAuth
 	// before either registers its cancel func, neither cancels the other and both proceed — they then
@@ -233,7 +233,7 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 	// Holding a.m across that wait blocks ConfigureProviders and every other a.m user — including a
 	// didChangeConfiguration notification handler, which would then stall the whole LSP request
 	// pipeline (jrpc2 serializes request dispatch behind an outstanding notification) and stop a
-	// subsequent login from cancelling this one.
+	// subsequent login from canceling this one.
 	//
 	// Supersession invariant: a caller that supersedes an in-flight login by clearing or reconfiguring
 	// provider state cancels the auth context first (via CancelOngoingAuth), so the ctx.Err() guard
@@ -260,7 +260,7 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 	defer a.m.Unlock()
 
 	// While we waited without the lock, a concurrent Logout or a newer Authenticate may have run its
-	// own a.m critical section, cancelling our context. If so, this login has been superseded — do not
+	// own a.m critical section, canceling our context. If so, this login has been superseded — do not
 	// apply its result, or we would re-establish credentials a Logout just cleared (or clobber a newer
 	// login). This deliberately discards even a token the provider had just successfully returned when
 	// a cancel coincides; that is the accepted trade-off. The cancellation propagates upward and is
