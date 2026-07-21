@@ -215,7 +215,16 @@ func (fc *FolderConfig) ToLspFolderConfig() *LspFolderConfig {
 			OriginScope: ev.OriginScope,
 			IsLocked:    strings.Contains(ev.Source, "locked"),
 		}
-		if !isMeaningfulValue(ev.Value) {
+		// Settings annotated AnnotationAlwaysSend are emitted even at their zero
+		// default (e.g. risk score 0 = "All"), so a reset syncs to an open settings
+		// window; isMeaningfulValue would otherwise drop a zero-valued numeric
+		// setting. The policy is declared at registration rather than hardcoded
+		// here, so a future always-send setting needs no edit to this shared loop.
+		alwaysSend := false
+		if as, found := fm.GetConfigurationOptionAnnotation(name, AnnotationAlwaysSend); found && as == "true" {
+			alwaysSend = true
+		}
+		if !alwaysSend && !isMeaningfulValue(ev.Value) {
 			continue
 		}
 		switch name {
@@ -451,7 +460,28 @@ func (fc *FolderConfig) applyLocalBranches(update *LspFolderConfig, conf configu
 	return true
 }
 
+// isFolderReset reports whether a setting carries a {Changed:true, Value:nil}
+// reset marker. getSettingValue treats a nil value as "not present", so basic
+// folder-field handlers must check this explicitly to clear their override
+// (mirrors the generic reset path in applyGenericFolderOverrides).
+func isFolderReset(settings map[string]*ConfigSetting, name string) bool {
+	cs := settings[name]
+	return cs != nil && cs.Changed && cs.Value == nil
+}
+
+// unsetFolderOverride clears the user:folder: override for name if one exists.
+func (fc *FolderConfig) unsetFolderOverride(conf configuration.Configuration, fp, name string) bool {
+	if !HasUserOverride(conf, fc.FolderPath, name) {
+		return false
+	}
+	conf.Unset(configresolver.UserFolderKey(fp, name))
+	return true
+}
+
 func (fc *FolderConfig) applyStringField(update *LspFolderConfig, conf configuration.Configuration, fp, name string, setUser func(string, any)) bool {
+	if isFolderReset(update.Settings, name) {
+		return fc.unsetFolderOverride(conf, fp, name)
+	}
 	val, ok := getSettingValue[string](update.Settings, name)
 	if !ok {
 		return false
@@ -464,6 +494,9 @@ func (fc *FolderConfig) applyStringField(update *LspFolderConfig, conf configura
 }
 
 func (fc *FolderConfig) applyStringSliceField(update *LspFolderConfig, conf configuration.Configuration, fp, name string, setUser func(string, any)) bool {
+	if isFolderReset(update.Settings, name) {
+		return fc.unsetFolderOverride(conf, fp, name)
+	}
 	val, ok := getStringSliceFromSetting(update.Settings, name)
 	if !ok {
 		return false
@@ -476,6 +509,9 @@ func (fc *FolderConfig) applyStringSliceField(update *LspFolderConfig, conf conf
 }
 
 func (fc *FolderConfig) applyScanCommandConfig(update *LspFolderConfig, conf configuration.Configuration, fp string, setUser func(string, any)) bool {
+	if isFolderReset(update.Settings, SettingScanCommandConfig) {
+		return fc.unsetFolderOverride(conf, fp, SettingScanCommandConfig)
+	}
 	scanCmdConfig, ok := getScanCommandConfigFromSetting(update.Settings, SettingScanCommandConfig)
 	if !ok || len(scanCmdConfig) == 0 {
 		return false
@@ -569,6 +605,17 @@ func (fc *FolderConfig) applyPreferredOrg(update *LspFolderConfig, handled map[s
 	fp := string(PathKey(fc.FolderPath))
 	if fp == "" {
 		return false
+	}
+
+	// Reset: a {Changed:true, Value:nil} on preferred_org clears the folder org override.
+	// getSettingValue below treats a nil value as "not present", so the reset must be
+	// handled explicitly first. Unset both preferred_org and org_set_by_user so the folder
+	// reverts to its auto-determined (LDX) / global org. Mirrors the generic reset path in
+	// applyGenericFolderOverrides.
+	if isFolderReset(update.Settings, SettingPreferredOrg) {
+		preferredOrgChanged := fc.unsetFolderOverride(conf, fp, SettingPreferredOrg)
+		orgSetByUserChanged := fc.unsetFolderOverride(conf, fp, SettingOrgSetByUser)
+		return preferredOrgChanged || orgSetByUserChanged
 	}
 
 	preferredOrg, ok := getSettingValue[string](update.Settings, SettingPreferredOrg)

@@ -21,11 +21,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -67,6 +70,96 @@ func TestTreeScanStateEmitter_Emit_SendsTreeViewNotification(t *testing.T) {
 	mu.Unlock()
 	require.True(t, ok, "payload should be types.TreeView")
 	assert.Contains(t, treeView.TreeViewHtml, "<!DOCTYPE html>")
+}
+
+func TestTreeScanStateEmitter_Emit_FeedbackBannerReflectsConfig(t *testing.T) {
+	t.Run("dismissed omits the banner", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		config.SetFeedbackBannerDismissed(engine.GetConfiguration())
+		html := emitAndCaptureHTML(t, engine.GetConfiguration(), engine.GetLogger())
+		assert.NotContains(t, html, `id="feedbackBanner"`)
+	})
+
+	t.Run("interacted renders the banner visible", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		config.SetFeedbackBannerInteracted(engine.GetConfiguration())
+		html := emitAndCaptureHTML(t, engine.GetConfiguration(), engine.GetLogger())
+		assert.Contains(t, html, `id="feedbackBanner"`)
+		assert.NotContains(t, html, `id="feedbackBanner" hidden>`)
+	})
+}
+
+// emitAndCaptureHTML runs one emit cycle and returns the rendered tree HTML.
+func emitAndCaptureHTML(t *testing.T, conf configuration.Configuration, logger *zerolog.Logger) string {
+	t.Helper()
+	notif := notification.NewNotifier()
+	var mu sync.Mutex
+	var receivedPayload any
+	notif.CreateListener(func(params any) {
+		mu.Lock()
+		defer mu.Unlock()
+		receivedPayload = params
+	})
+	t.Cleanup(func() { notif.DisposeListener() })
+
+	emitter, err := NewTreeScanStateEmitter(conf, logger, notif)
+	require.NoError(t, err)
+	t.Cleanup(emitter.Dispose)
+
+	emitter.Emit(scanstates.StateSnapshot{AnyScanInProgressWorkingDirectory: true})
+
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return receivedPayload != nil
+	}, 2*time.Second, 50*time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+	treeView, ok := receivedPayload.(types.TreeView)
+	require.True(t, ok, "payload should be types.TreeView")
+	return treeView.TreeViewHtml
+}
+
+// TestTreeScanStateEmitter_Emit_UntrustedFolder_ShowsBannerWithoutScan verifies the
+// banner renders on a non-scan emit (the empty snapshot agg.Init sends at startup),
+// not just after a scan — i.e. snyk-ls does emit the trust banner at init time.
+func TestTreeScanStateEmitter_Emit_UntrustedFolder_ShowsBannerWithoutScan(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	// Trust enabled + folder not in trusted_folders -> the folder is untrusted.
+	conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
+	workspaceutil.SetupWorkspace(t, engine, types.FilePath("/untrusted-project"))
+
+	notif := notification.NewNotifier()
+	var mu sync.Mutex
+	var receivedPayload any
+	notif.CreateListener(func(params any) {
+		mu.Lock()
+		defer mu.Unlock()
+		receivedPayload = params
+	})
+	t.Cleanup(func() { notif.DisposeListener() })
+
+	emitter, err := NewTreeScanStateEmitter(conf, engine.GetLogger(), notif)
+	require.NoError(t, err)
+	t.Cleanup(emitter.Dispose)
+
+	// Empty snapshot: no scan in progress, no product scan states — exactly what
+	// ScanStateAggregator.Init emits once at startup before any scan runs.
+	emitter.Emit(scanstates.StateSnapshot{})
+
+	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return receivedPayload != nil
+	}, 2*time.Second, 50*time.Millisecond)
+
+	mu.Lock()
+	treeView := receivedPayload.(types.TreeView)
+	mu.Unlock()
+	assert.Contains(t, treeView.TreeViewHtml, "tree-node-info--untrusted-folder",
+		"trust banner must render on the startup (non-scan) emit, not only after a scan")
 }
 
 func TestTreeScanStateEmitter_Emit_ScanInProgress_HasScanningInProductNode(t *testing.T) {
@@ -209,6 +302,33 @@ func TestTreeScanStateEmitter_Dispose_StopsRenderLoop(t *testing.T) {
 	emitter.Emit(scanstates.StateSnapshot{AnyScanInProgressWorkingDirectory: true})
 }
 
+func TestAggregateSeverityFilters(t *testing.T) {
+	t.Run("single folder is never mixed", func(t *testing.T) {
+		f := types.NewSeverityFilter(true, false, true, false)
+		sev, mixed := aggregateSeverityFilters([]types.SeverityFilter{f})
+		assert.Equal(t, f, sev)
+		assert.Equal(t, MixedSeverity{}, mixed)
+	})
+
+	t.Run("all folders agree", func(t *testing.T) {
+		f := types.NewSeverityFilter(true, true, false, false)
+		sev, mixed := aggregateSeverityFilters([]types.SeverityFilter{f, f, f})
+		assert.Equal(t, f, sev)
+		assert.Equal(t, MixedSeverity{}, mixed)
+	})
+
+	t.Run("disagreement marks only the differing severities mixed", func(t *testing.T) {
+		_, mixed := aggregateSeverityFilters([]types.SeverityFilter{
+			types.NewSeverityFilter(true, true, true, true),
+			types.NewSeverityFilter(false, true, true, false),
+		})
+		assert.True(t, mixed.Critical, "critical differs -> mixed")
+		assert.False(t, mixed.High, "high agrees")
+		assert.False(t, mixed.Medium, "medium agrees")
+		assert.True(t, mixed.Low, "low differs -> mixed")
+	})
+}
+
 // TestTreeScanStateEmitter_FolderLevelIssueViewOptions verifies that the info-node message
 // reflects folder-level IssueViewOptions overrides rather than the global setting.
 // Regression for: global open+ignored disabled, folder-level open+ignored enabled →
@@ -270,7 +390,7 @@ func TestTreeScanStateEmitter_FolderLevelIssueViewOptions(t *testing.T) {
 	mu.Unlock()
 	assert.NotContains(t, treeView.TreeViewHtml, "Open and Ignored issues are disabled!",
 		"folder-level enabled override must suppress the disabled info message")
-	assert.Contains(t, treeView.TreeViewHtml, "Congrats",
+	assert.Contains(t, treeView.TreeViewHtml, "No issues found",
 		"product node must still render a non-empty info message so the NotContains above is non-vacuous")
 }
 
@@ -329,4 +449,310 @@ func TestTreeScanStateEmitter_GlobalDisabledIVO_ShowsDisabledMessage(t *testing.
 	mu.Unlock()
 	assert.Contains(t, treeView.TreeViewHtml, "Open and Ignored issues are disabled!",
 		"global disabled IVO with no folder override must produce the disabled info message")
+}
+
+// TestFilterState_MultipleFolders_DifferingSeverity_SetsMixedAndRendersFilterMixed is an
+// end-to-end test: when two open folders have different per-folder severity
+// filters the toolbar button carries filter-mixed.
+func TestFilterState_MultipleFolders_DifferingSeverity_SetsMixedAndRendersFilterMixed(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+
+	folder1 := types.FilePath("/project-mixed-a")
+	folder2 := types.FilePath("/project-mixed-b")
+	workspaceutil.SetupWorkspace(t, engine, folder1, folder2)
+
+	// Folder 1: critical ON; folder 2: critical OFF — they disagree on Critical.
+	sf1 := types.NewSeverityFilter(true, true, true, true)
+	sf2 := types.NewSeverityFilter(false, true, true, true)
+	types.SetSeverityFilterForFolder(conf, folder1, &sf1)
+	types.SetSeverityFilterForFolder(conf, folder2, &sf2)
+
+	notif := notification.NewNotifier()
+	var mu sync.Mutex
+	var receivedPayload any
+	notif.CreateListener(func(params any) {
+		mu.Lock()
+		defer mu.Unlock()
+		receivedPayload = params
+	})
+	t.Cleanup(func() { notif.DisposeListener() })
+
+	emitter, err := NewTreeScanStateEmitter(conf, engine.GetLogger(), notif)
+	require.NoError(t, err)
+	t.Cleanup(emitter.Dispose)
+
+	emitter.Emit(scanstates.StateSnapshot{})
+
+	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return receivedPayload != nil
+	}, 2*time.Second, 50*time.Millisecond)
+
+	mu.Lock()
+	treeView := receivedPayload.(types.TreeView)
+	mu.Unlock()
+	assert.Contains(t, treeView.TreeViewHtml, "filter-mixed",
+		"HTML should contain filter-mixed class when folders disagree on severity")
+	assert.Contains(t, treeView.TreeViewHtml, "Open folders use different Critical severity filters",
+		"mixed critical button should carry the expected tooltip text")
+}
+
+// TestFilterState_NoWorkspace_FallsBackToGlobal verifies the ws==nil fallback:
+// filterState must return the global config values when there is no workspace.
+func TestFilterState_NoWorkspace_FallsBackToGlobal(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+
+	// Set a distinctive non-default global filter: only High enabled.
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterCritical), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterHigh), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterMedium), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterLow), false)
+
+	// No workspace is set up — GetWorkspace returns nil.
+	notif := notification.NewNotifier()
+	notif.CreateListener(func(params any) {})
+	t.Cleanup(func() { notif.DisposeListener() })
+
+	emitter, err := NewTreeScanStateEmitter(conf, engine.GetLogger(), notif)
+	require.NoError(t, err)
+	t.Cleanup(emitter.Dispose)
+
+	ws := config.GetWorkspace(conf)
+	fs := ResolveFilterState(conf, ws)
+
+	assert.False(t, fs.SeverityFilter.Critical, "global fallback: Critical should be false")
+	assert.True(t, fs.SeverityFilter.High, "global fallback: High should be true")
+	assert.False(t, fs.SeverityFilter.Medium, "global fallback: Medium should be false")
+	assert.False(t, fs.SeverityFilter.Low, "global fallback: Low should be false")
+	assert.Equal(t, MixedSeverity{}, fs.MixedSeverity, "no workspace → no mixed severity")
+}
+
+// TestFilterState_FolderWithNilConfigReadOnly_IsSkipped verifies that a folder
+// whose FolderConfigReadOnly() returns nil is silently skipped and does not panic.
+// When all folders are skipped the global fallback is used.
+func TestFilterState_FolderWithNilConfigReadOnly_IsSkipped(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+
+	// Global: all OFF.
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterCritical), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterHigh), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterMedium), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSeverityFilterLow), false)
+
+	// SetupWorkspace with a valid folder so there IS a workspace (ws != nil), but
+	// the folder itself will have a valid FolderConfigReadOnly. We then call
+	// filterState with a manually-constructed workspace that has no folders
+	// (simulating the "all folders skipped" case).
+	workspaceutil.SetupWorkspace(t, engine, types.FilePath("/project-nil-fc"))
+
+	notif := notification.NewNotifier()
+	notif.CreateListener(func(params any) {})
+	t.Cleanup(func() { notif.DisposeListener() })
+
+	emitter, err := NewTreeScanStateEmitter(conf, engine.GetLogger(), notif)
+	require.NoError(t, err)
+	t.Cleanup(emitter.Dispose)
+
+	// Call filterState with nil — the ws==nil path falls straight to global.
+	fs := ResolveFilterState(conf, nil)
+
+	assert.False(t, fs.SeverityFilter.Critical, "nil workspace → global fallback: Critical=false")
+	assert.Equal(t, MixedSeverity{}, fs.MixedSeverity, "nil workspace → no mixed severity")
+}
+
+// TestFilterState_IVO_AggregatesAcrossFolders verifies the IVO aggregation that
+// replaced the old first-folder-only read: when the SnykCodeConsistentIgnores flag
+// is on and open folders disagree on an option, that option is marked mixed
+// (analogous to severity), and IssueViewOptionsEnabled is set so the popover shows
+// the toggles.
+func TestFilterState_IVO_AggregatesAcrossFolders(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+
+	folder1 := types.FilePath("/project-ivo-first")
+	folder2 := types.FilePath("/project-ivo-second")
+
+	ffSvc := featureflag.NewFakeService()
+	ffSvc.Override(featureflag.SnykCodeConsistentIgnores, true)
+	workspaceutil.SetupWorkspaceWithFeatureFlags(t, engine, ffSvc, folder1, folder2)
+
+	// Opposite settings: both options disagree across folders → both mixed.
+	ivo1 := types.NewIssueViewOptions(true, false)
+	ivo2 := types.NewIssueViewOptions(false, true)
+	types.SetIssueViewOptionsForFolder(conf, folder1, &ivo1)
+	types.SetIssueViewOptionsForFolder(conf, folder2, &ivo2)
+
+	notif := notification.NewNotifier()
+	notif.CreateListener(func(params any) {})
+	t.Cleanup(func() { notif.DisposeListener() })
+
+	emitter, err := NewTreeScanStateEmitter(conf, engine.GetLogger(), notif)
+	require.NoError(t, err)
+	t.Cleanup(emitter.Dispose)
+
+	ws := config.GetWorkspace(conf)
+	fs := ResolveFilterState(conf, ws)
+
+	assert.True(t, fs.IssueViewOptionsEnabled, "flag on for a folder → section enabled")
+	assert.True(t, fs.ShowFilterPopover, "an enabled section → funnel shown")
+	assert.True(t, fs.MixedIssueViewOptions.OpenIssues, "open issues differ → mixed")
+	assert.True(t, fs.MixedIssueViewOptions.IgnoredIssues, "ignored issues differ → mixed")
+}
+
+// TestFilterState_RiskScore_AggregatesAcrossFolders verifies risk-score aggregation:
+// with the OsTestWorkflow flag on, agreeing folders yield a single threshold and
+// RiskScoreEnabled; disagreeing folders set RiskScoreMixed.
+func TestFilterState_RiskScore_AggregatesAcrossFolders(t *testing.T) {
+	tests := []struct {
+		name          string
+		f1Score       int
+		f2Score       int
+		wantMixed     bool
+		wantThreshold int
+	}{
+		{name: "agree", f1Score: 700, f2Score: 700, wantMixed: false, wantThreshold: 700},
+		{name: "disagree surfaces highest", f1Score: 300, f2Score: 800, wantMixed: true, wantThreshold: 800},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			conf := engine.GetConfiguration()
+			f1 := types.FilePath("/project-rs-" + tc.name + "-1")
+			f2 := types.FilePath("/project-rs-" + tc.name + "-2")
+			ffSvc := featureflag.NewFakeService()
+			ffSvc.Override(featureflag.UseExperimentalRiskScoreInCLI, true)
+			workspaceutil.SetupWorkspaceWithFeatureFlags(t, engine, ffSvc, f1, f2)
+			setFolderRiskScore(conf, f1, tc.f1Score)
+			setFolderRiskScore(conf, f2, tc.f2Score)
+
+			notif := notification.NewNotifier()
+			notif.CreateListener(func(params any) {})
+			t.Cleanup(func() { notif.DisposeListener() })
+			emitter, err := NewTreeScanStateEmitter(conf, engine.GetLogger(), notif)
+			require.NoError(t, err)
+			t.Cleanup(emitter.Dispose)
+
+			fs := emitter.filterState(config.GetWorkspace(conf))
+			assert.True(t, fs.RiskScoreEnabled, "flag on → section enabled")
+			assert.Equal(t, tc.wantMixed, fs.RiskScoreMixed)
+			assert.Equal(t, tc.wantThreshold, fs.RiskScoreThreshold)
+		})
+	}
+}
+
+// TestFilterState_FlagsOff_HidesPopover is the negative case for the popover
+// flag-gating: with neither gating flag enabled for any folder, ResolveFilterState
+// must leave both sections disabled and the popover hidden. Guards against a
+// regression that drops a gate and exposes controls that filter nothing.
+func TestFilterState_FlagsOff_HidesPopover(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+
+	// A fake service with no overrides → both gating flags off for the folder.
+	ffSvc := featureflag.NewFakeService()
+	workspaceutil.SetupWorkspaceWithFeatureFlags(t, engine, ffSvc, types.FilePath("/project-flags-off"))
+
+	notif := notification.NewNotifier()
+	notif.CreateListener(func(params any) {})
+	t.Cleanup(func() { notif.DisposeListener() })
+	emitter, err := NewTreeScanStateEmitter(conf, engine.GetLogger(), notif)
+	require.NoError(t, err)
+	t.Cleanup(emitter.Dispose)
+
+	fs := emitter.filterState(config.GetWorkspace(conf))
+	assert.False(t, fs.RiskScoreEnabled, "risk-score flag off → section disabled")
+	assert.False(t, fs.IssueViewOptionsEnabled, "consistent-ignores flag off → section disabled")
+	assert.False(t, fs.ShowFilterPopover, "no enabled section → funnel hidden")
+	assert.False(t, fs.RiskScoreMixed, "flag off → no mixed risk score")
+	assert.Equal(t, MixedIssueViewOptions{}, fs.MixedIssueViewOptions, "flag off → no mixed issue-view options")
+}
+
+// setFolderRiskScore writes a per-folder risk-score threshold override.
+func setFolderRiskScore(conf configuration.Configuration, folder types.FilePath, v int) {
+	conf.Set(configresolver.UserFolderKey(string(types.PathKey(folder)), types.SettingRiskScoreThreshold),
+		&configresolver.LocalConfigField{Value: v, Changed: true})
+}
+
+// TestFilterState_AggregateSeverityFilters_UsesFilters0AsBaseline verifies the coupling:
+// aggregateSeverityFilters uses filters[0] as the baseline, and MixedSeverity is only
+// set where a subsequent filter disagrees with that baseline.
+func TestFilterState_AggregateSeverityFilters_UsesFilters0AsBaseline(t *testing.T) {
+	// All agree with filters[0]: no mixed.
+	f0 := types.NewSeverityFilter(true, false, true, false)
+	f1 := types.NewSeverityFilter(true, false, true, false)
+	sev, mixed := aggregateSeverityFilters([]types.SeverityFilter{f0, f1})
+	assert.Equal(t, f0, sev, "when all agree, filters[0] is returned verbatim")
+	assert.Equal(t, MixedSeverity{}, mixed, "no disagreement → no mixed flags")
+
+	// f1 disagrees on High and Low relative to filters[0].
+	f2 := types.NewSeverityFilter(true, true, true, true) // High and Low differ from f0
+	_, mixed2 := aggregateSeverityFilters([]types.SeverityFilter{f0, f2})
+	assert.False(t, mixed2.Critical, "Critical agrees with baseline → not mixed")
+	assert.True(t, mixed2.High, "High differs from baseline → mixed")
+	assert.False(t, mixed2.Medium, "Medium agrees with baseline → not mixed")
+	assert.True(t, mixed2.Low, "Low differs from baseline → mixed")
+}
+
+func TestAggregateIssueViewOptions(t *testing.T) {
+	agree := []types.IssueViewOptions{
+		types.NewIssueViewOptions(true, false),
+		types.NewIssueViewOptions(true, false),
+	}
+	got, mixed := aggregateIssueViewOptions(agree)
+	assert.Equal(t, agree[0], got, "all agree → first value returned")
+	assert.Equal(t, MixedIssueViewOptions{}, mixed, "all agree → nothing mixed")
+
+	disagree := []types.IssueViewOptions{
+		types.NewIssueViewOptions(true, false),
+		types.NewIssueViewOptions(false, false), // only OpenIssues differs
+	}
+	_, mixed2 := aggregateIssueViewOptions(disagree)
+	assert.True(t, mixed2.OpenIssues, "OpenIssues differs → mixed")
+	assert.False(t, mixed2.IgnoredIssues, "IgnoredIssues agrees → not mixed")
+
+	// A mixed option is pinned to false (not opts[0]'s arbitrary value) so the
+	// rendered indeterminate checkbox has a deterministic first-click direction:
+	// clicking a dashed checkbox flips false→true, i.e. "enable everywhere", per
+	// the platform convention. Here opts[0] has OpenIssues=true, but because the
+	// option is mixed the aggregate must report false; IgnoredIssues agrees (both
+	// true) and is preserved as-is.
+	pinned := []types.IssueViewOptions{
+		types.NewIssueViewOptions(true, true),
+		types.NewIssueViewOptions(false, true),
+	}
+	got2, mixed3 := aggregateIssueViewOptions(pinned)
+	assert.True(t, mixed3.OpenIssues, "OpenIssues differs → mixed")
+	assert.False(t, mixed3.IgnoredIssues, "IgnoredIssues agrees → not mixed")
+	assert.False(t, got2.OpenIssues, "mixed option pinned to false so first click enables, not opts[0]")
+	assert.True(t, got2.IgnoredIssues, "agreed option preserved")
+
+	// A mixed IgnoredIssues is also pinned to false. opts[0] has IgnoredIssues=true,
+	// so a false result proves the pin fired rather than passing opts[0] through.
+	pinnedIgnored := []types.IssueViewOptions{
+		types.NewIssueViewOptions(true, true),
+		types.NewIssueViewOptions(true, false),
+	}
+	got3, mixed4 := aggregateIssueViewOptions(pinnedIgnored)
+	assert.False(t, mixed4.OpenIssues, "OpenIssues agrees → not mixed")
+	assert.True(t, mixed4.IgnoredIssues, "IgnoredIssues differs → mixed")
+	assert.False(t, got3.IgnoredIssues, "mixed option pinned to false so first click enables, not opts[0]")
+	assert.True(t, got3.OpenIssues, "agreed option preserved")
+}
+
+func TestAggregateRiskScores(t *testing.T) {
+	got, mixed := aggregateRiskScores([]int{500, 500, 500})
+	assert.Equal(t, 500, got, "all agree → agreed threshold")
+	assert.False(t, mixed, "all agree → not mixed")
+
+	got2, mixed2 := aggregateRiskScores([]int{300, 800})
+	assert.True(t, mixed2, "thresholds differ → mixed")
+	assert.Equal(t, 800, got2, "mixed → highest threshold returned")
+
+	got3, mixed3 := aggregateRiskScores([]int{800, 300, 100})
+	assert.True(t, mixed3, "thresholds differ → mixed")
+	assert.Equal(t, 800, got3, "mixed → highest threshold regardless of order")
 }

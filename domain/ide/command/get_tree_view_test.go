@@ -19,13 +19,18 @@ package command
 import (
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/treeview"
 	"github.com/snyk/snyk-ls/domain/scanstates"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -43,6 +48,29 @@ func TestGetTreeViewCommand_Execute_ReturnsHtml(t *testing.T) {
 	require.True(t, ok, "result should be a string")
 	assert.Contains(t, htmlResult, "<!DOCTYPE html>")
 	assert.Contains(t, htmlResult, "${ideScript}")
+}
+
+// TestGetTreeViewCommand_Execute_UntrustedFolder_IncludesBanner validates the
+// pull contract plugins rely on: fetching the tree on panel-open (after the early
+// startup push may have been missed) returns the trust banner for untrusted
+// folders. (IDE-1882)
+func TestGetTreeViewCommand_Execute_UntrustedFolder_IncludesBanner(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
+	setupToggleWorkspaceFolders(t, engine, types.PathKey("/untrusted-proj"))
+
+	cmd := &getTreeViewCommand{
+		command: types.CommandData{CommandId: types.GetTreeView},
+		engine:  engine,
+	}
+
+	result, err := cmd.Execute(t.Context())
+	require.NoError(t, err)
+
+	html, ok := result.(string)
+	require.True(t, ok)
+	assert.Contains(t, html, "tree-node-info--untrusted-folder",
+		"a tree pulled via snyk.getTreeView must include the trust banner for untrusted folders")
 }
 
 func TestGetTreeViewCommand_Execute_WithScanStates_ShowsFileNodes(t *testing.T) {
@@ -93,6 +121,66 @@ func TestGetTreeViewCommand_Execute_WithScanStateFunc_CallsIt(t *testing.T) {
 	_, err := cmd.Execute(t.Context())
 	require.NoError(t, err)
 	assert.True(t, called, "scanStateFunc should be called during Execute")
+}
+
+func TestGetTreeViewCommand_Execute_FeedbackBannerReflectsConfig(t *testing.T) {
+	execute := func(t *testing.T, engine workflow.Engine) string {
+		t.Helper()
+		cmd := &getTreeViewCommand{
+			command: types.CommandData{CommandId: types.GetTreeView},
+			engine:  engine,
+		}
+		result, err := cmd.Execute(t.Context())
+		require.NoError(t, err)
+		html, ok := result.(string)
+		require.True(t, ok, "result should be a string")
+		return html
+	}
+
+	t.Run("default renders the banner hidden", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		assert.Contains(t, execute(t, engine), `id="feedbackBanner" hidden>`)
+	})
+
+	t.Run("interacted renders the banner visible", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		config.SetFeedbackBannerInteracted(engine.GetConfiguration())
+		html := execute(t, engine)
+		assert.Contains(t, html, `id="feedbackBanner"`)
+		assert.NotContains(t, html, `id="feedbackBanner" hidden>`)
+	})
+
+	t.Run("dismissed omits the banner", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		config.SetFeedbackBannerDismissed(engine.GetConfiguration())
+		assert.NotContains(t, execute(t, engine), `id="feedbackBanner"`)
+	})
+}
+
+// With the risk-score feature flag on, the on-demand render must
+// include the filter popover, matching the scan-emitter render path.
+func TestGetTreeViewCommand_Execute_RendersFilterPopover(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	ffSvc := featureflag.NewFakeService()
+	ffSvc.Override(featureflag.UseExperimentalRiskScoreInCLI, true)
+	workspaceutil.SetupWorkspaceWithFeatureFlags(t, engine, ffSvc, types.FilePath("/proj-popover"))
+
+	cmd := &getTreeViewCommand{
+		command: types.CommandData{CommandId: types.GetTreeView},
+		engine:  engine,
+	}
+
+	result, err := cmd.Execute(t.Context())
+	require.NoError(t, err)
+	html, ok := result.(string)
+	require.True(t, ok)
+
+	// id="filtersPopover" appears only in the rendered markup (the embedded JS
+	// references it via getElementById('filtersPopover')), so this confirms the
+	// popover is actually rendered, not just referenced by the script.
+	assert.Contains(t, html, `id="filtersPopoverBtn"`, "funnel button must render when the risk-score flag is on")
+	assert.Contains(t, html, `id="riskScoreSlider"`, "risk-score slider must render on the getTreeView path")
 }
 
 func TestGetTreeViewCommand_Command_ReturnsCommandData(t *testing.T) {

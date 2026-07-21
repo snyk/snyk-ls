@@ -31,8 +31,21 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+// maxParentDepth caps how deep the parent-POM chain is followed, as a backstop
+// against pathological chains even when the visited-set has not yet caught a cycle.
+const maxParentDepth = 32
+
+// maxParentPOMSize bounds how many bytes we are willing to read for a single
+// parent POM, guarding against a <relativePath> pointing at an unexpectedly large
+// file. Real POMs are tiny; 16MiB is generous.
+const maxParentPOMSize = 16 << 20
+
 type Parser struct {
 	logger *zerolog.Logger
+	// root is an optional workspace boundary. If set, POMs mus reside under this
+	// directory (after relative path and symlink resolution), else they are rejected
+	// Leave empty to disable the check.
+	root types.FilePath
 }
 
 type Parent struct {
@@ -50,15 +63,27 @@ type Dependency struct {
 	Type       string `xml:"type"`
 }
 
-func New(logger *zerolog.Logger) Parser {
+// New builds a Parser. If root is set, POMs must reside under this directory
+// (after relative path and symlink resolution), else they are rejected. Leave
+// empty to disable the check.
+func New(logger *zerolog.Logger, root types.FilePath) Parser {
 	return Parser{
 		logger: logger,
+		root:   root,
 	}
 }
 
 func (p *Parser) Parse(content string, path types.FilePath) *ast.Tree {
+	return p.parse(content, path, map[string]bool{}, 0)
+}
+
+// parse is the recursive worker behind Parse. visited holds the canonical
+// (absolute, symlink-resolved) paths of POMs already parsed in this parent chain
+// (cycle detection) and depth bounds the chain length (see maxParentDepth).
+func (p *Parser) parse(content string, path types.FilePath, visited map[string]bool, depth int) *ast.Tree {
 	content = strings.ReplaceAll(content, "\r", "")
 	tree := p.initTree(path, content)
+	visited[canonicalPath(string(path))] = true
 	d := xml.NewDecoder(strings.NewReader(content))
 	var offset int64
 	pomDir := filepath.Dir(string(path))
@@ -72,52 +97,141 @@ func (p *Parser) Parse(content string, path types.FilePath) *ast.Tree {
 			p.logger.Err(err).Msg("Couldn't parse XML")
 		}
 
-		switch xmlType := token.(type) {
-		case xml.StartElement:
-			if xmlType.Name.Local == "dependency" {
-				var dep Dependency
-				if err = d.DecodeElement(&dep, &xmlType); err != nil {
-					p.logger.Err(err).Msg("Couldn't decode Dependency")
-					continue
-				}
-
-				if strings.ToLower(dep.Type) == "bom" {
-					addDepsFromBOM(path, tree, dep)
-				}
-
-				offsetAfter := d.InputOffset()
-				node := p.addNewNodeTo(tree.Root, offset, offsetAfter, dep)
-				p.logger.Debug().Interface("nodeName", node.Name).Str("path", tree.Document).Msg("Added Dependency node")
-			}
-			if xmlType.Name.Local == "parent" {
-				// parse Parent pom
-				var parentPOM Parent
-				if err = d.DecodeElement(&parentPOM, &xmlType); err != nil {
-					p.logger.Err(err).Msg("Couldn't decode Parent")
-					continue
-				}
-
-				if parentPOM.RelativePath == "" {
-					parentPOM.RelativePath = filepath.Join("..", "pom.xml")
-				}
-
-				parentAbsPath, err := filepath.Abs(filepath.Join(pomDir, parentPOM.RelativePath))
-				if err != nil {
-					p.logger.Err(err).Msg("Couldn't resolve Parent path")
-					continue
-				}
-				content, err := os.ReadFile(parentAbsPath)
-				if err != nil {
-					p.logger.Err(err).Msg("Couldn't read Parent file")
-					continue
-				}
-				parentTree := p.Parse(string(content), types.FilePath(parentAbsPath))
-				tree.ParentTree = parentTree
-			}
-		default:
+		startElement, ok := token.(xml.StartElement)
+		if !ok {
+			continue
+		}
+		switch startElement.Name.Local {
+		case "dependency":
+			p.handleDependency(d, tree, path, &startElement, offset)
+		case "properties":
+			p.handleProperties(d, tree, content, &startElement, offset)
+		case "parent":
+			p.handleParent(d, tree, pomDir, &startElement, visited, depth)
 		}
 	}
 	return tree
+}
+
+func (p *Parser) handleDependency(d *xml.Decoder, tree *ast.Tree, path types.FilePath, element *xml.StartElement, offset int64) {
+	var dep Dependency
+	if err := d.DecodeElement(&dep, element); err != nil {
+		p.logger.Err(err).Msg("Couldn't decode Dependency")
+		return
+	}
+
+	if strings.ToLower(dep.Type) == "bom" {
+		addDepsFromBOM(path, tree, dep)
+	}
+
+	offsetAfter := d.InputOffset()
+	node := p.addNewNodeTo(tree.Root, offset, offsetAfter, dep)
+	p.logger.Debug().Interface("nodeName", node.Name).Str("path", tree.Document).Msg("Added Dependency node")
+}
+
+func (p *Parser) handleProperties(d *xml.Decoder, tree *ast.Tree, content string, element *xml.StartElement, offset int64) {
+	// offset is the input position right after the <properties> start tag, i.e.
+	// where the inner XML begins.
+	var holder struct {
+		Inner string `xml:",innerxml"`
+	}
+	if err := d.DecodeElement(&holder, element); err != nil {
+		p.logger.Err(err).Msg("Couldn't decode properties")
+		return
+	}
+	p.addPropertyNodes(tree, content, int(offset), holder.Inner)
+}
+
+func (p *Parser) handleParent(d *xml.Decoder, tree *ast.Tree, pomDir string, element *xml.StartElement, visited map[string]bool, depth int) {
+	var parentPOM Parent
+	if err := d.DecodeElement(&parentPOM, element); err != nil {
+		p.logger.Err(err).Msg("Couldn't decode Parent")
+		return
+	}
+
+	if parentPOM.RelativePath == "" {
+		parentPOM.RelativePath = filepath.Join("..", "pom.xml")
+	}
+
+	parentAbsPath, err := filepath.Abs(filepath.Join(pomDir, parentPOM.RelativePath))
+	if err != nil {
+		p.logger.Err(err).Msg("Couldn't resolve Parent path")
+		return
+	}
+	if !p.isWithinRoot(parentAbsPath) {
+		p.logger.Warn().Str("path", parentAbsPath).Str("root", string(p.root)).Msg("Parent POM resolves outside the workspace root, skipping")
+		return
+	}
+	if depth+1 > maxParentDepth {
+		p.logger.Warn().Str("path", parentAbsPath).Int("depth", depth).Msg("Maximum parent POM depth reached, skipping")
+		return
+	}
+	if visited[canonicalPath(parentAbsPath)] {
+		p.logger.Warn().Str("path", parentAbsPath).Msg("Cyclic parent POM reference detected, skipping")
+		return
+	}
+	fi, err := os.Stat(parentAbsPath)
+	if err != nil {
+		p.logger.Err(err).Msg("Couldn't stat Parent file")
+		return
+	}
+	if !fi.Mode().IsRegular() {
+		p.logger.Warn().Str("path", parentAbsPath).Msg("Parent path is not a regular file, skipping")
+		return
+	}
+	if fi.Size() > maxParentPOMSize {
+		p.logger.Warn().Str("path", parentAbsPath).Int64("size", fi.Size()).Msg("Parent POM exceeds size limit, skipping")
+		return
+	}
+	content, err := os.ReadFile(parentAbsPath)
+	if err != nil {
+		p.logger.Err(err).Msg("Couldn't read Parent file")
+		return
+	}
+	tree.ParentTree = p.parse(string(content), types.FilePath(parentAbsPath), visited, depth+1)
+}
+
+// canonicalPath returns the absolute, symlink-resolved form of path so the same
+// real file is keyed identically by the visited-set (cycle detection) and the
+// symlink-resolving isWithinRoot check — two distinct symlinks to one real POM
+// would otherwise be treated as different files and re-parsed redundantly. It
+// falls back to the absolute path (or the input) when symlinks cannot be resolved,
+// e.g. the file does not exist.
+func canonicalPath(path string) string {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return path
+	}
+	if resolved, e := filepath.EvalSymlinks(abs); e == nil {
+		return resolved
+	}
+	return abs
+}
+
+// isWithinRoot reports whether parentAbsPath (an absolute path) is the workspace
+// root or lies inside it.
+//
+// An empty root disables the check (always returns true). Symlinks are resolved
+// before comparison.
+func (p *Parser) isWithinRoot(parentAbsPath string) bool {
+	if p.root == "" {
+		return true
+	}
+	rootAbs, err := filepath.Abs(string(p.root))
+	if err != nil {
+		return false
+	}
+	if resolved, e := filepath.EvalSymlinks(rootAbs); e == nil {
+		rootAbs = resolved
+	}
+	if resolved, e := filepath.EvalSymlinks(parentAbsPath); e == nil {
+		parentAbsPath = resolved
+	}
+	rel, err := filepath.Rel(rootAbs, parentAbsPath)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
 func addDepsFromBOM(path types.FilePath, tree *ast.Tree, dep Dependency) {
@@ -138,10 +252,99 @@ func (p *Parser) initTree(path types.FilePath, content string) *ast.Tree {
 	}
 
 	root.Tree = &ast.Tree{
-		Root:     &root,
-		Document: string(path),
+		Root:       &root,
+		Document:   string(path),
+		Properties: map[string]*ast.Node{},
 	}
 	return root.Tree
+}
+
+// addPropertyNodes parses the children of a <properties> element and records a
+// node per property in tree.Properties, with a range pointing at the property
+// value. baseOffset is the absolute byte offset (in content) at which inner
+// begins, so per-property offsets in inner can be mapped back to content.
+func (p *Parser) addPropertyNodes(tree *ast.Tree, content string, baseOffset int, inner string) {
+	dec := xml.NewDecoder(strings.NewReader(inner))
+	for {
+		token, err := dec.Token()
+		if token == nil || errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			p.logger.Err(err).Msg("Couldn't parse properties")
+			break
+		}
+
+		start, ok := token.(xml.StartElement)
+		if !ok {
+			continue
+		}
+
+		valueStartInInner, valueEndInInner := scanPropertyValueSpan(dec)
+
+		valueStartOffset := baseOffset + valueStartInInner
+		valueEndOffset := baseOffset + valueEndInInner
+		if valueStartOffset < 0 || valueStartOffset > valueEndOffset || valueEndOffset > len(content) {
+			continue
+		}
+
+		rawValue := content[valueStartOffset:valueEndOffset]
+		trimmedValue := strings.Trim(rawValue, " \t\n")
+		if trimmedValue == "" {
+			continue
+		}
+		leadingWhitespace := len(rawValue) - len(strings.TrimLeft(rawValue, " \t\n"))
+		valueStartOffset += leadingWhitespace
+		valueEndOffset = valueStartOffset + len(trimmedValue)
+
+		tree.Properties[start.Name.Local] = newValueNode(tree, content, valueStartOffset, valueEndOffset, start.Name.Local, trimmedValue)
+	}
+}
+
+// scanPropertyValueSpan consumes the children of the current property element
+// from dec and returns the [start, end) offsets (within the inner string) of the
+// property's direct text value. Nesting depth is tracked to ensure that we balance
+// opening and closing tags.
+func scanPropertyValueSpan(dec *xml.Decoder) (start, end int) {
+	start = int(dec.InputOffset())
+	end = start
+	depth := 0
+	for {
+		token, err := dec.Token()
+		if token == nil || err != nil {
+			return start, end
+		}
+		switch token.(type) {
+		case xml.StartElement:
+			depth++
+		case xml.EndElement:
+			if depth == 0 {
+				return start, end
+			}
+			depth--
+		case xml.CharData:
+			if depth == 0 {
+				end = int(dec.InputOffset())
+			}
+		}
+	}
+}
+
+// newValueNode builds an ast.Node whose range points at the value located at
+// [valueStartOffset, valueEndOffset) within content.
+func newValueNode(tree *ast.Tree, content string, valueStartOffset, valueEndOffset int, name, value string) *ast.Node {
+	contentToValueStart := content[0:valueStartOffset]
+	line := strings.Count(contentToValueStart, "\n")
+	lineStartOffset := strings.LastIndex(contentToValueStart, "\n") + 1
+	return &ast.Node{
+		Line:       line,
+		StartChar:  valueStartOffset - lineStartOffset,
+		EndChar:    valueEndOffset - lineStartOffset,
+		Name:       name,
+		Value:      value,
+		Attributes: make(map[string]string),
+		Tree:       tree,
+	}
 }
 
 func (p *Parser) addNewNodeTo(parent *ast.Node, offsetBefore int64, offsetAfter int64, dep Dependency) *ast.Node {

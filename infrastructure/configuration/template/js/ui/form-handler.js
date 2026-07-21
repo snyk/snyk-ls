@@ -29,7 +29,9 @@
 			}
 		}
 
-		// Folder configs: per-folder, only include changed fields
+		// Folder configs: per-folder, only include changed fields.
+		// applyFolderResets() handles force-including reset-only folders that
+		// collectChangedData's diff would otherwise drop.
 		if (current.folderConfigs) {
 			var changedFolders = [];
 			var origFolders = original.folderConfigs || [];
@@ -38,6 +40,7 @@
 				var origFc = origFolders[fi] || {};
 				var changedFc = null;
 				var fcKeys = window.FormUtils.getKeys(curFc);
+				var fcPath = curFc.folderPath || "";
 
 				for (var ki = 0; ki < fcKeys.length; ki++) {
 					var fk = fcKeys[ki];
@@ -50,8 +53,8 @@
 					}
 				}
 
-				if (changedFc && curFc.folderPath) {
-					changedFc.folderPath = curFc.folderPath;
+				if (changedFc && fcPath) {
+					changedFc.folderPath = fcPath;
 					changedFolders.push(changedFc);
 				}
 			}
@@ -206,42 +209,126 @@
 		}
 	}
 
-	// Mark a folder for complete reset (all org-scope overrides will be set to null)
-	formHandler.markFolderForReset = function (folderIndex) {
+	// Folder override fields cleared by a folder reset. Emitting flat null for each
+	// tells the IDE plugin to send {value:null, changed:true}, which makes snyk-ls
+	// Unset the user:folder: override so the value falls back to org/LDX/default.
+	// preferred_org is included: snyk-ls special-cases its null-reset to also unset
+	// org_set_by_user, reverting the folder to its auto-determined / global org.
+	// additional_parameters / additional_environment / scan_command_config are
+	// non-scalar overrides; snyk-ls's basic folder-field handlers honor the null reset.
+	var FOLDER_RESET_FIELDS = [
+		"scan_automatic",
+		"scan_net_new",
+		"severity_filter_critical",
+		"severity_filter_high",
+		"severity_filter_medium",
+		"severity_filter_low",
+		"snyk_oss_enabled",
+		"snyk_code_enabled",
+		"snyk_iac_enabled",
+		"snyk_secrets_enabled",
+		"issue_view_open_issues",
+		"issue_view_ignored_issues",
+		"risk_score_threshold",
+		"preferred_org",
+		"additional_parameters",
+		"additional_environment",
+		"scan_command_config",
+	];
+
+	// Mark a folder for complete reset (all org-scope overrides will be set to null).
+	// Keyed by folderPath, not index: collectChangedData() compacts folderConfigs, so an
+	// index captured at click time no longer maps to the same entry in the saved payload.
+	formHandler.markFolderForReset = function (folderPath) {
+		if (!folderPath) return;
 		window.ConfigApp.folderResets = window.ConfigApp.folderResets || {};
-		window.ConfigApp.folderResets[folderIndex] = true;
+		window.ConfigApp.folderResets[folderPath] = true;
 	};
 
 	// Check if a folder is marked for reset
-	formHandler.isFolderMarkedForReset = function (folderIndex) {
-		return (
+	formHandler.isFolderMarkedForReset = function (folderPath) {
+		return !!(
 			window.ConfigApp.folderResets &&
-			window.ConfigApp.folderResets[folderIndex]
+			window.ConfigApp.folderResets[folderPath]
 		);
 	};
 
-	// Apply reset: set all org-scope fields to null on the folder config
+	// Apply reset: set all org-scope fields to null on each reset-marked folder.
+	// A reset-only folder (no other edits) is dropped by collectChangedData's diff, so
+	// add a fresh entry for any marked folderPath missing from data.folderConfigs.
 	formHandler.applyFolderResets = function (data) {
-		if (!data.folderConfigs) return;
+		var marked = window.ConfigApp.folderResets;
+		if (!marked) return;
+
+		data.folderConfigs = data.folderConfigs || [];
+
+		// Index existing entries by folderPath.
+		var byPath = {};
 		for (var i = 0; i < data.folderConfigs.length; i++) {
-			if (formHandler.isFolderMarkedForReset(i) && data.folderConfigs[i]) {
-				var fc = data.folderConfigs[i];
-				fc.scan_automatic = null;
-				fc.scan_net_new = null;
-				fc.severity_filter_critical = null;
-				fc.severity_filter_high = null;
-				fc.severity_filter_medium = null;
-				fc.severity_filter_low = null;
-				fc.snyk_oss_enabled = null;
-				fc.snyk_code_enabled = null;
-				fc.snyk_iac_enabled = null;
-				fc.snyk_secrets_enabled = null;
-				fc.issue_view_open_issues = null;
-				fc.issue_view_ignored_issues = null;
-				fc.risk_score_threshold = null;
+			var fc = data.folderConfigs[i];
+			if (fc && fc.folderPath) {
+				byPath[fc.folderPath] = fc;
 			}
 		}
+
+		for (var folderPath in marked) {
+			if (!marked.hasOwnProperty(folderPath) || !marked[folderPath]) continue;
+
+			var entry = byPath[folderPath];
+			if (!entry) {
+				entry = { folderPath: folderPath };
+				data.folderConfigs.push(entry);
+				byPath[folderPath] = entry;
+			}
+
+			for (var f = 0; f < FOLDER_RESET_FIELDS.length; f++) {
+				entry[FOLDER_RESET_FIELDS[f]] = null;
+			}
+		}
+
 		window.ConfigApp.folderResets = {};
+	};
+
+	// Org-scope global ("Project Defaults") fields cleared by a global reset.
+	// Mirrors the folder reset list, minus preferred_org (folder-only) plus
+	// organization (global-only). Kept in sync with the Go list
+	// types.GlobalResettableSettings.
+	var GLOBAL_RESET_FIELDS = [
+		"snyk_oss_enabled",
+		"snyk_code_enabled",
+		"snyk_iac_enabled",
+		"snyk_secrets_enabled",
+		"scan_automatic",
+		"scan_net_new",
+		"severity_filter_critical",
+		"severity_filter_high",
+		"severity_filter_medium",
+		"severity_filter_low",
+		"issue_view_open_issues",
+		"issue_view_ignored_issues",
+		"risk_score_threshold",
+		"organization",
+	];
+
+	// Mark the global (Project Defaults) scope for reset — on save,
+	// applyGlobalResets() sets every GLOBAL_RESET_FIELDS to null at the top level.
+	formHandler.markGlobalForReset = function () {
+		window.ConfigApp.globalReset = true;
+	};
+
+	formHandler.isGlobalMarkedForReset = function () {
+		return !!window.ConfigApp.globalReset;
+	};
+
+	// Apply reset: set all org-scope global fields to null at the top level of the
+	// payload (NOT inside folderConfigs). The hosting IDE converts each
+	// top-level key:null into a {changed:true, value:null} ConfigSetting reaching
+	// the LS, which Unsets the user override.
+	formHandler.applyGlobalResets = function (data) {
+		if (!window.ConfigApp.globalReset) return;
+		for (var i = 0; i < GLOBAL_RESET_FIELDS.length; i++) {
+			data[GLOBAL_RESET_FIELDS[i]] = null;
+		}
 	};
 
 	window.ConfigApp.formHandler = formHandler;

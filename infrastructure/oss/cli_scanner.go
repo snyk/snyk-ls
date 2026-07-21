@@ -248,13 +248,13 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	ctx, cancel := context.WithCancel(s.Context())
 	defer cancel()
 
-	p := progress.NewTracker(true, cliScanner.engine.GetLogger())
+	// Use workspace folder from folderConfig for CLI execution (org lookup, etc.)
+	workspaceFolder := folderConfig.FolderPath
+
+	p := progress.NewScanTracker(true, cliScanner.engine.GetLogger(), workspaceFolder)
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
 	p.BeginUnquantifiableLength("Scanning for Snyk Open Source issues", string(path))
 	defer p.EndWithMessage("Snyk Open Source scan completed.")
-
-	// Use workspace folder from folderConfig for CLI execution (org lookup, etc.)
-	workspaceFolder := folderConfig.FolderPath
 
 	// cancel running scans on same workspace folder
 	cliScanner.mutex.Lock()
@@ -715,14 +715,14 @@ func findNewFeature(folderConfig *types.FolderConfig, cmd []string) string {
 }
 
 func (cliScanner *CLIScanner) enrichContext(ctx context.Context) context.Context {
-	dependenciesFromContext, found := ctx2.DependenciesFromContext(ctx)
-	if !found {
-		dependenciesFromContext = map[string]any{}
-	}
-	dependenciesFromContext[ctx2.DepLearnService] = cliScanner.learnService
-	dependenciesFromContext[ctx2.DepErrorReporter] = cliScanner.errorReporter
-	dependenciesFromContext[ctx2.DepCLIExecutor] = cliScanner.cli
-	dependenciesFromContext[ctx2.DepEngine] = cliScanner.engine
+	// CopyDependenciesFromContext returns a fresh map so we never mutate the
+	// shared map in the parent context — concurrent scans from the same parent
+	// context would otherwise race on the same map.
+	deps := ctx2.CopyDependenciesFromContext(ctx)
+	deps[ctx2.DepLearnService] = cliScanner.learnService
+	deps[ctx2.DepErrorReporter] = cliScanner.errorReporter
+	deps[ctx2.DepCLIExecutor] = cliScanner.cli
+	deps[ctx2.DepEngine] = cliScanner.engine
 
-	return ctx2.NewContextWithDependencies(ctx, dependenciesFromContext)
+	return ctx2.NewContextWithDependencies(ctx, deps)
 }

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"reflect"
 	"strings"
@@ -32,6 +33,7 @@ import (
 
 	"github.com/erni27/imcache"
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -73,7 +75,10 @@ type AuthenticationServiceImpl struct {
 	// key = token, value = isAuthenticated
 	authCache *imcache.Cache[string, bool]
 	// Last token that was successfully used for authentication. It might have expired (so not be present in authCache).
+	// Uses its own mutex (not m) because doAuthCheck runs under m.RLock, which allows
+	// concurrent writers here.
 	lastUsedToken               string
+	lastUsedTokenMu             sync.Mutex
 	m                           sync.RWMutex
 	previousAuthCtxCancelFunc   context.CancelFunc
 	previousAuthCtxCancelFuncMu sync.Mutex
@@ -111,6 +116,20 @@ type AuthenticationServiceImpl struct {
 	// across the lock boundary (worker acquires a.m before the load, but
 	// QueueCredentialUpdate reads without the lock).
 	syncGeneration uint64
+	// writingToken holds a pointer to the token string that the credentialUpdateWorker
+	// is currently writing to conf via updateCredentials → tokenService.SetToken →
+	// WriteTokenToConfig → conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, …).  When the conf key
+	// is persisted, that conf.Set call flows back through the storage's Set method, which
+	// fires the registered OAuth storage-bridge callback, which calls QueueCredentialUpdate
+	// again — re-enqueueing the same token the worker is already applying.  The re-enqueued
+	// copy lands after newer tokens in the channel and, on Windows where time.Now() has
+	// 15 ms resolution and all three rapid-rotation tokens share the same expiry, the
+	// shouldUpdateToken expiry check allows the stale copy to overwrite the final token.
+	//
+	// QueueCredentialUpdate skips the enqueue when the value matches writingToken, breaking
+	// the re-entrancy cycle.  External updates (from GAF refreshing the OAuth token) always
+	// carry a different token string and are never silently dropped by this guard.
+	writingToken atomic.Pointer[string]
 }
 
 func NewAuthenticationService(engine workflow.Engine, tokenService types.TokenService, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier, configResolver types.ConfigResolverInterface) AuthenticationService {
@@ -173,7 +192,19 @@ func (a *AuthenticationServiceImpl) credentialUpdateWorker(ctx context.Context) 
 				a.m.Unlock()
 				continue
 			}
-			applied := a.applyTokenMutationLocked(update.token, update.updateApiUrl)
+			// Advertise which token we are about to write so QueueCredentialUpdate can
+			// recognize and drop the re-entrant callback that fires when
+			// WriteTokenToConfig calls conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, …) and
+			// the key is persisted in storage (which triggers the bridge callback again).
+			// The clear is deferred so it always runs even if applyTokenMutationLocked
+			// panics, preventing the guard from staying permanently armed for that token
+			// string.
+			var applied bool
+			func() {
+				a.writingToken.Store(&update.token)
+				defer a.writingToken.Store(nil)
+				applied = a.applyTokenMutationLocked(update.token, update.updateApiUrl)
+			}()
 			a.m.Unlock()
 
 			// Post-mutation effects run WITHOUT a.m so that hooks which call
@@ -187,10 +218,29 @@ func (a *AuthenticationServiceImpl) credentialUpdateWorker(ctx context.Context) 
 
 // QueueCredentialUpdate queues a credential update for sequential processing.
 // This is used by the OAuth storage bridge callback to serialize updates.
+//
 // The current syncGeneration is captured at enqueue time; the worker discards
 // the update if a later synchronous UpdateCredentials call has already incremented
 // the generation past the captured value.
+//
+// Re-entrancy guard: when WriteTokenToConfig calls conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, …)
+// and the key is persisted in storage, the storage fires the bridge callback again with the
+// exact same token the worker is currently applying.  Enqueueing that copy would let a stale
+// token overwrite a newer one after the main sequence has already finished (observable on
+// Windows where time.Now() has 15 ms resolution and rapid-rotation tokens share the same
+// expiry, making shouldUpdateToken return true for the stale copy).  We drop the re-entrant
+// call by comparing the incoming token against writingToken; external updates from GAF always
+// carry a different token string and are never silently dropped by this guard.
 func (a *AuthenticationServiceImpl) QueueCredentialUpdate(token string, sendNotification bool, updateApiUrl bool) {
+	if w := a.writingToken.Load(); w != nil && *w == token {
+		// Re-entrant call: the worker is already applying this exact token via
+		// conf.Set → storage.Set → callback.  Drop it to prevent the stale copy
+		// from landing behind newer tokens in the channel.
+		a.engine.GetLogger().Debug().
+			Str("method", "AuthenticationService.QueueCredentialUpdate").
+			Msg("dropping duplicate credential update for token already being written")
+		return
+	}
 	gen := atomic.LoadUint64(&a.syncGeneration)
 	select {
 	case a.credentialUpdateChan <- credentialUpdate{
@@ -719,6 +769,10 @@ func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 	}
 	a.updateCredentials("", true, false)
 	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())
+
+	a.lastUsedTokenMu.Lock()
+	a.lastUsedToken = ""
+	a.lastUsedTokenMu.Unlock()
 }
 
 // IsAuthenticated returns true if the token is verified
@@ -796,7 +850,7 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 			return false
 		}
 
-		invalidOAuth2Token, isLegacyTokenErr := config.ParseOAuthToken(config.GetToken(conf), a.engine.GetLogger())
+		invalidOAuth2Token, isLegacyTokenErr := config.ParseOAuthToken(token, a.engine.GetLogger())
 		isLegacyToken := isLegacyTokenErr != nil
 
 		a.handleEmptyUser(logger, isLegacyToken, invalidOAuth2Token)
@@ -804,17 +858,26 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 	}
 	// We cache the API auth ok for up to 1 minute after last access. If more than a minute has passed, a new check is
 	// performed.
-	a.authCache.Set(config.GetToken(conf), true, imcache.WithSlidingExpiration(time.Minute))
+	//
+	// Cache/track the token that was actually verified above (captured once at function
+	// entry), not a fresh config.GetToken(conf) read: a concurrent credentialUpdateWorker
+	// write (which bypasses a.m entirely, see lastUsedToken field doc) can rotate the config
+	// token between the API call and here, which would otherwise mark an unverified token as
+	// authenticated (cache poisoning) or, on the error path above, misjudge a freshly rotated
+	// valid token as the failed one and log out a valid session.
+	a.authCache.Set(token, true, imcache.WithSlidingExpiration(time.Minute))
 
 	// For API Token and PAT authentication, the user may not have authenticated as part of the authenticate flow; e.g.,
 	// they could have pasted the token or PAT in to the IDE. In those cases, this will be the first time they have
 	// authenticated using that token or PAT
-	if a.lastUsedToken != config.GetToken(conf) {
-		a.lastUsedToken = config.GetToken(conf)
-
-		if config.GetAuthenticationMethodFromConfig(a.engine.GetConfiguration()) != types.OAuthAuthentication {
-			a.sendAuthenticationAnalytics()
-		}
+	a.lastUsedTokenMu.Lock()
+	isNewToken := a.lastUsedToken != token
+	if isNewToken {
+		a.lastUsedToken = token
+	}
+	a.lastUsedTokenMu.Unlock()
+	if isNewToken && config.GetAuthenticationMethodFromConfig(a.engine.GetConfiguration()) != types.OAuthAuthentication {
+		a.sendAuthenticationAnalytics()
 	}
 	logger.Debug().Str("userId", user).Msg("Authenticated, adding to cache.")
 	return true
@@ -877,6 +940,14 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 	errMsg := strings.ToLower(err.Error())
 
 	if isPermanentOAuthRefreshError(errMsg) {
+		return true
+	}
+
+	// A structured Snyk API error with a definitive auth status code is a permanent failure,
+	// even though http.Client.Do always wraps it in a *url.Error (which isTransientNetworkError
+	// would otherwise treat as transient network noise).
+	var snykErr snyk_errors.Error
+	if errors.As(err, &snykErr) && (snykErr.StatusCode == http.StatusUnauthorized || snykErr.StatusCode == http.StatusBadRequest) {
 		return true
 	}
 

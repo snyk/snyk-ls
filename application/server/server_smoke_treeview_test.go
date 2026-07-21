@@ -113,7 +113,7 @@ func Test_SmokeTreeView(t *testing.T) {
 
 		response, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 			Command:   types.ToggleTreeFilter,
-			Arguments: []any{"severity", "low", false},
+			Arguments: []any{"severity_low", false},
 		})
 		require.NoError(t, err)
 
@@ -137,7 +137,7 @@ func Test_SmokeTreeView(t *testing.T) {
 		// Re-enable low severity for clean state
 		_, err = loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 			Command:   types.ToggleTreeFilter,
-			Arguments: []any{"severity", "low", true},
+			Arguments: []any{"severity_low", true},
 		})
 		require.NoError(t, err)
 	})

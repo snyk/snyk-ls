@@ -33,13 +33,24 @@ import (
 var trackersMutex sync.RWMutex
 var trackers = make(map[types.ProgressToken]*Tracker)
 var ToServerProgressChannel = make(chan types.ProgressParams, 1000)
+
 var _ ui.ProgressBar = (*Tracker)(nil)
 
 type Tracker struct {
-	channel              chan types.ProgressParams
-	cancelChannel        chan bool
-	token                types.ProgressToken
-	cancellable          bool
+	channel       chan types.ProgressParams
+	cancelChannel chan bool
+	token         types.ProgressToken
+	cancellable   bool
+	// isScan distinguishes scan-operation trackers (NewScanTracker) from
+	// generic progress trackers so window/workDoneProgress/cancel can scope
+	// the summary-panel reset to scan cancellations only (IDE-1035).
+	// Written under trackersMutex when the tracker is registered; only ever
+	// read via IsScanToken under the same lock.
+	isScan bool
+	// folderPath is the workspace folder this scan tracker belongs to, set
+	// only for isScan trackers. Lets the cancel handler scope a reset to the
+	// canceled folder instead of every open folder.
+	folderPath           types.FilePath
 	lastReport           time.Time
 	lastReportPercentage int
 	finished             bool
@@ -77,6 +88,51 @@ func NewTracker(cancellable bool, logger *zerolog.Logger) *Tracker {
 	trackers[t.token] = t
 	trackersMutex.Unlock()
 	return t
+}
+
+// NewScanTracker creates a progress tracker tagged as a scan token so
+// IsScanToken returns true for it. Use this for scan operations (OSS, Code,
+// IaC) instead of NewTracker. Download/install operations must continue to
+// use NewTracker so their cancel events do not reset the summary panel.
+// folderPath is the workspace folder this scan belongs to; pass it through
+// FolderForScanToken so a cancel handler can scope a reset to this folder
+// alone.
+func NewScanTracker(cancellable bool, logger *zerolog.Logger, folderPath types.FilePath) *Tracker {
+	t := NewTracker(cancellable, logger)
+	trackersMutex.Lock()
+	t.isScan = true
+	t.folderPath = folderPath
+	trackersMutex.Unlock()
+	return t
+}
+
+// IsScanToken reports whether token belongs to an active scan tracker
+// created via NewScanTracker. Returns false once the tracker is removed
+// (e.g. after Cancel or deleteTracker), giving the cancel handler a
+// single source of truth without a parallel registry.
+func IsScanToken(token types.ProgressToken) bool {
+	trackersMutex.RLock()
+	defer trackersMutex.RUnlock()
+	t, ok := trackers[token]
+	if !ok {
+		return false
+	}
+	return t.isScan
+}
+
+// FolderForScanToken reports the workspace folder token belongs to, for
+// tokens registered via NewScanTracker. The second return value is false if
+// the token is unknown, already consumed (e.g. by Cancel), or belongs to a
+// non-scan tracker — callers must not fall back to resetting every folder in
+// that case.
+func FolderForScanToken(token types.ProgressToken) (types.FilePath, bool) {
+	trackersMutex.RLock()
+	defer trackersMutex.RUnlock()
+	t, ok := trackers[token]
+	if !ok || !t.isScan {
+		return "", false
+	}
+	return t.folderPath, true
 }
 
 func (t *Tracker) GetChannel() chan types.ProgressParams {
@@ -315,6 +371,9 @@ func Cancel(token types.ProgressToken) {
 		delete(trackers, token)
 		close(t.cancelChannel)
 	}
+	// Removing the tracker entry above is enough: IsScanToken looks up
+	// trackers and returns false once the entry is gone — no parallel
+	// registry to keep in sync.
 }
 
 func IsCanceled(token types.ProgressToken) bool {

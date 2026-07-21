@@ -32,6 +32,7 @@ import (
 	"github.com/golang/mock/gomock"
 	pkgerrors "github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -121,7 +122,7 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 				mockFolder2.EXPECT().Path().Return(folder2Path).AnyTimes()
 
 				mockWorkspace := mock_types.NewMockWorkspace(ctrl)
-				// FYI, mock returns deterministic slice order, but real Workspace.Folders() returns the slice in a random order
+				// FYI, both the mock and the real Workspace.Folders() now return a deterministic, ascending path-sorted slice
 				mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder1, mockFolder2}).AnyTimes()
 
 				return mockWorkspace
@@ -380,6 +381,104 @@ func TestIsAuthenticated_ConcurrentCallsSendOnlyOneNotification(t *testing.T) {
 		"concurrent IsAuthenticated() calls should make exactly one auth API call via singleflight, not one per caller")
 }
 
+// TestIsAuthenticated_ConcurrentCallsAllReturnSharedResult guards against a regression
+// where a token-keyed "already in flight" guard around authCheckGroup.Do (added to fix
+// IDE-2178's reentrant-call deadlock, see git history) also short-circuited legitimate
+// concurrent callers on other goroutines to a hardcoded false, instead of letting them
+// share the correct singleflight result. The actual reentrant deadlock is fixed at its
+// source instead: the OAuth token refresher (auth_configuration.go) no longer calls back
+// into IsAuthenticated() on refresh failure, since the in-flight check that triggered the
+// refresh observes the same failure itself and runs the notification/logout handling.
+func TestIsAuthenticated_ConcurrentCallsAllReturnSharedResult(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
+	ts.SetToken(engine.GetConfiguration(), "some-test-token")
+
+	provider := &FakeAuthenticationProvider{
+		IsAuthenticated: true,
+		Engine:          engine,
+		CheckAuthDelay:  50 * time.Millisecond,
+	}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+
+	const concurrency = 3
+	ready := make(chan struct{})
+	results := make([]bool, concurrency)
+	var wg sync.WaitGroup
+	wg.Add(concurrency)
+	for i := range concurrency {
+		go func(i int) {
+			defer wg.Done()
+			<-ready
+			results[i] = service.IsAuthenticated()
+		}(i)
+	}
+	close(ready)
+	wg.Wait()
+
+	for i, result := range results {
+		assert.Truef(t, result, "caller %d must observe the shared singleflight result (true), not a hardcoded false", i)
+	}
+	assert.Equal(t, 1, int(atomic.LoadInt32(&provider.AuthCallCount)),
+		"concurrent IsAuthenticated() calls should make exactly one auth API call via singleflight, not one per caller")
+}
+
+// errorFakeAuthProvider's check function always fails with a configurable error,
+// simulating the whoami call failing because the OAuth token could not be refreshed.
+type errorFakeAuthProvider struct {
+	err error
+}
+
+func (p *errorFakeAuthProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
+	return func(_ workflow.Engine) (string, error) { return "", p.err }
+}
+func (p *errorFakeAuthProvider) Authenticate(_ context.Context) (string, error) { return "", nil }
+func (p *errorFakeAuthProvider) ClearAuthentication(_ context.Context) error    { return nil }
+func (p *errorFakeAuthProvider) AuthURL(_ context.Context) string               { return "" }
+func (p *errorFakeAuthProvider) setAuthUrl(_ string)                            {}
+func (p *errorFakeAuthProvider) AuthenticationMethod() types.AuthenticationMethod {
+	return types.FakeAuthentication
+}
+
+// TestIsAuthenticated_PermanentAuthErrorStillTriggersReAuthNotification proves the
+// notification/logout side effect that the deleted reentrant IsAuthenticated() call in
+// the OAuth refresher (auth_configuration.go) used to trigger on refresh failure is still
+// produced - now by the single, outer doAuthCheck() call observing the same error itself,
+// with no reentrant call needed.
+func TestIsAuthenticated_PermanentAuthErrorStillTriggersReAuthNotification(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	errorReporter := error_reporting.NewTestErrorReporter(engine)
+	notifier := notification.NewNotifier()
+	// A non-JSON token is parsed as a legacy token, so a permanent failure routes through
+	// handleInvalidCredentials() -> sendAuthenticationRequest(), same as TestHandleInvalidCredentials.
+	ts.SetToken(engine.GetConfiguration(), "invalidCreds")
+	provider := &errorFakeAuthProvider{err: buildWhoamiErr(fmt.Errorf("API request failed (status: 401)"))}
+	service := NewAuthenticationService(engine, ts, provider, errorReporter, notifier, testutil.DefaultConfigResolver(engine))
+
+	var mu sync.RWMutex
+	messageRequestReceived := false
+	go notifier.CreateListener(func(params any) {
+		if p, ok := params.(types.ShowMessageRequest); ok {
+			keys := p.Actions.Keys()
+			loginAction, ok := p.Actions.Get(keys[0])
+			require.True(t, ok)
+			require.Equal(t, types.LoginCommand, loginAction.CommandId)
+			mu.Lock()
+			messageRequestReceived = true
+			mu.Unlock()
+		}
+	})
+
+	isAuthenticated := service.IsAuthenticated()
+
+	assert.False(t, isAuthenticated)
+	assert.Eventuallyf(t, func() bool {
+		mu.RLock()
+		defer mu.RUnlock()
+		return messageRequestReceived
+	}, 10*time.Second, time.Millisecond, "expected a re-authenticate request notification after a permanent auth failure")
+}
+
 func Test_IsAuthenticated(t *testing.T) {
 	t.Run("User is authenticated", func(t *testing.T) {
 		engine, ts := testutil.UnitTestWithEngine(t)
@@ -494,6 +593,20 @@ func Test_shouldCauseLogout(t *testing.T) {
 		selfURLErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: tokenURLErr}
 		assert.False(t, shouldCauseLogout(buildWhoamiErr(selfURLErr), &logger))
 	})
+
+	t.Run("permanent 401 snyk_errors.Error wrapped in url.Error causes logout", func(t *testing.T) {
+		// Mirrors what http.Client.Do returns for a real, permanent 401: it always wraps the
+		// RoundTripper error in *url.Error, regardless of whether the cause is transient or not.
+		snykErr := snyk_errors.Error{StatusCode: 401, Title: "Authentication error"}
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self?version=2024-04-22", Err: snykErr}
+		assert.True(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
+	})
+
+	t.Run("permanent 400 snyk_errors.Error wrapped in url.Error causes logout", func(t *testing.T) {
+		snykErr := snyk_errors.Error{StatusCode: 400, Title: "Bad request"}
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self?version=2024-04-22", Err: snykErr}
+		assert.True(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
+	})
 }
 
 func Test_Logout(t *testing.T) {
@@ -589,6 +702,19 @@ func Test_Logout_CallsClearAuthentication(t *testing.T) {
 	service.Logout(t.Context())
 
 	assert.True(t, provider.ClearAuthenticationCalled, "Logout() must call ClearAuthentication on the provider")
+}
+
+func Test_Logout_ResetsLastUsedToken(t *testing.T) {
+	// Without this reset, re-authenticating with the same PAT/API token after logout
+	// leaves isNewToken false in doAuthCheck, silently skipping sendAuthenticationAnalytics.
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+	service.lastUsedToken = "some-previously-seen-token"
+
+	service.Logout(t.Context())
+
+	assert.Empty(t, service.lastUsedToken, "Logout() must reset lastUsedToken so re-auth with the same token is treated as new")
 }
 
 func Test_ConfigureProviders_CredentialMismatch_CallsClearAuthentication(t *testing.T) {

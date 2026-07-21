@@ -127,3 +127,5 @@ brain/
 .snyk-code-output.json
 .snyk-code-output.err
 .verification-result.*
+.verify-report
+.localtmp
