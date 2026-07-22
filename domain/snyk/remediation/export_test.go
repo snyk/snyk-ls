@@ -17,6 +17,7 @@
 package remediation
 
 import (
+	"context"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -107,4 +108,11 @@ func RootMuLen(p RemediationProvider) int {
 	rp.rootMusMu.Lock()
 	defer rp.rootMusMu.Unlock()
 	return len(rp.rootMus)
+}
+
+// RefreshStatCacheForTest exposes refreshStatCache for black-box tests that
+// verify its error-propagation contract (e.g. that a non-git path returns an
+// error rather than silently no-oping).
+func RefreshStatCacheForTest(ctx context.Context, root string) error {
+	return refreshStatCache(ctx, root)
 }
