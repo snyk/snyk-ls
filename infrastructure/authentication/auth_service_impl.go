@@ -241,18 +241,16 @@ func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token str
 	// relies on its caller ApplyAuthMethodChange to cancel before reconfiguring. This is about
 	// correctness, not deadlock avoidance — releasing a.m above means nothing ever waits on the
 	// interactive provider call while holding a.m.
-	a.m.RLock()
+	a.m.Lock()
 	provider := a.authProvider
-	a.m.RUnlock()
-
 	if provider == nil {
 		err = errors.New("authentication provider is not configured")
 		a.engine.GetLogger().Warn().Err(err).Msg("Failed to authenticate: auth provider is nil")
-		a.m.Lock()
 		a.authCache.RemoveAll()
 		a.m.Unlock()
 		return "", err
 	}
+	a.m.Unlock()
 
 	token, err = provider.Authenticate(ctx)
 
