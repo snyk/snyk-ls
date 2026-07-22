@@ -58,6 +58,9 @@ const (
 	DismissFeedbackBanner    = "snyk.dismissFeedbackBanner"
 	FeedbackBannerInteracted = "snyk.feedbackBannerInteracted"
 
+	// Remediation agent commands
+	RemediationAgentFixFolderCommand = "snyk.remediationAgent.fixFolder"
+
 	// bridging commands
 	ExecuteCLICommand = "snyk.executeCLI"
 

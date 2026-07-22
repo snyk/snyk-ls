@@ -182,7 +182,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 		})
 
 	// reset to use real service with mock injected
-	command.SetService(command.NewService(engine, engine.GetLogger(), authenticationService, deps.FeatureFlagService, deps.Notifier, deps.LearnService, nil, nil, nil, mockLdxSyncService, nil, nil))
+	command.SetService(command.NewService(engine, engine.GetLogger(), authenticationService, deps.FeatureFlagService, deps.Notifier, deps.LearnService, nil, nil, nil, mockLdxSyncService, nil, nil, nil))
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {

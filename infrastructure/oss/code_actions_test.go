@@ -17,6 +17,7 @@
 package oss
 
 import (
+	"context"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -137,7 +138,7 @@ func Test_GetCodeActions_MavenPropertyInParentPom_RedirectsToParent(t *testing.T
 		&scanResult{}, nil, depNode, getLearnMock(t), error_reporting.NewTestErrorReporter(engine), "", nil)
 
 	quickFix := findUpgradeAction(t, snykIssue.CodeActions)
-	edit := (*quickFix.GetDeferredEdit())()
+	edit := (*quickFix.GetDeferredEdit())(context.Background())
 
 	// The edit must target the PARENT pom, not the child.
 	require.Empty(t, edit.Changes[childPath], "child pom must not be edited")
@@ -220,7 +221,7 @@ func Test_GetCodeActions_MavenParentPomPropertyVersion_RedirectsToParentProperty
 		&scanResult{}, nil, depNode, getLearnMock(t), error_reporting.NewTestErrorReporter(engine), "", nil)
 
 	quickFix := findUpgradeAction(t, snykIssue.CodeActions)
-	edit := (*quickFix.GetDeferredEdit())()
+	edit := (*quickFix.GetDeferredEdit())(context.Background())
 
 	// The edit must target the parent pom's <properties> entry, not its <version>,
 	// and the child pom must be untouched.
@@ -323,7 +324,7 @@ func Test_addQuickFixAction_RefusesStaleEdit(t *testing.T) {
 	changed := "<x>\n            <version>11.0.1</version>\n</x>\n"
 	require.NoError(t, os.WriteFile(pomPath, []byte(changed), 0600))
 
-	edit := (*action.GetDeferredEdit())()
+	edit := (*action.GetDeferredEdit())(context.Background())
 	assert.Empty(t, edit.Changes, "stale edit must not be applied")
 }
 
@@ -371,7 +372,7 @@ func Test_addQuickFixAction_AppliesWhenContentMatches(t *testing.T) {
 		[]string{"root@1.0.0", "org:art@9.0.5"}, []any{"false", "org:art@11.0.1"}, nil)
 	require.NotNil(t, action)
 
-	edit := (*action.GetDeferredEdit())()
+	edit := (*action.GetDeferredEdit())(context.Background())
 	edits := edit.Changes[pomPath]
 	require.Len(t, edits, 1)
 	assert.Equal(t, "11.0.1", edits[0].NewText)
@@ -408,13 +409,13 @@ func Test_MavenPropertyQuickfix_AppliedTwice_DoesNotCorruptPom(t *testing.T) {
 	// double-applied into 11.0.11.
 	result := propertyManagedPom
 
-	edit := (*quickFix.GetDeferredEdit())()
+	edit := (*quickFix.GetDeferredEdit())(context.Background())
 	edits := edit.Changes[pomPath]
 	require.Len(t, edits, 1, "first apply should produce the upgrade edit")
 	result = applySingleLineEdit(t, result, edits[0])
 	require.NoError(t, os.WriteFile(pomPath, []byte(result), 0600))
 
-	edit = (*quickFix.GetDeferredEdit())()
+	edit = (*quickFix.GetDeferredEdit())(context.Background())
 	assert.Empty(t, edit.Changes, "second apply must be refused, not re-applied")
 
 	// The property value is upgraded exactly once.
@@ -634,7 +635,7 @@ func applyMavenUpgradeQuickfix(t *testing.T, pom string) []types.TextEdit {
 	snykIssue := toIssue(engine, defaultResolver(t, engine), types.FilePath(dir), types.FilePath(pomPath), issue,
 		&scanResult{}, nil, depNode, getLearnMock(t), error_reporting.NewTestErrorReporter(engine), "", nil)
 	quickFix := findUpgradeAction(t, snykIssue.CodeActions)
-	edit := (*quickFix.GetDeferredEdit())()
+	edit := (*quickFix.GetDeferredEdit())(context.Background())
 	return edit.Changes[pomPath]
 }
 

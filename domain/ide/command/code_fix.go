@@ -44,7 +44,7 @@ func (cmd *fixCodeIssue) Command() types.CommandData {
 	return cmd.command
 }
 
-func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
+func (cmd *fixCodeIssue) Execute(ctx context.Context) (any, error) {
 	key := types.SettingClientCapabilities
 	capabilities, _ := cmd.engine.GetConfiguration().Get(key).(types.ClientCapabilities)
 	if !capabilities.Workspace.ApplyEdit {
@@ -71,7 +71,12 @@ func (cmd *fixCodeIssue) Execute(_ context.Context) (any, error) {
 				}
 
 				// execute autofix codeaction
-				edit := (*action.GetDeferredEdit())()
+				de := action.GetDeferredEdit()
+				if de == nil {
+					cmd.logger.Debug().Msg("No deferred edit available for code action.")
+					return nil, nil
+				}
+				edit := (*de)(ctx)
 				if edit == nil {
 					cmd.logger.Debug().Msg("No fix could be computed.")
 					return nil, nil
