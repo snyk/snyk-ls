@@ -81,14 +81,13 @@ func ApplyAuthMethodChange(conf gafConfig.Configuration, authService authenticat
 		Str("new_auth_method", string(authMethod)).
 		Msg("auth method change requested")
 
-	// When the method actually changes, cancel any login still in flight for the previous method so
-	// a stuck auth is aborted immediately. This is also required for correctness:
-	// ConfigureProviders below acquires the same mutex a blocked Authenticate holds, so without
-	// canceling first it would deadlock behind the stuck login. CancelOngoingAuth uses a separate
-	// mutex and is safe to call when nothing is in flight. Both providers return promptly on
-	// cancellation — the CLI provider's subprocess is killed via exec.CommandContext, and the OAuth
-	// provider's CancelableAuthenticate honors the context — so the mutex is released and the
-	// deadlock is avoided.
+	// When the method actually changes, cancel any login still in flight for the previous method so a
+	// stuck auth is aborted immediately and its now-stale result is discarded: canceling the auth
+	// context here is what makes the ctx.Err() guard in Authenticate drop the result rather than apply
+	// it against the newly reconfigured provider. CancelOngoingAuth uses a separate mutex and is safe
+	// to call when nothing is in flight. Both providers return promptly on cancellation — the CLI
+	// provider's subprocess is killed via exec.CommandContext, and the OAuth provider's
+	// CancelableAuthenticate honors the context.
 	//
 	// Guarded on `changed` so a config re-push that does not change the method (the settings-change
 	// caller, applyAuthenticationMethod) never cancels a freshly started login. The login command
