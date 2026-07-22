@@ -1908,7 +1908,7 @@ func Test_codeActionResolve_RemediationAgent_ReturnsEdit(t *testing.T) {
 	baseDeps := di.TestInit(t, engine, tokenService, nil)
 	baseDeps.CodeActionService = customCAService
 	jsonRPCRecorder := &testsupport.JsonRPCRecorder{}
-	loc := startServer(engine, tokenService, nil, jsonRPCRecorder, baseDeps)
+	loc := startServer(engine, tokenService, nil, jsonRPCRecorder, baseDeps, 0)
 	t.Cleanup(func() { _ = loc.Close() })
 
 	// Register the workspace folder so GetFolderContaining finds the file.
