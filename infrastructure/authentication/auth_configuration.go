@@ -73,7 +73,13 @@ func Default(engine workflow.Engine, authenticationService AuthenticationService
 		types.DefaultOpenBrowserFunc(url)
 	}
 
-	// this doesn't have any effect
+	// This closure is only wired into this OAuth2Provider's own authenticator, used by the
+	// explicit login flow (Authenticate -> CancelableAuthenticate). Real API traffic (scans,
+	// whoami) goes through a separate authenticator GAF builds internally for the network
+	// client, which never receives this refresherFunc - so it has no effect on that path.
+	// It used to reentrantly call authenticationService.IsAuthenticated() on failure, which
+	// would deadlock the singleflight group in IsAuthenticated() if this closure were ever
+	// invoked from within it; that call was removed for IDE-2178.
 	refresherFunc := func(ctx context.Context, oauthConfig *oauth2.Config, token *oauth2.Token) (*oauth2.Token, error) {
 		logger := engine.GetLogger().With().Str("method", "oauth.refresherFunc").Logger()
 		logger.Info().Msg("refreshing oauth2 token")
@@ -81,9 +87,6 @@ func Default(engine workflow.Engine, authenticationService AuthenticationService
 		refreshToken, err := auth.RefreshToken(ctx, oauthConfig, token)
 		if err != nil {
 			logger.Err(err).Msg("failed to refresh oauth2 token")
-			// call authservice to handle notifications and such
-			// we don't need the returned values, as we know it will either return false, nil or false, err
-			_ = authenticationService.IsAuthenticated()
 		}
 		return refreshToken, err
 	}
