@@ -24,6 +24,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -252,7 +253,13 @@ func TestLoginCommand_Execute_TimedOut_NotifiesButReturnsNoError(t *testing.T) {
 
 	require.NoError(t, err, "a login timeout must not be returned as an error (would be reported to Sentry)")
 	assert.Nil(t, result)
-	assert.Equal(t, 1, notifier.SendErrorCount(), "the user must be told the login timed out")
+	assert.Zero(t, notifier.SendErrorCount(), "a timeout must not surface the raw wrapped error to the user")
+	require.Equal(t, 1, notifier.SendShowMessageCount(), "the user must be told the login timed out")
+	msg, ok := notifier.SentMessages()[0].(sglsp.ShowMessageParams)
+	require.True(t, ok, "expected a ShowMessage notification")
+	assert.EqualValues(t, sglsp.MTWarning, msg.Type)
+	assert.Equal(t, "Snyk sign-in timed out. Please try again.", msg.Message)
+	assert.NotContains(t, msg.Message, "context deadline exceeded", "the friendly message must not leak developer jargon")
 }
 
 func TestApplyAuthConfig_EndpointChange_LogsOutAndClearsWorkspace(t *testing.T) {

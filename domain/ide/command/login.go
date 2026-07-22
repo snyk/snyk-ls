@@ -23,6 +23,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
@@ -128,7 +129,7 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 		// report it to Sentry. Scoping this here keeps genuine timeouts elsewhere reportable.
 		if util.IsTimeout(err) {
 			logger.Debug().Str("method", "loginCommand.Execute").Msg("login timed out")
-			cmd.notifier.SendError(err)
+			cmd.notifier.SendShowMessage(sglsp.MTWarning, "Snyk sign-in timed out. Please try again.")
 			return nil, nil
 		}
 		logger.Err(err).Msg("Error on snyk.login command")
