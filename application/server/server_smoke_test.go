@@ -1520,6 +1520,31 @@ func folderConfigsHaveNonEmptyAutoDeterminedOrgForValidators(
 	return true
 }
 
+// folderConfigNotificationMatchesValidators reports whether param contains exactly one
+// folder config per validator path (no extras). Stale notifications from prior workspace
+// changes often include removed folders; skipping those avoids flaky assertions.
+func folderConfigNotificationMatchesValidators(
+	param types.LspConfigurationParam,
+	validators map[types.FilePath]func(types.LspFolderConfig),
+) bool {
+	if len(param.FolderConfigs) != len(validators) {
+		return false
+	}
+	for wantPath := range validators {
+		found := false
+		for _, fc := range param.FolderConfigs {
+			if folderConfigPathsMatch(fc.FolderPath, wantPath) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
 // tryParseLatestMatchingFolderConfig walks notifications newest-first and returns the first
 // $/snyk.configuration payload that satisfies cfg (including optional autoDeterminedOrg wait).
 func tryParseLatestMatchingFolderConfig(
@@ -1532,11 +1557,13 @@ func tryParseLatestMatchingFolderConfig(
 		if err := notifications[i].UnmarshalParams(&param); err != nil || len(param.FolderConfigs) == 0 {
 			continue
 		}
+		if !folderConfigNotificationMatchesValidators(param, validators) {
+			continue
+		}
 		if cfg.waitForNonEmptyAutoDeterminedOrg {
 			if !folderConfigsHaveNonEmptyAutoDeterminedOrgForValidators(param, validators) {
 				continue
 			}
-			return param, true
 		}
 		return param, true
 	}
