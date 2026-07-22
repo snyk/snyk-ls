@@ -58,7 +58,13 @@ func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResul
 	issues := []types.Issue{}
 	for _, trIssue := range issuesFromTestResult {
 		issue := processIssue(ctx, trIssue, logger, affectedFilePath, workDir)
-		issues = append(issues, issue)
+		// processIssue returns a nil *snyk.Issue for findings it cannot convert
+		// (e.g. unusable attributes, unresolved ecosystem). Guard the append on the
+		// concrete pointer: appending a typed-nil pointer into a []types.Issue would
+		// yield a non-nil interface wrapping a nil pointer, which later panics.
+		if issue != nil {
+			issues = append(issues, issue)
+		}
 	}
 	return issues, nil
 }
@@ -109,7 +115,12 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 	title := trIssue.GetTitle()
 	introducingOssIssueData, err := buildOssIssueData(ctx, trIssue, problem, introducingFinding, affectedFilePath, myRange, ecosystemStr, dependencyPath)
 	if err != nil {
+		// The introducing finding is unusable, so we cannot produce a
+		// content-bearing issue. Skip it rather than emitting a finding whose
+		// grouping key would be derived from empty attributes and collide with
+		// other degenerate findings at the same location.
 		logger.Warn().Err(err).Msg("failed to build oss issue data")
+		return nil
 	}
 
 	introducingOssIssueData.MatchingIssues = populateMatchingIssues(ctx, trIssue, problem, affectedFilePath, myRange, ecosystemStr, logger)
@@ -158,7 +169,6 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 		CVEs:                introducingOssIssueData.Identifiers.CVE,
 		AdditionalData:      introducingOssIssueData,
 		LessonUrl:           introducingOssIssueData.Lesson,
-		FindingId:           introducingFinding.Id.String(),
 	}
 
 	// add code actions
@@ -169,6 +179,14 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 	// Calculate fingerprint
 	fingerprint := utils.CalculateFingerprintFromAdditionalData(issue)
 	issue.SetFingerPrint(fingerprint)
+	// The durable grouping key for an OSS finding is derived from stable
+	// vulnerability attributes (package name, version, dependency chain, rule
+	// id) rather than the per-scan testapi finding UUID, which the backend mints
+	// afresh on every scan. Using the fingerprint inputs keeps the finding
+	// identity identical across repeated scans of the same dependency graph; the
+	// conversion layer then adds the root-relative path and range to individuate
+	// multiple occurrences.
+	issue.FindingId = fingerprint
 	return issue
 }
 
@@ -456,6 +474,14 @@ func buildOssIssueData(
 ) (snyk.OssIssueData, error) {
 	logger := ctx2.LoggerFromContext(ctx).With().Str("method", "buildOssIssueData").Logger()
 	logger.Debug().Interface("problem", problem.Id).Interface("finding", finding.Id).Msg("building oss issue data")
+
+	if finding.Attributes == nil {
+		// Without attributes there is no package name, version or dependency
+		// chain to build from. Continuing would produce a content-less issue
+		// whose grouping key is derived from empty fields, so signal the caller
+		// to skip it entirely.
+		return snyk.OssIssueData{}, fmt.Errorf("finding has no attributes; cannot build OSS issue data")
+	}
 
 	attrs := finding.Attributes
 

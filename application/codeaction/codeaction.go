@@ -18,8 +18,10 @@
 package codeaction
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -30,8 +32,10 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	noti "github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -45,31 +49,45 @@ type CodeActionsService struct {
 	IssuesProvider     snyk.IssueProvider
 	featureFlagService featureflag.Service
 
+	// actionsCacheMu protects actionsCache. Every read and write of actionsCache
+	// must hold this lock. In ResolveCodeAction, the lock is released BEFORE
+	// invoking the slow deferred edit so that concurrent codeAction/resolve
+	// requests (which run on separate LSP handler goroutines) are not serialized
+	// through the potentially multi-minute remediation call.
+	actionsCacheMu sync.Mutex
 	// actionsCache holds all the issues that were returns by the GetCodeActions method.
 	// This is used to resolve the code actions later on in ResolveCodeAction.
-	actionsCache   map[uuid.UUID]cachedAction
-	engine         workflow.Engine
-	logger         zerolog.Logger
-	fileWatcher    dirtyFilesWatcher
-	notifier       noti.Notifier
-	configResolver types.ConfigResolverInterface
+	actionsCache        map[uuid.UUID]cachedAction
+	engine              workflow.Engine
+	logger              zerolog.Logger
+	fileWatcher         dirtyFilesWatcher
+	notifier            noti.Notifier
+	configResolver      types.ConfigResolverInterface
+	remediationProvider remediation.RemediationProvider
 }
 
 type cachedAction struct {
 	issue  types.Issue
 	action types.CodeAction
+	// canonicalRoot is the canonical registered workspace-folder root captured at
+	// GetCodeActions time. It is used at resolve time so the resolved action's
+	// FindingId anchors to the same root publishDiagnostics used, even if the
+	// folder is removed between GetCodeActions and ResolveCodeAction (a
+	// resolve-time workspace lookup would then return nil).
+	canonicalRoot types.FilePath
 }
 
-func NewService(engine workflow.Engine, provider snyk.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface) *CodeActionsService {
+func NewService(engine workflow.Engine, provider snyk.IssueProvider, fileWatcher dirtyFilesWatcher, notifier noti.Notifier, featureFlagService featureflag.Service, configResolver types.ConfigResolverInterface, remediationProvider remediation.RemediationProvider) *CodeActionsService {
 	return &CodeActionsService{
-		IssuesProvider:     provider,
-		featureFlagService: featureFlagService,
-		actionsCache:       make(map[uuid.UUID]cachedAction),
-		engine:             engine,
-		logger:             engine.GetLogger().With().Str("service", "CodeActionsService").Logger(),
-		fileWatcher:        fileWatcher,
-		notifier:           notifier,
-		configResolver:     configResolver,
+		IssuesProvider:      provider,
+		featureFlagService:  featureFlagService,
+		actionsCache:        make(map[uuid.UUID]cachedAction),
+		engine:              engine,
+		logger:              engine.GetLogger().With().Str("service", "CodeActionsService").Logger(),
+		fileWatcher:         fileWatcher,
+		notifier:            notifier,
+		configResolver:      configResolver,
+		remediationProvider: remediationProvider,
 	}
 }
 
@@ -110,10 +128,10 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 			}
 			filteredIssues = append(filteredIssues, issue)
 		}
-		c.logger.Debug().Any("path", path).Any("range", r).Msgf("Filtered to %d issues", len(issues))
+		c.logger.Debug().Any("path", path).Any("range", r).Msgf("Filtered to %d issues", len(filteredIssues))
 	}
 
-	quickFixGroupables := c.getQuickFixGroupablesAndCache(filteredIssues)
+	quickFixGroupables := c.getQuickFixGroupablesAndCache(filteredIssues, folder.Path())
 
 	var updatedIssues []types.Issue
 	if len(quickFixGroupables) != 0 {
@@ -122,8 +140,91 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 		updatedIssues = filteredIssues
 	}
 
-	actions := converter.ToCodeActions(updatedIssues)
+	remediationActions := c.remediationCodeActions(updatedIssues, path, folder.Path(), r)
+	actions := converter.ToCodeActions(updatedIssues, folder.Path())
+	actions = append(actions, remediationActions...)
 	c.logger.Debug().Msg(fmt.Sprint("Returning ", len(actions), " code actions"))
+	return actions
+}
+
+func (c *CodeActionsService) remediationCodeActions(issues []types.Issue, path types.FilePath, folderPath types.FilePath, r types.Range) []types.LSPCodeAction {
+	if c.remediationProvider == nil {
+		return nil
+	}
+	// Gate behind the same feature flag that controls whether RemediationAgentFixFolderCommand
+	// is advertised in server capabilities. When the flag is off, neither the command nor the
+	// code action is surfaced, keeping the two entry-points consistent.
+	if !c.engine.GetConfiguration().GetBool("remediation_agent_enabled") {
+		return nil
+	}
+	const remediationActionTitle = "Fix with Snyk Remediation Agent"
+	var actions []types.LSPCodeAction
+	// De-duplicate by title: IssuesForRange can return several fixable issues for
+	// one request range, each producing an identical-titled remediation action.
+	// The client would then show multiple indistinguishable quickfix entries, so
+	// emit at most one remediation action per distinct title.
+	seenTitles := make(map[string]bool)
+	for i := range issues {
+		issue := issues[i]
+		findingId := issue.GetFindingId()
+		if findingId == "" {
+			continue
+		}
+		issueProduct := issue.GetProduct()
+		additionalData := issue.GetAdditionalData()
+		switch issueProduct {
+		case product.ProductCode:
+			// Remy handles Code issues that carry an AI-generated fix (hasAIFix).
+			if additionalData == nil || !additionalData.IsFixable() {
+				continue
+			}
+		case product.ProductInfrastructureAsCode:
+			// Remy handles IaC issues via FindingId; IaCIssueData.IsFixable() is
+			// always false, so eligibility is determined by FindingId alone (already
+			// guarded above).
+		default:
+			// OSS, Secrets, Unknown, and any future product are not handled by remy.
+			continue
+		}
+
+		if seenTitles[remediationActionTitle] {
+			// A remediation action with this title was already emitted for this
+			// request; skip the duplicate.
+			continue
+		}
+
+		// Capture loop variables for the closure.
+		issueFindingId := findingId
+		issueRange := r
+		provider := c.remediationProvider
+		deferredEdit := func(ctx context.Context) *types.WorkspaceEdit {
+			edit, err := provider.Remediate(ctx, remediation.RemediationRequest{
+				FindingId:   issueFindingId,
+				FilePath:    path,
+				ContentRoot: folderPath,
+				Range:       issueRange,
+				Product:     issueProduct,
+			})
+			if err != nil {
+				c.logger.Error().Err(err).Str("findingId", issueFindingId).Msg("remediation provider returned error")
+			}
+			return edit
+		}
+		action, err := snyk.NewDeferredCodeAction(
+			remediationActionTitle,
+			&deferredEdit,
+			nil,
+			"",
+			nil,
+		)
+		if err == nil {
+			action.Kind = types.RemediationAgentQuickFix
+			lspAction := converter.ToCodeAction(issue, &action, folderPath)
+			c.cacheCodeAction(&action, issue, folderPath)
+			actions = append(actions, lspAction)
+			seenTitles[remediationActionTitle] = true
+		}
+	}
 	return actions
 }
 
@@ -178,30 +279,44 @@ func (c *CodeActionsService) getQuickFixAction(quickFixGroupables []types.Groupa
 	return quickFix
 }
 
-func (c *CodeActionsService) getQuickFixGroupablesAndCache(issues []types.Issue) []types.Groupable {
+func (c *CodeActionsService) getQuickFixGroupablesAndCache(issues []types.Issue, canonicalRoot types.FilePath) []types.Groupable {
 	quickFixGroupables := []types.Groupable{}
 	for _, issue := range issues {
 		for _, action := range issue.GetCodeActions() {
 			if action.GetGroupingType() == types.Quickfix {
 				quickFixGroupables = append(quickFixGroupables, action)
 			}
-			c.cacheCodeAction(action, issue)
+			c.cacheCodeAction(action, issue, canonicalRoot)
 		}
 	}
 	return quickFixGroupables
 }
 
-func (c *CodeActionsService) cacheCodeAction(action types.CodeAction, issue types.Issue) {
+func (c *CodeActionsService) cacheCodeAction(action types.CodeAction, issue types.Issue, canonicalRoot types.FilePath) {
 	if action.GetUuid() != nil {
 		cached := cachedAction{
-			issue:  issue,
-			action: action,
+			issue:         issue,
+			action:        action,
+			canonicalRoot: canonicalRoot,
 		}
+		c.actionsCacheMu.Lock()
 		c.actionsCache[*action.GetUuid()] = cached
+		c.actionsCacheMu.Unlock()
 	}
 }
 
-func (c *CodeActionsService) ResolveCodeAction(action types.LSPCodeAction) (types.LSPCodeAction, error) {
+// ResolveCodeAction resolves a cached code action by invoking its deferred edit
+// and returning the resulting LSPCodeAction. The cache entry is kept alive for
+// the duration of the edit so that a concurrent retry for the same UUID can
+// still find it (e.g. a client that timed out and re-sent the request). The
+// entry is always removed after the edit — even if the edit panics (the jrpc2
+// handler recovers panics, keeping the process alive) — because the delete is
+// registered as a deferred call before the edit runs.
+//
+// Concurrent resolves of the same UUID are not deduplicated at this layer: both
+// callers may invoke the deferred edit independently. Providers must be safe for
+// concurrent calls; the remy provider serializes per content-root.
+func (c *CodeActionsService) ResolveCodeAction(ctx context.Context, action types.LSPCodeAction) (types.LSPCodeAction, error) {
 	c.logger.Debug().Msg("Received code action resolve request")
 	t := time.Now()
 
@@ -217,19 +332,48 @@ func (c *CodeActionsService) ResolveCodeAction(action types.LSPCodeAction) (type
 	}
 
 	key := uuid.UUID(*action.Data)
+
+	// Read under lock, then release before invoking the slow deferred edit.
+	// The entry stays in the cache while the edit runs so that a concurrent
+	// retry for the same UUID (e.g. a client that timed out and re-sent the
+	// request) can still find it instead of receiving a hard "not found" error.
+	c.actionsCacheMu.Lock()
 	cached, found := c.actionsCache[key]
+	c.actionsCacheMu.Unlock()
+
 	if !found {
 		return types.LSPCodeAction{}, errors.New(fmt.Sprint("could not find cached action for uuid ", key))
 	}
 
-	// only delete cache entry after it's been resolved
-	defer delete(c.actionsCache, key)
-	edit := (*cached.action.GetDeferredEdit())()
+	// Remove the cache entry once the edit is done, even if it panics.
+	// Using defer guarantees cleanup on any exit path — normal return or panic.
+	defer func() {
+		c.actionsCacheMu.Lock()
+		delete(c.actionsCache, key)
+		c.actionsCacheMu.Unlock()
+	}()
+
+	// Invoke the deferred edit outside the lock. When DeferredEdit is nil the
+	// action carries no edit (e.g. a command-only CodeAction); skip the call and
+	// leave edit as nil so the resolved action is returned without an Edit field.
+	var edit *types.WorkspaceEdit
+	if de := cached.action.GetDeferredEdit(); de != nil {
+		edit = (*de)(ctx)
+	}
+
 	resolvedAction := cached.action
 	resolvedAction.SetEdit(edit)
 	elapsed := time.Since(t)
 	elapsedSeconds := int(elapsed.Seconds())
-	codeAction := converter.ToCodeAction(cached.issue, resolvedAction)
+
+	// Use the canonical registered folder root captured at GetCodeActions time so
+	// the resolved action's embedded FindingId matches the one published for the
+	// same finding via publishDiagnostics (both anchor to the folder root). Reading
+	// it from the cache — rather than re-deriving it via a workspace lookup — keeps
+	// the id correct even if the folder was removed between GetCodeActions and this
+	// resolve (the lookup would then return nil and the id would silently fall back
+	// to the issue's sub-path ContentRoot, diverging from what was published).
+	codeAction := converter.ToCodeAction(cached.issue, resolvedAction, cached.canonicalRoot)
 
 	c.logger.Debug().Msg(fmt.Sprint("Resolved code action in ", elapsedSeconds, " seconds:\n", codeAction))
 	return codeAction, nil

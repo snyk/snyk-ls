@@ -206,6 +206,7 @@ type ServerCapabilities struct {
 	SemanticHighlighting             *sglsp.SemanticHighlightingOptions     `json:"semanticHighlighting,omitempty"`
 	Workspace                        *WorkspaceCapabilities                 `json:"workspace,omitempty"`
 	InlineValueProvider              bool                                   `json:"inlineValueProvider,omitempty"`
+	DiagnosticProvider               *DiagnosticOptions                     `json:"diagnosticProvider,omitempty"`
 }
 
 type ClientCapabilities struct {
@@ -865,6 +866,10 @@ const SourceOrganizeImports CodeActionKind = "source.organizeImports"
  */
 const SourceFixAll CodeActionKind = "source.fixAll"
 
+// RemediationAgentQuickFix is the stable, machine-readable kind clients match on to identify
+// the Snyk Remediation Agent fix action. Clients must match on this kind, never on the title.
+const RemediationAgentQuickFix CodeActionKind = "quickfix.snyk.remediationAgent"
+
 type CodeActionParams struct {
 	/**
 	 * The document in which the command was invoked.
@@ -1123,13 +1128,23 @@ type SnykScanParams struct {
 type ScanIssue struct { // TODO - convert this to a generic type
 	// Unique key identifying an issue in the whole result set. Not the same as the Snyk issue ID.
 	Id string `json:"id"`
-	// FindingId is stable across scans for the same underlying finding; sourced from Issue.GetFindingId().
-	// Unlike Id (which is per-result-set), this value is consistent between separate scan invocations
-	// and allows clients to correlate or deduplicate findings over time.
-	FindingId           string                      `json:"findingId"`
-	Title               string                      `json:"title"`
-	Severity            string                      `json:"severity"`
-	FilePath            FilePath                    `json:"filePath"`
+	// FindingId is the composite WIRE correlation id for the finding: a stable,
+	// instance-unique, root-relative identity. It is identical across repeated
+	// scans of unchanged code — including across a git-worktree copy of the same
+	// tree — yet distinct for two findings that share a grouping key at different
+	// locations. Unlike Id (which folds the absolute path and so cannot survive a
+	// worktree boundary), FindingId is derived from the root-relative path, making
+	// it correlatable across the working tree and a worktree copy.
+	//
+	// This composite value is for consumer correlation on the wire, not for fix lookup.
+	FindingId string   `json:"findingId"`
+	Title     string   `json:"title"`
+	Severity  string   `json:"severity"`
+	FilePath  FilePath `json:"filePath"`
+	// ContentRoot is the canonical registered workspace-folder root the finding
+	// belongs to. It is always the registered root — identical regardless of which
+	// sub-path was scanned — so a consumer can reliably attribute every finding to
+	// the correct root instead of defaulting to the first root.
 	ContentRoot         FilePath                    `json:"contentRoot"`
 	Range               sglsp.Range                 `json:"range"`
 	IsIgnored           bool                        `json:"isIgnored"`
@@ -1288,4 +1303,57 @@ type SecretIssueData struct {
 	Rows           Point    `json:"rows"`
 	Fingerprint    string   `json:"fingerprint"`
 	LocationsCount int      `json:"locationsCount"`
+}
+
+// LSP 3.17 pull-diagnostic types (sourcegraph/go-lsp predates 3.17, so defined here).
+
+// DiagnosticOptions is advertised in ServerCapabilities.DiagnosticProvider.
+type DiagnosticOptions struct {
+	Identifier            string `json:"identifier,omitempty"`
+	InterFileDependencies bool   `json:"interFileDependencies"`
+	WorkspaceDiagnostics  bool   `json:"workspaceDiagnostics"`
+}
+
+// DocumentDiagnosticParams is the request body for textDocument/diagnostic.
+type DocumentDiagnosticParams struct {
+	TextDocument     sglsp.TextDocumentIdentifier `json:"textDocument"`
+	Identifier       string                       `json:"identifier,omitempty"`
+	PreviousResultID string                       `json:"previousResultId,omitempty"`
+}
+
+// RelatedFullDocumentDiagnosticReport is the response for textDocument/diagnostic.
+// Kind is always "full" in v1.
+type RelatedFullDocumentDiagnosticReport struct {
+	Kind     string       `json:"kind"`
+	ResultID string       `json:"resultId,omitempty"`
+	Items    []Diagnostic `json:"items"`
+}
+
+// PreviousResultID is one entry in WorkspaceDiagnosticParams.PreviousResultIDs.
+// The field tag is "value" (not "resultId") per the LSP 3.17 spec.
+type PreviousResultID struct {
+	URI   sglsp.DocumentURI `json:"uri"`
+	Value string            `json:"value"`
+}
+
+// WorkspaceDiagnosticParams is the request body for workspace/diagnostic.
+type WorkspaceDiagnosticParams struct {
+	Identifier        string             `json:"identifier,omitempty"`
+	PreviousResultIDs []PreviousResultID `json:"previousResultIds"`
+}
+
+// WorkspaceDiagnosticReport is the response for workspace/diagnostic.
+// Items is a list of per-document reports (one per file with findings).
+type WorkspaceDiagnosticReport struct {
+	Items []WorkspaceDocumentDiagnosticReport `json:"items"`
+}
+
+// WorkspaceDocumentDiagnosticReport is one entry in WorkspaceDiagnosticReport.Items.
+// Version uses *int with no omitempty so nil serializes as JSON null per the spec.
+type WorkspaceDocumentDiagnosticReport struct {
+	Kind     string            `json:"kind"`
+	URI      sglsp.DocumentURI `json:"uri"`
+	Version  *int              `json:"version"`
+	ResultID string            `json:"resultId,omitempty"`
+	Items    []Diagnostic      `json:"items"`
 }

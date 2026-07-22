@@ -263,10 +263,14 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	}
 	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv))
 	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv))
-	handlers["textDocument/didChange"] = enrich(textDocumentDidChangeHandler(conf))
+	var onFileChange func(types.FilePath)
+	if deps.RemediationNotifier != nil {
+		onFileChange = deps.RemediationNotifier.InvalidateFile
+	}
+	handlers["textDocument/didChange"] = enrich(textDocumentDidChangeHandler(conf, onFileChange))
 	handlers["textDocument/didClose"] = enrich(noOpHandler())
 	handlers[textDocumentDidOpenOperation] = enrich(textDocumentDidOpenHandler(conf))
-	handlers[textDocumentDidSaveOperation] = enrich(textDocumentDidSaveHandler(conf))
+	handlers[textDocumentDidSaveOperation] = enrich(textDocumentDidSaveHandler(conf, onFileChange))
 	handlers["textDocument/hover"] = enrich(textDocumentHover())
 	handlers["textDocument/codeAction"] = enrich(textDocumentCodeActionHandler(logger, deps.CodeActionService))
 	handlers["textDocument/codeLens"] = enrich(codeLensHandler())
@@ -282,6 +286,8 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	handlers["window/workDoneProgress/cancel"] = enrich(windowWorkDoneProgressCancelHandler(conf))
 	handlers["workspace/executeCommand"] = enrich(executeCommandHandler(srv))
 	handlers["$/cancelRequest"] = cancelRequestHandler(srv)
+	handlers["textDocument/diagnostic"] = enrich(textDocumentDiagnosticHandler(conf))
+	handlers["workspace/diagnostic"] = enrich(workspaceDiagnosticHandler(conf))
 }
 
 func authenticationServiceFromContext(ctx context.Context) (authentication.AuthenticationService, bool) {
@@ -501,7 +507,7 @@ func mustConfigResolverFromContext(ctx context.Context) types.ConfigResolverInte
 	return cr
 }
 
-func textDocumentDidChangeHandler(conf configuration.Configuration) jrpc2.Handler {
+func textDocumentDidChangeHandler(conf configuration.Configuration, onFileChange func(types.FilePath)) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidChangeTextDocumentParams) (any, error) {
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "TextDocumentDidChangeHandler").Logger()
 		pathFromUri := uri.PathFromUri(params.TextDocument.URI)
@@ -519,6 +525,9 @@ func textDocumentDidChangeHandler(conf configuration.Configuration) jrpc2.Handle
 		}
 
 		mustFileWatcherFromContext(ctx).SetFileAsChanged(params.TextDocument.URI)
+		if onFileChange != nil {
+			onFileChange(pathFromUri)
+		}
 
 		return nil, nil
 	})
@@ -696,40 +705,11 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 				CodeLensProvider:    &sglsp.CodeLensOptions{ResolveProvider: false},
 				InlineValueProvider: true,
 				ExecuteCommandProvider: &sglsp.ExecuteCommandOptions{
-					Commands: []string{
-						types.NavigateToRangeCommand,
-						types.WorkspaceScanCommand,
-						types.WorkspaceFolderScanCommand,
-						types.OpenBrowserCommand,
-						types.LoginCommand,
-						types.CopyAuthLinkCommand,
-						types.LogoutCommand,
-						types.TrustWorkspaceFoldersCommand,
-						types.OpenLearnLesson,
-						types.GetLearnLesson,
-						types.SubmitIgnoreRequest,
-						types.GetSettingsSastEnabled,
-						types.GetFeatureFlagStatus,
-						types.GetActiveUserCommand,
-						types.CodeFixCommand,
-						types.CodeSubmitFixFeedback,
-						types.CodeFixDiffsCommand,
-						types.CodeFixApplyEditCommand,
-						types.ExecuteCLICommand,
-						types.ConnectivityCheckCommand,
-						types.DirectoryDiagnosticsCommand,
-						types.ClearCacheCommand,
-						types.GenerateIssueDescriptionCommand,
-						types.ReportAnalyticsCommand,
-						types.WorkspaceConfigurationCommand,
-						types.GetTreeView,
-						types.ToggleTreeFilter,
-						types.SetNodeExpanded,
-						types.ShowScanErrorDetails,
-						types.UpdateFolderConfig,
-						types.DismissFeedbackBanner,
-						types.FeedbackBannerInteracted,
-					},
+					Commands: commands(conf),
+				},
+				DiagnosticProvider: &types.DiagnosticOptions{
+					InterFileDependencies: false,
+					WorkspaceDiagnostics:  true,
 				},
 			},
 		}
@@ -738,6 +718,47 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		logger.Debug().Str("method", method).Any("result", result).Msg("SENDING")
 		return result, nil
 	})
+}
+
+func commands(conf configuration.Configuration) []string {
+	cmds := []string{
+		types.NavigateToRangeCommand,
+		types.WorkspaceScanCommand,
+		types.WorkspaceFolderScanCommand,
+		types.OpenBrowserCommand,
+		types.LoginCommand,
+		types.CopyAuthLinkCommand,
+		types.LogoutCommand,
+		types.TrustWorkspaceFoldersCommand,
+		types.OpenLearnLesson,
+		types.GetLearnLesson,
+		types.SubmitIgnoreRequest,
+		types.GetSettingsSastEnabled,
+		types.GetFeatureFlagStatus,
+		types.GetActiveUserCommand,
+		types.CodeFixCommand,
+		types.CodeSubmitFixFeedback,
+		types.CodeFixDiffsCommand,
+		types.CodeFixApplyEditCommand,
+		types.ExecuteCLICommand,
+		types.ConnectivityCheckCommand,
+		types.DirectoryDiagnosticsCommand,
+		types.ClearCacheCommand,
+		types.GenerateIssueDescriptionCommand,
+		types.ReportAnalyticsCommand,
+		types.WorkspaceConfigurationCommand,
+		types.GetTreeView,
+		types.ToggleTreeFilter,
+		types.SetNodeExpanded,
+		types.ShowScanErrorDetails,
+		types.UpdateFolderConfig,
+		types.DismissFeedbackBanner,
+		types.FeedbackBannerInteracted,
+	}
+	if conf.GetBool("remediation_agent_enabled") {
+		cmds = append(cmds, types.RemediationAgentFixFolderCommand)
+	}
+	return cmds
 }
 
 func startClientMonitor(params types.InitializeParams, logger zerolog.Logger) {
@@ -1128,7 +1149,7 @@ func textDocumentDidOpenHandler(conf configuration.Configuration) jrpc2.Handler 
 			logger.Debug().Msg("Sending cached issues")
 			diagnosticParams := types.PublishDiagnosticsParams{
 				URI:         params.TextDocument.URI,
-				Diagnostics: converter.ToDiagnostics(filteredIssues[filePath]),
+				Diagnostics: converter.ToDiagnosticsForFolder(filteredIssues[filePath], folder.Path(), &logger),
 			}
 			mustNotifierFromContext(ctx).Send(diagnosticParams)
 		}
@@ -1137,7 +1158,7 @@ func textDocumentDidOpenHandler(conf configuration.Configuration) jrpc2.Handler 
 	})
 }
 
-func textDocumentDidSaveHandler(conf configuration.Configuration) jrpc2.Handler {
+func textDocumentDidSaveHandler(conf configuration.Configuration, onFileChange func(types.FilePath)) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidSaveTextDocumentParams) (any, error) {
 		bgCtx := context.Background()
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "TextDocumentDidSaveHandler").Logger()
@@ -1155,6 +1176,10 @@ func textDocumentDidSaveHandler(conf configuration.Configuration) jrpc2.Handler 
 		if !folder.IsTrusted() {
 			logger.Warn().Msg(string("folder not trusted for file " + filePath))
 			return nil, nil
+		}
+
+		if onFileChange != nil {
+			onFileChange(filePath)
 		}
 
 		if folder.IsAutoScanEnabled() && uri.IsDotSnykFile(params.TextDocument.URI) {
@@ -1260,6 +1285,50 @@ func noOpHandler() jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidCloseTextDocumentParams) (any, error) {
 		ctx2.LoggerFromContext(ctx).Debug().Str("method", "NoOpHandler").Interface("params", params).Msg("RECEIVING")
 		return nil, nil
+	})
+}
+
+func workspaceDiagnosticHandler(conf configuration.Configuration) jrpc2.Handler {
+	// Always returns full results; previousResultIds is not used.
+	return handler.New(func(_ context.Context, _ types.WorkspaceDiagnosticParams) (any, error) {
+		reports := []types.WorkspaceDocumentDiagnosticReport{}
+		for _, folder := range config.GetWorkspace(conf).Folders() {
+			if !folder.IsTrusted() {
+				continue
+			}
+			fip, ok := folder.(snyk.FilteringIssueProvider)
+			if !ok {
+				continue
+			}
+			filtered := fip.FilterIssues(fip.Issues(), folder.DisplayableIssueTypes())
+			for filePath, issues := range filtered {
+				reports = append(reports, types.WorkspaceDocumentDiagnosticReport{
+					Kind:    "full",
+					URI:     uri.PathToUri(filePath),
+					Version: nil,
+					Items:   converter.ToDiagnosticsForFolder(issues, folder.Path(), nil),
+				})
+			}
+		}
+		return types.WorkspaceDiagnosticReport{Items: reports}, nil
+	})
+}
+
+func textDocumentDiagnosticHandler(conf configuration.Configuration) jrpc2.Handler {
+	return handler.New(func(_ context.Context, params types.DocumentDiagnosticParams) (any, error) {
+		report := types.RelatedFullDocumentDiagnosticReport{Kind: "full", Items: []types.Diagnostic{}}
+		filePath := uri.PathFromUri(params.TextDocument.URI)
+		folder := config.GetWorkspace(conf).GetFolderContaining(filePath)
+		if folder == nil || !folder.IsTrusted() {
+			return report, nil
+		}
+		fip, ok := folder.(snyk.FilteringIssueProvider)
+		if !ok {
+			return report, nil
+		}
+		filtered := fip.FilterIssues(fip.Issues(), folder.DisplayableIssueTypes())
+		report.Items = converter.ToDiagnosticsForFolder(filtered[filePath], folder.Path(), nil)
+		return report, nil
 	})
 }
 
