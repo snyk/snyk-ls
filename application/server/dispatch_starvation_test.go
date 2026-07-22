@@ -16,19 +16,18 @@
 
 package server
 
-// IDE-2181 — dispatch starvation.
+// Tests for dispatch starvation during a failing startup token refresh.
 //
 // When the stored OAuth token is expired/revoked, the scanner's Init path enters
-// a failing token-refresh storm. Historically initializedHandler ran that Init
-// synchronously, so it held a jrpc2 dispatch worker for the whole storm (~60s in
-// the field). With a saturated worker pool the later workspace/executeCommand that
-// asks for the settings-configuration HTML was never dispatched until Init unblocked
-// — even though rendering that HTML needs no auth and is fast.
+// a failing token-refresh storm. If initializedHandler runs that Init synchronously
+// it holds a jrpc2 dispatch worker for the whole storm (~60s in the field). With a
+// saturated worker pool the later workspace/executeCommand that asks for the
+// settings-configuration HTML is never dispatched until Init unblocks — even though
+// rendering that HTML needs no auth and is fast.
 //
 // These tests inject a scanner whose Init blocks (a faithful stand-in for the
 // failing-refresh storm) and pin the server worker pool to 1 so the starvation is
-// deterministic regardless of host core count. They are RED before CP1 (config HTML
-// starved / initialized blocks) and GREEN after (init runs in the background).
+// deterministic regardless of host core count.
 
 import (
 	"context"
@@ -145,10 +144,10 @@ func Test_ConfigHTML_ServicedDuringFailingStartupRefresh(t *testing.T) {
 	}
 }
 
-// Test_InitializedHandler_ReturnsPromptly_AndSignalsAfterScannerReady covers the
-// integration + ordering (D1) invariants: the initialized acknowledgement must
-// return without waiting for the (blocked) scanner Init, and SettingIsLspInitialized
-// must flip only once the background init actually completes.
+// Test_InitializedHandler_ReturnsPromptly_AndSignalsAfterScannerReady verifies two
+// ordering invariants: the initialized acknowledgement must return without waiting
+// for the (blocked) scanner Init, and SettingIsLspInitialized must flip only once
+// the background init actually completes.
 func Test_InitializedHandler_ReturnsPromptly_AndSignalsAfterScannerReady(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
@@ -170,8 +169,7 @@ func Test_InitializedHandler_ReturnsPromptly_AndSignalsAfterScannerReady(t *test
 	require.Less(t, elapsed, 2*time.Second,
 		"initialized handler returned in %v; it must not wait for the scanner Init (dispatch starvation)", elapsed)
 
-	// Ordering invariant D1: "initialized ⇒ scanner ready". While Init is still
-	// blocked, the signal must NOT have fired yet.
+	// While Init is still blocked, the signal must NOT have fired yet.
 	<-sc.started
 	require.False(t, conf.GetBool(types.SettingIsLspInitialized),
 		"SettingIsLspInitialized must stay false until the background scanner init completes")

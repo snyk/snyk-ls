@@ -16,24 +16,23 @@
 
 package server
 
-// IDE-2181 — background-init goroutine lifecycle.
+// Tests for background-init goroutine lifecycle.
 //
-// CP1 moved the blocking scanner Init + folder handling + first scan out of the
-// synchronous `initialized` handler and into a background goroutine so the handler
-// returns promptly (fixing dispatch starvation). That async move introduced two
-// lifecycle gaps these tests pin down:
+// The blocking scanner Init + folder handling + first scan run in a background
+// goroutine so the initialized handler returns promptly and does not hold a
+// dispatch worker. That async move introduced two lifecycle gaps these tests
+// exercise:
 //
-//   1. The goroutine ran with no panic recovery. Pre-CP1 the same work ran inside the
-//      handler call stack, which withContext wraps with recover(); a panic there now
-//      escapes an unrecovered goroutine and the Go runtime terminates the whole server.
+//   1. The goroutine ran with no panic recovery. The same work previously ran inside
+//      the handler call stack, which withContext wraps with recover(); a panic there
+//      now escapes an unrecovered goroutine and the Go runtime terminates the whole
+//      server.
 //
 //   2. The goroutine ran on an uncancellable context.Background() and `shutdown` neither
 //      canceled nor awaited it. If the IDE closes during the (up to ~60s) failing-refresh
 //      init window, shutdown disposes the notifier/tree-emitter/timers while the goroutine
 //      is still mid-init, then the goroutine proceeds into HandleFolders/ScanWorkspace
 //      against disposed state → use-after-dispose.
-//
-// Both are RED before the lifecycle fix and GREEN after.
 
 import (
 	"context"
@@ -102,13 +101,11 @@ func (s *lifecycleScanner) getInitCtx() context.Context {
 	return s.initCtx
 }
 
-// Test_Shutdown_CancelsAndAwaitsBackgroundInit asserts SHOULD-FIX 2: shutdown must
-// cancel the background init context and wait for the goroutine to finish BEFORE it
-// disposes the notifier/tree-emitter/timers. Pre-fix the goroutine runs on
-// context.Background() and shutdown neither cancels nor awaits it, so Init is still
-// blocked (and its context never canceled) when shutdown returns — RED. Post-fix
-// shutdown cancels the context, Init observes the cancellation and returns, and the
-// goroutine has finished by the time shutdown returns — GREEN.
+// Test_Shutdown_CancelsAndAwaitsBackgroundInit verifies that shutdown cancels the
+// background init context and waits for the goroutine to finish BEFORE it disposes
+// the notifier/tree-emitter/timers. The goroutine must run on a cancellable context
+// that shutdown cancels; Init must observe the cancellation and return before
+// shutdown proceeds to tear down shared state.
 func Test_Shutdown_CancelsAndAwaitsBackgroundInit(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
@@ -154,9 +151,8 @@ func Test_Shutdown_CancelsAndAwaitsBackgroundInit(t *testing.T) {
 		"the background init must run on a cancellable context that shutdown cancels, not context.Background()")
 }
 
-// panicInitScanner panics inside Init to exercise SHOULD-FIX 1: a panic in the
-// background init goroutine must be recovered (the server survives) and the readiness
-// signal must still fire.
+// panicInitScanner panics inside Init to verify that a panic in the background init
+// goroutine is recovered, the server survives, and the readiness signal still fires.
 type panicInitScanner struct {
 	*scanner.TestScanner
 }
@@ -165,12 +161,10 @@ func (s *panicInitScanner) Init(_ context.Context) error {
 	panic("simulated panic in background scanner init")
 }
 
-// Test_BackgroundInit_PanicRecovered_ServerSurvives_SignalFires asserts SHOULD-FIX 1.
-// Pre-fix the raw `go func()` has no recover(), so a panic in scanner Init escapes the
-// goroutine and the Go runtime terminates the entire process — the test binary crashes
-// (RED). Post-fix the goroutine recovers the panic, still fires the readiness signal so
-// WaitForLspInitialized waiters are released, and the server keeps serving requests
-// (GREEN).
+// Test_BackgroundInit_PanicRecovered_ServerSurvives_SignalFires verifies that a panic
+// inside the background init goroutine is recovered, the readiness signal still fires
+// (so WaitForLspInitialized waiters are released), and the server continues serving
+// requests.
 func Test_BackgroundInit_PanicRecovered_ServerSurvives_SignalFires(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()

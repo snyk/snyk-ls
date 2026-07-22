@@ -841,16 +841,16 @@ func getDownloadURL(conf configuration.Configuration, engine workflow.Engine, pr
 func initializedHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server) handler.Func {
 	return handler.New(func(ctx context.Context, params types.InitializedParams) (any, error) {
 		// Readiness-signal safety net. The normal signal fires at the END of the
-		// background scanner-init goroutine launched below (invariant D1: scanner-readiness
-		// waiters must wait for real init completion). But every dependency resolution
-		// before that launch (mustConfigResolverFromContext, …, mustScannerFromContext,
-		// etc.) panics on a missing dep; jrpc2/withContext recover such a panic and keep
-		// the server alive, but the goroutine would never start, stranding any goroutine
-		// parked in WaitForLspInitialized (e.g. outbound-notification dispatch) forever.
-		// Registering this defer before the resolutions restores the pre-CP1 "signal
-		// always fires on handler exit" guarantee, firing IFF the background goroutine
-		// never took ownership — so the normal path (goroutine owns the late signal) is
-		// unchanged and the signal is never moved earlier.
+		// background scanner-init goroutine launched below (scanner-readiness waiters
+		// must not be released before real init completes). But every dependency
+		// resolution before that launch (mustConfigResolverFromContext, …,
+		// mustScannerFromContext, etc.) panics on a missing dep; jrpc2/withContext
+		// recover such a panic and keep the server alive, but the goroutine would never
+		// start, stranding any goroutine parked in WaitForLspInitialized (e.g.
+		// outbound-notification dispatch) forever. Registering this defer before the
+		// resolutions ensures the signal always fires on handler exit when the background
+		// goroutine never took ownership — so the normal path (goroutine owns the late
+		// signal) is unchanged and the signal is never moved earlier.
 		goroutineLaunched := false
 		defer func() {
 			if !goroutineLaunched {
@@ -921,10 +921,10 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 		// keeping it off the handler's goroutine stops it from occupying a jrpc2 dispatch
 		// worker and starving later requests such as the settings-configuration HTML
 		// command (IDE-2181). The initialized signal fires at the END of this work
-		// (invariant D1: SettingIsLspInitialized ⇒ scanner init has completed) for both
-		// the success and Init-error paths, so consumers waiting on WaitForLspInitialized
-		// never hang. A background context is used because the request context is
-		// canceled once this handler returns.
+		// (SettingIsLspInitialized ⇒ scanner init has completed) for both the success
+		// and Init-error paths, so consumers waiting on WaitForLspInitialized never hang.
+		// A background context is used because the request context is canceled once this
+		// handler returns.
 		//
 		// From here the background goroutine owns the readiness signal, so the
 		// handler-level safety net above stands down (it fires only when the goroutine
@@ -946,11 +946,9 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 			// fired.
 			defer close(done)
 			// Recover any panic from the init path (e.g. a nil-deref on the failing-token
-			// refresh cold path). Pre-CP1 this work ran inside the handler call stack, which
-			// withContext wraps with recover(); now it runs in a raw goroutine, so an
-			// unrecovered panic here would terminate the whole language server. Recovering it
-			// (and still firing the readiness signal) preserves the pre-CP1 behavior and the
-			// "signal always fires" guarantee so WaitForLspInitialized waiters never hang.
+			// refresh cold path). This work runs in a raw goroutine; an unrecovered panic
+			// would terminate the whole language server. Recovering it and still firing
+			// the readiness signal ensures WaitForLspInitialized waiters are never stranded.
 			defer func() {
 				if r := recover(); r != nil {
 					logger.Error().Str("stack", string(debug.Stack())).Msgf("snyk-ls: recovered panic in background initialization: %v", r)
