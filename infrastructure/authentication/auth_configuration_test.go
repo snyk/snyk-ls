@@ -29,6 +29,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/auth"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -620,4 +621,68 @@ func Test_NewOauthProvider_oauthProvider_created_with_injected_refreshMethod(t *
 	assert.Eventuallyf(t, func() bool {
 		return <-triggeredChan
 	}, 5*time.Second, 100*time.Millisecond, "refresh should have been triggered")
+}
+
+// Test_DefaultRefresherFunc_RefreshFailureOutsideIsAuthenticated_DoesNotNotify documents
+// the current, intentional behavior for IDE-2178: Default()'s refresherFunc no longer
+// calls back into AuthenticationService.IsAuthenticated() on refresh failure (that
+// reentrant call used to deadlock singleflight, see auth_service_impl.go history).
+//
+// This drives the authenticator the exact way GAF's networking layer would for an
+// ordinary authenticated API call (AddAuthenticationHeader), not via
+// AuthenticationService.IsAuthenticated(), and asserts no notification fires - proving
+// there is no proactive, standalone notification for a refresh failure taken on this
+// path. Whatever caller made the API call (e.g. the scanner) must interpret the returned
+// error itself, exactly as before this closure existed.
+func Test_DefaultRefresherFunc_RefreshFailureOutsideIsAuthenticated_DoesNotNotify(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+
+	// Token endpoint that always rejects the refresh, simulating an expired/revoked
+	// refresh token that can no longer be exchanged for a new access token.
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"invalid_grant"}`))
+	}))
+	t.Cleanup(tokenServer.Close)
+
+	// Must be set before Default()/NewOAuthProvider() construct the authenticator, since
+	// the OAuth2 endpoint config (including the token URL used for refresh) is captured
+	// at construction time.
+	conf.Set(configuration.API_URL, tokenServer.URL)
+
+	expiredToken := oauth2.Token{
+		AccessToken:  "expired-access",
+		RefreshToken: "expired-refresh",
+		Expiry:       time.Now().Add(-1 * time.Hour),
+	}
+	tokenBytes, err := json.Marshal(expiredToken)
+	require.NoError(t, err)
+	conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, string(tokenBytes))
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(
+		engine,
+		tokenService,
+		nil,
+		error_reporting.NewTestErrorReporter(engine),
+		mockNotifier,
+		testutil.DefaultConfigResolver(engine),
+	)
+
+	authProvider := Default(engine, service)
+	oauthProvider, ok := authProvider.(*OAuth2Provider)
+	require.True(t, ok)
+
+	// This is the same method GAF's networking middleware calls on every outbound
+	// request (networking.go:AddHeaders -> middleware.AddAuthenticationHeader ->
+	// Authenticator.AddAuthenticationHeader) - i.e. what a real scan or whoami call
+	// triggers, as opposed to AuthenticationService.IsAuthenticated().
+	err = oauthProvider.Authenticator().AddAuthenticationHeader(httptest.NewRequest(http.MethodGet, "/", nil))
+
+	assert.Error(t, err, "expected the failing token endpoint to produce a refresh error")
+	assert.Equal(t, 0, mockNotifier.SendShowMessageCount(),
+		"a refresh failure reached outside of IsAuthenticated() currently produces no user-facing notification")
 }
