@@ -17,6 +17,7 @@
 package codeaction_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -108,7 +109,7 @@ func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
 	var issues []types.Issue
 	providerMock := mock_snyk.NewMockIssueProvider(ctrl)
 	providerMock.EXPECT().IssuesForRange(gomock.Any(), gomock.Any()).Return(issues)
-	service := codeaction.NewService(engine, providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), featureflag.NewFakeService(), types.NewConfigResolver(engine.GetLogger()))
+	service := codeaction.NewService(engine, providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), featureflag.NewFakeService(), types.NewConfigResolver(engine.GetLogger()), nil)
 	codeActionsParam := types.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
 			URI: documentUriExample,
@@ -122,6 +123,122 @@ func Test_GetCodeActions_NoIssues_ReturnsNil(t *testing.T) {
 
 	// Assert
 	assert.Nil(t, actions)
+}
+
+// Test_ResolveCodeAction_CacheEntryPresentDuringDeferredEdit verifies that the
+// cache entry for a code action is still present while the deferred edit is
+// executing, and is removed only after ResolveCodeAction returns. This ensures
+// that a client retry arriving while the first resolve is still computing can
+// still find the entry instead of receiving a hard "not found" error.
+func Test_ResolveCodeAction_CacheEntryPresentDuringDeferredEdit(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	id := uuid.New()
+
+	// svcRef holds the service pointer so the deferred-edit closure can call
+	// CacheLenForTest without a forward-reference compile error.
+	var svcRef *codeaction.CodeActionsService
+
+	// cacheLenDuringEdit captures the cache length as observed from inside the deferred edit.
+	var cacheLenDuringEdit int
+	deferredEdit := func(_ context.Context) *types.WorkspaceEdit {
+		// While the edit is running, the entry must still be in the cache so
+		// that a concurrent retry can find it.
+		cacheLenDuringEdit = codeaction.CacheLenForTest(svcRef)
+		return nil
+	}
+
+	issue := &snyk.Issue{
+		CodeActions: []types.CodeAction{
+			&snyk.CodeAction{
+				Title:         "Fix with remy",
+				OriginalTitle: "Fix with remy",
+				DeferredEdit:  &deferredEdit,
+				Uuid:          &id,
+			},
+		},
+	}
+
+	service, _, _ := setupWithSingleIssue(t, engine, issue)
+	svcRef = service
+
+	// Populate the cache.
+	params := types.CodeActionParams{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: documentUriExample},
+		Range:        exampleRange,
+		Context:      types.CodeActionContext{},
+	}
+	actions := service.GetCodeActions(params)
+	assert.Equal(t, 1, codeaction.CacheLenForTest(service), "cache must hold exactly one entry after GetCodeActions")
+
+	// Resolve the action — this invokes deferredEdit, which reads cacheLenDuringEdit.
+	lspAction := actions[0]
+	_, err := service.ResolveCodeAction(t.Context(), lspAction)
+	assert.NoError(t, err)
+
+	// The entry must have been present during the edit (i.e. not yet deleted).
+	assert.Equal(t, 1, cacheLenDuringEdit,
+		"cache entry must still be present while the deferred edit is executing")
+	// After ResolveCodeAction returns the entry must be gone.
+	assert.Equal(t, 0, codeaction.CacheLenForTest(service),
+		"cache entry must be removed after ResolveCodeAction returns")
+}
+
+// Test_ResolveCodeAction_PanicInDeferredEdit_CacheEntryRemoved verifies that
+// the cache entry is deleted even when the deferred edit function panics. If
+// the delete is done with an explicit (non-deferred) block after the edit call,
+// a panic aborts that path and the entry leaks forever. With a defer the entry
+// is always cleaned up.
+//
+// The test:
+//  1. Caches an action whose deferred edit panics.
+//  2. Calls ResolveCodeAction — the caller recovers the panic (simulating the
+//     jrpc2 handler recovery), so the goroutine stays alive.
+//  3. Asserts that the cache length is 0 after recovery (entry must be gone).
+func Test_ResolveCodeAction_PanicInDeferredEdit_CacheEntryRemoved(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	id := uuid.New()
+	deferredEdit := func(_ context.Context) *types.WorkspaceEdit {
+		panic("simulated provider panic")
+	}
+
+	issue := &snyk.Issue{
+		CodeActions: []types.CodeAction{
+			&snyk.CodeAction{
+				Title:         "Fix with remy",
+				OriginalTitle: "Fix with remy",
+				DeferredEdit:  &deferredEdit,
+				Uuid:          &id,
+			},
+		},
+	}
+
+	service, _, _ := setupWithSingleIssue(t, engine, issue)
+
+	// Populate the cache.
+	params := types.CodeActionParams{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: documentUriExample},
+		Range:        exampleRange,
+		Context:      types.CodeActionContext{},
+	}
+	actions := service.GetCodeActions(params)
+	assert.Equal(t, 1, codeaction.CacheLenForTest(service),
+		"cache must hold exactly one entry after GetCodeActions")
+
+	lspAction := actions[0]
+
+	// Invoke ResolveCodeAction and recover the panic (mimicking jrpc2 recovery).
+	func() {
+		defer func() { _ = recover() }()
+		_, _ = service.ResolveCodeAction(t.Context(), lspAction)
+	}()
+
+	// Whether the delete used defer or an explicit block determines whether the
+	// entry survives the panic. With defer it must be gone; with an explicit
+	// block it leaks (CacheLen would be 1).
+	assert.Equal(t, 0, codeaction.CacheLenForTest(service),
+		"cache entry must be removed even when the deferred edit panics")
 }
 
 func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
@@ -140,7 +257,7 @@ func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
 			"someUri": {mockTextEdit},
 		},
 	}
-	deferredEdit := func() *types.WorkspaceEdit {
+	deferredEdit := func(_ context.Context) *types.WorkspaceEdit {
 		return mockEdit
 	}
 	id := uuid.New()
@@ -159,7 +276,7 @@ func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
 	// Act
 	actions := service.GetCodeActions(codeActionsParam)
 	actionFromRequest := actions[0]
-	resolvedAction, _ := service.ResolveCodeAction(actionFromRequest)
+	resolvedAction, _ := service.ResolveCodeAction(t.Context(), actionFromRequest)
 
 	// Assert
 	assert.NotNil(t, resolvedAction)
@@ -167,6 +284,70 @@ func Test_ResolveCodeAction_ReturnsCorrectEdit(t *testing.T) {
 	assert.Nil(t, actionFromRequest.Edit)
 	assert.Nil(t, actionFromRequest.Command)
 	assert.NotNil(t, resolvedAction.Edit)
+}
+
+// Test_ResolveCodeAction_NilDeferredEdit_NoPanic verifies that resolving a cached
+// action whose DeferredEdit is nil (e.g. a command-only CodeAction) does not panic.
+// Previously, the code unconditionally dereferenced GetDeferredEdit(), causing a
+// nil-pointer panic for command-only actions.
+func Test_ResolveCodeAction_NilDeferredEdit_NoPanic(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	// Build a deferred action with a command but no edit (DeferredEdit == nil).
+	deferredCmd := func() *types.CommandData {
+		return &types.CommandData{CommandId: "some.command"}
+	}
+	id := uuid.New()
+	action := &snyk.CodeAction{
+		Title:           "Command only",
+		OriginalTitle:   "Command only",
+		DeferredCommand: &deferredCmd,
+		Uuid:            &id,
+	}
+	// DeferredEdit is nil — this is the scenario under test.
+	if action.GetDeferredEdit() != nil {
+		t.Fatal("test setup error: DeferredEdit must be nil for this test")
+	}
+
+	issue := &snyk.Issue{}
+
+	// Wire a service and manually populate the cache by embedding the action in an issue.
+	_, _ = workspaceutil.SetupWorkspace(t, engine, types.FilePath("/path/to"))
+	ctrl := gomock.NewController(t)
+	providerMock := mock_snyk.NewMockIssueProvider(ctrl)
+	providerMock.EXPECT().IssuesForRange(gomock.Any(), gomock.Any()).
+		Return([]types.Issue{issue}).AnyTimes()
+	// The issue carries the action so GetCodeActions caches it.
+	issue.CodeActions = []types.CodeAction{action}
+
+	service := codeaction.NewService(engine, providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), featureflag.NewFakeService(), types.NewConfigResolver(engine.GetLogger()), nil)
+	codeActionsParam := types.CodeActionParams{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: documentUriExample},
+		Range:        exampleRange,
+		Context:      types.CodeActionContext{},
+	}
+
+	// Populate the cache via GetCodeActions.
+	actions := service.GetCodeActions(codeActionsParam)
+
+	// Find the action with a Data field (deferred/cached actions have Data set).
+	var cachedAction *types.LSPCodeAction
+	for i := range actions {
+		if actions[i].Data != nil {
+			cachedAction = &actions[i]
+			break
+		}
+	}
+	if cachedAction == nil {
+		t.Skip("no cached action found; test setup may have changed")
+		return
+	}
+
+	// Must not panic even though DeferredEdit is nil.
+	resolved, err := service.ResolveCodeAction(t.Context(), *cachedAction)
+	assert.NoError(t, err, "resolving a command-only action must not error")
+	// Without a deferred edit the resolved action must have no edit.
+	assert.Nil(t, resolved.Edit, "command-only action must produce no edit")
 }
 
 func Test_ResolveCodeAction_KeyDoesNotExist_ReturnError(t *testing.T) {
@@ -184,7 +365,7 @@ func Test_ResolveCodeAction_KeyDoesNotExist_ReturnError(t *testing.T) {
 
 	// Act
 	var err error
-	_, err = service.ResolveCodeAction(ca)
+	_, err = service.ResolveCodeAction(t.Context(), ca)
 
 	// Assert
 	assert.Error(t, err, "Expected error when resolving a code action with a key that doesn't exist")
@@ -201,7 +382,7 @@ func Test_ResolveCodeAction_KeyAndCommandIsNull_ReturnsError(t *testing.T) {
 		Data:    nil,
 	}
 
-	_, err := service.ResolveCodeAction(ca)
+	_, err := service.ResolveCodeAction(t.Context(), ca)
 	assert.Error(t, err, "Expected error when resolving a code action with a null key")
 	assert.True(t, codeaction.IsMissingKeyError(err))
 }
@@ -217,7 +398,7 @@ func Test_ResolveCodeAction_KeyIsNull_ReturnsCodeAction(t *testing.T) {
 		Data:    nil,
 	}
 
-	actual, err := service.ResolveCodeAction(expected)
+	actual, err := service.ResolveCodeAction(t.Context(), expected)
 	assert.NoError(t, err, "Expected error when resolving a code action with a null key")
 	assert.Equal(t, expected.Command.Command, actual.Command.Command)
 }
@@ -281,7 +462,7 @@ func setupService(t *testing.T, engine workflow.Engine) *codeaction.CodeActionsS
 
 	providerMock := mock_snyk.NewMockIssueProvider(gomock.NewController(t))
 	providerMock.EXPECT().IssuesForRange(gomock.Any(), gomock.Any()).Return([]types.Issue{}).AnyTimes()
-	service := codeaction.NewService(engine, providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), featureflag.NewFakeService(), types.NewConfigResolver(engine.GetLogger()))
+	service := codeaction.NewService(engine, providerMock, watcher.NewFileWatcher(), notification.NewMockNotifier(), featureflag.NewFakeService(), types.NewConfigResolver(engine.GetLogger()), nil)
 	return service
 }
 
@@ -299,7 +480,7 @@ func setupWithSingleIssue(t *testing.T, engine workflow.Engine, issue types.Issu
 	issues := []types.Issue{issue}
 	providerMock.EXPECT().IssuesForRange(path, converter.FromRange(r)).Return(issues).AnyTimes()
 	fileWatcher := watcher.NewFileWatcher()
-	service := codeaction.NewService(engine, providerMock, fileWatcher, notification.NewMockNotifier(), featureflag.NewFakeService(), types.NewConfigResolver(engine.GetLogger()))
+	service := codeaction.NewService(engine, providerMock, fileWatcher, notification.NewMockNotifier(), featureflag.NewFakeService(), types.NewConfigResolver(engine.GetLogger()), nil)
 
 	codeActionsParam := types.CodeActionParams{
 		TextDocument: sglsp.TextDocumentIdentifier{
