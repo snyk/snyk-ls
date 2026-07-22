@@ -65,7 +65,7 @@ func Test_ExecuteCommand_CanceledCommand_ReturnsCancellationWithoutError(t *test
 	notifier := notification.NewMockNotifier()
 	authService := authentication.NewAuthenticationService(engine, tokenService, blockingProvider, error_reporting.NewTestErrorReporter(engine), notifier, resolver)
 
-	service := NewService(engine, engine.GetLogger(), authService, featureflag.NewFakeService(), notifier, nil, nil, nil, nil, mock_command.NewMockLdxSyncService(ctrl), resolver, nil)
+	service := NewService(engine, engine.GetLogger(), authService, featureflag.NewFakeService(), notifier, nil, nil, nil, nil, mock_command.NewMockLdxSyncService(ctrl), resolver, nil, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
