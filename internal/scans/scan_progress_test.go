@@ -18,6 +18,7 @@ package scans
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,6 +26,37 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// TestScanProgress_CancelScan_WithCancelFunc_ImmediateWithoutListener verifies that
+// CancelScan() with a registered cancel func does NOT block waiting for Listen() to
+// be scheduled. This is the regression test for IDE-2099: when many scans are queued
+// concurrently the Listen goroutine may not have been scheduled before CancelScan is
+// called; without SetCancelFunc the cancel signal is lost until a 5-second timeout,
+// allowing the superseded scan's Execute timer to fire and increment finishedScans.
+func TestScanProgress_CancelScan_WithCancelFunc_ImmediateWithoutListener(t *testing.T) {
+	logger := zerolog.Nop()
+	sp := NewScanProgressWithLogger(&logger)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	sp.SetCancelFunc(cancel)
+	// Intentionally do NOT start Listen() — CancelScan must not block.
+
+	done := make(chan struct{})
+	go func() {
+		sp.CancelScan()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Expected: returned immediately without waiting for a channel receiver.
+	case <-time.After(time.Second):
+		assert.Fail(t, "CancelScan blocked even though SetCancelFunc was called — goroutine-readiness race not fixed")
+	}
+
+	assert.True(t, sp.IsDone())
+	assert.ErrorIs(t, ctx.Err(), context.Canceled, "context must be canceled by CancelScan")
+}
 
 func TestScanProgress_SetDone_DoesNotBlockAfterContextCanceled(t *testing.T) {
 	logger := zerolog.Nop()
@@ -110,6 +142,47 @@ func TestScanProgress_CancelScan_MarksIsDone(t *testing.T) {
 	}
 
 	assert.True(t, sp.IsDone())
+}
+
+// TestScanProgress_SetCancelFunc_CancelScan_NoRace verifies that concurrent
+// SetCancelFunc and CancelScan on the same *ScanProgress do not race on
+// sp.cancelFunc. Without the mutex in SetCancelFunc the Go race detector
+// reports a DATA RACE on that field.
+//
+// Design note: a cancel func is pre-registered so CancelScan never falls into
+// the 5-second legacy-channel fallback. A start barrier synchronizes the two
+// goroutines so they race as tightly as possible.
+func TestScanProgress_SetCancelFunc_CancelScan_NoRace(t *testing.T) {
+	logger := zerolog.Nop()
+
+	for i := 0; i < 500; i++ {
+		sp := NewScanProgressWithLogger(&logger)
+
+		// Pre-register a cancel func so CancelScan never blocks in the legacy path.
+		_, preCancel := context.WithCancel(context.Background())
+		sp.SetCancelFunc(preCancel)
+
+		_, newCancel := context.WithCancel(context.Background())
+
+		barrier := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+			<-barrier
+			sp.SetCancelFunc(newCancel) // concurrent write — SetCancelFunc holds sp.mutex; race detector confirms no data race
+		}()
+
+		go func() {
+			defer wg.Done()
+			<-barrier
+			sp.CancelScan() // reads sp.cancelFunc under mutex
+		}()
+
+		close(barrier) // release both goroutines simultaneously
+		wg.Wait()
+	}
 }
 
 func TestScanProgress_SetDone_SafeToCallMultipleTimes(t *testing.T) {
