@@ -18,11 +18,13 @@ package command
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -167,6 +169,97 @@ func TestLoginCommand_Execute_InvalidAuthMethodArg_ReturnsError(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Nil(t, result)
+}
+
+func TestLoginCommand_Execute_CanceledAuth_NotReportedToUser(t *testing.T) {
+	// When the IDE cancels an in-flight login via $/cancelRequest, Authenticate returns a
+	// cancellation. Execute must treat it as expected: return the error without notifying the user.
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	setMockWorkspace(t, ctrl, conf)
+
+	blockingProvider := authentication.NewBlockingFakeAuthProvider()
+	notifier := notification.NewMockNotifier()
+	authService := authentication.NewAuthenticationService(engine, ts, blockingProvider, error_reporting.NewTestErrorReporter(engine), notifier, testutil.DefaultConfigResolver(engine))
+
+	cmd := loginCommand{
+		command:            types.CommandData{CommandId: types.LoginCommand},
+		authService:        authService,
+		featureFlagService: featureflag.NewFakeService(),
+		notifier:           notifier,
+		engine:             engine,
+		ldxSyncService:     mock_command.NewMockLdxSyncService(ctrl),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan struct{})
+	var result any
+	var err error
+	go func() {
+		result, err = cmd.Execute(ctx)
+		close(done)
+	}()
+
+	// Cancel once the provider's Authenticate has entered and is blocking on the context.
+	select {
+	case <-blockingProvider.Started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("auth did not start in time")
+	}
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Execute did not return after cancellation")
+	}
+
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Nil(t, result)
+	assert.Zero(t, notifier.SendErrorCount(), "a canceled login must not be surfaced to the user")
+}
+
+func TestLoginCommand_Execute_TimedOut_NotifiesButReturnsNoError(t *testing.T) {
+	// A login timeout (e.g. the user didn't complete the OAuth browser flow) is a user-facing,
+	// retryable outcome, not a defect: the user is told, but no error is returned — returning one would
+	// be reported to Sentry by the command handler. Scoping the "don't report" decision here keeps
+	// genuine timeouts elsewhere (scans, API calls) visible in error tracking.
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+	setMockWorkspace(t, ctrl, conf)
+
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	provider.AuthenticateErr = fmt.Errorf("oauth authentication timed out: %w", context.DeadlineExceeded)
+	notifier := notification.NewMockNotifier()
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notifier, testutil.DefaultConfigResolver(engine))
+
+	cmd := loginCommand{
+		command:            types.CommandData{CommandId: types.LoginCommand},
+		authService:        authService,
+		featureFlagService: featureflag.NewFakeService(),
+		notifier:           notifier,
+		engine:             engine,
+		ldxSyncService:     mock_command.NewMockLdxSyncService(ctrl),
+	}
+
+	result, err := cmd.Execute(t.Context())
+
+	require.NoError(t, err, "a login timeout must not be returned as an error (would be reported to Sentry)")
+	assert.Nil(t, result)
+	assert.Zero(t, notifier.SendErrorCount(), "a timeout must not surface the raw wrapped error to the user")
+	require.Equal(t, 1, notifier.SendShowMessageCount(), "the user must be told the login timed out")
+	msg, ok := notifier.SentMessages()[0].(sglsp.ShowMessageParams)
+	require.True(t, ok, "expected a ShowMessage notification")
+	assert.EqualValues(t, sglsp.MTWarning, msg.Type)
+	assert.Equal(t, "Snyk sign-in timed out. Please try again.", msg.Message)
+	assert.NotContains(t, msg.Message, "context deadline exceeded", "the friendly message must not leak developer jargon")
 }
 
 func TestApplyAuthConfig_EndpointChange_LogsOutAndClearsWorkspace(t *testing.T) {

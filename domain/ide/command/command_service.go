@@ -36,6 +36,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 var instance types.CommandService
@@ -102,9 +103,14 @@ func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.
 	result, err := command.Execute(ctx)
 	if err != nil {
 		var snykErr snyk_errors.Error
-		if errors.As(err, &snykErr) {
+		switch {
+		case util.IsCancellation(err):
+			// A canceled command (e.g. a login the IDE canceled via $/cancelRequest) is expected,
+			// not a failure: log at debug so it isn't reported as an error downstream.
+			logger.Debug().Msgf("command %s canceled", commandData.CommandId)
+		case errors.As(err, &snykErr):
 			logger.Err(err).Str("detail", snykErr.Detail).Msg("failed to execute command")
-		} else {
+		default:
 			logger.Err(err).Msg("failed to execute command")
 		}
 	}

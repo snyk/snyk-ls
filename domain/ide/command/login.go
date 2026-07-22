@@ -23,6 +23,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
@@ -90,10 +91,10 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 	}
 
 	if n == 3 {
-		// Cancel any in-progress auth before reconfiguring providers. ConfigureProviders
-		// (called inside applyAuthConfig) acquires the same mutex as Authenticate. Without
-		// canceling first, a blocking Authenticate holds the mutex and ConfigureProviders
-		// deadlocks — preventing the new login from ever starting.
+		// Cancel any in-progress auth before reconfiguring providers: a login always supersedes an
+		// in-flight login, so the previous one is aborted and its now-stale result is discarded by the
+		// ctx.Err() guard in Authenticate. This cancel is unconditional, unlike ApplyAuthMethodChange
+		// which only cancels when the method actually changes.
 		cmd.authService.CancelOngoingAuth()
 		if err := cmd.applyAuthConfig(ctx, conf, logger); err != nil {
 			logger.Err(err).Msg("Error applying auth config from login command arguments")
@@ -116,6 +117,21 @@ func (cmd *loginCommand) Execute(ctx context.Context) (any, error) {
 
 	token, err := cmd.authService.Authenticate(ctx)
 	if err != nil {
+		// A canceled login (e.g. the IDE canceled it via $/cancelRequest when the user switched auth
+		// method, retried Authenticate, or logged out) is expected, not a failure: log at debug and
+		// don't notify the user.
+		if util.IsCancellation(err) {
+			logger.Debug().Str("method", "loginCommand.Execute").Msg("login canceled")
+			return nil, err
+		}
+		// A login timeout (e.g. the user didn't complete the browser flow) is a user-facing, retryable
+		// outcome, not a defect: tell the user, but return no error so the command handler doesn't
+		// report it to Sentry. Scoping this here keeps genuine timeouts elsewhere reportable.
+		if util.IsTimeout(err) {
+			logger.Debug().Str("method", "loginCommand.Execute").Msg("login timed out")
+			cmd.notifier.SendShowMessage(sglsp.MTWarning, "Snyk sign-in timed out. Please try again.")
+			return nil, nil
+		}
 		logger.Err(err).Msg("Error on snyk.login command")
 		cmd.notifier.SendError(err)
 	}
