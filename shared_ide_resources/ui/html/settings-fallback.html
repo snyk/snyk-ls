@@ -59,6 +59,10 @@
       --border-color: var(--vscode-panel-border, #454545);
       --focus-border: var(--vscode-focusBorder, #007acc);
 
+      /* Buttons */
+      --button-background: var(--vscode-button-background, #0e639c);
+      --button-foreground: var(--vscode-button-foreground, #ffffff);
+
       /* Other */
       --border-radius: 4px;
       --border-radius-small: 2px;
@@ -213,6 +217,29 @@
       display: none !important;
     }
 
+    /* Logout control */
+    .logout-status {
+      margin: 0 0 var(--form-group-margin) 0;
+      color: var(--text-color);
+    }
+
+    .logout-button {
+      align-self: flex-start;
+      padding: var(--input-padding) 16px;
+      background-color: var(--button-background);
+      color: var(--button-foreground);
+      border: 1px solid var(--button-background);
+      border-radius: var(--border-radius-small);
+      font-family: inherit;
+      font-size: inherit;
+      cursor: pointer;
+    }
+
+    .logout-button:focus {
+      outline: 1px solid var(--focus-border);
+      outline-offset: 2px;
+    }
+
     /* Info Message */
     .info-message {
       padding: var(--section-padding);
@@ -309,6 +336,11 @@
 </div>
   <div class="section">
     <h2>Authentication</h2>
+
+    <div class="form-group">
+      <p id="logout-status" class="logout-status">If Snyk is stuck, clear your stored credentials to recover, then reopen Settings to sign in again.</p>
+      <button type="button" id="logout-button" class="logout-button">Log out</button>
+    </div>
 
     <div class="form-group half-width">
       <label class="checkbox-label">
@@ -502,10 +534,28 @@
       }
     };
 
+    // Dispatch snyk.logout through the IDE command bridge to clear stored credentials.
+    // Logout is synchronous and idempotent — no in-flight latch or timer needed.
+    function startLogout() {
+      if (typeof window.__ideExecuteCommand__ !== 'function') { return; }
+      var statusEl = get('logout-status');
+      function done() {
+        if (statusEl) {
+          statusEl.textContent = 'Signed out. Your stored credentials were cleared — reopen Settings to sign in again.';
+        }
+      }
+      try {
+        window.__ideExecuteCommand__('snyk.logout', [], done);
+      } catch (e) {
+        console.error('Error logging out:', e);
+      }
+    }
+
     window.__isFormDirty__ = function() { return isDirty(); };
     window.collectData = collectData;
     window.collectChangedData = collectChangedData;
     window.markDirty = markDirty;
+    window.startLogout = startLogout;
 
     function repositionTooltip(trigger) {
       var popup = trigger.querySelector('.tooltip-popup');
@@ -565,6 +615,11 @@
 
       get('cli_release_channel_custom').addEventListener('input', validateCliVersion);
       get('cli_release_channel_custom').addEventListener('blur', validateCliVersion);
+
+      var logoutBtn = get('logout-button');
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', startLogout);
+      }
 
       var tooltipTriggers = document.querySelectorAll('[data-toggle="tooltip"]');
       for (var k = 0; k < tooltipTriggers.length; k++) {

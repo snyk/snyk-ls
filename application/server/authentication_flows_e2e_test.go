@@ -268,6 +268,71 @@ func Test_E2E_EndpointChangeDuringScannerInitClearsToken(t *testing.T) {
 	assert.Equal(t, "https://api.changed.example", types.GetGlobalString(engine.GetConfiguration(), types.SettingApiEndpoint))
 }
 
+// Test_E2E_LogoutDuringScannerInitClearsCredentials is the acceptance test for
+// the IDE-2181 fallback-page logout control. A user on the limited settings
+// fallback page can clear their stored Snyk credentials even while the Language
+// Server is inside the failing-startup window (CP1 keeps workspace/executeCommand
+// serviceable during that window; the logout command does not require scanner init
+// to complete). RED before CP1; GREEN after.
+func Test_E2E_LogoutDuringScannerInitClearsCredentials(t *testing.T) {
+	engine, tokenService := newAuthFlowE2EEngine(t, "http://127.0.0.1", filepath.Join(t.TempDir(), "ls-config.json"))
+	engine.GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT, "IDE-2181-logout-during-init")
+
+	// A scanner whose Init blocks stands in for the failing startup token-refresh
+	// storm, so the late scanner-ready signal never fires during the test window.
+	sc := newBlockingInitScanner()
+	// Release the blocked Init before server-shutdown cleanup runs (t.Cleanup is LIFO
+	// and startE2ELocalServer registers its shutdown after this defer), so the
+	// background init goroutine ends against a live engine.
+	defer close(sc.release)
+
+	loc, _, _ := startE2ELocalServer(t, engine, tokenService, func(deps di.Dependencies) di.Dependencies {
+		deps.Scanner = sc
+		return deps
+	})
+
+	// Prevent the released background init goroutine from triggering an auto-scan
+	// against a teardown-in-progress engine; this test only exercises the credential
+	// clear, not scanning.
+	disableAutoScan(t, engine.GetConfiguration())
+
+	require.NoError(t, initializeLSPClientOnly(t, loc, types.InitializeParams{}))
+	require.NoError(t, initializedLSPClient(t, loc))
+
+	// Precondition: scanner Init is blocked, so the late scanner-ready signal is
+	// still false — we are inside the init window.
+	<-sc.started
+	require.False(t, engine.GetConfiguration().GetBool(types.SettingIsLspInitialized),
+		"precondition: scanner-ready signal must still be false during the init window")
+
+	// Establish credentials that the stuck user would have in the failing-startup state.
+	apiToken := "44444444-4444-4444-8444-444444444444"
+	_, err := loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", types.DidChangeConfigurationParams{
+		Settings: types.LspConfigurationParam{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingAuthenticationMethod: {Value: string(types.TokenAuthentication), Changed: true},
+				types.SettingToken:                {Value: apiToken, Changed: true},
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, apiToken, config.GetToken(engine.GetConfiguration()))
+
+	// Dispatch snyk.logout DURING the init window — this is what the fallback page's
+	// Log out button does via window.__ideExecuteCommand__.
+	_, err = loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		Command: types.LogoutCommand,
+	})
+	require.NoError(t, err)
+
+	// Credentials must be cleared immediately even while the scanner is still
+	// initializing. We assert the credential directly: the $/snyk.hasAuthenticated
+	// notification is deferred behind WaitForLspInitialized (scanner readiness), which
+	// has not fired yet, but the credential itself is cleared synchronously.
+	assert.Empty(t, config.GetToken(engine.GetConfiguration()),
+		"credentials must be cleared when snyk.logout is dispatched during scanner init")
+}
+
 func Test_E2E_IsAuthenticatedFalseSkipsActiveUserLookup(t *testing.T) {
 	engine, tokenService := newAuthFlowE2EEngine(t, "http://127.0.0.1", filepath.Join(t.TempDir(), "ls-config.json"))
 	engine.GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT, "IDE-1900-is-authenticated")
