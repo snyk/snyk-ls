@@ -82,6 +82,13 @@ func (fixHandler *AiFixHandler) GetResults(fixId string) (filePath string, diff 
 	return "", "", fmt.Errorf("no suggestion found for fixId: %s", fixId)
 }
 
+// EnrichWithExplain fills in the Explanation for the given suggestions.
+//
+// The AI Explain service is being deprecated: newer Agent Fix responses already include an
+// explanation per suggestion, which is carried through on AutofixUnifiedDiffSuggestion.Explanation.
+// We therefore only fall back to the (deprecated) AI Explain service for suggestions whose
+// explanation is missing - for example when the response is served by an older Agent Fix backend
+// version. When every suggestion already has an explanation, we skip the call entirely.
 func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, engine workflow.Engine, issue types.Issue, suggestions []llm.AutofixUnifiedDiffSuggestion) {
 	if !shouldRunExplain {
 		return
@@ -91,6 +98,22 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, engine wo
 		logger.Debug().Msgf("EnrichWithExplain context canceled")
 		return
 	}
+	if len(suggestions) == 0 {
+		return
+	}
+
+	// Only suggestions that are missing an explanation need the deprecated AI Explain call.
+	missingIndices := make([]int, 0, len(suggestions))
+	for i := range suggestions {
+		if suggestions[i].Explanation == "" {
+			missingIndices = append(missingIndices, i)
+		}
+	}
+	if len(missingIndices) == 0 {
+		logger.Debug().Msg("All suggestions already contain an explanation, skipping AI Explain call")
+		return
+	}
+
 	contextWithCancel, cancelFunc := context.WithTimeout(ctx, explainTimeout)
 	defer cancelFunc()
 
@@ -98,11 +121,10 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, engine wo
 	fixHandler.explainCancelFunc = cancelFunc
 	fixHandler.mu.Unlock()
 
-	if len(suggestions) == 0 {
-		return
+	diffs := make([]string, 0, len(missingIndices))
+	for _, idx := range missingIndices {
+		diffs = append(diffs, getDiffForSuggestion(suggestions[idx]))
 	}
-	var diffs []string
-	diffs = getDiffListFromSuggestions(suggestions, diffs)
 	deepCodeLLMBinding := llm.NewDeepcodeLLMBinding(
 		llm.WithLogger(engine.GetLogger()),
 		llm.WithOutputFormat(llm.HTML),
@@ -120,12 +142,12 @@ func (fixHandler *AiFixHandler) EnrichWithExplain(ctx context.Context, engine wo
 		logger.Error().Err(err).Msgf("Failed to explain with explain for issue %s", issue.GetID())
 		return
 	}
-	for i, diff := range diffs {
+	for i, idx := range missingIndices {
 		if i >= len(explanations) {
-			logger.Debug().Msgf("Failed to get explanation for issue with diff index %v diff %s", i, diff)
+			logger.Debug().Msgf("Failed to get explanation for suggestion index %v", idx)
 			break
 		}
-		suggestions[i].Explanation = explanations[i]
+		suggestions[idx].Explanation = explanations[i]
 	}
 }
 
@@ -146,16 +168,13 @@ func getExplainEndpoint(engine workflow.Engine, folder types.FilePath) (*url.URL
 	return endpoint, nil
 }
 
-func getDiffListFromSuggestions(suggestions []llm.AutofixUnifiedDiffSuggestion, diffs []string) []string {
+func getDiffForSuggestion(suggestion llm.AutofixUnifiedDiffSuggestion) string {
 	// Suggestion diffs may be coming from different files
-	for i := range suggestions {
-		diff := ""
-		for _, v := range suggestions[i].UnifiedDiffsPerFile {
-			diff += v
-		}
-		diffs = append(diffs, diff)
+	diff := ""
+	for _, v := range suggestion.UnifiedDiffsPerFile {
+		diff += v
 	}
-	return diffs
+	return diff
 }
 
 func (fixHandler *AiFixHandler) SetAiFixDiffState(state AiStatus, suggestions []llm.AutofixUnifiedDiffSuggestion, err error, callback func()) {
