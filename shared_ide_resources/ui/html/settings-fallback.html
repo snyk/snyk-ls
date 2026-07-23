@@ -62,6 +62,10 @@
       /* Buttons */
       --button-background: var(--vscode-button-background, #0e639c);
       --button-foreground: var(--vscode-button-foreground, #ffffff);
+      --button-hover-background: var(--vscode-button-hoverBackground, #1177bb);
+      --button-secondary-background: var(--vscode-button-secondaryBackground, #3a3d41);
+      --button-secondary-foreground: var(--vscode-button-secondaryForeground, #ffffff);
+      --button-secondary-hover-background: var(--vscode-button-secondaryHoverBackground, #45494e);
 
       /* Other */
       --border-radius: 4px;
@@ -226,13 +230,18 @@
     .logout-button {
       align-self: flex-start;
       padding: var(--input-padding) 16px;
-      background-color: var(--button-background);
-      color: var(--button-foreground);
-      border: 1px solid var(--button-background);
+      background-color: var(--button-secondary-background);
+      color: var(--button-secondary-foreground);
+      border: none;
       border-radius: var(--border-radius-small);
       font-family: inherit;
       font-size: inherit;
+      font-weight: 600;
       cursor: pointer;
+    }
+
+    .logout-button:hover {
+      background-color: var(--button-secondary-hover-background);
     }
 
     .logout-button:focus {
@@ -338,8 +347,8 @@
     <h2>Authentication</h2>
 
     <div class="form-group">
-      <p id="logout-status" class="logout-status">If Snyk is stuck, clear your stored credentials to recover, then reopen Settings to sign in again.</p>
-      <button type="button" id="logout-button" class="logout-button">Log out</button>
+      <p id="logout-status" class="logout-status hidden" aria-live="polite"></p>
+      <button type="button" id="logout-button" class="logout-button">Clear credentials</button>
     </div>
 
     <div class="form-group half-width">
@@ -541,6 +550,7 @@
       var statusEl = get('logout-status');
       function done() {
         if (statusEl) {
+          statusEl.className = statusEl.className.replace(/\bhidden\b/, '').trim();
           statusEl.textContent = 'Signed out. Your stored credentials were cleared — reopen Settings to sign in again.';
         }
       }

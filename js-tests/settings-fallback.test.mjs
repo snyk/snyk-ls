@@ -301,6 +301,11 @@ test("settings-fallback: the authentication section offers a log out control and
   const win = await buildFallbackDom();
   const logoutBtn = win.document.getElementById("logout-button");
   assert.ok(logoutBtn, "a log out control (#logout-button) must exist");
+  assert.strictEqual(
+    logoutBtn.textContent.trim(),
+    "Clear credentials",
+    'log out control label must be "Clear credentials"'
+  );
 
   // No login/"Connect" control must be present.
   assert.ok(
@@ -358,7 +363,7 @@ test("settings-fallback: after logout the status copy confirms credentials were 
   // Before done fires the status copy is the default prompt.
   const status = win.document.getElementById("logout-status");
   const textBefore = status.textContent.trim();
-  assert.ok(textBefore.length > 0, "status copy must be present before logout");
+  assert.strictEqual(textBefore.length, 0, "status copy must be empty before logout");
 
   // Fire the done callback (LS confirmed credentials cleared).
   captured();
