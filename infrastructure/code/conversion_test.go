@@ -71,7 +71,7 @@ const conversionTestInnerSarif = `{
               }
             }
           ],
-          "fingerprints": { "0": "", "1": "fp-a", "identity": "id-a" }
+          "fingerprints": { "0": "4e1195df020de59e0d65a33a4279f1183e7ae4e5d980e309f8b55adff2e61c3e", "1": "68571817.2f8fe63a.d72e654c.2cb72cc6.3889ba3b.f9768b25.9f7df27c.2f57ef22.e691b550.178ac497.def7d7ff.a4a218b6.0478660a.48626284.c7aa846c.04f0f7a5", "identity": "109d79437bb9079b50bca1cf364a334ff8edbd7bab38997d73e8450e7122a9e5" }
         },
         {
           "ruleId": "java/TestRule",
@@ -85,7 +85,7 @@ const conversionTestInnerSarif = `{
               }
             }
           ],
-          "fingerprints": { "0": "", "1": "fp-b", "identity": "id-b" }
+          "fingerprints": { "0": "c02c0b965e023abee808f2b548d8d5193a8b5229be6f3121a6f16e2d41a449b3", "1": "c94d3162.3e499e75.77c10054.ce8e0834.4d1dae3c.dbd66e9d.07e7f9dc.f2a15e5d.533fa06c.b4fd2a7d.9e32d5bd.672c8618.7503d35f.0f88f1cc.74deb835.49a51850", "identity": "c0e0efc4fc56af4904d52e381eaf5c7090e91e217bc390997a119140dc672ff2" }
         }
       ]
     }
@@ -239,7 +239,7 @@ func TestConvertSARIFJSONToIssues_DuplicateRunsAndResultsMatchFullUnmarshal(t *t
               }
             }
           ],
-          "fingerprints": { "1": "ignored" }
+          "fingerprints": { "1": "133be358.f469d8d4.6302e868.382ef795.a17ba59d.854b6255.bca5d63f.96ca7145.85591433.52e49978.0711b1f8.e054793b.49e37dd4.4c133804.41753fbf.61c1b43c" }
         }
       ],
       "results": [
@@ -255,7 +255,7 @@ func TestConvertSARIFJSONToIssues_DuplicateRunsAndResultsMatchFullUnmarshal(t *t
               }
             }
           ],
-          "fingerprints": { "1": "last-fp", "identity": "last-id" }
+          "fingerprints": { "1": "53043482.4d2614b5.1604a9ec.fc6c50c7.d4aa1e8e.1e3ef15a.eaea6ed8.b6cea163.e88fd9c1.60001b50.de4c1baf.466e6dbb.670c2e50.8480b731.12be1d63.d9269ada", "identity": "52d2f06d9e325af363d551d93bdf43b4971933d0c3bcd5c72526c0a3c0572843" }
         }
       ]
     }
