@@ -27,17 +27,20 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// ApplyEndpointChange updates API endpoints. If changed and LSP is initialized,
-// logs out and clears workspace. Returns true if endpoints changed.
+// ApplyEndpointChange updates API endpoints. If changed and the LSP handshake has been
+// acknowledged, logs out and clears workspace. Returns true if endpoints changed.
 // Logout internally calls configureProviders, so no explicit ConfigureProviders call is needed.
 //
 // Requires a non-nil authService, so that logout can be called.
 func ApplyEndpointChange(ctx context.Context, conf gafConfig.Configuration, authService authentication.AuthenticationService, logger *zerolog.Logger, endpoint string) bool {
 	oldEndpoint := types.GetGlobalString(conf, types.SettingApiEndpoint)
-	// When LSP is initialized, an endpoint switch requires logout to clear credentials.
-	// Mutating config without logout would leave the system with new-endpoint config
-	// but old-environment credentials — a session leakage risk.
-	if conf.GetBool(types.SettingIsLspInitialized) && authService == nil {
+	// Once the LSP handshake is acknowledged, an endpoint switch requires logout to clear
+	// credentials. Mutating config without logout would leave the system with new-endpoint
+	// config but old-environment credentials — a session leakage risk. This gates on the
+	// early handshake-ack signal (not scanner readiness) so the safety clear still runs
+	// while background scanner init is in flight (IDE-2181).
+	handshakeAcknowledged := types.IsLspHandshakeAcknowledged(conf)
+	if handshakeAcknowledged && authService == nil {
 		logger.Error().
 			Str("old_endpoint", oldEndpoint).
 			Str("new_endpoint", endpoint).
@@ -45,11 +48,11 @@ func ApplyEndpointChange(ctx context.Context, conf gafConfig.Configuration, auth
 		return false
 	}
 	changed := config.UpdateApiEndpointsOnConfig(conf, endpoint)
-	if changed && conf.GetBool(types.SettingIsLspInitialized) {
+	if changed && handshakeAcknowledged {
 		logger.Info().
 			Str("old_endpoint", oldEndpoint).
 			Str("new_endpoint", endpoint).
-			Msg("auth endpoint changed after LSP initialization; clearing credentials")
+			Msg("auth endpoint changed after LSP handshake acknowledged; clearing credentials")
 		authService.Logout(ctx)
 		ws := config.GetWorkspace(conf)
 		if ws != nil {

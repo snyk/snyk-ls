@@ -1522,6 +1522,31 @@ func folderConfigsHaveNonEmptyAutoDeterminedOrgForValidators(
 	return true
 }
 
+// folderConfigNotificationMatchesValidators reports whether param contains exactly one
+// folder config per validator path (no extras). Stale notifications from prior workspace
+// changes often include removed folders; skipping those avoids flaky assertions.
+func folderConfigNotificationMatchesValidators(
+	param types.LspConfigurationParam,
+	validators map[types.FilePath]func(types.LspFolderConfig),
+) bool {
+	if len(param.FolderConfigs) != len(validators) {
+		return false
+	}
+	for wantPath := range validators {
+		found := false
+		for _, fc := range param.FolderConfigs {
+			if folderConfigPathsMatch(fc.FolderPath, wantPath) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
 // tryParseLatestMatchingFolderConfig walks notifications newest-first and returns the first
 // $/snyk.configuration payload that satisfies cfg (including optional autoDeterminedOrg wait).
 func tryParseLatestMatchingFolderConfig(
@@ -1534,11 +1559,13 @@ func tryParseLatestMatchingFolderConfig(
 		if err := notifications[i].UnmarshalParams(&param); err != nil || len(param.FolderConfigs) == 0 {
 			continue
 		}
+		if !folderConfigNotificationMatchesValidators(param, validators) {
+			continue
+		}
 		if cfg.waitForNonEmptyAutoDeterminedOrg {
 			if !folderConfigsHaveNonEmptyAutoDeterminedOrgForValidators(param, validators) {
 				continue
 			}
-			return param, true
 		}
 		return param, true
 	}
@@ -2038,6 +2065,10 @@ func ensureInitialized(t *testing.T, engine workflow.Engine, tokenService *confi
 
 	_, err = loc.Client.Call(t.Context(), "initialized", nil)
 	assert.NoError(t, err)
+
+	// Scanner init now runs in the background (IDE-2181). Wait for completion so smoke
+	// tests observe the same post-init semantics as when initializedHandler was synchronous.
+	types.WaitForLspInitialized(engine.GetConfiguration())
 }
 
 func getCurrentCommitHash(t *testing.T, workDir types.FilePath) string {
@@ -2490,6 +2521,11 @@ func gitCommandForMonorepoBenchmark(dir string, args ...string) *exec.Cmd {
 func substituteRemyFlow(t *testing.T, engine workflow.Engine) {
 	t.Helper()
 	conf := engine.GetConfiguration()
+
+	// Offer the remediation code action / command: both are gated behind this flag
+	// (codeaction.go and server capabilities). Without it the Remy quick-fix action is
+	// never surfaced and the remediation smoke tests cannot observe the flow.
+	conf.Set("remediation_agent_enabled", true)
 
 	// Always download the preview CLI into a test-scoped temp dir.
 	// getDistributionChannel reads engine.GetRuntimeInfo().GetVersion(), not config,

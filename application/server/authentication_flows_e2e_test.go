@@ -120,6 +120,9 @@ func Test_E2E_AuthenticationMethodChangeClearsIncompatibleToken(t *testing.T) {
 
 	require.NoError(t, initializeLSPClientOnly(t, loc, types.InitializeParams{}))
 	require.NoError(t, initializedLSPClient(t, loc))
+	// Init runs in the background now (IDE-2181); auth notifications are dispatched only
+	// after scanner init completes, so wait before exercising config-driven auth changes.
+	types.WaitForLspInitialized(engine.GetConfiguration())
 
 	apiToken := "22222222-2222-4222-8222-222222222222"
 	_, err := loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", types.DidChangeConfigurationParams{
@@ -156,6 +159,10 @@ func Test_E2E_EndpointChangeAfterInitializationClearsToken(t *testing.T) {
 
 	require.NoError(t, initializeLSPClientOnly(t, loc, types.InitializeParams{}))
 	require.NoError(t, initializedLSPClient(t, loc))
+	// Init runs in the background now (IDE-2181); the endpoint-change token clear is
+	// gated on SettingIsLspInitialized, so wait for the init-complete signal before
+	// changing config (mirrors real IDE usage where config changes follow startup).
+	types.WaitForLspInitialized(engine.GetConfiguration())
 
 	apiToken := "33333333-3333-4333-8333-333333333333"
 	_, err := loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", types.DidChangeConfigurationParams{
@@ -182,6 +189,82 @@ func Test_E2E_EndpointChangeAfterInitializationClearsToken(t *testing.T) {
 	authAfterEndpointChange := requireAuthNotification(t, recorder, "")
 	assert.Empty(t, authAfterEndpointChange.Token)
 	assert.Empty(t, config.GetToken(engine.GetConfiguration()))
+	assert.Equal(t, "https://api.changed.example", types.GetGlobalString(engine.GetConfiguration(), types.SettingApiEndpoint))
+}
+
+// Test_E2E_EndpointChangeDuringScannerInitClearsToken is the IDE-2181 session-leakage
+// regression. After CP1 moved scanner Init into a background goroutine, the late
+// scanner-ready flag (SettingIsLspInitialized) stays false for the whole failing
+// startup token-refresh window, yet the initialized RPC has already returned — so a
+// client workspace/didChangeConfiguration that switches the API endpoint is now
+// dispatched DURING that window. The endpoint-switch credential clear is a safety
+// side-effect that must still run (otherwise new-endpoint config coexists with
+// old-endpoint credentials). It is gated on the EARLY handshake-ack signal, not the
+// late scanner-ready flag, so the clear happens even while the scanner is still
+// initializing. RED before the two-signal split: the clear is gated on the late flag,
+// which is still false, so the token is not cleared.
+func Test_E2E_EndpointChangeDuringScannerInitClearsToken(t *testing.T) {
+	engine, tokenService := newAuthFlowE2EEngine(t, "http://127.0.0.1", filepath.Join(t.TempDir(), "ls-config.json"))
+	engine.GetConfiguration().Set(configuration.INTEGRATION_ENVIRONMENT, "IDE-2181-endpoint-clears-token-during-init")
+
+	// A scanner whose Init blocks stands in for the failing startup token-refresh storm,
+	// so the late scanner-ready signal never fires during the test window.
+	sc := newBlockingInitScanner()
+	// Release the blocked Init before the server-shutdown cleanup runs (t.Cleanup is LIFO
+	// and startE2ELocalServer registers its shutdown after this defer), so the background
+	// init goroutine ends against a live engine.
+	defer close(sc.release)
+
+	loc, _, _ := startE2ELocalServer(t, engine, tokenService, func(deps di.Dependencies) di.Dependencies {
+		deps.Scanner = sc
+		return deps
+	})
+
+	// The released background init goroutine must not kick off an auto-scan against a
+	// teardown-in-progress engine, which flakes; this test only exercises the
+	// endpoint-change credential clear, not scanning.
+	disableAutoScan(t, engine.GetConfiguration())
+
+	require.NoError(t, initializeLSPClientOnly(t, loc, types.InitializeParams{}))
+	require.NoError(t, initializedLSPClient(t, loc))
+
+	// Precondition: scanner Init is blocked, so the late scanner-ready signal is still
+	// false — we are inside the init window.
+	<-sc.started
+	require.False(t, engine.GetConfiguration().GetBool(types.SettingIsLspInitialized),
+		"precondition: scanner-ready signal must still be false during the init window")
+
+	// Establish old-endpoint credentials.
+	apiToken := "33333333-3333-4333-8333-333333333333"
+	_, err := loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", types.DidChangeConfigurationParams{
+		Settings: types.LspConfigurationParam{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingAuthenticationMethod: {Value: string(types.TokenAuthentication), Changed: true},
+				types.SettingToken:                {Value: apiToken, Changed: true},
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, apiToken, config.GetToken(engine.GetConfiguration()))
+
+	// Switch the API endpoint DURING the init window.
+	_, err = loc.Client.Call(t.Context(), "workspace/didChangeConfiguration", types.DidChangeConfigurationParams{
+		Settings: types.LspConfigurationParam{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingApiEndpoint: {Value: "https://api.changed.example", Changed: true},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	// The credential-clear safety side-effect must have run synchronously within the
+	// config-change handler, even though the scanner is still initializing. We assert on
+	// the cleared credential directly rather than on the $/snyk.hasAuthenticated
+	// notification: the notifier intentionally holds outbound notifications behind
+	// WaitForLspInitialized (scanner readiness), which has not fired yet, so the logout
+	// notification is deferred — but the credential itself is cleared immediately.
+	assert.Empty(t, config.GetToken(engine.GetConfiguration()),
+		"old-endpoint credentials must be cleared when the endpoint changes during scanner init")
 	assert.Equal(t, "https://api.changed.example", types.GetGlobalString(engine.GetConfiguration(), types.SettingApiEndpoint))
 }
 
@@ -393,7 +476,7 @@ func startE2ELocalServer(
 		nil,
 	))
 	recorder := &testsupport.JsonRPCRecorder{}
-	loc := startServer(engine, tokenService, nil, recorder, deps)
+	loc := startServer(engine, tokenService, nil, recorder, deps, 0)
 	cleanupChannels()
 
 	t.Cleanup(func() {
