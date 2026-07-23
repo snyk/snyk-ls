@@ -350,7 +350,7 @@ test("settings-fallback: activating the control is a no-op-safe when the bridge 
   }, "clicking the log out control without a bridge must not throw");
 });
 
-test("settings-fallback: after logout the status copy confirms credentials were cleared", async () => {
+test("settings-fallback: after logout the status copy is concise", async () => {
   const win = await buildFallbackDom();
   let captured;
   win.__ideExecuteCommand__ = (_cmd, _args, callback) => { captured = callback; };
@@ -368,12 +368,9 @@ test("settings-fallback: after logout the status copy confirms credentials were 
   // Fire the done callback (LS confirmed credentials cleared).
   captured();
 
-  // After done the status copy must confirm the cleared state.
+  // After done the status copy must confirm sign-out.
   const textAfter = status.textContent.trim();
-  assert.ok(
-    /signed out|credentials.*cleared/i.test(textAfter),
-    `status copy must confirm credentials cleared after done; got "${textAfter}"`
-  );
+  assert.strictEqual(textAfter, "Signed out.");
 });
 
 // ---------------------------------------------------------------------------
