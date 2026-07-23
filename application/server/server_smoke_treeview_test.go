@@ -18,6 +18,7 @@ package server
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -122,17 +123,26 @@ func Test_SmokeTreeView(t *testing.T) {
 		require.NoError(t, response.UnmarshalResult(&result))
 		assert.Nil(t, result, "toggleTreeFilter should return nil; tree is pushed via notification")
 
-		// Wait for a new $/snyk.treeView notification with the filter applied
+		// Wait for a $/snyk.treeView notification that reflects the applied filter.
+		// A stale background scan-render may arrive first (its count satisfies > countBefore
+		// while its HTML does not yet carry the filter marker), causing the old count-only
+		// predicate to exit early and the subsequent content assert to fail immediately.
+		// Scanning all notifications beyond countBefore tolerates that interleaving: we keep
+		// polling until ANY new notification contains the filter-applied marker.
 		require.Eventually(t, func() bool {
-			return len(jsonRPCRecorder.FindNotificationsByMethod("$/snyk.treeView")) > countBefore
-		}, 5*time.Second, time.Millisecond, "expected new $/snyk.treeView notification after filter toggle")
-
-		notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.treeView")
-		lastNotification := notifications[len(notifications)-1]
-		var treeView types.TreeView
-		require.NoError(t, json.Unmarshal([]byte(lastNotification.ParamString()), &treeView))
-		assert.Contains(t, treeView.TreeViewHtml, `data-filter-value="low" class="filter-btn filter-btn-icon"`,
-			"low severity button should not have filter-active class")
+			notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.treeView")
+			if len(notifications) <= countBefore {
+				return false
+			}
+			for _, n := range notifications[countBefore:] {
+				var treeView types.TreeView
+				if json.Unmarshal([]byte(n.ParamString()), &treeView) == nil &&
+					strings.Contains(treeView.TreeViewHtml, `data-filter-value="low" class="filter-btn filter-btn-icon"`) {
+					return true
+				}
+			}
+			return false
+		}, 5*time.Second, time.Millisecond, "expected $/snyk.treeView notification with low severity filter applied")
 
 		// Re-enable low severity for clean state
 		_, err = loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
