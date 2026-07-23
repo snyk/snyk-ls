@@ -26,6 +26,16 @@ func TestProductSecrets_ToProductCodename(t *testing.T) {
 	assert.Equal(t, "secrets", ProductSecrets.ToProductCodename())
 }
 
+func TestCollapsesByFingerprint(t *testing.T) {
+	// Only Secrets collapses same-fingerprint issues into one; every other
+	// product counts each issue individually.
+	assert.True(t, ProductSecrets.CollapsesByFingerprint())
+	assert.False(t, ProductCode.CollapsesByFingerprint())
+	assert.False(t, ProductOpenSource.CollapsesByFingerprint())
+	assert.False(t, ProductInfrastructureAsCode.CollapsesByFingerprint())
+	assert.False(t, ProductUnknown.CollapsesByFingerprint())
+}
+
 func TestProductSecrets_ToFilterableIssueType(t *testing.T) {
 	result := ProductSecrets.ToFilterableIssueType()
 	assert.Equal(t, []FilterableIssueType{FilterableIssueTypeSecrets}, result)

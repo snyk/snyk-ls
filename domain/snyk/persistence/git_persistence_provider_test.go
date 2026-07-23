@@ -522,7 +522,7 @@ func TestGetPersistedIssueList_FallbackToDiskWhenCacheEmpty(t *testing.T) {
 
 	expectedIssue := &snyk.Issue{
 		GlobalIdentity:   uuid.New().String(),
-		Fingerprint:      "test-fingerprint-fallback",
+		Fingerprint:      testutil.Sha256Fingerprint(),
 		ContentRoot:      folderPath,
 		AffectedFilePath: types.FilePath(filepath.Join(string(folderPath), "test.js")),
 	}
@@ -800,7 +800,7 @@ func TestGetPersistedIssueList_AfterRestart(t *testing.T) {
 
 	expectedIssue := &snyk.Issue{
 		GlobalIdentity:   uuid.New().String(),
-		Fingerprint:      "test-fingerprint-123",
+		Fingerprint:      testutil.Sha256Fingerprint(),
 		ContentRoot:      folderPath,
 		AffectedFilePath: types.FilePath(filepath.Join(string(folderPath), "test.js")),
 	}

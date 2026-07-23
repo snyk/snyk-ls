@@ -31,7 +31,7 @@ import (
 func NewMockIssue(id string, path types.FilePath) *snyk.Issue {
 	return &snyk.Issue{
 		ID:               id,
-		Fingerprint:      util.Result(uuid.NewUUID()).String(),
+		Fingerprint:      Sha256Fingerprint(),
 		AffectedFilePath: path,
 		Product:          product.ProductOpenSource,
 		Severity:         types.Medium,

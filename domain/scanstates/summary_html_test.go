@@ -57,16 +57,36 @@ func Test_Summary_Html_getSummaryDetailsHtml_hasCSS(t *testing.T) {
 	assert.Contains(t, summaryPanel, ":root")
 }
 
-func Test_Summary_Html_DeduplicateAndCount_SinglePass(t *testing.T) {
+func Test_Summary_Html_DeduplicateAndCount_Code_CountsEachInstance(t *testing.T) {
+	// Two distinct Code findings share a structural fingerprint; Code is not
+	// collapsed, so both are counted.
+	sharedFp := testutil.SastFingerprint()
 	issues := []types.Issue{
-		&snyk.Issue{Fingerprint: "fp-1", Product: product.ProductCode, AdditionalData: snyk.CodeIssueData{HasAIFix: true}},
-		&snyk.Issue{Fingerprint: "fp-1", Product: product.ProductCode, AdditionalData: snyk.CodeIssueData{HasAIFix: true}},
-		&snyk.Issue{Fingerprint: "fp-2", Product: product.ProductCode, AdditionalData: snyk.CodeIssueData{HasAIFix: false}},
+		&snyk.Issue{Fingerprint: sharedFp, Product: product.ProductCode, AdditionalData: snyk.CodeIssueData{HasAIFix: true}},
+		&snyk.Issue{Fingerprint: sharedFp, Product: product.ProductCode, AdditionalData: snyk.CodeIssueData{HasAIFix: true}},
+		&snyk.Issue{Fingerprint: testutil.SastFingerprint(), Product: product.ProductCode, AdditionalData: snyk.CodeIssueData{HasAIFix: false}},
 	}
 
 	counts := deduplicateAndCount(issues)
 
-	assert.Equal(t, 2, counts.uniqueCount, "should have 2 unique issues")
-	assert.Equal(t, 1, counts.fixableCount, "only one of the unique issues is fixable")
+	assert.Equal(t, 3, counts.uniqueCount, "Code: each instance counts, even with a shared fingerprint")
+	assert.Equal(t, 2, counts.fixableCount, "both fixable Code instances are counted")
 	assert.Equal(t, 0, counts.ignoredCount)
+}
+
+func Test_Summary_Html_DeduplicateAndCount_Secrets_CollapsesSharedFingerprint(t *testing.T) {
+	// The same secret at two locations shares one fingerprint and collapses to
+	// a single issue. The ignored duplicate is collapsed into the first-seen.
+	sharedFp := testutil.Sha256Fingerprint()
+	issues := []types.Issue{
+		&snyk.Issue{Fingerprint: sharedFp, Product: product.ProductSecrets},
+		&snyk.Issue{Fingerprint: sharedFp, Product: product.ProductSecrets, IsIgnored: true},
+		&snyk.Issue{Fingerprint: testutil.Sha256Fingerprint(), Product: product.ProductSecrets},
+	}
+
+	counts := deduplicateAndCount(issues)
+
+	assert.Equal(t, 2, counts.uniqueCount, "Secrets: shared fingerprint collapses to one issue")
+	assert.Equal(t, 0, counts.fixableCount, "Secrets issues are not fixable")
+	assert.Equal(t, 0, counts.ignoredCount, "the ignored duplicate was collapsed into the non-ignored first-seen")
 }
