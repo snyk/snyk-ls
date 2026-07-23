@@ -35,6 +35,9 @@ type FakeAuthenticationProvider struct {
 	Method                    types.AuthenticationMethod
 	// TokenToReturn, when non-empty, is returned by Authenticate() so tests can use a real token for LDX-Sync etc. while faking login.
 	TokenToReturn string
+	// AuthenticateErr, when non-nil, is returned by Authenticate() so tests can exercise failure paths
+	// (e.g. a login timeout).
+	AuthenticateErr error
 	// CheckAuthDelay, when positive, adds a delay inside GetCheckAuthenticationFunction to let concurrent test goroutines overlap.
 	CheckAuthDelay time.Duration
 	// AuthCallCount is incremented atomically each time the returned check function is invoked.
@@ -67,6 +70,9 @@ func (a *FakeAuthenticationProvider) GetCheckAuthenticationFunction() Authentica
 }
 
 func (a *FakeAuthenticationProvider) Authenticate(_ context.Context) (string, error) {
+	if a.AuthenticateErr != nil {
+		return "", a.AuthenticateErr
+	}
 	a.IsAuthenticated = true
 	if a.TokenToReturn != "" {
 		return a.TokenToReturn, nil

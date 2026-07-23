@@ -17,10 +17,13 @@
 package command
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	gafConfig "github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -31,6 +34,50 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
+
+func TestApplyAuthMethodChange_CancelsInFlightLoginWhenMethodChanges(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+
+	provider := authentication.NewBlockingFakeAuthProvider()
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+
+	// Start a login that blocks until its context is canceled, simulating a stuck auth.
+	firstDone := make(chan struct{})
+	go func() {
+		defer close(firstDone)
+		_, _ = authService.Authenticate(context.Background())
+	}()
+
+	select {
+	case <-provider.Started:
+	case <-time.After(time.Second):
+		t.Fatal("Authenticate did not start")
+	}
+
+	// Switching the auth method must cancel the in-flight login for the previous method. Run it in a
+	// goroutine so a regression (ConfigureProviders deadlocking behind the stuck login's mutex) is
+	// reported by this explicit timeout rather than the global test timeout.
+	acDone := make(chan bool, 1)
+	go func() {
+		acDone <- ApplyAuthMethodChange(conf, authService, engine.GetLogger(), types.TokenAuthentication)
+	}()
+
+	var changed bool
+	select {
+	case changed = <-acDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("ApplyAuthMethodChange deadlocked — it must cancel the in-flight login before ConfigureProviders acquires the auth mutex")
+	}
+	assert.True(t, changed)
+
+	select {
+	case <-firstDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("ApplyAuthMethodChange did not cancel the in-flight login")
+	}
+}
 
 func TestApplyEndpointChange_EndpointChanges_LSPInitialized_LogsOutAndClearsWorkspace(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)

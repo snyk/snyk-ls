@@ -17,6 +17,8 @@
 package authentication
 
 import (
+	"context"
+	"fmt"
 	"testing"
 
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
@@ -64,4 +66,52 @@ func Test_autoAuthenticationDisabled_doesNotAuthenticate(t *testing.T) {
 			assert.Equal(t, tc.autoAuthentication, provider.IsAuthenticated)
 		})
 	}
+}
+
+func Test_autoAuthentication_TimedOut_NotSurfacedOrAborting(t *testing.T) {
+	// A startup auto-auth that times out (the user ignored the browser window) is the same
+	// user-abandoned outcome as a login-command timeout: it must not be reported to Sentry and must
+	// not abort the init chain. Handled silently here since auto-auth is a background, best-effort step.
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	ts.SetToken(conf, "")
+	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), true)
+
+	provider := NewFakeCliAuthenticationProvider(engine)
+	provider.AuthenticateErr = fmt.Errorf("oauth authentication timed out: %w", context.DeadlineExceeded)
+
+	notifier := notification.NewMockNotifier()
+	configResolver := testutil.DefaultConfigResolver(engine)
+	authService := NewAuthenticationService(engine, ts, provider, errorreporting.NewTestErrorReporter(engine), notifier, configResolver)
+	initializer := NewInitializer(conf, engine.GetLogger(), authService, errorreporting.NewTestErrorReporter(engine), notifier, configResolver)
+
+	err := initializer.Init(t.Context())
+
+	require.NoError(t, err, "a timed-out auto-auth must not abort initialization")
+	assert.Zero(t, notifier.SendErrorCount(), "a background auto-auth timeout must not be surfaced to the user")
+}
+
+func Test_autoAuthentication_CanceledOAuth_NotSurfacedToUser(t *testing.T) {
+	// A canceled startup auto-auth (OAuth returns ErrAuthCanceled, normalized to context.Canceled)
+	// must not notify the user and must not abort the init chain. The service wraps the initializer's
+	// context.Background() in a cancelable child, so CancelOngoingAuth — triggered by a superseding
+	// login or an auth-method change during startup — can cancel this in-flight auth.
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	ts.SetToken(conf, "")
+	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), true)
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true)
+	authenticator.canceled = true
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	notifier := notification.NewMockNotifier()
+	configResolver := testutil.DefaultConfigResolver(engine)
+	authService := NewAuthenticationService(engine, ts, provider, errorreporting.NewTestErrorReporter(engine), notifier, configResolver)
+	initializer := NewInitializer(conf, engine.GetLogger(), authService, errorreporting.NewTestErrorReporter(engine), notifier, configResolver)
+
+	err := initializer.Init(t.Context())
+
+	require.NoError(t, err, "a canceled auto-auth must not abort initialization")
+	assert.Zero(t, notifier.SendErrorCount(), "a canceled auto-auth must not be surfaced to the user")
 }

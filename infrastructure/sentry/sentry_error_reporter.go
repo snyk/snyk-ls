@@ -27,6 +27,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 // A Sentry implementation of our error reporter that respects user preferences regarding tracking
@@ -38,6 +39,12 @@ type GDPRAwareSentryErrorReporter struct {
 }
 
 func (s *GDPRAwareSentryErrorReporter) CaptureErrorAndReportAsIssue(path types.FilePath, err error) bool {
+	// A canceled operation is an expected outcome, not a failure: never surface it to the user or
+	// report it to Sentry, regardless of where it originated.
+	if util.IsCancellation(err) {
+		s.logger.Debug().Err(err).Str("method", "CaptureErrorAndReportAsIssue").Msg("ignoring canceled-operation error")
+		return false
+	}
 	if s.notifier != nil {
 		s.notifier.SendErrorDiagnostic(path, err)
 	}
@@ -55,7 +62,15 @@ func (s *GDPRAwareSentryErrorReporter) FlushErrorReporting() {
 }
 
 func (s *GDPRAwareSentryErrorReporter) CaptureError(err error) bool {
-	s.notifier.SendError(err)
+	// A canceled operation is an expected outcome, not a failure: never surface it to the user or
+	// report it to Sentry, regardless of where it originated.
+	if util.IsCancellation(err) {
+		s.logger.Debug().Err(err).Str("method", "CaptureError").Msg("ignoring canceled-operation error")
+		return false
+	}
+	if s.notifier != nil {
+		s.notifier.SendError(err)
+	}
 	return s.sendToSentry(err)
 }
 
