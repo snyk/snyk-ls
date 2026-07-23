@@ -2522,6 +2522,11 @@ func substituteRemyFlow(t *testing.T, engine workflow.Engine) {
 	t.Helper()
 	conf := engine.GetConfiguration()
 
+	// Offer the remediation code action / command: both are gated behind this flag
+	// (codeaction.go and server capabilities). Without it the Remy quick-fix action is
+	// never surfaced and the remediation smoke tests cannot observe the flow.
+	conf.Set("remediation_agent_enabled", true)
+
 	// Always download the preview CLI into a test-scoped temp dir.
 	// getDistributionChannel reads engine.GetRuntimeInfo().GetVersion(), not config,
 	// so channel cannot be overridden via conf.Set — call GetLatestReleaseByChannel directly.

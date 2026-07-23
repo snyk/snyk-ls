@@ -181,13 +181,13 @@ func Test_ScanStarted_TokenChanged_ScanCancelled(t *testing.T) {
 	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx interface{}, _ types.FilePath) ([]types.Issue, error) {
 			scanStarted <- true
-			// Simulate slow scan - wait for context cancellation or timeout
-			select {
-			case <-ctx.(interface{ Done() <-chan struct{} }).Done():
-				wasCanceled = true
-			case <-time.After(2 * time.Second):
-				// Scan completed normally (should not happen in this test)
-			}
+			// Block until the scan's context is canceled by the token change.
+			// Racing a fixed wall-clock timer here makes the test flaky: under load
+			// the cancellation can arrive after the timer, leaving wasCanceled false.
+			// The outer RequireEventuallyReceive(done) bounds the wait, so a genuinely
+			// broken cancellation surfaces as a "scan should complete" failure instead.
+			<-ctx.(interface{ Done() <-chan struct{} }).Done()
+			wasCanceled = true
 			return []types.Issue{}, nil
 		}).Times(1)
 
