@@ -294,6 +294,84 @@ test("settings-fallback: error shown when custom channel has invalid value", asy
 });
 
 // ---------------------------------------------------------------------------
+// Log out control (IDE-2181)
+// ---------------------------------------------------------------------------
+
+test("settings-fallback: the authentication section offers a log out control and no login control", async () => {
+  const win = await buildFallbackDom();
+  const logoutBtn = win.document.getElementById("logout-button");
+  assert.ok(logoutBtn, "a log out control (#logout-button) must exist");
+
+  // No login/"Connect" control must be present.
+  assert.ok(
+    !win.document.getElementById("reauth-button"),
+    "no #reauth-button (login control) must exist"
+  );
+
+  // The log out button must live inside the Authentication section.
+  const authHeading = [...win.document.querySelectorAll("h2")].find(
+    (h) => h.textContent.trim() === "Authentication"
+  );
+  assert.ok(authHeading, "Authentication section heading must exist");
+  const authSection = authHeading.closest(".section");
+  assert.ok(
+    authSection && authSection.contains(logoutBtn),
+    "log out control must be inside the Authentication section"
+  );
+});
+
+test("settings-fallback: activating the control dispatches snyk.logout through the bridge", async () => {
+  const win = await buildFallbackDom();
+  const calls = [];
+  win.__ideExecuteCommand__ = (cmd, args, callback) => {
+    calls.push({ cmd, args, callback });
+  };
+
+  const btn = win.document.getElementById("logout-button");
+  btn.dispatchEvent(new win.Event("click"));
+
+  assert.strictEqual(calls.length, 1, "__ideExecuteCommand__ must be called exactly once");
+  assert.strictEqual(calls[0].cmd, "snyk.logout", "command must be snyk.logout");
+  assert.ok(Array.isArray(calls[0].args), "args must be an array");
+  assert.strictEqual(calls[0].args.length, 0, "no args should be passed to snyk.logout");
+});
+
+test("settings-fallback: activating the control is a no-op-safe when the bridge is absent", async () => {
+  const win = await buildFallbackDom();
+  // No window.__ideExecuteCommand__ defined.
+  const btn = win.document.getElementById("logout-button");
+  assert.doesNotThrow(() => {
+    btn.dispatchEvent(new win.Event("click"));
+  }, "clicking the log out control without a bridge must not throw");
+});
+
+test("settings-fallback: after logout the status copy confirms credentials were cleared", async () => {
+  const win = await buildFallbackDom();
+  let captured;
+  win.__ideExecuteCommand__ = (_cmd, _args, callback) => { captured = callback; };
+
+  const btn = win.document.getElementById("logout-button");
+  btn.dispatchEvent(new win.Event("click"));
+
+  assert.strictEqual(typeof captured, "function", "bridge must receive a done callback");
+
+  // Before done fires the status copy is the default prompt.
+  const status = win.document.getElementById("logout-status");
+  const textBefore = status.textContent.trim();
+  assert.ok(textBefore.length > 0, "status copy must be present before logout");
+
+  // Fire the done callback (LS confirmed credentials cleared).
+  captured();
+
+  // After done the status copy must confirm the cleared state.
+  const textAfter = status.textContent.trim();
+  assert.ok(
+    /signed out|credentials.*cleared/i.test(textAfter),
+    `status copy must confirm credentials cleared after done; got "${textAfter}"`
+  );
+});
+
+// ---------------------------------------------------------------------------
 // Payload snapshot
 // ---------------------------------------------------------------------------
 
