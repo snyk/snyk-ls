@@ -217,13 +217,13 @@
       display: none !important;
     }
 
-    /* Re-authentication control */
-    .reauth-status {
+    /* Logout control */
+    .logout-status {
       margin: 0 0 var(--form-group-margin) 0;
       color: var(--text-color);
     }
 
-    .reauth-button {
+    .logout-button {
       align-self: flex-start;
       padding: var(--input-padding) 16px;
       background-color: var(--button-background);
@@ -235,14 +235,9 @@
       cursor: pointer;
     }
 
-    .reauth-button:focus {
+    .logout-button:focus {
       outline: 1px solid var(--focus-border);
       outline-offset: 2px;
-    }
-
-    .reauth-button:disabled {
-      opacity: 0.6;
-      cursor: default;
     }
 
     /* Info Message */
@@ -343,8 +338,8 @@
     <h2>Authentication</h2>
 
     <div class="form-group">
-      <p id="logout-status" class="reauth-status">If Snyk is stuck, clear your stored credentials to recover, then reopen Settings to sign in again.</p>
-      <button type="button" id="logout-button" class="reauth-button">Log out</button>
+      <p id="logout-status" class="logout-status">If Snyk is stuck, clear your stored credentials to recover, then reopen Settings to sign in again.</p>
+      <button type="button" id="logout-button" class="logout-button">Log out</button>
     </div>
 
     <div class="form-group half-width">
