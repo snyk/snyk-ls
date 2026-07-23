@@ -13,6 +13,8 @@ on:
       - main
     paths:
       - 'shared_ide_resources/ui/html/settings-fallback.html'
+      - '.github/distribute-fallback-html.sh'
+      - '.github/workflows/distribute-fallback-html.yaml'
   workflow_dispatch:
 
 # Serialize runs so concurrent pushes don't race on the shared sync branch.
