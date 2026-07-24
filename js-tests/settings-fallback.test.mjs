@@ -301,6 +301,11 @@ test("settings-fallback: the authentication section offers a log out control and
   const win = await buildFallbackDom();
   const logoutBtn = win.document.getElementById("logout-button");
   assert.ok(logoutBtn, "a log out control (#logout-button) must exist");
+  assert.strictEqual(
+    logoutBtn.textContent.trim(),
+    "Clear credentials",
+    'log out control label must be "Clear credentials"'
+  );
 
   // No login/"Connect" control must be present.
   assert.ok(
@@ -345,7 +350,7 @@ test("settings-fallback: activating the control is a no-op-safe when the bridge 
   }, "clicking the log out control without a bridge must not throw");
 });
 
-test("settings-fallback: after logout the status copy confirms credentials were cleared", async () => {
+test("settings-fallback: after logout the status copy is concise", async () => {
   const win = await buildFallbackDom();
   let captured;
   win.__ideExecuteCommand__ = (_cmd, _args, callback) => { captured = callback; };
@@ -358,17 +363,14 @@ test("settings-fallback: after logout the status copy confirms credentials were 
   // Before done fires the status copy is the default prompt.
   const status = win.document.getElementById("logout-status");
   const textBefore = status.textContent.trim();
-  assert.ok(textBefore.length > 0, "status copy must be present before logout");
+  assert.strictEqual(textBefore.length, 0, "status copy must be empty before logout");
 
   // Fire the done callback (LS confirmed credentials cleared).
   captured();
 
-  // After done the status copy must confirm the cleared state.
+  // After done the status copy must confirm sign-out.
   const textAfter = status.textContent.trim();
-  assert.ok(
-    /signed out|credentials.*cleared/i.test(textAfter),
-    `status copy must confirm credentials cleared after done; got "${textAfter}"`
-  );
+  assert.strictEqual(textAfter, "Signed out.");
 });
 
 // ---------------------------------------------------------------------------
