@@ -251,8 +251,8 @@ func (i *Issue) GetFindingId() string {
 }
 
 func (i *Issue) SetFindingId(findingId string) {
-	i.m.RLock()
-	defer i.m.RUnlock()
+	i.m.Lock()
+	defer i.m.Unlock()
 	i.FindingId = findingId
 }
 
