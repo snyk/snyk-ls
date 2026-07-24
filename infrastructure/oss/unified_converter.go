@@ -127,8 +127,8 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 
 	remediationAdvice := getRemediationAdvice(introducingOssIssueData)
 	// TODO: add ignore details once provenance and granularity are clarified
-	//ignoreDetails := trIssue.GetIgnoreDetails()
-	//isIgnored := ignoreDetails != nil && ignoreDetails.GetStatus() == testapi.SuppressionStatusIgnored
+	// ignoreDetails := trIssue.GetIgnoreDetails()
+	// isIgnored := ignoreDetails != nil && ignoreDetails.GetStatus() == testapi.SuppressionStatusIgnored
 	message := buildMessage(title, problem.PackageName, remediationAdvice)
 	severity := types.IssuesSeverity[strings.ToLower(trIssue.GetSeverity())]
 	configResolver, _ := ctx2.ConfigResolverFromContext(ctx)
@@ -193,6 +193,9 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 func populateMatchingIssues(ctx context.Context, trIssue testapi.Issue, problem *testapi.SnykVulnProblem, affectedFilePath types.FilePath, myRange types.Range, ecosystemStr string, logger zerolog.Logger) []snyk.OssIssueData {
 	var matching []snyk.OssIssueData
 	for _, finding := range trIssue.GetFindings() {
+		if finding == nil || finding.Attributes == nil {
+			continue
+		}
 		for _, evidence := range finding.Attributes.Evidence {
 			dependencyPathEvidence, err := evidence.AsDependencyPathEvidence()
 			if err != nil {
@@ -202,6 +205,7 @@ func populateMatchingIssues(ctx context.Context, trIssue testapi.Issue, problem 
 			issueData, err := buildOssIssueData(ctx, trIssue, problem, finding, affectedFilePath, myRange, ecosystemStr, stringPath)
 			if err != nil {
 				logger.Warn().Err(err).Msg("failed to build oss issue data")
+				continue
 			}
 			matching = append(matching, issueData)
 		}
@@ -365,7 +369,7 @@ func extractDependencyPath(finding *testapi.FindingData) []string {
 		return nil
 	}
 
-	//FIXME: don't stop at the first dependency path
+	// FIXME: don't stop at the first dependency path
 	for _, evidence := range finding.Attributes.Evidence {
 		disc, err := evidence.Discriminator()
 		if err == nil && disc == "dependency_path" {
