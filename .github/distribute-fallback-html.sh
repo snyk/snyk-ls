@@ -53,7 +53,7 @@ FAILED=()
 
 # Single parent temp dir — one EXIT trap covers all per-repo clones.
 PARENT_WORK=$(mktemp -d)
-trap "rm -rf '$PARENT_WORK'" EXIT
+trap 'rm -rf "$PARENT_WORK"' EXIT
 
 gh auth setup-git
 
@@ -73,6 +73,10 @@ process_repo() {
   local WORK_DIR="$PARENT_WORK/$REPO_SLUG"
 
   gh repo clone "$REPO" "$WORK_DIR" -- --depth=1 --quiet
+
+  local BASE_BRANCH
+  BASE_BRANCH=$(gh repo view "$REPO" --json defaultBranchRef --jq '.defaultBranchRef.name') \
+    || { echo "    ERROR: failed to fetch default branch for $REPO" >&2; return 1; }
 
   local DEST_FULL="$WORK_DIR/$DEST_PATH"
   mkdir -p "$(dirname "$DEST_FULL")"
@@ -98,7 +102,8 @@ process_repo() {
   # Design decision: this branch is exclusively owned by this automation.
   # Force-push is intentional — any human commits on the sync branch will be
   # overwritten. Reviewers should not push changes directly to this branch.
-  git -C "$WORK_DIR" push -f -u origin "$BRANCH"
+  git -C "$WORK_DIR" push -f -u origin "$BRANCH" \
+    || { echo "    ERROR: git push failed for $REPO" >&2; return 1; }
 
   local PR_BODY
   PR_BODY="Automatic sync of \`settings-fallback.html\` triggered by [snyk/snyk-ls@${LS_SHA}](https://github.com/snyk/snyk-ls/commit/${LS_SHA_FULL}).
@@ -121,13 +126,15 @@ Review and merge when ready. No manual testing is required beyond confirming tha
     echo "    Creating PR in $REPO"
     gh pr create \
       --repo "$REPO" \
-      --base main \
+      --base "$BASE_BRANCH" \
       --head "$BRANCH" \
       --title "$PR_TITLE" \
-      --body "$PR_BODY"
+      --body "$PR_BODY" \
+      || { echo "    ERROR: gh pr create failed for $REPO" >&2; return 1; }
   else
     echo "    Updating existing PR #$EXISTING_PR in $REPO"
-    gh pr edit "$EXISTING_PR" --repo "$REPO" --body "$PR_BODY"
+    gh pr edit "$EXISTING_PR" --repo "$REPO" --body "$PR_BODY" \
+      || { echo "    ERROR: gh pr edit failed for $REPO (PR #$EXISTING_PR)" >&2; return 1; }
   fi
 
   echo "    Done."
