@@ -26,8 +26,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
-
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -44,17 +42,15 @@ func TestDownloader_Download(t *testing.T) {
 		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh, engine.GetLogger()),
 		httpClient:      func() *http.Client { return http.DefaultClient },
 		engine:          engine,
-		configResolver:  testutil.DefaultConfigResolver(engine),
 	}
 	exec := (&Discovery{}).ExecutableName(false)
 	destination := filepath.Join(t.TempDir(), exec)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), destination)
 	lockFileName, err := d.lockFileName()
 	require.NoError(t, err)
 	// remove any existing lockfile
 	_ = os.RemoveAll(lockFileName)
 
-	err = d.Download(r, false)
+	_, err = d.Download(r, destination, false)
 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, progressCh)
@@ -77,10 +73,10 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 		progressTracker: progressTracker,
 		httpClient:      func() *http.Client { return http.DefaultClient },
 		engine:          engine,
-		configResolver:  testutil.DefaultConfigResolver(engine),
 	}
 
 	r := getTestAsset()
+	cliPath := filepath.Join(t.TempDir(), (&Discovery{}).ExecutableName(false))
 
 	// simulate cancellation when some progress received
 	go func() {
@@ -88,7 +84,7 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 		progress.Cancel(progressTracker.GetToken())
 	}()
 
-	err := d.Download(r, false)
+	_, err := d.Download(r, cliPath, false)
 	require.Error(t, err)
 
 	lockFileName, err := config.CLIDownloadLockFileName(engine.GetConfiguration())
