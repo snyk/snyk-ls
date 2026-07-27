@@ -259,11 +259,182 @@ func TestDownloaderMoveToDestination_ReturnsErrorWhenCliPathIsEmpty(t *testing.T
 	require.NoError(t, err)
 	require.NoError(t, sourceFile.Close())
 
-	got, err := downloader.moveToDestination("", filename.ExecutableName, sourceFile.Name())
+	got, err := downloader.moveToDestination("", filename.ExecutableName, sourceFile.Name(), nil)
 
 	require.Error(t, err)
 	assert.Empty(t, got)
 	assert.NoFileExists(t, filename.ExecutableName)
+}
+
+func TestDownloaderMoveToDestination_ReturnsExistingPathWhenConcurrentInstallAlreadyWroteExpectedBinary(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
+	existingBinary := []byte("expected-cli")
+	require.NoError(t, os.WriteFile(cliPath, existingBinary, 0755))
+
+	sourceFile, err := os.CreateTemp(t.TempDir(), "cli-source")
+	require.NoError(t, err)
+	_, err = sourceFile.Write([]byte("new-cli"))
+	require.NoError(t, err)
+	require.NoError(t, sourceFile.Close())
+
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), nil)
+	downloader.removeFile = func(string) error { return os.ErrPermission }
+	expectedChecksum := sha256.Sum256(existingBinary)
+
+	got, err := downloader.moveToDestination(cliPath, filename.ExecutableName, sourceFile.Name(), expectedChecksum[:])
+
+	require.NoError(t, err)
+	assert.Equal(t, cliPath, got)
+	assert.FileExists(t, got)
+	assert.Equal(t, existingBinary, readFile(t, got))
+}
+
+func TestDownloaderMoveToDestination_ReturnsExistingPathWhenConcurrentInstallRenamedExpectedBinary(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
+	existingBinary := []byte("expected-cli")
+
+	sourceFile, err := os.CreateTemp(t.TempDir(), "cli-source")
+	require.NoError(t, err)
+	_, err = sourceFile.Write([]byte("new-cli"))
+	require.NoError(t, err)
+	require.NoError(t, sourceFile.Close())
+
+	renameErr := os.ErrPermission
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), nil)
+	downloader.renameFile = func(_, destinationFilePath string) error {
+		require.NoError(t, os.WriteFile(destinationFilePath, existingBinary, 0755))
+		return renameErr
+	}
+	expectedChecksum := sha256.Sum256(existingBinary)
+
+	got, err := downloader.moveToDestination(cliPath, filename.ExecutableName, sourceFile.Name(), expectedChecksum[:])
+
+	require.NoError(t, err)
+	assert.Equal(t, cliPath, got)
+	assert.Equal(t, existingBinary, readFile(t, got))
+}
+
+func TestDownloaderMoveToDestination_ReturnsErrorWhenConcurrentInstallRenamedWrongBinary(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
+
+	sourceFile, err := os.CreateTemp(t.TempDir(), "cli-source")
+	require.NoError(t, err)
+	_, err = sourceFile.Write([]byte("new-cli"))
+	require.NoError(t, err)
+	require.NoError(t, sourceFile.Close())
+
+	renameErr := os.ErrPermission
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), nil)
+	downloader.renameFile = func(_, destinationFilePath string) error {
+		require.NoError(t, os.WriteFile(destinationFilePath, []byte("wrong-cli"), 0755))
+		return renameErr
+	}
+	expectedChecksum := sha256.Sum256([]byte("expected-cli"))
+
+	got, err := downloader.moveToDestination(cliPath, filename.ExecutableName, sourceFile.Name(), expectedChecksum[:])
+
+	require.Error(t, err)
+	assert.Empty(t, got)
+	assert.ErrorIs(t, err, renameErr)
+}
+
+func TestDownloaderMoveToDestination_ReturnsErrorWhenExistingBinaryCannotBeRemoved(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
+	require.NoError(t, os.WriteFile(cliPath, []byte("outdated-cli"), 0755))
+
+	sourceFile, err := os.CreateTemp(t.TempDir(), "cli-source")
+	require.NoError(t, err)
+	_, err = sourceFile.Write([]byte("new-cli"))
+	require.NoError(t, err)
+	require.NoError(t, sourceFile.Close())
+
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), nil)
+	downloader.removeFile = func(string) error { return os.ErrPermission }
+	expectedChecksum := sha256.Sum256([]byte("new-cli"))
+
+	got, err := downloader.moveToDestination(cliPath, filename.ExecutableName, sourceFile.Name(), expectedChecksum[:])
+
+	require.Error(t, err)
+	assert.Empty(t, got)
+	assert.ErrorIs(t, err, os.ErrPermission)
+}
+
+func readFile(t *testing.T, path string) []byte {
+	t.Helper()
+	contents, err := os.ReadFile(path)
+	require.NoError(t, err)
+	return contents
+}
+
+func TestDownloaderDownload_ReturnsExistingPathWhenConcurrentInstallRenamedExpectedBinary(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
+	existingBinary := []byte("expected-cli")
+	checksum := sha256.Sum256(existingBinary)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(existingBinary)
+	}))
+	t.Cleanup(server.Close)
+
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), func() *http.Client { return server.Client() })
+	downloader.renameFile = func(_, destinationFilePath string) error {
+		require.NoError(t, os.WriteFile(destinationFilePath, existingBinary, 0755))
+		return os.ErrPermission
+	}
+
+	got, err := downloader.Download(testRelease(server.URL, fmt.Sprintf("%x  %s", checksum, filename.ExecutableName)), cliPath, false)
+
+	require.NoError(t, err)
+	assert.Equal(t, cliPath, got)
+	assert.Equal(t, existingBinary, readFile(t, got))
+}
+
+func TestDownloaderDownload_ReturnsExistingPathWhenConcurrentInstallAlreadyWroteExpectedBinary(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
+	existingBinary := []byte("expected-cli")
+	require.NoError(t, os.WriteFile(cliPath, existingBinary, 0755))
+
+	checksum := sha256.Sum256(existingBinary)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(existingBinary)
+	}))
+	t.Cleanup(server.Close)
+
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), func() *http.Client { return server.Client() })
+	downloader.removeFile = func(string) error { return os.ErrPermission }
+
+	got, err := downloader.Download(testRelease(server.URL, fmt.Sprintf("%x  %s", checksum, filename.ExecutableName)), cliPath, false)
+
+	require.NoError(t, err)
+	assert.Equal(t, cliPath, got)
+	assert.Equal(t, existingBinary, readFile(t, got))
+}
+
+func TestDownloaderDownload_ReturnsErrorWhenConcurrentInstallWroteWrongBinary(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
+	require.NoError(t, os.WriteFile(cliPath, []byte("outdated-cli"), 0755))
+
+	newBinary := []byte("expected-cli")
+	checksum := sha256.Sum256(newBinary)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(newBinary)
+	}))
+	t.Cleanup(server.Close)
+
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), func() *http.Client { return server.Client() })
+	downloader.removeFile = func(string) error { return os.ErrPermission }
+
+	got, err := downloader.Download(testRelease(server.URL, fmt.Sprintf("%x  %s", checksum, filename.ExecutableName)), cliPath, false)
+
+	require.Error(t, err)
+	assert.Empty(t, got)
+	assert.ErrorIs(t, err, os.ErrPermission)
 }
 
 func TestFakeInstaller_Install_ReturnsPath(t *testing.T) {

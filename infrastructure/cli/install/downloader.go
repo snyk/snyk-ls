@@ -36,6 +36,8 @@ type Downloader struct {
 	errorReporter   error_reporting.ErrorReporter
 	httpClient      func() *http.Client
 	engine          workflow.Engine
+	removeFile      func(string) error
+	renameFile      func(string, string) error
 }
 
 func NewDownloader(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, httpClientFunc func() *http.Client) *Downloader {
@@ -44,6 +46,8 @@ func NewDownloader(engine workflow.Engine, errorReporter error_reporting.ErrorRe
 		errorReporter:   errorReporter,
 		httpClient:      httpClientFunc,
 		engine:          engine,
+		removeFile:      os.Remove,
+		renameFile:      os.Rename,
 	}
 }
 
@@ -194,7 +198,7 @@ func (d *Downloader) Download(r *Release, cliPath string, isUpdate bool) (string
 	}
 
 	_ = cliTmpFile.Close() // close file to allow moving it on Windows
-	destinationPath, err := d.moveToDestination(cliPath, executableFileName, cliTmpFile.Name())
+	destinationPath, err := d.moveToDestination(cliPath, executableFileName, cliTmpFile.Name(), expectedChecksum)
 
 	if isUpdate {
 		d.progressTracker.EndWithMessage("Snyk CLI has been updated.")
@@ -224,7 +228,30 @@ func (d *Downloader) destinationPath(cliPath string, destinationFileName string)
 	return filepath.Join(filepath.Dir(cliPath), destinationFileName)
 }
 
-func (d *Downloader) moveToDestination(cliPath string, destinationFileName string, sourceFilePath string) (string, error) {
+func (d *Downloader) remove(path string) error {
+	if d.removeFile != nil {
+		return d.removeFile(path)
+	}
+	return os.Remove(path)
+}
+
+func (d *Downloader) rename(sourceFilePath string, destinationFilePath string) error {
+	if d.renameFile != nil {
+		return d.renameFile(sourceFilePath, destinationFilePath)
+	}
+	return os.Rename(sourceFilePath, destinationFilePath)
+}
+
+func (d *Downloader) existingDestinationMatchesChecksum(expectedChecksum HashSum, destinationFilePath string) bool {
+	compareErr := compareChecksum(d.engine.GetLogger(), expectedChecksum, destinationFilePath)
+	if compareErr == nil {
+		return true
+	}
+	d.engine.GetLogger().Debug().Err(compareErr).Str("path", destinationFilePath).Msg("existing Snyk CLI does not match requested checksum")
+	return false
+}
+
+func (d *Downloader) moveToDestination(cliPath string, destinationFileName string, sourceFilePath string, expectedChecksum HashSum) (string, error) {
 	// Defend this file-moving boundary when it is called independently of Install.
 	if cliPath == "" {
 		return "", fmt.Errorf("CLI path is not configured")
@@ -244,25 +271,33 @@ func (d *Downloader) moveToDestination(cliPath string, destinationFileName strin
 
 	// for Windows, we have to remove original file first before move/rename
 	if fileInfo, statErr := os.Stat(destinationFilePath); statErr == nil {
-		removeErr := os.Remove(destinationFilePath)
+		removeErr := d.remove(destinationFilePath)
 		if removeErr != nil {
 			returnErr := errors.Wrap(
 				removeErr,
 				fmt.Sprintf("couldn't remove old CLI at %s. FileInfo: %v", destinationFilePath, fileInfo),
 			)
+			if d.existingDestinationMatchesChecksum(expectedChecksum, destinationFilePath) {
+				logger.Info().Str("path", destinationFilePath).Msg("another installer already wrote the requested Snyk CLI")
+				return destinationFilePath, nil
+			}
 			logger.Err(returnErr).Send()
 			return "", returnErr
 		}
 	}
 
 	logger.Debug().Str("tempFilePath", sourceFilePath).Msg("tempfile path")
-	err = os.Rename(sourceFilePath, destinationFilePath)
+	err = d.rename(sourceFilePath, destinationFilePath)
 	if err != nil {
 		returnErr :=
 			errors.Wrap(
 				err,
 				fmt.Sprintf("couldn't rename Snyk CLI from %s to %s", sourceFilePath, destinationFilePath),
 			)
+		if d.existingDestinationMatchesChecksum(expectedChecksum, destinationFilePath) {
+			logger.Info().Str("path", destinationFilePath).Msg("another installer already wrote the requested Snyk CLI")
+			return destinationFilePath, nil
+		}
 		logger.Err(returnErr).Send()
 		return "", returnErr
 	}
