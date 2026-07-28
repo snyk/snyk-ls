@@ -646,7 +646,10 @@ func setupScanPrecedenceTest(t *testing.T, codeEnabled, ossEnabled, iacEnabled b
 	folder := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, engine, tokenService)
 
 	requireLspConfigurationNotification(t, jsonRpcRecorder, nil, false)
-	jsonRpcRecorder.ClearNotifications()
+	// Background init (IDE-2181) finishes workspace scans before WaitForLspInitialized
+	// returns; clearing all notifications would discard the $/snyk.scan success payloads
+	// that scan-level precedence tests assert on immediately after setup.
+	jsonRpcRecorder.ClearNotificationsByMethod("$/snyk.configuration")
 
 	return engine, tokenService, loc, jsonRpcRecorder, folder
 }

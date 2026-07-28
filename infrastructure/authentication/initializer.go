@@ -29,6 +29,7 @@ import (
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 type Initializer struct {
@@ -77,6 +78,17 @@ func (i *Initializer) authenticate(authenticationService AuthenticationService, 
 
 	token, err := authenticationService.Authenticate(context.Background())
 	if token == "" || err != nil {
+		// A canceled or timed-out auto-authentication is expected, not a failure. Cancellation happens
+		// when a superseding login or an auth-method change cancels the startup auto-auth via
+		// CancelOngoingAuth (the service wraps context.Background() in a cancelable child, so this is
+		// reachable even though the caller's context is never canceled directly). A timeout happens
+		// when the user ignores the browser window this best-effort background step opened. In both
+		// cases: log at debug, don't notify the user or report to Sentry, and return nil so the rest of
+		// the init chain still runs.
+		if util.IsCancellation(err) || util.IsTimeout(err) {
+			i.logger.Debug().Str("method", "auth.initializer.init").Msg("authentication canceled or timed out")
+			return nil
+		}
 		if err == nil {
 			err = &AuthenticationFailedError{}
 		}

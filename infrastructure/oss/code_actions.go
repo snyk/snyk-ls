@@ -17,6 +17,7 @@
 package oss
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"regexp"
@@ -248,7 +249,7 @@ func addQuickFixAction(engine workflow.Engine, configResolver types.ConfigResolv
 	// corrupt the value. The latch makes the deferred action single-shot, which the
 	// disk guard cannot guarantee.
 	var applied bool
-	autofixEditCallback := func() *types.WorkspaceEdit {
+	autofixEditCallback := func(_ context.Context) *types.WorkspaceEdit {
 		edit := &types.WorkspaceEdit{}
 		if applied {
 			logger.Warn().Str("file", filePathString).Msg("quickfix already applied; refusing to re-apply")
