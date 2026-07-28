@@ -110,3 +110,31 @@ alwaysApply: true
 - use `make generate-diagrams` to generate diagrams
 - document the tested scenarios for all testing stages (unit, integration, e2e) in ./docs
 </documenting>
+## Cursor Cloud specific instructions
+
+Durable, non-obvious notes for agents running in the Cursor Cloud Linux VM. The
+update script already runs `go mod download`; the items below are setup context
+and gotchas, not install steps to repeat.
+
+- **Go toolchain — pin the exact patch.** `go.mod` needs Go 1.26.x; with
+  `GOTOOLCHAIN=auto` Go tries to fetch a toolchain from the **blocked** `go.dev`.
+  The environment pins `GOTOOLCHAIN=go1.26.5` (`go env -w GOTOOLCHAIN=go1.26.5`),
+  served by `proxy.golang.org`. Keep it set.
+- **golangci-lint host is blocked.** The Makefile installs it via
+  `curl … raw.githubusercontent.com/golangci/golangci-lint/…/install.sh` which
+  downloads from a blocked host. Install the pinned version from the module proxy
+  into `.bin/` instead:
+  `GOBIN=$(pwd)/.bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1`.
+- **Standard commands** (see the Makefile): `make build` → `build/snyk-ls.linux.amd64`;
+  `make lint` → `0 issues`; `make test-js` (regenerates Go HTML fixtures then runs
+  mocha; needs Node) → all pass. Verify the binary with `./build/snyk-ls.linux.amd64 -v`
+  (it speaks LSP over stdio, so there is no `--help`; a JSON-RPC `initialize`
+  handshake returns the server capabilities).
+- **Do not run the full `make test` casually** — it has a ~90m timeout and its
+  integration/smoke suites need `SNYK_TOKEN` and network. For a quick check run a
+  unit subset, e.g. `go test ./internal/... ./domain/ide/converter/...`.
+- **Node** must come from `~/.nvm/versions/node/v22.22.3/bin` (see below); nvm is
+  not auto-sourced in non-interactive shells and `/exec-daemon/node` ships no npm.
+  Prepend `PATH="$HOME/.nvm/versions/node/v22.22.3/bin:$PATH"` before `make test-js`.
+- **Reachable:** `proxy.golang.org`, `github.com`, `registry.npmjs.org`.
+  **Blocked:** `go.dev`, `golangci-lint.run`.
