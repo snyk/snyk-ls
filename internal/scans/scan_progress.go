@@ -30,15 +30,16 @@ const timeout = 5 * time.Second
 // and invoke cancellations or "done" signals. This allows throttling or canceling previous scans instead of
 // having many scans running at once for the same files.
 //
-// The correct usage would be to create a NewScanProgress and call "go Listen()" to
-// listen for cancel/done signals in the background.
+// The correct usage would be to create a NewScanProgress, call SetCancelFunc with the context cancel
+// function, register the scan, and then launch "go Listen()" in the background.
 // ScanProgress operations should be done in locked sections.
 type ScanProgress struct {
-	isDone bool
-	done   chan bool
-	cancel chan bool
-	mutex  sync.Mutex
-	logger *zerolog.Logger
+	isDone     bool
+	done       chan bool
+	cancel     chan bool
+	cancelFunc context.CancelFunc
+	mutex      sync.Mutex
+	logger     *zerolog.Logger
 }
 
 func NewScanProgressWithLogger(logger *zerolog.Logger) *ScanProgress {
@@ -55,6 +56,15 @@ func (sp *ScanProgress) GetDoneChannel() <-chan bool { return sp.done }
 
 func (sp *ScanProgress) GetCancelChannel() <-chan bool { return sp.cancel }
 
+// SetCancelFunc registers the context cancel function so CancelScan can cancel
+// the scan immediately, without waiting for the Listen goroutine to be scheduled.
+// Must be called before the scan is registered in runningScans.
+func (sp *ScanProgress) SetCancelFunc(f context.CancelFunc) {
+	sp.mutex.Lock()
+	defer sp.mutex.Unlock()
+	sp.cancelFunc = f
+}
+
 // IsDone is true if the scan finished whether by cancellation or by a SetDone call
 func (sp *ScanProgress) IsDone() bool {
 	sp.mutex.Lock()
@@ -64,18 +74,34 @@ func (sp *ScanProgress) IsDone() bool {
 
 func (sp *ScanProgress) CancelScan() {
 	sp.logger.Debug().Msg("Canceling scan")
+	sp.mutex.Lock()
+	if sp.isDone {
+		sp.mutex.Unlock()
+		return
+	}
+	sp.isDone = true
+	cf := sp.cancelFunc
+	sp.mutex.Unlock()
+
+	if cf != nil {
+		// Direct cancellation: invoke the context cancel func immediately so the
+		// scan is stopped without waiting for the Listen goroutine to be scheduled.
+		// This eliminates the goroutine-readiness race where Execute() can complete
+		// its timer before Listen() starts (IDE-2099).
+		cf()
+		return
+	}
+
+	// Legacy fallback when no cancel func is registered: signal via channel.
+	// Blocks until the Listen goroutine receives or the safety timeout fires.
 	select {
 	case <-time.After(timeout):
 		// This should not happen if ScanProgress is used correctly and is here for safety.
 		// Seeing this message in a log is a sign that something is wrong.
 		// There should always be a goroutine that listens for this channel
 		sp.logger.Warn().Str("method", "CancelScan").Msg("No listeners for cancel message - timing out")
-		return
 	case sp.cancel <- true:
 		sp.logger.Debug().Msg("Cancel signal sent")
-		sp.mutex.Lock()
-		defer sp.mutex.Unlock()
-		sp.isDone = true
 	}
 }
 
