@@ -200,7 +200,7 @@ func TestInstallerUpdate_ResolvesCliPathOnce(t *testing.T) {
 	assert.Equal(t, binary, installedBinary)
 }
 
-func TestInstallRelease_ReturnsInstalledPath_WhenCacheDirOutsideDiscovery(t *testing.T) {
+func TestInstallRelease_ReturnsConfiguredDestination_OnSuccessfulInstall(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
 	t.Setenv("PATH", t.TempDir())
