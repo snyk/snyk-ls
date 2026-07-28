@@ -110,3 +110,23 @@ alwaysApply: true
 - use `make generate-diagrams` to generate diagrams
 - document the tested scenarios for all testing stages (unit, integration, e2e) in ./docs
 </documenting>
+## Cursor Cloud specific instructions
+
+Environment notes for Cursor Cloud agents (dependencies are pre-installed by the
+startup update script; the caveats below are the non-obvious bits).
+
+- **Go toolchain is pinned to `go1.26.5`** via `go env -w GOTOOLCHAIN=go1.26.5`
+  (repo needs Go 1.26.x; the toolchain auto-download from `go.dev` is blocked, so
+  the pin routes it through `proxy.golang.org`).
+- **golangci-lint** (`v2.10.1`) is installed into `.bin/` via
+  `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1`
+  (the Makefile's `raw.githubusercontent.com` install script is sometimes blocked).
+- **Build/run:** `make build` → `build/snyk-ls.linux.amd64`. It is an **LSP
+  server over stdio** (no `--help` output); `./build/snyk-ls.linux.amd64 -v`
+  prints the version. Driving it means sending framed JSON-RPC `initialize` on
+  stdin.
+- **Tests:** `make test-js` (Node-based, generates Go HTML fixtures then runs
+  mocha — passes) and Go unit subsets like `go test ./internal/...` are quick and
+  green. Full `make test` uses a 90m timeout and pulls in integration/smoke
+  tests that require `SNYK_TOKEN` and network — don't expect those to pass in the
+  sandbox.
