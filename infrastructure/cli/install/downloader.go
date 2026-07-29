@@ -82,12 +82,15 @@ func (d *Downloader) lockFileName() (string, error) {
 	return config.CLIDownloadLockFileName(d.engine.GetConfiguration())
 }
 
-func (d *Downloader) validateDownloadPreconditions(r *Release) error {
+func (d *Downloader) validateDownloadPreconditions(r *Release, cliPath string) error {
 	if r == nil {
 		return fmt.Errorf("release cannot be nil")
 	}
 	if d.httpClient == nil {
 		return fmt.Errorf("http client function is not configured")
+	}
+	if cliPath == "" {
+		return fmt.Errorf("CLI path is not configured")
 	}
 	return nil
 }
@@ -99,8 +102,8 @@ func downloadKind(isUpdate bool) string {
 	return "download"
 }
 
-func (d *Downloader) Download(r *Release, cliPath string, isUpdate bool) (string, error) {
-	if err := d.validateDownloadPreconditions(r); err != nil {
+func (d *Downloader) Download(r *Release, cliPath string, isUpdate bool) (destinationPath string, err error) {
+	if err = d.validateDownloadPreconditions(r, cliPath); err != nil {
 		return "", err
 	}
 
@@ -127,6 +130,22 @@ func (d *Downloader) Download(r *Release, cliPath string, isUpdate bool) (string
 		d.progressTracker.BeginWithMessage("Downloading Snyk CLI...", "We download Snyk CLI to run security scans.")
 	}
 
+	// Begin was just sent above, so from this point on every return path
+	// (early or final) must close the progress indicator exactly once. A
+	// deferred function keyed off the named return values guarantees this
+	// regardless of which return statement is hit.
+	defer func() {
+		if err != nil {
+			d.progressTracker.EndWithMessage(fmt.Sprintf("Failed to %s Snyk CLI.", kindStr))
+			return
+		}
+		if isUpdate {
+			d.progressTracker.EndWithMessage("Snyk CLI has been updated.")
+		} else {
+			d.progressTracker.EndWithMessage("Snyk CLI has been downloaded.")
+		}
+	}()
+
 	doneCh := make(chan struct{}, 1)
 
 	var resp *http.Response
@@ -145,16 +164,17 @@ func (d *Downloader) Download(r *Release, cliPath string, isUpdate bool) (string
 		d.progressTracker.CancelOrDone(cancel, doneCh)
 	}(resp.Body)
 
-	if resp.StatusCode != http.StatusOK {
-		d.errorReporter.CaptureError(err)
-		return "", fmt.Errorf("failed to %s Snyk CLI from %q: %s", kindStr, downloadURL, resp.Status)
-	}
 	executableFileName := cliDiscovery.ExecutableName(isUpdate)
 	defer func(Body io.ReadCloser) {
 		_ = Body.Close()
 		doneCh <- struct{}{}
 		logger.Debug().Msgf("finished Snyk CLI %s", kindStr)
 	}(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		d.errorReporter.CaptureError(err)
+		return "", fmt.Errorf("failed to %s Snyk CLI from %q: %s", kindStr, downloadURL, resp.Status)
+	}
 
 	// pipe stream
 	cliReader := io.TeeReader(resp.Body, newWriter(resp.ContentLength, d.progressTracker, onProgress))
@@ -198,13 +218,7 @@ func (d *Downloader) Download(r *Release, cliPath string, isUpdate bool) (string
 	}
 
 	_ = cliTmpFile.Close() // close file to allow moving it on Windows
-	destinationPath, err := d.moveToDestination(cliPath, executableFileName, cliTmpFile.Name(), expectedChecksum)
-
-	if isUpdate {
-		d.progressTracker.EndWithMessage("Snyk CLI has been updated.")
-	} else {
-		d.progressTracker.EndWithMessage("Snyk CLI has been downloaded.")
-	}
+	destinationPath, err = d.moveToDestination(cliPath, executableFileName, cliTmpFile.Name(), expectedChecksum)
 
 	return destinationPath, err
 }

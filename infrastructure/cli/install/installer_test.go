@@ -131,6 +131,32 @@ func TestInstallRelease_ReturnsErrorWhenCliPathIsEmpty(t *testing.T) {
 	assert.NoFileExists(t, filename.ExecutableName)
 }
 
+func TestUpdateFromRelease_ReturnsErrorWhenCliPathIsEmpty(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	resolver := mock_types.NewMockConfigResolverInterface(gomock.NewController(t))
+	resolver.EXPECT().GetString(types.SettingCliPath, nil).AnyTimes().Return("")
+	t.Chdir(t.TempDir())
+
+	binary := []byte("snyk-cli")
+	checksum := sha256.Sum256(binary)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(binary)
+	}))
+	t.Cleanup(server.Close)
+
+	installer := NewInstaller(
+		engine,
+		error_reporting.NewTestErrorReporter(engine),
+		func() *http.Client { return server.Client() },
+		resolver,
+	)
+
+	updated, err := installer.updateFromRelease(testRelease(server.URL, fmt.Sprintf("%x  %s", checksum, filename.ExecutableName)))
+
+	require.Error(t, err)
+	assert.False(t, updated)
+}
+
 func TestInstallRelease_ReturnsInstalledPath_WhenResolverCannotRediscoverIt(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
