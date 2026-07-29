@@ -19,6 +19,7 @@ package authentication
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -52,8 +53,17 @@ func (p *OAuth2Provider) Authenticate(ctx context.Context) (string, error) {
 	err := p.authenticator.CancelableAuthenticate(ctx)
 	switch {
 	case errors.Is(err, auth.ErrAuthCanceled):
-		p.logger.Info().Msg("authentication canceled")
-		return "", nil // Consume the error, the user knows they canceled.
+		p.logger.Debug().Msg("authentication canceled")
+		// GAF's ErrAuthCanceled is a plain sentinel that does not wrap context.Canceled. Normalize it
+		// to context.Canceled so the shared util.IsCancellation helper classifies a canceled OAuth
+		// login as an expected cancellation across the auth/login stack — debug log, no Sentry report,
+		// no user notification.
+		return "", fmt.Errorf("oauth authentication canceled: %w", context.Canceled)
+	case errors.Is(err, auth.ErrAuthTimedOut):
+		p.logger.Debug().Msg("authentication timed out")
+		// Normalize GAF's ErrAuthTimedOut to context.DeadlineExceeded so util.IsTimeout recognizes it:
+		// the timeout is surfaced to the user (so they can retry) but kept out of Sentry.
+		return "", fmt.Errorf("oauth authentication timed out: %w", context.DeadlineExceeded)
 	case err != nil:
 		return "", err
 	}

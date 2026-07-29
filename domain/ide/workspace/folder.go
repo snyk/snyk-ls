@@ -875,7 +875,7 @@ func (f *Folder) sendDiagnosticsForFile(path types.FilePath, issues []types.Issu
 
 	f.notifier.Send(types.PublishDiagnosticsParams{
 		URI:         uri.PathToUri(path),
-		Diagnostics: converter.ToDiagnostics(issues),
+		Diagnostics: converter.ToDiagnosticsForFolder(issues, f.path, f.logger),
 	})
 }
 

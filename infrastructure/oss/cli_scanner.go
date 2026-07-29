@@ -264,6 +264,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 		previousScan.CancelScan()
 	}
 	newScan := scans.NewScanProgressWithLogger(cliScanner.engine.GetLogger())
+	newScan.SetCancelFunc(cancel)
 	go newScan.Listen(ctx, cancel, i)
 	defer func() {
 		cliScanner.mutex.Lock()

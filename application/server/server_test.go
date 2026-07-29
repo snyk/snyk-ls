@@ -42,13 +42,17 @@ import (
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/application/watcher"
 	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
@@ -92,9 +96,11 @@ func didOpenTextParams(t *testing.T) (sglsp.DidOpenTextDocumentParams, types.Fil
 type ServerTestOption func(*serverTestConfig)
 
 type serverTestConfig struct {
-	useRealDI    bool
-	overrideDeps *di.Dependencies
-	callbackFn   onCallbackFn
+	useRealDI       bool
+	overrideDeps    *di.Dependencies
+	callbackFn      onCallbackFn
+	concurrency     int
+	scannerOverride scanner.Scanner
 }
 
 func WithRealDI() ServerTestOption {
@@ -112,6 +118,26 @@ func WithDeps(deps di.Dependencies) ServerTestOption {
 func WithCallback(fn onCallbackFn) ServerTestOption {
 	return func(cfg *serverTestConfig) {
 		cfg.callbackFn = fn
+	}
+}
+
+// WithScanner replaces the Scanner dependency injected into request contexts.
+// It composes with WithRealDI, so a test can keep the real command service (needed
+// for commands that actually render, e.g. the settings-configuration HTML) while
+// still controlling scanner Init behavior.
+func WithScanner(s scanner.Scanner) ServerTestOption {
+	return func(cfg *serverTestConfig) {
+		cfg.scannerOverride = s
+	}
+}
+
+// WithServerConcurrency pins the jrpc2 server worker-pool size for the test.
+// A value of 1 deterministically reproduces the saturated-dispatch condition
+// from IDE-2181 (a single busy worker starves later requests) regardless of the
+// host core count; 0 keeps the production default (number of cores).
+func WithServerConcurrency(n int) ServerTestOption {
+	return func(cfg *serverTestConfig) {
+		cfg.concurrency = n
 	}
 }
 
@@ -154,10 +180,16 @@ func setupServer(
 		}
 	}
 
+	// Scanner override applies to either DI path (composes with WithRealDI); only the
+	// Scanner dependency injected into request contexts is replaced.
+	if cfg.scannerOverride != nil {
+		deps.Scanner = cfg.scannerOverride
+	}
+
 	setUniqueCliPath(t, engine)
 
 	jsonRPCRecorder := &testsupport.JsonRPCRecorder{}
-	loc := startServer(engine, tokenService, cfg.callbackFn, jsonRPCRecorder, deps)
+	loc := startServer(engine, tokenService, cfg.callbackFn, jsonRPCRecorder, deps, cfg.concurrency)
 	cleanupChannels()
 
 	t.Cleanup(func() {
@@ -289,7 +321,7 @@ func TestWithContext_HandlerPanic_ReturnsJRPC2Error(t *testing.T) {
 
 type onCallbackFn = func(ctx context.Context, request *jrpc2.Request) (any, error)
 
-func startServer(engine workflow.Engine, tokenService *config.TokenServiceImpl, callBackFn onCallbackFn, jsonRPCRecorder *testsupport.JsonRPCRecorder, deps di.Dependencies) server.Local {
+func startServer(engine workflow.Engine, tokenService *config.TokenServiceImpl, callBackFn onCallbackFn, jsonRPCRecorder *testsupport.JsonRPCRecorder, deps di.Dependencies, concurrency int) server.Local {
 	var srv *jrpc2.Server
 	logger := engine.GetLogger()
 
@@ -308,7 +340,7 @@ func startServer(engine workflow.Engine, tokenService *config.TokenServiceImpl, 
 		},
 		Server: &jrpc2.ServerOptions{
 			AllowPush:   true,
-			Concurrency: 0, // set concurrency to < 1 causes initialization with number of cores
+			Concurrency: concurrency, // 0 => number of cores (production default); >0 pins the pool size for tests
 			Logger: func(text string) {
 				logger.Trace().Str("method", "json-rpc").Msg(text)
 			},
@@ -513,6 +545,11 @@ func Test_initialized_shouldInitializeAndTriggerCliDownload(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Scanner init (which triggers the CLI download) now runs in the background after
+	// the initialized handler returns (IDE-2181). Wait for the init-complete signal
+	// (invariant D1) so the assertion observes the finished download without racing the
+	// goroutine.
+	types.WaitForLspInitialized(engine.GetConfiguration())
 	assert.Equal(t, 1, di.Installer().(*install.FakeInstaller).Installs())
 }
 
@@ -1280,6 +1317,11 @@ func Test_initializedHandler_PopulatesFeatureFlagsAndSastSettingsForWorkspaceFol
 	_, err = loc.Client.Call(t.Context(), "initialized", types.InitializedParams{})
 	require.NoError(t, err)
 
+	// HandleFolders (feature-flag + SAST population) now runs in the background after
+	// initialized returns (IDE-2181); wait for the init-complete signal (invariant D1)
+	// so these reads happen-after the goroutine's writes.
+	types.WaitForLspInitialized(engine.GetConfiguration())
+
 	assert.Equal(t, len(folderPaths), fakeFF.PopulateFolderConfigCallCount,
 		"PopulateFolderConfig must be called once per workspace folder")
 	for _, p := range folderPaths {
@@ -1725,7 +1767,7 @@ func TestInitializeHandler_MissingDep_PropagatesLSPError(t *testing.T) {
 			tc.mutate(&deps)
 
 			jsonRPCRecorder := &testsupport.JsonRPCRecorder{}
-			loc := startServer(engine, tokenService, nil, jsonRPCRecorder, deps)
+			loc := startServer(engine, tokenService, nil, jsonRPCRecorder, deps, 0)
 			t.Cleanup(func() { _ = loc.Close() })
 
 			_, err := loc.Client.Call(t.Context(), "initialize", nil)
@@ -1736,4 +1778,175 @@ func TestInitializeHandler_MissingDep_PropagatesLSPError(t *testing.T) {
 			assert.Contains(t, rpcErr.Message, tc.wantMessage)
 		})
 	}
+}
+
+// Test_textDocumentDidChange_WithRemediationEnabled_NoRPCError verifies that a
+// textDocument/didChange notification reaches the onFileChange callback and
+// returns no RPC error when the remediation agent is enabled (INTEG-006).
+func Test_textDocumentDidChange_WithRemediationEnabled_NoRPCError(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, _, _ := setupServer(t, engine, tokenService)
+	testutil.CreateDummyProgressListener(t)
+
+	dir := t.TempDir()
+	file := testsupport.CreateTempFile(t, dir)
+	fileURI := uri.PathToUri(types.FilePath(file.Name()))
+	folderURI := uri.PathToUri(types.FilePath(dir))
+
+	// Add the folder so the file is inside a known workspace folder.
+	_, err := loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
+		Event: types.WorkspaceFoldersChangeEvent{
+			Added: []types.WorkspaceFolder{{Name: dir, Uri: folderURI}},
+		},
+	})
+	require.NoError(t, err)
+
+	// didChange must reach onFileChange and return no RPC error.
+	_, err = loc.Client.Call(t.Context(), "textDocument/didChange", sglsp.DidChangeTextDocumentParams{
+		TextDocument:   sglsp.VersionedTextDocumentIdentifier{TextDocumentIdentifier: sglsp.TextDocumentIdentifier{URI: fileURI}, Version: 1},
+		ContentChanges: []sglsp.TextDocumentContentChangeEvent{{Text: "package main\n\nfunc main() {}\n"}},
+	})
+	require.NoError(t, err, "textDocument/didChange must not return an RPC error")
+}
+
+// Test_workspaceDidChangeWorkspaceFolders_RemediationAction_WorksInDynamicFolder verifies that a
+// textDocument/codeAction request against a file in a folder added via workspace/didChangeWorkspaceFolders
+// succeeds without error (INTEG-005: worktree-root code-action reachability).
+func Test_workspaceDidChangeWorkspaceFolders_RemediationAction_WorksInDynamicFolder(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	// Enable the remediation-agent flag so the provider is wired in by TestInit path.
+	loc, _, _ := setupServer(t, engine, tokenService)
+	testutil.CreateDummyProgressListener(t)
+
+	dir := t.TempDir()
+	file := testsupport.CreateTempFile(t, dir)
+	filePath := types.FilePath(file.Name())
+	folderUri := uri.PathToUri(types.FilePath(dir))
+
+	// Add the folder dynamically, mirroring what ambient-canary does for a worktree root.
+	_, err := loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
+		Event: types.WorkspaceFoldersChangeEvent{
+			Added: []types.WorkspaceFolder{{Name: dir, Uri: folderUri}},
+		},
+	})
+	require.NoError(t, err)
+
+	// textDocument/codeAction must return a valid (possibly empty) response — no RPC error.
+	params := types.CodeActionParams{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(filePath)},
+		Range:        sglsp.Range{Start: sglsp.Position{Line: 0, Character: 0}, End: sglsp.Position{Line: 0, Character: 1}},
+	}
+	resp, err := loc.Client.Call(t.Context(), "textDocument/codeAction", params)
+	require.NoError(t, err, "codeAction must not return an RPC error for a dynamically-added folder")
+
+	var actions []types.LSPCodeAction
+	require.NoError(t, resp.UnmarshalResult(&actions))
+	// No assertion on count: the file is empty, so no issues and no actions.
+	// The test's value is that the call succeeds rather than returning a "folder not found" error.
+}
+
+// serverTestRemediationProvider is a test double for remediation.RemediationProvider
+// used in server-level integration tests.
+type serverTestRemediationProvider struct {
+	edit *types.WorkspaceEdit
+}
+
+func (f *serverTestRemediationProvider) Remediate(_ context.Context, _ remediation.RemediationRequest) (*types.WorkspaceEdit, error) {
+	return f.edit, nil
+}
+
+// Test_codeActionResolve_RemediationAgent_ReturnsEdit verifies the full LSP
+// round-trip for a RemediationAgentQuickFix code action:
+//  1. textDocument/codeAction returns an action with kind=RemediationAgentQuickFix,
+//     nil edit, and a UUID in Data.
+//  2. codeAction/resolve calls through to the remediation provider and returns
+//     the WorkspaceEdit (INTEG-007).
+func Test_codeActionResolve_RemediationAgent_ReturnsEdit(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	testutil.CreateDummyProgressListener(t)
+
+	dir := t.TempDir()
+	file := testsupport.CreateTempFile(t, dir)
+	filePath := types.FilePath(file.Name())
+	fileURI := uri.PathToUri(filePath)
+	folderURI := uri.PathToUri(types.FilePath(dir))
+
+	// Fixable Code issue with FindingId — the one that triggers RemediationAgentQuickFix.
+	fixableIssue := &snyk.Issue{
+		FindingId:      "finding-integ-resolve",
+		Product:        product.ProductCode,
+		AdditionalData: snyk.CodeIssueData{HasAIFix: true},
+	}
+
+	// Mock issue provider returns the fixable issue for any range query.
+	ctrl := gomock.NewController(t)
+	issueProvider := mock_snyk.NewMockIssueProvider(ctrl)
+	issueProvider.EXPECT().IssuesForRange(gomock.Any(), gomock.Any()).Return([]types.Issue{fixableIssue}).AnyTimes()
+
+	// Fake remediation provider returns a pre-built WorkspaceEdit.
+	mockEdit := &types.WorkspaceEdit{
+		Changes: map[string][]types.TextEdit{
+			string(filePath): {{NewText: "// fixed by remy\n"}},
+		},
+	}
+	fakeProvider := &serverTestRemediationProvider{edit: mockEdit}
+
+	// Enable the feature flag so remediationCodeActions is not gated out.
+	engine.GetConfiguration().Set("remediation_agent_enabled", true)
+
+	// Build a custom CodeActionsService wired with the mocks.
+	fw := watcher.NewFileWatcher()
+	customCAService := codeaction.NewService(
+		engine, issueProvider, fw,
+		notification.NewMockNotifier(),
+		featureflag.NewFakeService(),
+		types.NewConfigResolver(engine.GetLogger()),
+		fakeProvider,
+	)
+
+	// Start server with the custom CodeActionsService injected via deps override.
+	baseDeps := di.TestInit(t, engine, tokenService, nil)
+	baseDeps.CodeActionService = customCAService
+	jsonRPCRecorder := &testsupport.JsonRPCRecorder{}
+	loc := startServer(engine, tokenService, nil, jsonRPCRecorder, baseDeps, 0)
+	t.Cleanup(func() { _ = loc.Close() })
+
+	// Register the workspace folder so GetFolderContaining finds the file.
+	_, err := loc.Client.Call(t.Context(), "workspace/didChangeWorkspaceFolders", types.DidChangeWorkspaceFoldersParams{
+		Event: types.WorkspaceFoldersChangeEvent{
+			Added: []types.WorkspaceFolder{{Name: dir, Uri: folderURI}},
+		},
+	})
+	require.NoError(t, err)
+
+	// List code actions for the file range.
+	caParams := types.CodeActionParams{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: fileURI},
+		Range:        sglsp.Range{Start: sglsp.Position{Line: 0, Character: 0}, End: sglsp.Position{Line: 0, Character: 1}},
+	}
+	caResp, err := loc.Client.Call(t.Context(), "textDocument/codeAction", caParams)
+	require.NoError(t, err)
+
+	var listedActions []types.LSPCodeAction
+	require.NoError(t, caResp.UnmarshalResult(&listedActions))
+
+	var remyAction *types.LSPCodeAction
+	for i := range listedActions {
+		if listedActions[i].Kind == types.RemediationAgentQuickFix {
+			remyAction = &listedActions[i]
+			break
+		}
+	}
+	require.NotNil(t, remyAction, "expected a RemediationAgentQuickFix action in the list response")
+	assert.Nil(t, remyAction.Edit, "edit must be nil at list time (deferred)")
+	require.NotNil(t, remyAction.Data, "Data must carry the deferred-resolve UUID")
+
+	// Resolve the code action through the full LSP stack.
+	resolveResp, err := loc.Client.Call(t.Context(), "codeAction/resolve", *remyAction)
+	require.NoError(t, err)
+
+	var resolved types.LSPCodeAction
+	require.NoError(t, resolveResp.UnmarshalResult(&resolved))
+	require.NotNil(t, resolved.Edit, "resolved action must carry the WorkspaceEdit from the provider")
+	assert.NotEmpty(t, resolved.Edit.Changes, "WorkspaceEdit must have at least one change")
 }
