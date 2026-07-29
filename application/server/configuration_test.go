@@ -2575,34 +2575,37 @@ func Test_updateFolderConfig_PreferredOrgChange_ResetsSummaryPanelOnOrgChange(t 
 }
 
 // initRecordingAggregator wraps NoopStateAggregator to count Init calls so we
-// can assert that the guard branches in resetSummaryPanelForOrgChange do not
+// can assert that the guard branches in resetSummaryPanel do not
 // invoke Init when there are no folder paths to reset.
 type initRecordingAggregator struct {
 	scanstates.NoopStateAggregator
+	mu        sync.Mutex
 	initCalls [][]types.FilePath
 }
 
 func (r *initRecordingAggregator) Init(folders []types.FilePath) {
 	cp := make([]types.FilePath, len(folders))
 	copy(cp, folders)
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.initCalls = append(r.initCalls, cp)
 }
 
-// IDE-1969: resetSummaryPanelForOrgChange has two early-return guards (nil
-// aggregator, empty folder paths). Both must be safe — the nil case happens
-// before di.Init wires the aggregator, and the empty case happens when an
-// org change is reported for a workspace with no folders.
-func TestResetSummaryPanelForOrgChange_NilAgg_DoesNotPanic(t *testing.T) {
+// IDE-1969: resetSummaryPanel has two early-return guards (nil aggregator,
+// empty folder paths). Both must be safe — the nil case happens before
+// di.Init wires the aggregator, and the empty case happens when an org change
+// is reported for a workspace with no folders.
+func TestResetSummaryPanel_NilAgg_DoesNotPanic(t *testing.T) {
 	assert.NotPanics(t, func() {
-		resetSummaryPanelForOrgChange(nil, []types.FilePath{"/some/folder"})
+		resetSummaryPanel(nil, []types.FilePath{"/some/folder"})
 	})
 }
 
-func TestResetSummaryPanelForOrgChange_EmptyFolderPaths_DoesNotCallInit(t *testing.T) {
+func TestResetSummaryPanel_EmptyFolderPaths_DoesNotCallInit(t *testing.T) {
 	agg := &initRecordingAggregator{}
 	assert.NotPanics(t, func() {
-		resetSummaryPanelForOrgChange(agg, nil)
-		resetSummaryPanelForOrgChange(agg, []types.FilePath{})
+		resetSummaryPanel(agg, nil)
+		resetSummaryPanel(agg, []types.FilePath{})
 	})
 	assert.Empty(t, agg.initCalls, "Init must not be called when folderPaths is empty")
 }

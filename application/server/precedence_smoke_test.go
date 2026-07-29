@@ -25,7 +25,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adrg/xdg"
 	"github.com/creachadair/jrpc2/server"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -50,9 +49,11 @@ func setupPrecedenceTest(t *testing.T) (workflow.Engine, *config.TokenServiceImp
 	t.Helper()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
 
-	origConfigHome := xdg.ConfigHome
-	xdg.ConfigHome = t.TempDir()
-	t.Cleanup(func() { xdg.ConfigHome = origConfigHome })
+	// Explicit per-test config file: ConfigFileFromConfig short-circuits on
+	// SettingConfigFile before ever calling into xdg, so the resolved path is
+	// independent of any process-global xdg state and safe under concurrent tests.
+	engine.GetConfiguration().Set(types.SettingConfigFile,
+		filepath.Join(t.TempDir(), "snyk", "ls-config.json"))
 
 	loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 
@@ -627,9 +628,9 @@ func setupScanPrecedenceTest(t *testing.T, codeEnabled, ossEnabled, iacEnabled b
 	t.Helper()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
 
-	origConfigHome := xdg.ConfigHome
-	xdg.ConfigHome = t.TempDir()
-	t.Cleanup(func() { xdg.ConfigHome = origConfigHome })
+	// See setupPrecedenceTest: explicit config file keeps this isolated from xdg.ConfigHome.
+	engine.GetConfiguration().Set(types.SettingConfigFile,
+		filepath.Join(t.TempDir(), "snyk", "ls-config.json"))
 
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
@@ -646,7 +647,10 @@ func setupScanPrecedenceTest(t *testing.T, codeEnabled, ossEnabled, iacEnabled b
 	folder := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, engine, tokenService)
 
 	requireLspConfigurationNotification(t, jsonRpcRecorder, nil, false)
-	jsonRpcRecorder.ClearNotifications()
+	// Background init (IDE-2181) finishes workspace scans before WaitForLspInitialized
+	// returns; clearing all notifications would discard the $/snyk.scan success payloads
+	// that scan-level precedence tests assert on immediately after setup.
+	jsonRpcRecorder.ClearNotificationsByMethod("$/snyk.configuration")
 
 	return engine, tokenService, loc, jsonRpcRecorder, folder
 }
@@ -686,7 +690,7 @@ func waitForScanCompletion(t *testing.T, agg scanstates.Aggregator) {
 	t.Helper()
 	require.Eventually(t, func() bool {
 		return agg.StateSnapshot().AllScansFinishedWorkingDirectory
-	}, 120*time.Second, time.Millisecond, "scans did not complete in time")
+	}, maxIntegTestDuration, time.Millisecond, "scans did not complete in time")
 }
 
 // Test_SmokeScanPrecedence_OSSEnabled_CodeDisabled verifies that when OSS is enabled
@@ -815,9 +819,9 @@ func Test_SmokeScanPrecedence_UserOverrideDisablesProduct(t *testing.T) {
 func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
 
-	origConfigHome := xdg.ConfigHome
-	xdg.ConfigHome = t.TempDir()
-	t.Cleanup(func() { xdg.ConfigHome = origConfigHome })
+	// See setupPrecedenceTest: explicit config file keeps this isolated from xdg.ConfigHome.
+	engine.GetConfiguration().Set(types.SettingConfigFile,
+		filepath.Join(t.TempDir(), "snyk", "ls-config.json"))
 
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())

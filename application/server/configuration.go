@@ -394,7 +394,7 @@ func displayNameFor(fm workflow.ConfigurationOptionsMetaData, name string) strin
 // processConfigSettings writes incoming settings to configuration and applies side effects.
 // This replaces the old writeSettings + update* functions.
 // Returns globalOrgChanged so the caller (processFolderConfigs) can fold the
-// global reset into the single resetSummaryPanelForOrgChange call that covers
+// global reset into the single resetSummaryPanel call that covers
 // per-folder org changes, plus the names of any machine-scope settings rejected
 // for being locked. The caller is responsible for emitting a single
 // deduplicated locked-fields notification for the triggering event (see
@@ -484,7 +484,7 @@ func hasFilterChangesInLspConfig(lspConfig *types.LspFolderConfig) bool {
 // processFolderConfigs handles the folder configuration portion of incoming settings.
 // When globalOrgChanged is true, every workspace folder is treated as having an
 // org change so the Summary Panel reset is folded into the single
-// resetSummaryPanelForOrgChange call below (avoiding the double-flash that used
+// resetSummaryPanel call below (avoiding the double-flash that used
 // to occur when applyOrganization reset separately from processFolderConfigs).
 //
 // Returns the union of all folder-scope setting names rejected for being locked
@@ -557,7 +557,7 @@ func processFolderConfigs(ctx context.Context, conf configuration.Configuration,
 		for p := range orgChangedFolderPaths {
 			paths = append(paths, p)
 		}
-		resetSummaryPanelForOrgChange(mustScanStateAggregatorFromContext(ctx), paths)
+		resetSummaryPanel(mustScanStateAggregatorFromContext(ctx), paths)
 	}
 
 	return lockedFields
@@ -1008,7 +1008,7 @@ func applyGlobalResets(ctx context.Context, conf configuration.Configuration, en
 // applyOrganization persists the global org change and emits analytics.
 // Returns true when the global org actually changed and the LSP is initialized
 // so the caller (processConfigSettings → processFolderConfigs) can union the
-// affected workspace folders into the single resetSummaryPanelForOrgChange call.
+// affected workspace folders into the single resetSummaryPanel call.
 func applyOrganization(ctx context.Context, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) bool {
 	v, ok := settingStr(settings, types.SettingOrganization)
 	if !ok {
@@ -1072,10 +1072,11 @@ func findFoldersUsingGlobalOrgFallback(conf configuration.Configuration, folders
 	return result
 }
 
-// resetSummaryPanelForOrgChange clears scan state for the given folders so the
-// Summary Panel returns to its initial "no scans yet" state. The aggregator's
-// Init re-emits a fresh snapshot, which IDE clients render as the empty summary panel.
-func resetSummaryPanelForOrgChange(scanAgg scanstates.Aggregator, folderPaths []types.FilePath) {
+// resetSummaryPanel clears scan state for the given folders so the Summary
+// Panel returns to its initial "no scans yet" state. The aggregator's Init
+// re-emits a fresh snapshot, which IDE clients render as the empty summary
+// panel. Used by both org-change and stop-scan paths.
+func resetSummaryPanel(scanAgg scanstates.Aggregator, folderPaths []types.FilePath) {
 	if scanAgg == nil || len(folderPaths) == 0 {
 		return
 	}
