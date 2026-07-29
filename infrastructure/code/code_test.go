@@ -27,6 +27,7 @@ import (
 	"github.com/erni27/imcache"
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -133,6 +134,37 @@ func TestUploadAndAnalyze(t *testing.T) {
 	channel := make(chan types.ProgressParams, 10000)
 	cancelChannel := make(chan bool, 1)
 	testTracker := progress.NewTestTracker(channel, cancelChannel, engine.GetLogger())
+
+	t.Run("should not send a user-facing popup when repository URL cannot be determined during scan", func(t *testing.T) {
+		mockNotifier := notification.NewMockNotifier()
+		scanner := New(engine,
+			performance.NewInstrumentor(),
+			&snyk_api.FakeApiClient{CodeEnabled: true},
+			newTestCodeErrorReporter(),
+			setupMockLearnServiceNoLessons(t),
+			featureflag.NewFakeService(),
+			mockNotifier,
+			NewCodeInstrumentor(),
+			newTestCodeErrorReporter(),
+			NewFakeCodeScannerClient,
+			defaultResolver(engine))
+
+		// Use a non-git temp dir so NewRepositoryTarget fails to determine the repo URL.
+		nonGitPath := types.FilePath(t.TempDir())
+		engineConfig := engine.GetConfiguration()
+		types.SetPreferredOrgAndOrgSetByUser(engineConfig, nonGitPath, "test-org", true)
+		folderConfig := &types.FolderConfig{FolderPath: nonGitPath}
+		folderConfig.ConfigResolver = types.NewMinimalConfigResolver(engineConfig)
+
+		_, _ = scanner.UploadAndAnalyze(t.Context(), nonGitPath, folderConfig, sliceToChannel([]string{}), map[types.FilePath]bool{}, false, testTracker)
+
+		for _, msg := range mockNotifier.SentMessages() {
+			if params, ok := msg.(sglsp.ShowMessageParams); ok {
+				assert.NotEqual(t, sglsp.MTWarning, params.Type,
+					"scan path must not send a warning popup when repo URL cannot be determined; got: %v", params.Message)
+			}
+		}
+	})
 
 	t.Run(
 		"should retrieve from backend", func(t *testing.T) {

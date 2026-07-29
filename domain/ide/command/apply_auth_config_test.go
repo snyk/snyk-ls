@@ -17,10 +17,13 @@
 package command
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	gafConfig "github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -31,6 +34,50 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
+
+func TestApplyAuthMethodChange_CancelsInFlightLoginWhenMethodChanges(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+
+	provider := authentication.NewBlockingFakeAuthProvider()
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+
+	// Start a login that blocks until its context is canceled, simulating a stuck auth.
+	firstDone := make(chan struct{})
+	go func() {
+		defer close(firstDone)
+		_, _ = authService.Authenticate(context.Background())
+	}()
+
+	select {
+	case <-provider.Started:
+	case <-time.After(time.Second):
+		t.Fatal("Authenticate did not start")
+	}
+
+	// Switching the auth method must cancel the in-flight login for the previous method. Run it in a
+	// goroutine so a regression (ConfigureProviders deadlocking behind the stuck login's mutex) is
+	// reported by this explicit timeout rather than the global test timeout.
+	acDone := make(chan bool, 1)
+	go func() {
+		acDone <- ApplyAuthMethodChange(conf, authService, engine.GetLogger(), types.TokenAuthentication)
+	}()
+
+	var changed bool
+	select {
+	case changed = <-acDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("ApplyAuthMethodChange deadlocked — it must cancel the in-flight login before ConfigureProviders acquires the auth mutex")
+	}
+	assert.True(t, changed)
+
+	select {
+	case <-firstDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("ApplyAuthMethodChange did not cancel the in-flight login")
+	}
+}
 
 func TestApplyEndpointChange_EndpointChanges_LSPInitialized_LogsOutAndClearsWorkspace(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
@@ -53,6 +100,36 @@ func TestApplyEndpointChange_EndpointChanges_LSPInitialized_LogsOutAndClearsWork
 
 	assert.True(t, changed)
 	assert.Empty(t, config.GetToken(conf), "Logout must clear the token when endpoint changes and LSP is initialized")
+}
+
+// TestApplyEndpointChange_EndpointChanges_HandshakeAckedButScannerNotReady_LogsOut is
+// the IDE-2181 unit-level guard: during the background scanner-init window the late
+// SettingIsLspInitialized flag is still false, but the handshake has been acknowledged
+// (SettingIsLspHandshakeAcknowledged). The endpoint-switch credential clear must still
+// run — otherwise new-endpoint config coexists with old-endpoint credentials.
+func TestApplyEndpointChange_EndpointChanges_HandshakeAckedButScannerNotReady_LogsOut(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	// Handshake acknowledged, scanner NOT ready (the init window).
+	conf.Set(types.SettingIsLspHandshakeAcknowledged, true)
+	assert.False(t, conf.GetBool(types.SettingIsLspInitialized), "precondition: scanner-ready flag must be false")
+	ts.SetToken(conf, "some-token")
+
+	mockWs := mock_types.NewMockWorkspace(ctrl)
+	mockWs.EXPECT().Clear().Times(1)
+	mockWs.EXPECT().Folders().Return([]types.Folder{}).AnyTimes()
+	config.SetWorkspace(conf, mockWs)
+
+	provider := authentication.NewFakeCliAuthenticationProvider(engine)
+	authService := authentication.NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+
+	changed := ApplyEndpointChange(t.Context(), conf, authService, engine.GetLogger(), "https://api.custom.io")
+
+	assert.True(t, changed)
+	assert.Empty(t, config.GetToken(conf), "Logout must clear the token when endpoint changes and the handshake is acknowledged, even before scanner init completes")
 }
 
 func TestApplyEndpointChange_EndpointChanges_LSPNotInitialized_NoLogout(t *testing.T) {

@@ -11,6 +11,7 @@ import (
 	"github.com/golang/mock/gomock"
 	gafconfiguration "github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -872,9 +873,17 @@ func TestConfigHtml_FormFieldNamesMatchRegisteredSettings(t *testing.T) {
 	html := renderer.GetConfigHtml(settings, folderConfigs)
 	require.NotEmpty(t, html)
 
-	// 3. Parse all name="..." attributes
+	// 3. Parse all name="..." attributes.
+	// Strip <script> and <style> blocks first: form field names live in HTML
+	// elements, not in embedded JS/CSS. Inline JS that builds attribute selectors —
+	// e.g. `input[name="folder_' + index + '_' + field + '"]` in filter-sync.js —
+	// would otherwise be scraped as bogus field names and falsely flagged.
+	scriptRegex := regexp.MustCompile(`(?s)<script\b[^>]*>.*?</script>`)
+	styleRegex := regexp.MustCompile(`(?s)<style\b[^>]*>.*?</style>`)
+	htmlNoScripts := styleRegex.ReplaceAllString(scriptRegex.ReplaceAllString(html, ""), "")
+
 	nameRegex := regexp.MustCompile(`name="([^"]+)"`)
-	matches := nameRegex.FindAllStringSubmatch(html, -1)
+	matches := nameRegex.FindAllStringSubmatch(htmlNoScripts, -1)
 
 	// UI-only helpers and non-form-element name= attributes
 	allowedNonPflag := map[string]bool{
@@ -931,4 +940,35 @@ func TestConfigHtml_FormFieldNamesMatchRegisteredSettings(t *testing.T) {
 		t.Errorf("Found %d HTML form field name(s) that don't match registered pflag settings:\n%s",
 			len(violations), strings.Join(violations, "\n"))
 	}
+}
+
+func TestGetCliReleaseChannel(t *testing.T) {
+	t.Run("falls back to runtime version when unconfigured", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		engine.SetRuntimeInfo(runtimeinfo.New(runtimeinfo.WithVersion("v1.1234.4-preview.")))
+
+		channel := getCliReleaseChannel(engine.GetConfiguration(), engine)
+
+		assert.Equal(t, "preview", channel)
+	})
+
+	t.Run("prefers configured channel over runtime version", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		engine.SetRuntimeInfo(runtimeinfo.New(runtimeinfo.WithVersion("v1.1234.4-preview.")))
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliReleaseChannel), "stable")
+
+		channel := getCliReleaseChannel(engine.GetConfiguration(), engine)
+
+		assert.Equal(t, "stable", channel)
+	})
+
+	t.Run("prefers configured pinned version over runtime version", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		engine.SetRuntimeInfo(runtimeinfo.New(runtimeinfo.WithVersion("v1.1234.4")))
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliReleaseChannel), "v1.1292.0")
+
+		channel := getCliReleaseChannel(engine.GetConfiguration(), engine)
+
+		assert.Equal(t, "v1.1292.0", channel)
+	})
 }

@@ -27,12 +27,14 @@ import (
 	"github.com/creachadair/jrpc2"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
@@ -70,12 +72,13 @@ func TestCreateProgressListener(t *testing.T) {
 
 	server := mock_types.NewMockServer(ctrl)
 
-	var called atomic.Bool
+	var callbackCalled atomic.Bool
+	var notifyCalled atomic.Bool
 
 	server.EXPECT().
 		Callback(gomock.Any(), gomock.Any(), gomock.Any()).
 		DoAndReturn(func(ctx context.Context, s string, v any) (*jrpc2.Response, error) {
-			called.Store(true)
+			callbackCalled.Store(true)
 			return nil, nil
 		}).
 		Times(1)
@@ -83,7 +86,7 @@ func TestCreateProgressListener(t *testing.T) {
 	server.EXPECT().
 		Notify(gomock.Any(), gomock.Any(), gomock.Any()).
 		DoAndReturn(func(ctx context.Context, s string, v any) (*jrpc2.Response, error) {
-			called.Store(true)
+			notifyCalled.Store(true)
 			return nil, nil
 		}).
 		Times(1)
@@ -91,7 +94,7 @@ func TestCreateProgressListener(t *testing.T) {
 	go createProgressListener(progressChannel, server, engine.GetLogger())
 
 	assert.Eventually(t, func() bool {
-		return called.Load()
+		return callbackCalled.Load() && notifyCalled.Load()
 	}, 2*time.Second, time.Millisecond)
 
 	disposeProgressListener()
@@ -159,6 +162,38 @@ func TestCancelProgress(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		return progress.IsCanceled(expectedWorkdoneProgressCancelParams.Token)
 	}, time.Second*5, time.Millisecond)
+}
+
+// IDE-1035 (D): window/workDoneProgress/cancel for a non-scan token (e.g. a
+// download tracker) must NOT reset the summary panel. The positive case (scan
+// token → panel is eventually reset) is exercised by
+// TestScan_CancelCallback_CalledAfterGoroutinesFinish in the scanner package,
+// which verifies the reset happens only after scan goroutines finish writing.
+func TestCancelProgress_NonScanToken_DoesNotResetAggregator(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+
+	agg := &initRecordingAggregator{}
+	loc, _, _ := setupServer(t, engine, tokenService, WithDeps(di.Dependencies{ScanStateAggregator: agg}))
+
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
+	require.NoError(t, err)
+
+	// Seed a workspace folder.
+	tmpDir := types.FilePath(t.TempDir())
+	_, _ = workspaceutil.SetupWorkspace(t, engine, tmpDir)
+
+	// Create a plain (non-scan) tracker, e.g. for a download, and cancel it.
+	plainTracker := progress.NewTracker(true, engine.GetLogger())
+	cancelParams := types.WorkdoneProgressCancelParams{Token: plainTracker.GetToken()}
+	_, err = loc.Client.Call(t.Context(), "window/workDoneProgress/cancel", cancelParams)
+	require.NoError(t, err)
+
+	// Give the handler time to execute; Init must NOT be called.
+	assert.Never(t, func() bool {
+		agg.mu.Lock()
+		defer agg.mu.Unlock()
+		return len(agg.initCalls) > 0
+	}, 300*time.Millisecond, time.Millisecond, "Init must NOT be called when a non-scan token is canceled")
 }
 
 func Test_NotifierShouldSendNotificationToClient(t *testing.T) {
@@ -373,4 +408,47 @@ func Test_NotifierWaitsForLspInitializedChannel(t *testing.T) {
 
 	assert.Eventually(t, delivered, 2*time.Second, time.Millisecond,
 		"notification must be delivered after LspInitialized is signaled")
+}
+
+// Test_handleApplyWorkspaceEdit_NoCapability_DoesNotCallback verifies that
+// workspace/applyEdit is NOT sent to clients that do not declare support for it.
+func Test_handleApplyWorkspaceEdit_NoCapability_DoesNotCallback(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	// Explicitly leave ApplyEdit = false (zero value).
+	conf.Set(types.SettingClientCapabilities, types.ClientCapabilities{
+		Workspace: types.WorkspaceClientCapabilities{ApplyEdit: false},
+	})
+
+	srv := mock_types.NewMockServer(ctrl)
+	// Callback must NOT be called when the client has not declared applyEdit support.
+	srv.EXPECT().Callback(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	logger := engine.GetLogger()
+	params := types.ApplyWorkspaceEditParams{Label: "test-no-cap"}
+	handleApplyWorkspaceEdit(conf, srv, params, logger)
+}
+
+// Test_handleApplyWorkspaceEdit_WithCapability_SendsCallback verifies that
+// workspace/applyEdit IS sent when the client declares support for it.
+func Test_handleApplyWorkspaceEdit_WithCapability_SendsCallback(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(types.SettingClientCapabilities, types.ClientCapabilities{
+		Workspace: types.WorkspaceClientCapabilities{ApplyEdit: true},
+	})
+
+	srv := mock_types.NewMockServer(ctrl)
+	srv.EXPECT().
+		Callback(gomock.Any(), "workspace/applyEdit", gomock.Any()).
+		Return(nil, nil).
+		Times(1)
+
+	logger := engine.GetLogger()
+	params := types.ApplyWorkspaceEditParams{Label: "test-with-cap"}
+	handleApplyWorkspaceEdit(conf, srv, params, logger)
 }

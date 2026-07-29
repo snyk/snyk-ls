@@ -28,7 +28,6 @@ import (
 
 type workspaceScanCommand struct {
 	command types.CommandData
-	srv     types.Server
 	engine  workflow.Engine
 }
 
@@ -40,13 +39,10 @@ func (cmd *workspaceScanCommand) Execute(_ context.Context) (any, error) {
 	w := config.GetWorkspace(cmd.engine.GetConfiguration())
 	w.Clear()
 	args := cmd.command.Arguments
-	// HandleUntrustedFolders spawns un-awaited goroutines that outlive this command's execution.
-	// They cannot reuse the command's context, as the command executor will cancel it when the command finishes.
-	// w.ScanWorkspace also needs the same enriched context, I don't want to copy the enriched values across contexts,
-	// so I gave it the same (background) context.
+	// ScanWorkspace needs a context that outlives this command (the executor cancels
+	// the command's context on return), so it gets a background-derived enriched context.
 	enrichedCtx := cmd.enrichContextWithScanSource(context.Background(), args)
 	w.ScanWorkspace(enrichedCtx)
-	HandleUntrustedFolders(enrichedCtx, cmd.engine.GetConfiguration(), cmd.engine.GetLogger(), cmd.srv)
 	return nil, nil
 }
 

@@ -17,19 +17,19 @@
 package workspace
 
 func (w *Workspace) StartRequestTrustCommunication() {
-	w.trustMutex.Lock()
+	w.trustStateMutex.Lock()
 	w.trustRequestOngoing = true
-	w.trustMutex.Unlock()
+	w.trustStateMutex.Unlock()
 }
 
 func (w *Workspace) EndRequestTrustCommunication() {
-	w.trustMutex.Lock()
+	w.trustStateMutex.Lock()
 	w.trustRequestOngoing = false
-	w.trustMutex.Unlock()
+	w.trustStateMutex.Unlock()
 }
 
 func (w *Workspace) IsTrustRequestOngoing() bool {
-	w.trustMutex.Lock()
-	defer w.trustMutex.Unlock()
+	w.trustStateMutex.Lock()
+	defer w.trustStateMutex.Unlock()
 	return w.trustRequestOngoing
 }

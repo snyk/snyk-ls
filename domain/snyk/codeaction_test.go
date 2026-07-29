@@ -17,6 +17,7 @@
 package snyk
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -41,7 +42,7 @@ var mockCommand = &types.CommandData{
 	Title: "command",
 }
 
-var mockDeferredEdit = func() *types.WorkspaceEdit {
+var mockDeferredEdit = func(_ context.Context) *types.WorkspaceEdit {
 	return mockEdit
 }
 
@@ -82,7 +83,7 @@ func assertActionsInitializedCorrectly(t *testing.T,
 	action types.CodeAction,
 	expectedEdit *types.WorkspaceEdit,
 	expectedCommand *types.CommandData,
-	mockDeferredEdit *func() *types.WorkspaceEdit,
+	mockDeferredEdit *func(context.Context) *types.WorkspaceEdit,
 	mockDeferredCommand *func() *types.CommandData,
 ) {
 	t.Helper()

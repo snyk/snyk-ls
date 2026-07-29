@@ -28,6 +28,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -35,39 +36,42 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 var instance types.CommandService
 
 type serviceImpl struct {
-	authService        authentication.AuthenticationService
-	featureFlagService featureflag.Service
-	notifier           noti.Notifier
-	learnService       learn.Service
-	issueProvider      snyk.IssueProvider
-	codeScanner        *code.Scanner
-	cli                cli.Executor
-	ldxSyncService     LdxSyncService
-	configResolver     types.ConfigResolverInterface
-	scanStateFunc      func() scanstates.StateSnapshot
-	engine             workflow.Engine
-	logger             *zerolog.Logger
+	authService         authentication.AuthenticationService
+	featureFlagService  featureflag.Service
+	notifier            noti.Notifier
+	learnService        learn.Service
+	issueProvider       snyk.IssueProvider
+	codeScanner         *code.Scanner
+	cli                 cli.Executor
+	ldxSyncService      LdxSyncService
+	configResolver      types.ConfigResolverInterface
+	scanStateFunc       func() scanstates.StateSnapshot
+	engine              workflow.Engine
+	logger              *zerolog.Logger
+	remediationProvider remediation.FolderRemediator
 }
 
-func NewService(engine workflow.Engine, logger *zerolog.Logger, authService authentication.AuthenticationService, featureFlagService featureflag.Service, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor, ldxSyncService LdxSyncService, configResolver types.ConfigResolverInterface, scanStateFunc func() scanstates.StateSnapshot) types.CommandService {
+func NewService(engine workflow.Engine, logger *zerolog.Logger, authService authentication.AuthenticationService, featureFlagService featureflag.Service, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor, ldxSyncService LdxSyncService, configResolver types.ConfigResolverInterface, scanStateFunc func() scanstates.StateSnapshot, remediationProvider remediation.FolderRemediator) types.CommandService {
 	return &serviceImpl{
-		authService:        authService,
-		featureFlagService: featureFlagService,
-		notifier:           notifier,
-		learnService:       learnService,
-		issueProvider:      issueProvider,
-		codeScanner:        codeScanner,
-		cli:                cli,
-		ldxSyncService:     ldxSyncService,
-		configResolver:     configResolver,
-		scanStateFunc:      scanStateFunc,
-		engine:             engine,
-		logger:             logger,
+		authService:         authService,
+		featureFlagService:  featureFlagService,
+		notifier:            notifier,
+		learnService:        learnService,
+		issueProvider:       issueProvider,
+		codeScanner:         codeScanner,
+		cli:                 cli,
+		ldxSyncService:      ldxSyncService,
+		configResolver:      configResolver,
+		scanStateFunc:       scanStateFunc,
+		engine:              engine,
+		logger:              logger,
+		remediationProvider: remediationProvider,
 	}
 }
 
@@ -90,7 +94,7 @@ func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.
 
 	logger.Debug().Msgf("executing command %s", commandData.CommandId)
 	// TODO: move to DI
-	command, err := CreateFromCommandData(ctx, s.engine, commandData, server, s.authService, s.featureFlagService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli, s.ldxSyncService, s.configResolver, s.scanStateFunc)
+	command, err := CreateFromCommandData(ctx, s.engine, commandData, server, s.authService, s.featureFlagService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli, s.ldxSyncService, s.configResolver, s.scanStateFunc, s.remediationProvider)
 	if err != nil {
 		logger.Err(err).Msg("failed to create command")
 		return nil, err
@@ -99,9 +103,14 @@ func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.
 	result, err := command.Execute(ctx)
 	if err != nil {
 		var snykErr snyk_errors.Error
-		if errors.As(err, &snykErr) {
+		switch {
+		case util.IsCancellation(err):
+			// A canceled command (e.g. a login the IDE canceled via $/cancelRequest) is expected,
+			// not a failure: log at debug so it isn't reported as an error downstream.
+			logger.Debug().Msgf("command %s canceled", commandData.CommandId)
+		case errors.As(err, &snykErr):
 			logger.Err(err).Str("detail", snykErr.Detail).Msg("failed to execute command")
-		} else {
+		default:
 			logger.Err(err).Msg("failed to execute command")
 		}
 	}

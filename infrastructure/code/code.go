@@ -25,7 +25,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/puzpuzpuz/xsync"
 	"github.com/rs/zerolog"
-
 	codeClient "github.com/snyk/code-client-go"
 	codeClientConfig "github.com/snyk/code-client-go/config"
 	codeClientHTTP "github.com/snyk/code-client-go/http"
@@ -264,7 +263,7 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, l
 		Int("fileCount", len(filesToBeScanned)).
 		Msg("Code scanner: files to be scanned")
 
-	t := progress.NewTracker(true, sc.engine.GetLogger())
+	t := progress.NewScanTracker(true, sc.engine.GetLogger(), folderPath)
 	go func() { t.CancelOrDone(cancel, ctx.Done()) }()
 
 	t.BeginWithMessage(string("Snyk Code: scanning "+folderPath), "starting scan")
@@ -412,7 +411,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fo
 
 	target, err := scan.NewRepositoryTarget(string(path))
 	if err != nil {
-		logger.Warn().Msg("could not determine repository URL (target)")
+		logger.Warn().Err(err).Msg("could not determine repository URL (target)")
 	}
 
 	// convert changedFiles to map[string]bool

@@ -154,7 +154,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 		logger.Debug().Msg("IaC scan skipped: path is not a supported IaC file or directory")
 		return []types.Issue{}, nil
 	}
-	p := progress.NewTracker(true, iac.logger)
+	p := progress.NewScanTracker(true, iac.logger, workspaceFolder)
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
 	p.BeginUnquantifiableLength("Scanning for Snyk IaC issues", string(pathToScan))
 	defer p.EndWithMessage("Snyk Iac Scan completed.")
@@ -165,6 +165,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 		previousScan.CancelScan()
 	}
 	newScan := scans.NewScanProgressWithLogger(iac.logger)
+	newScan.SetCancelFunc(cancel)
 	go newScan.Listen(ctx, cancel, i)
 	defer func() {
 		iac.mutex.Lock()

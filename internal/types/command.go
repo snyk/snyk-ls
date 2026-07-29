@@ -50,11 +50,16 @@ const (
 	CodeSubmitFixFeedback   = "snyk.code.submitFixFeedback"
 
 	// Tree view commands
-	GetTreeView          = "snyk.getTreeView"
-	ToggleTreeFilter     = "snyk.toggleTreeFilter"
-	SetNodeExpanded      = "snyk.setNodeExpanded"
-	ShowScanErrorDetails = "snyk.showScanErrorDetails"
-	UpdateFolderConfig   = "snyk.updateFolderConfig"
+	GetTreeView              = "snyk.getTreeView"
+	ToggleTreeFilter         = "snyk.toggleTreeFilter"
+	SetNodeExpanded          = "snyk.setNodeExpanded"
+	ShowScanErrorDetails     = "snyk.showScanErrorDetails"
+	UpdateFolderConfig       = "snyk.updateFolderConfig"
+	DismissFeedbackBanner    = "snyk.dismissFeedbackBanner"
+	FeedbackBannerInteracted = "snyk.feedbackBannerInteracted"
+
+	// Remediation agent commands
+	RemediationAgentFixFolderCommand = "snyk.remediationAgent.fixFolder"
 
 	// bridging commands
 	ExecuteCLICommand = "snyk.executeCLI"

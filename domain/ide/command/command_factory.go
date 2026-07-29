@@ -25,6 +25,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/treeview"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -52,6 +53,7 @@ func CreateFromCommandData(
 	ldxSyncService LdxSyncService,
 	configResolver types.ConfigResolverInterface,
 	scanStateFunc func() scanstates.StateSnapshot,
+	remediationProvider remediation.FolderRemediator,
 ) (types.Command, error) {
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
@@ -67,9 +69,9 @@ func CreateFromCommandData(
 			featureFlagService: featureFlagService,
 		}, nil
 	case types.WorkspaceScanCommand:
-		return &workspaceScanCommand{command: commandData, srv: srv, engine: engine}, nil
+		return &workspaceScanCommand{command: commandData, engine: engine}, nil
 	case types.WorkspaceFolderScanCommand:
-		return &workspaceFolderScanCommand{command: commandData, srv: srv, engine: engine}, nil
+		return &workspaceFolderScanCommand{command: commandData, engine: engine}, nil
 	case types.OpenBrowserCommand:
 		return &openBrowserCommand{command: commandData, logger: logger}, nil
 	case types.LoginCommand:
@@ -79,7 +81,9 @@ func CreateFromCommandData(
 	case types.LogoutCommand:
 		return &logoutCommand{command: commandData, authService: authService, engine: engine, featureFlagService: featureFlagService}, nil
 	case types.TrustWorkspaceFoldersCommand:
-		return &trustWorkspaceFoldersCommand{command: commandData, notifier: notifier, engine: engine, configResolver: configResolver}, nil
+		// notifier omitted: trust notifications are sent by ws.TrustFoldersAndScan
+		// using the workspace's own notifier — this command needs no separate one.
+		return &trustWorkspaceFoldersCommand{command: commandData, engine: engine, configResolver: configResolver}, nil
 	case types.GetLearnLesson:
 		return &getLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	case types.OpenLearnLesson:
@@ -138,13 +142,22 @@ func CreateFromCommandData(
 	case types.GetTreeView:
 		return &getTreeViewCommand{command: commandData, engine: engine, scanStateFunc: scanStateFunc}, nil
 	case types.ToggleTreeFilter:
-		return &toggleTreeFilter{command: commandData, engine: engine}, nil
+		return &toggleTreeFilter{command: commandData, engine: engine, notifier: notifier, configResolver: configResolver}, nil
 	case types.SetNodeExpanded:
 		return &setNodeExpanded{command: commandData, expandState: treeview.GlobalExpandState()}, nil
 	case types.ShowScanErrorDetails:
 		return &showScanErrorDetails{command: commandData, srv: srv}, nil
 	case types.UpdateFolderConfig:
 		return &updateFolderConfig{command: commandData, engine: engine, configResolver: configResolver}, nil
+	case types.DismissFeedbackBanner:
+		return &dismissFeedbackBanner{command: commandData, engine: engine}, nil
+	case types.FeedbackBannerInteracted:
+		return &feedbackBannerInteracted{command: commandData, engine: engine}, nil
+	case types.RemediationAgentFixFolderCommand:
+		return &remediationFixFolderCommand{
+			command:  commandData,
+			provider: remediationProvider,
+		}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command %v", commandData)

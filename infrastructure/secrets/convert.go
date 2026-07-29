@@ -67,6 +67,21 @@ func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, scanPa
 
 	severity := toSeverity(string(attrs.Rating.Severity))
 	cwes, ruleID, ruleName, categories := extractProblems(attrs.Problems)
+
+	// groupingKey is the durable finding-id grouping key: the rule identity, which
+	// is stable across scans. It is captured BEFORE the per-result-set ruleID
+	// fallback below so it never silently becomes attrs.Key while a rule name is
+	// available. It falls back to attrs.Key only when the finding carries no rule
+	// problem at all (a defensive case; a real secrets finding always has one).
+	groupingKey := ruleID
+	if groupingKey == "" {
+		groupingKey = ruleName
+	}
+	if groupingKey == "" {
+		c.logger.Warn().Str("key", attrs.Key).Msg("secrets finding has no rule identity (ruleID and ruleName empty); FindingId falls back to per-scan key and will not be stable across scans")
+		groupingKey = attrs.Key
+	}
+
 	if ruleID == "" {
 		ruleID = attrs.Key
 	}
@@ -125,9 +140,16 @@ func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, scanPa
 			ContentRoot:      folderPath,
 			Product:          product.ProductSecrets,
 			CWEs:             cwes,
-			FindingId:        attrs.Key,
-			Fingerprint:      attrs.Key,
-			AdditionalData:   additionalData,
+			// FindingId is the durable grouping key: the stable rule identity (rule
+			// id, falling back to rule name), never attrs.Key. attrs.Key is a
+			// per-scan UUID, so folding it in made the same finding change identity
+			// on every scan. The converter combines this grouping key with the
+			// root-relative path + range to individuate multiple occurrences.
+			FindingId: groupingKey,
+			// Fingerprint feeds delta / IsNew matching (a separate concern) and
+			// intentionally stays the per-scan key.
+			Fingerprint:    attrs.Key,
+			AdditionalData: additionalData,
 		})
 	}
 	return issues

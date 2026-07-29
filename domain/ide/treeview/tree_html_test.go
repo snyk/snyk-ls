@@ -78,6 +78,39 @@ func TestTreeHtmlRenderer_TreeContainer_HasTotalIssuesAttribute(t *testing.T) {
 	assert.Contains(t, html, `data-total-issues="42"`)
 }
 
+func TestTreeHtmlRenderer_FeedbackBanner_RenderedHiddenWhenNotInteracted(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	html := renderer.RenderTreeView(TreeViewData{})
+
+	assert.Contains(t, html, `id="feedbackBanner"`)
+	assert.Contains(t, html, feedbackBannerURL)
+	assert.Contains(t, html, `id="feedbackBanner" hidden>`)
+}
+
+func TestTreeHtmlRenderer_FeedbackBanner_RenderedVisibleWhenInteracted(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	html := renderer.RenderTreeView(TreeViewData{FeedbackBannerInteracted: true})
+
+	assert.Contains(t, html, `id="feedbackBanner"`)
+	assert.NotContains(t, html, `id="feedbackBanner" hidden>`)
+}
+
+func TestTreeHtmlRenderer_FeedbackBanner_OmittedWhenDismissed(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	html := renderer.RenderTreeView(TreeViewData{FeedbackBannerDismissed: true})
+
+	assert.NotContains(t, html, `id="feedbackBanner"`)
+}
+
 func TestTreeHtmlRenderer_FileNode_HasDataAttributes(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
@@ -104,6 +137,60 @@ func TestTreeHtmlRenderer_FileNode_HasDataAttributes(t *testing.T) {
 	assert.Contains(t, html, "tree-node-file")
 	assert.Contains(t, html, `data-file-path="/project/main.go"`)
 	assert.Contains(t, html, `data-product="code"`)
+}
+
+func TestTreeHtmlRenderer_UntrustedFolderBanner_HasPerFolderTrustButtons(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	banner := NewTreeNode(NodeTypeInfo, untrustedFolderRationale,
+		WithID("info:untrusted-folder"),
+		WithInfoVariant("untrusted-folder"),
+		WithFolderPaths([]string{"/repo/a", "/repo/b"}),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{Nodes: []TreeNode{banner}})
+
+	assert.Contains(t, html, "tree-node-info--untrusted-folder")
+	assert.Contains(t, html, "You should only scan folders you trust")
+	// One Trust button per folder, each carrying its own folder path so the JS
+	// handler can scope snyk.trustWorkspaceFolders to that folder.
+	assert.Contains(t, html, `data-action="trust-folder" data-folder-path="/repo/a"`)
+	assert.Contains(t, html, `data-action="trust-folder" data-folder-path="/repo/b"`)
+	assert.Equal(t, 2, strings.Count(html, `data-action="trust-folder"`), "expected one Trust button per untrusted folder")
+}
+
+func TestTreeHtmlRenderer_UntrustedFolderNode_DimmedAndNoChevron(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	node := NewTreeNode(NodeTypeFolder, "my-project",
+		WithID("folder:/repo/my-project"),
+		WithFilePath("/repo/my-project"),
+		WithUntrusted(true),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{Nodes: []TreeNode{node}})
+
+	// (a) The node element must carry tree-node-untrusted: this drives opacity:0.5
+	//     dimming in CSS and signals the user that the folder is not yet trusted.
+	assert.Contains(t, html, `class="tree-node tree-node-untrusted"`,
+		"untrusted folder must carry tree-node-untrusted class for dimming")
+
+	// (b) The node element must NOT carry tree-node-has-children in any class
+	//     attribute value. tree-node-has-children drives chevron visibility and
+	//     row expand/collapse in CSS. Its absence means the folder cannot be
+	//     expanded — the banner is the sole trust affordance.
+	//
+	//     The closing-quote anchor `tree-node-has-children"` scopes the match to
+	//     an attribute value, not the CSS stylesheet which references the class
+	//     as a selector (`.tree-node-has-children {`). A bare NotContains on
+	//     the full class name would be a false pass because the selector string
+	//     appears in the embedded <style> block.
+	assert.NotContains(t, html, `tree-node-has-children"`,
+		"untrusted folder must not have tree-node-has-children — no chevron, no expand")
 }
 
 func TestTreeHtmlRenderer_ContainsIE11CompatMeta(t *testing.T) {
@@ -295,7 +382,7 @@ func TestTreeHtmlRenderer_FilterToolbar_SeverityButtons_Rendered(t *testing.T) {
 	assert.Contains(t, html, `<svg`)
 }
 
-func TestTreeHtmlRenderer_FilterToolbar_NoIssueViewButtons(t *testing.T) {
+func TestTreeHtmlRenderer_FilterToolbar_PopoverHiddenWhenFlagsOff(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
@@ -303,24 +390,83 @@ func TestTreeHtmlRenderer_FilterToolbar_NoIssueViewButtons(t *testing.T) {
 	html := renderer.RenderTreeView(TreeViewData{
 		FilterState: TreeViewFilterState{
 			SeverityFilter: types.DefaultSeverityFilter(),
+			// ShowFilterPopover defaults to false (no feature flag enabled).
 		},
 	})
 
-	// Issue view buttons should NOT be present
-	assert.NotContains(t, html, `data-filter-type="issueView"`)
-	assert.NotContains(t, html, `data-filter-value="openIssues"`)
-	assert.NotContains(t, html, `data-filter-value="ignoredIssues"`)
+	// The funnel button and popover markup must be absent. We match on the
+	// double-quoted attribute markup (id="filtersPopover"), which appears only in
+	// the rendered body — the embedded tree.js references these ids via
+	// getElementById('filtersPopover'), so a bare substring match would false-hit.
+	assert.NotContains(t, html, `id="filtersPopover"`, "popover panel must not render when flags are off")
+	assert.NotContains(t, html, `id="filtersPopoverBtn"`, "funnel button must not render when flags are off")
 }
 
-func TestTreeHtmlRenderer_FilterToolbar_ExpandCollapseButtons_Rendered(t *testing.T) {
+func TestTreeHtmlRenderer_FilterToolbar_Popover_RiskScoreOnly(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	html := renderer.RenderTreeView(TreeViewData{
+		FilterState: TreeViewFilterState{
+			SeverityFilter:     types.DefaultSeverityFilter(),
+			RiskScoreThreshold: 500,
+			RiskScoreEnabled:   true,
+			ShowFilterPopover:  true,
+		},
+	})
+
+	assert.Contains(t, html, `id="filtersPopoverBtn"`, "funnel button renders when a section is enabled")
+	assert.Contains(t, html, `id="riskScoreSlider"`, "risk-score slider renders when RiskScoreEnabled")
+	assert.Contains(t, html, `value="500"`, "slider reflects the aggregated threshold")
+	assert.Contains(t, html, `≥ 500`, "value label reflects the threshold")
+	// Issue-view section is gated off.
+	assert.NotContains(t, html, `data-filter-value="ignoredIssues"`, "issue-view toggles absent when IssueViewOptionsEnabled is false")
+}
+
+func TestTreeHtmlRenderer_FilterToolbar_Popover_MixedState(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	html := renderer.RenderTreeView(TreeViewData{
+		FilterState: TreeViewFilterState{
+			SeverityFilter:          types.DefaultSeverityFilter(),
+			RiskScoreEnabled:        true,
+			RiskScoreMixed:          true,
+			RiskScoreThreshold:      800, // highest folder threshold when mixed
+			IssueViewOptionsEnabled: true,
+			// aggregateIssueViewOptions pins a mixed option to false, so the
+			// rendered open-issues checkbox is unchecked (+ indeterminate). The
+			// native first click then flips it false→true = "enable everywhere".
+			IssueViewOptions:      types.NewIssueViewOptions(false, false),
+			MixedIssueViewOptions: MixedIssueViewOptions{OpenIssues: true},
+			ShowFilterPopover:     true,
+		},
+	})
+
+	assert.Contains(t, html, `filters-popover-trigger-mixed`, "funnel shows the mixed dot when any control is mixed")
+	assert.Contains(t, html, `Mixed (≥ 800)`, "mixed risk-score label shows the highest folder threshold")
+	assert.Contains(t, html, `value="800"`, "slider sits at the highest folder threshold when mixed")
+	assert.Contains(t, html, `data-mixed="true"`, "the disagreeing open-issues checkbox carries data-mixed")
+	// The mixed open-issues checkbox must render unchecked so the native first
+	// click flips it to checked/true; assert the exact attribute sequence with
+	// no intervening ` checked`.
+	assert.Contains(t, html, `data-filter-value="openIssues" data-mixed="true">`,
+		"mixed open-issues checkbox renders unchecked so first click enables everywhere")
+}
+
+func TestTreeHtmlRenderer_FilterToolbar_ExpandCollapseButtons_NotRendered(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
 	require.NoError(t, err)
 
 	html := renderer.RenderTreeView(TreeViewData{})
 
-	assert.Contains(t, html, `id="expandAllBtn"`)
-	assert.Contains(t, html, `id="collapseAllBtn"`)
+	// The toolbar has no Expand/Collapse All buttons; per-scanner chevrons
+	// handle expand/collapse.
+	assert.NotContains(t, html, `id="expandAllBtn"`)
+	assert.NotContains(t, html, `id="collapseAllBtn"`)
 }
 
 func TestTreeHtmlRenderer_MultiRoot_FolderNodes_Rendered(t *testing.T) {
@@ -360,6 +506,32 @@ func TestTreeHtmlRenderer_ProductNode_ScanError_HasDataAttribute(t *testing.T) {
 
 	assert.Contains(t, html, `data-error-message="dependency graph failed"`, "product node with error should have data-error-message attribute")
 	assert.Contains(t, html, "tree-node-error", "product node with error should have error CSS class")
+}
+
+func TestTreeHtmlRenderer_ProductNode_HasChildrenClass_OnlyWhenExpandable(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	// The chevron glyph is gated on tree-node-has-children, so a product with
+	// children (completed scan with results/info rows) carries the class and one
+	// without (scanning / awaiting first scan / errored) does not.
+	withChildren := NewTreeNode(NodeTypeProduct, "Open Source",
+		WithProduct(product.ProductOpenSource),
+		WithChildren([]TreeNode{NewTreeNode(NodeTypeInfo, "✅ No issues found")}),
+	)
+	withoutChildren := NewTreeNode(NodeTypeProduct, "Snyk Code",
+		WithProduct(product.ProductCode),
+		WithDescription("- Scanning..."),
+	)
+
+	withHTML := renderer.RenderTreeView(TreeViewData{Nodes: []TreeNode{withChildren}})
+	withoutHTML := renderer.RenderTreeView(TreeViewData{Nodes: []TreeNode{withoutChildren}})
+
+	// Match the class on the node (space-separated, quote-terminated) rather than
+	// the bare string, which also appears in the embedded styles.css selectors.
+	assert.Contains(t, withHTML, ` tree-node-has-children"`, "product with children should be marked expandable")
+	assert.NotContains(t, withoutHTML, ` tree-node-has-children"`, "product without children should not be marked expandable")
 }
 
 func TestTreeHtmlRenderer_FolderNode_DeltaEnabled_HasBranchDataAttributes(t *testing.T) {
@@ -508,6 +680,41 @@ func TestTreeHtmlRenderer_NodeLabelsWithHtmlSpecialChars_AreEscaped(t *testing.T
 	assert.NotContains(t, html, `<img src=x`, "img tags in descriptions must be escaped")
 	assert.Contains(t, html, `&lt;script&gt;`, "label should contain escaped HTML entities")
 	assert.Contains(t, html, `&lt;img`, "description should contain escaped img tag")
+}
+
+// TestTreeHtmlRenderer_UntrustedFolderPaths_AreHtmlEscapedInBanner verifies that
+// folder paths rendered inside the untrusted-folder banner are HTML-escaped. The
+// paths appear in data-folder-path="..." attribute values and in the visible label
+// span. A path containing " or < must not produce unescaped HTML that an attacker
+// could inject into the webview. Go's html/template escapes attribute values
+// automatically; this test proves the guarantee holds end-to-end. (IDE-1882)
+func TestTreeHtmlRenderer_UntrustedFolderPaths_AreHtmlEscapedInBanner(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	// A path that contains both HTML-special characters:
+	//   " breaks attribute value quoting
+	//   < could open a tag
+	maliciousPath := `/repo/my"project</script><script>alert(1)`
+
+	banner := NewTreeNode(NodeTypeInfo, untrustedFolderRationale,
+		WithID("info:untrusted-folder"),
+		WithInfoVariant("untrusted-folder"),
+		WithFolderPaths([]string{maliciousPath}),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{Nodes: []TreeNode{banner}})
+
+	// The raw path must never appear verbatim in the HTML output.
+	assert.NotContains(t, html, maliciousPath,
+		"raw malicious path must not appear unescaped in the banner HTML")
+
+	// The double-quote and angle brackets must be escaped as HTML entities in the
+	// data-folder-path attribute and the visible label.
+	assert.Contains(t, html, `&#34;`, "double-quote in folder path must be escaped as &#34; in attributes")
+	assert.NotContains(t, html, `<script>alert(1)`,
+		"script injection via folder path must be neutralized by HTML escaping")
 }
 
 func TestTreeHtmlRenderer_LocationNode_HasDataAttributesAndClass(t *testing.T) {
@@ -699,4 +906,72 @@ func TestTreeHtmlRenderer_FileNode_EmptyFileIconHTML_RendersGenericSVG(t *testin
 
 	assert.NotContains(t, html, "📄", "empty FileIconHTML should not fall back to emoji")
 	assert.Contains(t, html, `<svg`, "empty FileIconHTML should render the generic file SVG")
+}
+
+// TestTreeHtmlRenderer_MixedSeverity_RendersMixedClass verifies that when a severity is mixed
+// (open folders disagree), the toolbar button carries filter-mixed and the correct tooltip text
+// (tree.html:33-36).
+func TestTreeHtmlRenderer_MixedSeverity_RendersMixedClass(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	html := renderer.RenderTreeView(TreeViewData{
+		FilterState: TreeViewFilterState{
+			SeverityFilter: types.DefaultSeverityFilter(),
+			MixedSeverity:  MixedSeverity{Critical: true},
+		},
+	})
+
+	assert.Contains(t, html, `filter-mixed`, "critical button should carry filter-mixed class when severity disagrees across folders")
+	assert.Contains(t, html, `Open folders use different Critical severity filters`, "mixed critical button should carry the expected tooltip")
+}
+
+// TestTreeHtmlRenderer_ProductNode_Tooltip_RenderedAsTitle verifies that a node with .Tooltip
+// set produces a title="..." attribute on the row element (tree.html:70).
+func TestTreeHtmlRenderer_ProductNode_Tooltip_RenderedAsTitle(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	productNode := NewTreeNode(NodeTypeProduct, "Snyk Code",
+		WithProduct(product.ProductCode),
+		WithTooltip("Snyk Code is disabled"),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{Nodes: []TreeNode{productNode}})
+
+	assert.Contains(t, html, `title="Snyk Code is disabled"`, "node tooltip should render as title attribute on the row element")
+}
+
+// TestTreeHtmlRenderer_ProductNode_HasDataProductID verifies that data-product-id is present
+// on a product node and carries the product codename (tree.html:69).
+func TestTreeHtmlRenderer_ProductNode_HasDataProductID(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	productNode := NewTreeNode(NodeTypeProduct, "Snyk Code",
+		WithProduct(product.ProductCode),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{Nodes: []TreeNode{productNode}})
+
+	assert.Contains(t, html, `data-product-id="code"`, "product node should carry data-product-id with codename")
+}
+
+// TestTreeHtmlRenderer_ProductNode_HasAbbreviatedIconClass verifies that product-icon--abbreviated
+// class is present on the product icon (tree.html:72).
+func TestTreeHtmlRenderer_ProductNode_HasAbbreviatedIconClass(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	productNode := NewTreeNode(NodeTypeProduct, "Open Source",
+		WithProduct(product.ProductOpenSource),
+	)
+
+	html := renderer.RenderTreeView(TreeViewData{Nodes: []TreeNode{productNode}})
+
+	assert.Contains(t, html, `product-icon--abbreviated`, "product icon should carry the product-icon--abbreviated class")
 }

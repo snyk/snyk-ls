@@ -1,6 +1,6 @@
 module github.com/snyk/snyk-ls
 
-go 1.26
+go 1.26.4
 
 tool github.com/golang/mock/mockgen
 
@@ -131,8 +131,8 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
-	golang.org/x/crypto v0.51.0 // indirect
-	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/crypto v0.52.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/term v0.43.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect

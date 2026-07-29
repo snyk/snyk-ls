@@ -425,6 +425,25 @@
   }
 
   container.addEventListener('click', function(e) {
+    // Trust button on the untrusted-folder banner (IDE-1882). Handle this before
+    // the row logic below so trusting a folder doesn't also toggle expand/collapse.
+    // Walk up from the click target since the button has no child elements but the
+    // click may originate on text inside it.
+    var trustBtn = e.target;
+    while (trustBtn && trustBtn !== container) {
+      if (trustBtn.getAttribute && trustBtn.getAttribute('data-action') === 'trust-folder') break;
+      trustBtn = trustBtn.parentElement;
+    }
+    if (trustBtn && trustBtn !== container && trustBtn.getAttribute &&
+        trustBtn.getAttribute('data-action') === 'trust-folder') {
+      e.stopPropagation();
+      var folderPath = trustBtn.getAttribute('data-folder-path');
+      if (folderPath) {
+        executeCommand('snyk.trustWorkspaceFolders', [folderPath]);
+      }
+      return;
+    }
+
     var row = null;
     var el = e.target;
     // Walk up to find the tree-node-row (use hasClass for SVG compatibility)
@@ -493,6 +512,11 @@
       executeCommand('snyk.showScanErrorDetails', [productAttr, errorMessage]);
     }
 
+    // Untrusted folder nodes are dimmed and non-expandable (no children, no
+    // chevron). The folder template still emits an empty children container, so
+    // bail here to avoid toggling and persisting spurious expand state (IDE-1882).
+    if (hasClass(node, 'tree-node-untrusted')) return;
+
     // Toggle expand/collapse for non-leaf nodes
     var children = findChildrenContainer(node);
     if (!children) return;
@@ -538,8 +562,129 @@
       var isActive = hasClass(btn, 'filter-active');
       var enabled = !isActive;
 
-      executeCommand('snyk.toggleTreeFilter', [filterType, filterValue, enabled]);
+      // Optimistically reflect the toggle in the button's class so the active
+      // state updates immediately, rather than waiting for the LS to re-render
+      // the tree in response to the command below. A "mixed" button (open folders
+      // disagree) counts as not-active, so the first click enables the severity
+      // for every folder, resolving the mismatch.
+      // Note: this optimistic flip does NOT account for org-locked folders. When
+      // a folder has the severity org-locked (Locked Remote > User Folder
+      // Override), the button flips active here but snaps back to filter-mixed on
+      // the next LS re-render (a brief flicker). The resolved state is always
+      // correct — only the transient optimistic state may be wrong.
+      btn.classList.remove('filter-mixed');
+      if (enabled) {
+        btn.classList.add('filter-active');
+      } else {
+        btn.classList.remove('filter-active');
+      }
+
+      executeCommand('snyk.toggleTreeFilter', [filterType + '_' + filterValue, enabled]);
     });
+  }
+
+  // Filter popover (Risk Score + Issue View Options).
+  // The funnel button opens a small popover whose controls write per-folder
+  // settings to EVERY open folder (workspace-wide), mirroring the severity
+  // buttons. When open folders disagree on a setting it renders "mixed":
+  // indeterminate checkboxes / a "Mixed" risk-score label, plus a dot on the
+  // funnel. The first change aligns all folders, resolving the mismatch.
+  // Note: each change triggers a server-side re-render that replaces this view,
+  // so the popover closes after a change — same model as the severity buttons.
+  var popoverBtn = document.getElementById('filtersPopoverBtn');
+  var popover = document.getElementById('filtersPopover');
+  if (popoverBtn && popover) {
+    var openPopover = function() {
+      popover.hidden = false;
+      popoverBtn.setAttribute('aria-expanded', 'true');
+    };
+    var closePopover = function() {
+      if (popover.hidden) return;
+      popover.hidden = true;
+      popoverBtn.setAttribute('aria-expanded', 'false');
+    };
+
+    popoverBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (popover.hidden) { openPopover(); } else { closePopover(); }
+    });
+
+    // Keep clicks inside the popover from reaching the document dismiss handler.
+    popover.addEventListener('click', function(e) { e.stopPropagation(); });
+
+    document.addEventListener('click', function() { closePopover(); });
+    document.addEventListener('keydown', function(e) {
+      if (popover.hidden) return;
+      if (e.key === 'Escape' || e.key === 'Esc' || e.keyCode === 27) { closePopover(); }
+    });
+
+    // The DOM `indeterminate` flag can't be expressed in HTML markup, so apply it
+    // here on load from the server-set data-mixed attribute.
+    var issueViewChecks = popover.querySelectorAll('input[type="checkbox"][data-filter-type="issueView"]');
+    for (var ci = 0; ci < issueViewChecks.length; ci++) {
+      if (issueViewChecks[ci].getAttribute('data-mixed') === 'true') {
+        issueViewChecks[ci].indeterminate = true;
+      }
+      issueViewChecks[ci].addEventListener('change', function(e) {
+        var chk = e.target;
+        chk.indeterminate = false;
+        chk.removeAttribute('data-mixed');
+        executeCommand('snyk.toggleTreeFilter', ['issueView_' + chk.getAttribute('data-filter-value'), chk.checked]);
+      });
+    }
+
+    // Risk-score slider: update the label live on input, commit on change (avoids
+    // a command per drag step). Reads "All" at 0, otherwise "≥ N".
+    var slider = document.getElementById('riskScoreSlider');
+    var riskValue = document.getElementById('riskScoreValue');
+    var updateRiskLabel = function(v) {
+      if (riskValue) { riskValue.textContent = (v === 0) ? 'All' : ('≥ ' + v); }
+    };
+    var commitRiskScore = function() {
+      slider.removeAttribute('data-mixed');
+      executeCommand('snyk.toggleTreeFilter', ['riskScore', parseIntSafe(slider.value, 0)]);
+    };
+    if (slider) {
+      slider.addEventListener('input', function() {
+        slider.removeAttribute('data-mixed');
+        updateRiskLabel(parseIntSafe(slider.value, 0));
+      });
+      slider.addEventListener('change', commitRiskScore);
+      // When folders disagree the slider is "mixed": it shows the highest threshold
+      // but commits nothing until the value changes. Accepting the shown value by
+      // clicking/releasing on it fires no 'change', so the mixed state would never
+      // resolve. Treat a click on a still-mixed slider as a commit of the shown
+      // value, aligning every folder to it. 'input'/'change' clear data-mixed first
+      // on a real drag, so this no-ops then (no double-commit).
+      slider.addEventListener('click', function() {
+        if (slider.getAttribute('data-mixed') !== 'true') return;
+        updateRiskLabel(parseIntSafe(slider.value, 0));
+        commitRiskScore();
+      });
+    }
+
+    // Reset: restore defaults (risk score 0, open issues on, ignored off). The
+    // controls are updated optimistically, then a SINGLE 'reset' command writes all
+    // defaults to every folder server-side — one config-change cycle / re-render for
+    // the whole reset rather than one per control.
+    var resetBtn = document.getElementById('filtersResetBtn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (slider) {
+          slider.value = '0';
+          slider.removeAttribute('data-mixed');
+          updateRiskLabel(0);
+        }
+        for (var ri = 0; ri < issueViewChecks.length; ri++) {
+          var chk = issueViewChecks[ri];
+          chk.indeterminate = false;
+          chk.removeAttribute('data-mixed');
+          chk.checked = (chk.getAttribute('data-filter-value') === 'openIssues');
+        }
+        executeCommand('snyk.toggleTreeFilter', ['reset']);
+      });
+    }
   }
 
   // Expand All / Collapse All toolbar buttons.
@@ -585,4 +730,294 @@
   if (collapseAllBtn) {
     collapseAllBtn.addEventListener('click', function() { collapseAllNodes(); });
   }
+
+  // File-path middle truncation.
+  // File rows show the full project-relative path as the label
+  // (e.g. "frontend/src/app/app.component.ts"). When the sidebar narrows, the
+  // CSS fallback clips the right edge — hiding the filename, which is usually
+  // the most informative part. This block measures the label's available
+  // width and rewrites the text into a middle-truncated form that keeps the
+  // filename intact: "frontend/…/app.component.ts". The companion flex
+  // layout in styles.css gives us label.clientWidth directly.
+  var measureCanvas = null;
+  var measureCtx = null;
+  var measureFontKey = '';
+  var retruncatePending = false;
+
+  function getMeasureCtx() {
+    if (!measureCtx) {
+      measureCanvas = document.createElement('canvas');
+      measureCtx = measureCanvas.getContext('2d');
+    }
+    return measureCtx;
+  }
+
+  function ensureMeasureFont(labelEl) {
+    if (!labelEl) return;
+    var cs = window.getComputedStyle(labelEl);
+    // `cs.font` returns "" in Firefox when longhand values diverge from the
+    // shorthand defaults, so compose the shorthand by hand for portability.
+    var font = (cs.fontStyle || 'normal') + ' ' +
+               (cs.fontVariant || 'normal') + ' ' +
+               (cs.fontWeight || 'normal') + ' ' +
+               (cs.fontSize || '13px') + ' ' +
+               (cs.fontFamily || 'sans-serif');
+    if (font !== measureFontKey) {
+      var ctx = getMeasureCtx();
+      if (!ctx) return; // canvas 2d unavailable (restricted webview) — skip
+      measureFontKey = font;
+      ctx.font = font;
+    }
+  }
+
+  function measureWidth(text) {
+    var ctx = getMeasureCtx();
+    // No 2d context (canvas disabled in some webview hosts): report 0 so callers
+    // treat everything as "fits" and middle-truncation no-ops, leaving CSS
+    // end-truncation in charge rather than throwing.
+    if (!ctx) return 0;
+    return ctx.measureText(text).width;
+  }
+
+  function truncateMiddleByWidth(text, maxWidth) {
+    if (maxWidth <= 0) return text;
+    if (measureWidth(text) <= maxWidth) return text;
+
+    var lastSlash = text.lastIndexOf('/');
+    if (lastSlash < 0) return text; // no path structure — let CSS end-truncate
+    // Filename includes the leading slash so the ellipsis sits flush:
+    // "foo/…/bar.ts" rather than "foo…/bar.ts".
+    var filename = text.substring(lastSlash);
+    var prefix = text.substring(0, lastSlash);
+    var ellipsis = '…';
+    var reserved = measureWidth(filename) + measureWidth(ellipsis);
+    if (reserved >= maxWidth) return text;
+
+    var availForPrefix = maxWidth - reserved;
+    var lo = 0;
+    var hi = prefix.length;
+    var best = 0;
+    while (lo <= hi) {
+      var mid = (lo + hi) >> 1;
+      if (measureWidth(prefix.substring(0, mid)) <= availForPrefix) {
+        best = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    if (best === prefix.length) return text;
+    // When best === 0 no prefix character fits: swapping nothing for an "…"
+    // saves nothing — the string is still too long. Fall back and let CSS
+    // end-truncate rather than producing "…/bar.ts" with no useful context.
+    if (best === 0) return text;
+    return prefix.substring(0, best) + ellipsis + filename;
+  }
+
+  function applyTruncation() {
+    retruncatePending = false;
+    // File rows + any opt-in label marked data-truncate-middle (used by the
+    // untrusted-folder path list so each line stays middle-truncated rather
+    // than end-clipped — keeping the folder basename visible).
+    var labels = container.querySelectorAll(
+      '.tree-node-file > .tree-node-row > .tree-label, .tree-label[data-truncate-middle]'
+    );
+    if (!labels.length) return;
+    for (var i = 0; i < labels.length; i++) {
+      var label = labels[i];
+      // Skip labels in collapsed branches — clientWidth is 0 so a measurement
+      // round-trip would be wasted, and they'll be re-evaluated on expand.
+      if (label.clientWidth === 0) continue;
+      // File rows and the untrusted-folder path list use different font families;
+      // ensure the canvas font matches each label before measuring. The call
+      // short-circuits when the font key hasn't changed, so the only real cost
+      // is one getComputedStyle per visible label.
+      ensureMeasureFont(label);
+      var full = label.getAttribute('data-full-label');
+      if (full === null) {
+        full = label.textContent;
+        label.setAttribute('data-full-label', full);
+        label.setAttribute('title', full);
+      }
+      var next = truncateMiddleByWidth(full, label.clientWidth);
+      if (label.textContent !== next) {
+        label.textContent = next;
+      }
+    }
+  }
+
+  function scheduleRetruncate() {
+    if (retruncatePending) return;
+    retruncatePending = true;
+    if (window.requestAnimationFrame) {
+      window.requestAnimationFrame(applyTruncation);
+    } else {
+      setTimeout(applyTruncation, 16);
+    }
+  }
+
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(scheduleRetruncate).observe(container);
+  } else {
+    window.addEventListener('resize', scheduleRetruncate);
+  }
+
+  // Expand/collapse mutates .expanded on .tree-node elements, which changes
+  // which file rows are laid out. Watch class changes on tree-node elements
+  // and re-run; selection toggling on .tree-node-row is filtered out below.
+  // Note: there is no fallback when MutationObserver is unavailable. Unlike
+  // ResizeObserver (which falls back to the 'resize' event), there is no DOM
+  // event for "a node's class changed", so expand/collapse re-truncation is
+  // simply skipped in environments that do not support MutationObserver.
+  if (typeof MutationObserver !== 'undefined') {
+    new MutationObserver(function(records) {
+      for (var i = 0; i < records.length; i++) {
+        var t = records[i].target;
+        if (t && t.classList && t.classList.contains('tree-node')) {
+          scheduleRetruncate();
+          return;
+        }
+      }
+    }).observe(container, { attributes: true, attributeFilter: ['class'], subtree: true });
+  }
+
+  // Re-run once webfonts settle so measurements aren't off by a few pixels.
+  if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
+    document.fonts.ready.then(scheduleRetruncate);
+  }
+
+  scheduleRetruncate();
+
+  // Tooltips.
+  // Native `title` tooltips render inconsistently inside IDE webviews, so we
+  // draw our own from the same `title` attributes (disabled/errored scanner
+  // hints, full file paths from the truncation pass above, untrusted folder
+  // paths). While our tooltip is shown the title is moved to data-tooltip so
+  // the native one can't also fire, and restored on mouse-out so it stays
+  // available for accessibility and any non-webview host.
+  var tooltipEl = null;
+  var tooltipTarget = null;
+
+  function findTitledAncestor(el) {
+    while (el && el !== document.body) {
+      if (el.getAttribute && el.getAttribute('title')) return el;
+      el = el.parentElement;
+    }
+    return null;
+  }
+
+  function positionTooltip(tip, target) {
+    var rect = target.getBoundingClientRect();
+    var vw = window.innerWidth || document.documentElement.clientWidth || 600;
+    var vh = window.innerHeight || document.documentElement.clientHeight || 600;
+    var gap = 4;
+    var tw = tip.offsetWidth;
+    var th = tip.offsetHeight;
+    // Prefer below the row; flip above if there isn't room.
+    var top = rect.bottom + gap;
+    if (top + th > vh - gap) {
+      top = rect.top - th - gap;
+    }
+    top = Math.max(gap, top);
+    var left = Math.max(gap, Math.min(rect.left, vw - tw - gap));
+    tip.style.top = top + 'px';
+    tip.style.left = left + 'px';
+  }
+
+  function showTooltip(target) {
+    var text = target.getAttribute('title');
+    if (!text) return;
+    // Stash + remove title so the native tooltip can't also appear.
+    target.setAttribute('data-tooltip', text);
+    target.removeAttribute('title');
+    tooltipTarget = target;
+
+    if (!tooltipEl) {
+      tooltipEl = document.createElement('div');
+      tooltipEl.className = 'tree-tooltip';
+      tooltipEl.setAttribute('role', 'tooltip');
+      document.body.appendChild(tooltipEl);
+    }
+    tooltipEl.textContent = text;
+    // Measure with content + max-width applied, then position, then reveal.
+    tooltipEl.style.visibility = 'hidden';
+    tooltipEl.style.display = 'block';
+    positionTooltip(tooltipEl, target);
+    tooltipEl.style.visibility = '';
+  }
+
+  function hideTooltip() {
+    if (tooltipTarget) {
+      var stored = tooltipTarget.getAttribute('data-tooltip');
+      if (stored !== null) {
+        tooltipTarget.setAttribute('title', stored);
+        tooltipTarget.removeAttribute('data-tooltip');
+      }
+      tooltipTarget = null;
+    }
+    if (tooltipEl) tooltipEl.style.display = 'none';
+  }
+
+  // Bound to document so it also covers titled elements outside the tree
+  // container (e.g. the severity filter-toolbar buttons).
+  document.addEventListener('mouseover', function(e) {
+    // Still hovering within the current target (e.g. moved onto a child) — keep it.
+    if (tooltipTarget && tooltipTarget.contains(e.target)) return;
+    var t = findTitledAncestor(e.target);
+    if (!t) {
+      hideTooltip();
+      return;
+    }
+    if (t !== tooltipTarget) {
+      hideTooltip();
+      showTooltip(t);
+    }
+  });
+  document.addEventListener('mouseout', function(e) {
+    // Ignore moves between descendants of the same titled element.
+    if (tooltipTarget && !tooltipTarget.contains(e.relatedTarget)) {
+      hideTooltip();
+    }
+  });
+
+  // Feedback banner. Dismissal is persisted via snyk.dismissFeedbackBanner so the
+  // banner is omitted from later renders. When the banner renders hidden it is
+  // revealed 5s after the user's first interaction; the reveal is reported via
+  // snyk.feedbackBannerInteracted so the server keeps it visible across re-renders.
+  (function() {
+    var banner = document.getElementById('feedbackBanner');
+    if (!banner) return;
+
+    var dismissed = false;
+
+    var dismissBtn = banner.querySelector('[data-action="dismiss-feedback"]');
+    if (dismissBtn) {
+      dismissBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        banner.hidden = true;
+        dismissed = true;
+        executeCommand('snyk.dismissFeedbackBanner', []);
+      });
+    }
+
+    // Already revealed server-side (the user interacted earlier this session).
+    if (!banner.hidden) return;
+
+    var armed = false;
+
+    function reveal() {
+      if (dismissed) return;
+      banner.hidden = false;
+      executeCommand('snyk.feedbackBannerInteracted', []);
+    }
+
+    function arm() {
+      if (armed || dismissed) return;
+      armed = true;
+      setTimeout(reveal, 5000);
+    }
+
+    document.addEventListener('click', arm);
+    document.addEventListener('keydown', arm);
+  })();
 })();

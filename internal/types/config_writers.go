@@ -85,3 +85,70 @@ func SetGlobalDeferredFolderScope(conf configuration.Configuration, name string,
 func SetGlobalRawForRawReader(conf configuration.Configuration, name string, value any) {
 	conf.Set(configresolver.UserGlobalKey(name), value)
 }
+
+// SetUserFolder writes a user-intent value for a folder-scoped setting at the
+// per-folder UserFolderKey. The value is wrapped as *LocalConfigField{Changed:
+// true} because the resolver's folder pass only treats UserFolderKey as the
+// authoritative "folder value" (ConfigSourceUserFolderOverride, which outranks
+// remote-folder and user-global) when Changed is true; an unwrapped write is
+// ignored at that tier. Use this for folder-scoped settings the user controls
+// per folder (e.g. severity filters, issue view options) so the choice survives
+// LDX-Sync remote defaults.
+func SetUserFolder(conf configuration.Configuration, folderPath FilePath, name string, value any) {
+	// Normalize with PathKey to match how the resolver builds the folder key on
+	// read (getValueLocked uses string(PathKey(folderConfig.GetFolderPath()))).
+	conf.Set(configresolver.UserFolderKey(string(PathKey(folderPath)), name), &configresolver.LocalConfigField{
+		Value:   value,
+		Changed: true,
+	})
+}
+
+// UnsetGlobalUser clears a user-global override so the value falls back through
+// whatever resolver chain the reader uses (e.g. GetGlobalBool falls through to
+// the LDX-Sync remote-unlocked value → flagset default, while organization
+// resolution uses GAF's ORGANIZATION key). This is the global-scope counterpart
+// of the per-folder reset in folder_config.go::applyGenericFolderOverrides, which
+// Unsets UserFolderKey when an IDE sends {changed: true, value: null}. Like all
+// GAF Unset calls it writes through to shared on-disk storage via
+// PersistInStorage, which is the desired behavior here: a "Reset to defaults"
+// must clear the persisted global override.
+func UnsetGlobalUser(conf configuration.Configuration, name string) {
+	conf.Unset(configresolver.UserGlobalKey(name))
+}
+
+// HasGlobalUserOverride reports whether a user-global override exists for name.
+// It mirrors userGlobalValue (config_readers.go): a *LocalConfigField must have
+// Changed=true to count, while a bare (unwrapped) value counts by presence.
+func HasGlobalUserOverride(conf configuration.Configuration, name string) bool {
+	_, ok := userGlobalValue(conf, name)
+	return ok
+}
+
+// GlobalResettableSettings are the org-scope "Project Defaults" settings that the
+// HTML settings page can reset back to their fallback value (LDX-Sync / org /
+// flagset default). It is the same set the per-folder reset uses
+// (form-handler.js FOLDER_RESET_FIELDS) with two deliberate differences:
+//   - preferred_org is folder-only and excluded here.
+//   - organization is global-only and included here; it is NOT a
+//     UserGlobalKey(SettingOrganization) override, so it is reset via
+//     config.ResetOrganization rather than UnsetGlobalUser (see applyGlobalResets).
+//
+// KEEP IN SYNC with GLOBAL_RESET_FIELDS in
+// infrastructure/configuration/template/js/ui/form-handler.js.
+// A test in js-tests/global-reset.test.mjs asserts the two lists match.
+var GlobalResettableSettings = []string{
+	SettingSnykOssEnabled,
+	SettingSnykCodeEnabled,
+	SettingSnykIacEnabled,
+	SettingSnykSecretsEnabled,
+	SettingScanAutomatic,
+	SettingScanNetNew,
+	SettingSeverityFilterCritical,
+	SettingSeverityFilterHigh,
+	SettingSeverityFilterMedium,
+	SettingSeverityFilterLow,
+	SettingIssueViewOpenIssues,
+	SettingIssueViewIgnoredIssues,
+	SettingRiskScoreThreshold,
+	SettingOrganization,
+}
