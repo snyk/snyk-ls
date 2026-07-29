@@ -31,7 +31,12 @@ jobs:
       - name: Checkout snyk-ls
         uses: actions/checkout@v4
 
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.TEAM_IDE_USER_SSH }}
+
       - name: Distribute settings-fallback.html to IDE repos
         env:
           GH_TOKEN: ${{ secrets.TEAM_IDE_PAT }}
+          PUB_SIGNING_KEY: ${{ secrets.TEAM_IDE_USER_SSH_PUB }}
         run: .github/distribute-fallback-html.sh
