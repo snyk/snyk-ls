@@ -14,33 +14,13 @@
  * limitations under the License.
  */
 
-// Package folderconfig — regression test for IDE-2108.
-//
-// Root cause: smoke test helpers (setupPrecedenceTest, setupScanPrecedenceTest,
-// setupLdxSyncTest) mutated the process-global xdg.ConfigHome to redirect the
-// ls-config file into a per-test temp dir, then restored it in t.Cleanup.
-// ConfigFileFromConfig falls back to xdg.ConfigFile (which reads xdg.ConfigHome)
-// when no explicit SettingConfigFile is set on the engine.  When two smoke
-// tests run concurrently — or when one test's Cleanup fires while another is
-// still initializing — the global is clobbered: storage for test A resolves to
-// test B's (or the original system) temp dir, the expected config file is
-// absent, and the scan stalls / never completes.
-//
-// Why xdg.ConfigHome mutation is unsafe under concurrency: two goroutines each
-// writing xdg.ConfigHome to their own temp dir race on a single process-global
-// variable.  The race detector flags the unsynchronised writes, and either
-// goroutine may read the other's value from ConfigFileFromConfig, resolving the
-// config path to the wrong temp dir.  The old pattern could not be made safe
-// with a mutex because ConfigFileFromConfig itself reads the global without any
-// lock.
-//
-// Fix: set types.SettingConfigFile on the engine configuration to a per-test
-// path.  ConfigFileFromConfig checks that key first and never consults
-// xdg.ConfigHome.  The global is never mutated; concurrent tests are fully
-// isolated.
-//
-// This file contains unit-level regression tests that are runnable without a
-// Snyk token or network access and verify the isolation invariant directly.
+// These tests verify that ConfigFileFromConfig returns the explicit
+// SettingConfigFile (or its legacy/user-global variants) whenever one is set,
+// without ever consulting the process-global xdg.ConfigHome. That invariant is
+// what makes per-test config files a safe isolation mechanism under
+// t.Parallel() — mutating xdg.ConfigHome directly is not, since concurrent
+// writes to that global race and callers can observe each other's value.
+
 package folderconfig
 
 import (
@@ -55,14 +35,11 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// TestConfigHomeIsolation_ExplicitConfigFileBypassesGlobal verifies the CORRECT
-// pattern: when SettingConfigFile is set on the engine configuration, ConfigFileFromConfig
-// returns that explicit path — never consulting xdg.ConfigHome.
-//
-// This is the GREEN test that must pass after the fix.  It is also the
-// isolation invariant whose violation caused IDE-2108: a concurrent test setting
-// xdg.ConfigHome to a different value must NOT affect a test that uses the
-// explicit-config-file approach.
+// TestConfigHomeIsolation_ExplicitConfigFileBypassesGlobal verifies that when
+// SettingConfigFile is set on the engine configuration, ConfigFileFromConfig
+// returns that explicit path — never consulting xdg.ConfigHome. A concurrent
+// test setting xdg.ConfigHome to a different value must not affect a test
+// that uses the explicit-config-file approach.
 func TestConfigHomeIsolation_ExplicitConfigFileBypassesGlobal(t *testing.T) {
 	t.Parallel()
 
@@ -70,7 +47,6 @@ func TestConfigHomeIsolation_ExplicitConfigFileBypassesGlobal(t *testing.T) {
 	perTestConfigFile := filepath.Join(perTestConfigDir, "ls-config.json")
 
 	conf := configuration.NewWithOpts()
-	// The correct pattern used after the fix: set the config file on the engine config.
 	// ConfigFileFromConfig short-circuits on this key before ever reading xdg.ConfigHome,
 	// so no global mutation is needed to prove precedence — and none is safe under t.Parallel().
 	conf.Set(types.SettingConfigFile, perTestConfigFile)

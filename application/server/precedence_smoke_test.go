@@ -49,10 +49,9 @@ func setupPrecedenceTest(t *testing.T) (workflow.Engine, *config.TokenServiceImp
 	t.Helper()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
 
-	// IDE-2108: use an explicit per-test config file path instead of mutating the
-	// process-global xdg.ConfigHome.  ConfigFileFromConfig (called by initializeHandler)
-	// checks SettingConfigFile first and never falls back to xdg.ConfigHome when it
-	// is set — eliminating the concurrent-test interference that caused the flake.
+	// Explicit per-test config file: ConfigFileFromConfig checks SettingConfigFile
+	// before falling back to the process-global xdg.ConfigHome, so tests stay isolated
+	// under concurrent execution without touching shared state.
 	engine.GetConfiguration().Set(types.SettingConfigFile,
 		filepath.Join(t.TempDir(), "snyk", "ls-config.json"))
 
@@ -629,8 +628,7 @@ func setupScanPrecedenceTest(t *testing.T, codeEnabled, ossEnabled, iacEnabled b
 	t.Helper()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
 
-	// IDE-2108: use an explicit per-test config file path instead of mutating the
-	// process-global xdg.ConfigHome.  See setupPrecedenceTest for the full explanation.
+	// See setupPrecedenceTest: explicit config file keeps this isolated from xdg.ConfigHome.
 	engine.GetConfiguration().Set(types.SettingConfigFile,
 		filepath.Join(t.TempDir(), "snyk", "ls-config.json"))
 
@@ -818,8 +816,7 @@ func Test_SmokeScanPrecedence_UserOverrideDisablesProduct(t *testing.T) {
 func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
 
-	// IDE-2108: use an explicit per-test config file path instead of mutating the
-	// process-global xdg.ConfigHome.  See setupPrecedenceTest for the full explanation.
+	// See setupPrecedenceTest: explicit config file keeps this isolated from xdg.ConfigHome.
 	engine.GetConfiguration().Set(types.SettingConfigFile,
 		filepath.Join(t.TempDir(), "snyk", "ls-config.json"))
 
