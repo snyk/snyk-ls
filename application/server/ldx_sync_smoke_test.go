@@ -46,9 +46,9 @@ func setupLdxSyncTest(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, 
 	t.Helper()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_4")
 
-	// Explicit per-test config file: ConfigFileFromConfig checks SettingConfigFile
-	// before falling back to the process-global xdg.ConfigHome, so tests stay isolated
-	// under concurrent execution without touching shared state.
+	// Explicit per-test config file: ConfigFileFromConfig short-circuits on
+	// SettingConfigFile before ever calling into xdg, so the resolved path is
+	// independent of any process-global xdg state and safe under concurrent tests.
 	engine.GetConfiguration().Set(types.SettingConfigFile,
 		filepath.Join(t.TempDir(), "snyk", "ls-config.json"))
 

@@ -16,10 +16,10 @@
 
 // These tests verify that ConfigFileFromConfig returns the explicit
 // SettingConfigFile (or its legacy/user-global variants) whenever one is set,
-// without ever consulting the process-global xdg.ConfigHome. That invariant is
-// what makes per-test config files a safe isolation mechanism under
-// t.Parallel() — mutating xdg.ConfigHome directly is not, since concurrent
-// writes to that global race and callers can observe each other's value.
+// short-circuiting before it ever calls into xdg. That invariant is what makes
+// per-test config files a safe isolation mechanism under t.Parallel(): the
+// resolved path depends only on engine configuration, never on process-global
+// xdg state, so concurrent tests can't interfere with each other's storage file.
 
 package folderconfig
 
@@ -37,9 +37,7 @@ import (
 
 // TestConfigHomeIsolation_ExplicitConfigFileBypassesGlobal verifies that when
 // SettingConfigFile is set on the engine configuration, ConfigFileFromConfig
-// returns that explicit path — never consulting xdg.ConfigHome. A concurrent
-// test setting xdg.ConfigHome to a different value must not affect a test
-// that uses the explicit-config-file approach.
+// returns that explicit path without depending on any process-global xdg state.
 func TestConfigHomeIsolation_ExplicitConfigFileBypassesGlobal(t *testing.T) {
 	t.Parallel()
 
@@ -47,15 +45,14 @@ func TestConfigHomeIsolation_ExplicitConfigFileBypassesGlobal(t *testing.T) {
 	perTestConfigFile := filepath.Join(perTestConfigDir, "ls-config.json")
 
 	conf := configuration.NewWithOpts()
-	// ConfigFileFromConfig short-circuits on this key before ever reading xdg.ConfigHome,
-	// so no global mutation is needed to prove precedence — and none is safe under t.Parallel().
+	// ConfigFileFromConfig short-circuits on this key before ever calling into xdg.
 	conf.Set(types.SettingConfigFile, perTestConfigFile)
 
 	got, err := ConfigFileFromConfig(conf)
 	require.NoError(t, err)
 	assert.Equal(t, perTestConfigFile, got,
 		"ConfigFileFromConfig must return the explicit SettingConfigFile path "+
-			"and must NOT consult xdg.ConfigHome when the setting is present")
+			"and must NOT consult xdg state when the setting is present")
 }
 
 // TestConfigHomeIsolation_LegacyKeyAlsoBypassesGlobal covers the legacy
@@ -66,7 +63,7 @@ func TestConfigHomeIsolation_LegacyKeyAlsoBypassesGlobal(t *testing.T) {
 	perTestConfigFile := filepath.Join(t.TempDir(), "legacy-ls-config.json")
 
 	conf := configuration.NewWithOpts()
-	// ConfigFileFromConfig short-circuits on SettingConfigFileLegacy before reading xdg.ConfigHome.
+	// ConfigFileFromConfig short-circuits on SettingConfigFileLegacy before calling into xdg.
 	conf.Set(types.SettingConfigFileLegacy, perTestConfigFile)
 
 	got, err := ConfigFileFromConfig(conf)
@@ -84,11 +81,29 @@ func TestConfigHomeIsolation_UserGlobalKeyAlsoBypassesGlobal(t *testing.T) {
 	perTestConfigFile := filepath.Join(t.TempDir(), "user-global-ls-config.json")
 
 	conf := configuration.NewWithOpts()
-	// ConfigFileFromConfig short-circuits on UserGlobalKey(SettingConfigFile) before reading xdg.ConfigHome.
+	// ConfigFileFromConfig short-circuits on UserGlobalKey(SettingConfigFile) before calling into xdg.
 	conf.Set(configresolver.UserGlobalKey(types.SettingConfigFile), perTestConfigFile)
 
 	got, err := ConfigFileFromConfig(conf)
 	require.NoError(t, err)
 	assert.Equal(t, perTestConfigFile, got,
 		"ConfigFileFromConfig must return the UserGlobal-wrapped SettingConfigFile path")
+}
+
+// TestConfigHomeIsolation_UserGlobalLegacyKeyAlsoBypassesGlobal covers the
+// configresolver.UserGlobalKey-wrapped legacy key, the fourth and last entry
+// in ConfigFileFromConfig's precedence order.
+func TestConfigHomeIsolation_UserGlobalLegacyKeyAlsoBypassesGlobal(t *testing.T) {
+	t.Parallel()
+
+	perTestConfigFile := filepath.Join(t.TempDir(), "user-global-legacy-ls-config.json")
+
+	conf := configuration.NewWithOpts()
+	// ConfigFileFromConfig short-circuits on UserGlobalKey(SettingConfigFileLegacy) before calling into xdg.
+	conf.Set(configresolver.UserGlobalKey(types.SettingConfigFileLegacy), perTestConfigFile)
+
+	got, err := ConfigFileFromConfig(conf)
+	require.NoError(t, err)
+	assert.Equal(t, perTestConfigFile, got,
+		"ConfigFileFromConfig must return the UserGlobal-wrapped SettingConfigFileLegacy path")
 }
