@@ -603,7 +603,11 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 	workingDir, _ := os.Getwd()
 	folderPath := workingDir
 	fakeCli := cli.NewTestExecutor(engine)
-	fakeCli.ExecuteDuration = 200 * time.Millisecond
+	// ponytail: 2s gives ~50-100x headroom over the <40ms it takes all 10 scans to
+	// register and cancel their predecessor (observed in CI). A superseded scan only
+	// finishes instead of being canceled if the scheduler stalls it past this window;
+	// bump further if this still flakes under heavier CI contention.
+	fakeCli.ExecuteDuration = 2 * time.Second
 	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), fakeCli, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine))
 	wg := sync.WaitGroup{}
 	p, _ := filepath.Abs(workingDir + testDataPackageJson)
