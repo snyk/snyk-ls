@@ -110,23 +110,41 @@ alwaysApply: true
 - use `make generate-diagrams` to generate diagrams
 - document the tested scenarios for all testing stages (unit, integration, e2e) in ./docs
 </documenting>
+
 ## Cursor Cloud specific instructions
 
-Environment notes for Cursor Cloud agents (dependencies are pre-installed by the
-startup update script; the caveats below are the non-obvious bits).
+Durable, non-obvious notes for agents running in the Cursor Cloud Linux VM. The
+update script already runs `go mod download`, so the items below are setup context
+and gotchas rather than install steps to repeat.
 
-- **Go toolchain is pinned to `go1.26.5`** via `go env -w GOTOOLCHAIN=go1.26.5`
-  (repo needs Go 1.26.x; the toolchain auto-download from `go.dev` is blocked, so
-  the pin routes it through `proxy.golang.org`).
-- **golangci-lint** (`v2.10.1`) is installed into `.bin/` via
-  `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1`
-  (the Makefile's `raw.githubusercontent.com` install script is sometimes blocked).
-- **Build/run:** `make build` → `build/snyk-ls.linux.amd64`. It is an **LSP
-  server over stdio** (no `--help` output); `./build/snyk-ls.linux.amd64 -v`
-  prints the version. Driving it means sending framed JSON-RPC `initialize` on
-  stdin.
-- **Tests:** `make test-js` (Node-based, generates Go HTML fixtures then runs
-  mocha — passes) and Go unit subsets like `go test ./internal/...` are quick and
-  green. Full `make test` uses a 90m timeout and pulls in integration/smoke
-  tests that require `SNYK_TOKEN` and network — don't expect those to pass in the
-  sandbox.
+- **Pin the exact Go patch version.** `go.mod` needs Go 1.26.x, and with
+  `GOTOOLCHAIN=auto` Go resolves the toolchain from `go.dev`, which is normally
+  outside the egress allowlist. Keep `GOTOOLCHAIN=go1.26.5` set
+  (`go env -w GOTOOLCHAIN=go1.26.5`) so it comes from `proxy.golang.org` instead.
+- **golangci-lint** is installed by the Makefile via a `curl` from
+  `raw.githubusercontent.com`, which is generally reachable here. If that step is
+  ever blocked, install the pinned version (`OVERRIDE_GOCI_LINT_V`, currently
+  `v2.10.1`) from the module proxy into `.bin/` instead:
+  `GOBIN=$(pwd)/.bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1`.
+- **Build and lint:** `make build` produces `build/snyk-ls.linux.amd64` and
+  `make lint` reports `0 issues`. The binary is an **LSP server speaking JSON-RPC
+  over stdio**, so there is no `--help` to inspect: `./build/snyk-ls.linux.amd64 -v`
+  prints the version, and exercising it means writing a framed `initialize` request
+  to stdin, which returns the server capabilities.
+- **Do not run the full `make test` casually.** It carries a ~90 minute timeout, and
+  its integration and smoke suites need `SNYK_TOKEN` plus network access, so they
+  will not pass in a sandboxed VM. For a quick signal run a unit subset such as
+  `go test ./internal/... ./domain/ide/converter/...`. `make test-js` — which
+  regenerates the Go HTML fixtures and then runs mocha — passes and needs Node.
+- **Node comes from nvm, not `/exec-daemon/node`**, which is first on `PATH` but
+  ships no npm. Prepend `PATH="$HOME/.nvm/versions/node/v22.22.3/bin:$PATH"` before
+  `make test-js`; nvm is not auto-sourced in non-interactive shells.
+- **Probe egress instead of trusting a host list.** The allowlist changes between
+  runs, so treat any reachable/blocked list — including in older revisions of this
+  section — as stale. Matching is per hostname, and a bare entry is apex-exact
+  while `*.example.com` covers subdomains only, so an apex host has to be
+  allowlisted in its own right. A block surfaces as a TLS reset mid-handshake
+  rather than a DNS failure, so check a host directly before concluding anything:
+  `timeout 12 openssl s_client -connect go.dev:443 -servername go.dev </dev/null`.
+  The hosts worth probing for this repo are `proxy.golang.org`, `github.com`,
+  `raw.githubusercontent.com` and `registry.npmjs.org`.
