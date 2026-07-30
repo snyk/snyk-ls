@@ -1020,4 +1020,164 @@
     document.addEventListener('click', arm);
     document.addEventListener('keydown', arm);
   })();
+
+  // File/issue search (IDE-2362).
+  // A transient, client-side filter. As the user types it hides non-matching
+  // nodes, keeps the ancestors of a match visible (auto-expanding them so the
+  // match is reachable), and shows a "no results" message when a query matches
+  // nothing. Nothing here touches the LS: the change is purely visual, and only
+  // the nodes this filter auto-expanded are collapsed again when the query
+  // changes or clears, so the user's own expand/collapse state is preserved.
+  (function() {
+    var searchInput = document.getElementById('treeSearchInput');
+    if (!searchInput) return;
+    var emptyMessage = document.getElementById('treeSearchEmpty');
+    var searchRow = document.getElementById('treeSearch');
+    var toggle = document.getElementById('treeSearchToggle');
+
+    // Nodes that WE expanded to reveal a match. Only these are collapsed again
+    // when the filter is recomputed or cleared, so the search never disturbs the
+    // user's own (LS-persisted) expand/collapse state — even if they toggle a
+    // node mid-search — and each keystroke recomputes auto-expansion from a clean
+    // baseline regardless of typing history.
+    var autoExpanded = [];
+
+    function collapseAutoExpanded() {
+      for (var i = 0; i < autoExpanded.length; i++) {
+        autoExpanded[i].classList.remove('expanded');
+      }
+      autoExpanded = [];
+    }
+
+    function ownRow(node) {
+      var kids = node.childNodes;
+      for (var i = 0; i < kids.length; i++) {
+        if (hasClass(kids[i], 'tree-node-row')) return kids[i];
+      }
+      return null;
+    }
+
+    // The lower-cased text a node matches against: its own label (the full,
+    // pre-truncation value when the truncation pass has stashed one) plus, for
+    // file nodes, the full file path so a match works even when the visible
+    // label is middle-truncated.
+    function ownText(node) {
+      var row = ownRow(node);
+      if (!row) return '';
+      var text = '';
+      var label = row.querySelector('.tree-label');
+      if (label) {
+        var full = label.getAttribute('data-full-label');
+        text = (full !== null ? full : label.textContent) || '';
+      }
+      if (hasClass(node, 'tree-node-file')) {
+        var fp = node.getAttribute('data-file-path');
+        if (fp) text += ' ' + fp;
+      }
+      return text.toLowerCase();
+    }
+
+    // Recursively show/hide a node. Returns true when the node or any descendant
+    // matches. An empty query matches everything — used both to clear the filter
+    // and to reveal the whole subtree beneath a self-matched ancestor. Nodes
+    // hidden via the HTML `hidden` attribute (e.g. the filter-empty info node)
+    // are never matchable, so they can't keep the "no results" message hidden.
+    function filterNode(node, query) {
+      if (node.hidden) return false;
+      var selfMatch = query === '' || ownText(node).indexOf(query) !== -1;
+      var childContainer = findChildrenContainer(node);
+      var anyChildVisible = false;
+      if (childContainer) {
+        var children = childContainer.childNodes;
+        for (var i = 0; i < children.length; i++) {
+          var child = children[i];
+          if (!hasClass(child, 'tree-node')) continue;
+          if (filterNode(child, selfMatch ? '' : query)) {
+            anyChildVisible = true;
+          }
+        }
+      }
+      var visible = selfMatch || anyChildVisible;
+      if (visible) {
+        node.classList.remove('tree-search-hidden');
+        // Expand only to reveal a descendant match, and only when the node isn't
+        // already open, tracking it so we can collapse it back afterwards. A
+        // self-matched container is left as-is so the user opens it themselves.
+        if (anyChildVisible && !selfMatch && childContainer && !node.classList.contains('expanded')) {
+          node.classList.add('expanded');
+          autoExpanded.push(node);
+        }
+      } else {
+        node.classList.add('tree-search-hidden');
+      }
+      return visible;
+    }
+
+    function applySearch() {
+      var query = searchInput.value.trim().toLowerCase();
+      // Recompute from a clean baseline: undo our previous auto-expansions so
+      // this pass reflects only the current query.
+      collapseAutoExpanded();
+
+      var anyVisible = false;
+      var tops = container.childNodes;
+      for (var i = 0; i < tops.length; i++) {
+        var top = tops[i];
+        if (!hasClass(top, 'tree-node')) continue;
+        if (filterNode(top, query)) anyVisible = true;
+      }
+
+      if (emptyMessage) {
+        emptyMessage.hidden = (query === '' || anyVisible);
+      }
+    }
+
+    // Debounce to one filter pass per frame so fast typing doesn't thrash the DOM.
+    var searchPending = false;
+    function scheduleSearch() {
+      if (searchPending) return;
+      searchPending = true;
+      var run = function() { searchPending = false; applySearch(); };
+      if (window.requestAnimationFrame) {
+        window.requestAnimationFrame(run);
+      } else {
+        setTimeout(run, 16);
+      }
+    }
+
+    // Open/close the search box from the toolbar toggle. Closing always resets
+    // the filter so a dismissed search never leaves the tree filtered.
+    function openSearch() {
+      if (searchRow) searchRow.hidden = false;
+      if (toggle) toggle.setAttribute('aria-expanded', 'true');
+      searchInput.focus();
+    }
+
+    function closeSearch() {
+      if (searchRow) searchRow.hidden = true;
+      if (toggle) toggle.setAttribute('aria-expanded', 'false');
+      if (searchInput.value !== '') {
+        searchInput.value = '';
+        applySearch();
+      }
+    }
+
+    searchInput.addEventListener('input', scheduleSearch);
+    searchInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' || e.key === 'Esc' || e.keyCode === 27) {
+        closeSearch();
+      }
+    });
+
+    if (toggle) {
+      toggle.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (!searchRow || searchRow.hidden) {
+          openSearch();
+        } else {
+          closeSearch();
+        }
+      });
+    }
+  })();
 })();

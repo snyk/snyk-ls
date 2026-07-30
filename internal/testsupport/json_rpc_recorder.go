@@ -86,6 +86,20 @@ func (r *JsonRPCRecorder) ClearNotifications() {
 	r.notifications = []jrpc2.Request{}
 }
 
+// ClearNotificationsByMethod removes recorded notifications for a single LSP method.
+// Other notification types (e.g. $/snyk.scan) are preserved.
+func (r *JsonRPCRecorder) ClearNotificationsByMethod(method string) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	filtered := r.notifications[:0]
+	for _, notification := range r.notifications {
+		if notification.Method() != method {
+			filtered = append(filtered, notification)
+		}
+	}
+	r.notifications = filtered
+}
+
 // DrainRecordedTrafficForProfiling clears buffered LSP notifications and callbacks
 // on the test client recorder so megaproject heap profiles (heap_after) reflect
 // the language server process rather than retained JSON-RPC payloads (IDE-1940).

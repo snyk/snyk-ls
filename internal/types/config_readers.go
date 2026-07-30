@@ -304,6 +304,25 @@ func WaitForDefaultEnv(ctx context.Context, conf configuration.Configuration) er
 	}
 }
 
+// IsLspHandshakeAcknowledged reports whether the LSP initialize/initialized handshake
+// has been acknowledged. The initialized handler sets SettingIsLspHandshakeAcknowledged
+// synchronously before it returns, i.e. before the background scanner init runs — so
+// this becomes true as soon as the handshake completes, distinct from
+// SettingIsLspInitialized which flips only once scanner init finishes.
+//
+// It also returns true when SettingIsLspInitialized is set: scanner readiness strictly
+// follows handshake acknowledgement (late implies early), and callers/tests that set
+// SettingIsLspInitialized directly must still be treated as having acknowledged the
+// handshake.
+//
+// Config-change SAFETY side-effects that must run even while the scanner is still
+// initializing (e.g. clearing credentials on an endpoint switch) gate on this, not on
+// SettingIsLspInitialized. Actions that genuinely require a ready scanner keep gating
+// on SettingIsLspInitialized.
+func IsLspHandshakeAcknowledged(conf configuration.Configuration) bool {
+	return conf.GetBool(SettingIsLspHandshakeAcknowledged) || conf.GetBool(SettingIsLspInitialized)
+}
+
 // NewLspInitializedChannel creates a channel for signaling LSP initialization
 // and stores it in conf under SettingLspInitializedChannel. Call
 // SignalLspInitialized(conf) when the initialized handler completes.

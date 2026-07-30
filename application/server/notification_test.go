@@ -72,12 +72,13 @@ func TestCreateProgressListener(t *testing.T) {
 
 	server := mock_types.NewMockServer(ctrl)
 
-	var called atomic.Bool
+	var callbackCalled atomic.Bool
+	var notifyCalled atomic.Bool
 
 	server.EXPECT().
 		Callback(gomock.Any(), gomock.Any(), gomock.Any()).
 		DoAndReturn(func(ctx context.Context, s string, v any) (*jrpc2.Response, error) {
-			called.Store(true)
+			callbackCalled.Store(true)
 			return nil, nil
 		}).
 		Times(1)
@@ -85,7 +86,7 @@ func TestCreateProgressListener(t *testing.T) {
 	server.EXPECT().
 		Notify(gomock.Any(), gomock.Any(), gomock.Any()).
 		DoAndReturn(func(ctx context.Context, s string, v any) (*jrpc2.Response, error) {
-			called.Store(true)
+			notifyCalled.Store(true)
 			return nil, nil
 		}).
 		Times(1)
@@ -93,7 +94,7 @@ func TestCreateProgressListener(t *testing.T) {
 	go createProgressListener(progressChannel, server, engine.GetLogger())
 
 	assert.Eventually(t, func() bool {
-		return called.Load()
+		return callbackCalled.Load() && notifyCalled.Load()
 	}, 2*time.Second, time.Millisecond)
 
 	disposeProgressListener()

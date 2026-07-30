@@ -39,6 +39,13 @@
         Per-scanner chevrons (see .tree-chevron in styles.css) handle
         expand/collapse. tree.js keeps the expandAll/collapseAll handlers,
         which no-op when the buttons are absent. */}}
+    {{/* Right-side actions: search toggle + the "more filters" funnel. */}}
+    <span class="filter-actions">
+    {{if gt .TotalIssues 0}}
+      {{/* Search toggle (IDE-2362). Toggles the search box below the toolbar;
+          clicking again hides it and resets the filter (handled in tree.js). */}}
+      <button type="button" id="treeSearchToggle" class="tree-search-toggle" title="Search files and issues" aria-label="Search files and issues" aria-expanded="false" aria-controls="treeSearch"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.3"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></button>
+    {{end}}
     {{if .FilterState.ShowFilterPopover}}
     <span class="filter-popover-wrap">
       <button type="button" id="filtersPopoverBtn" class="filters-popover-trigger{{if or .FilterState.RiskScoreMixed .FilterState.MixedIssueViewOptions.OpenIssues .FilterState.MixedIssueViewOptions.IgnoredIssues}} filters-popover-trigger-mixed{{end}}" title="More filters" aria-haspopup="dialog" aria-expanded="false" aria-controls="filtersPopover"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 3h12l-4.5 6v4l-3 1.5V9L2 3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" fill="none"/></svg></button>
@@ -66,13 +73,27 @@
       </div>
     </span>
     {{end}}
+    </span>
   </div>
+
+  {{if gt .TotalIssues 0}}
+  {{/* Client-side file/issue search (IDE-2362). Purely transient: tree.js filters
+      the rendered nodes in the webview, so there is no LS round-trip and no
+      persisted state. Hidden by default; toggled by #treeSearchToggle. */}}
+  <div class="tree-search" id="treeSearch" hidden>
+    <input type="search" id="treeSearchInput" class="tree-search-input" placeholder="Search files and issues" aria-label="Search files and issues" autocomplete="off" autocapitalize="off" spellcheck="false">
+  </div>
+  {{end}}
 
   <div class="tree-container" id="treeContainer" data-total-issues="{{.TotalIssues}}">
     {{range .Nodes}}
       {{template "treeNode" .}}
     {{end}}
   </div>
+
+  {{if gt .TotalIssues 0}}
+  <div class="tree-search-empty" id="treeSearchEmpty" hidden>No files or issues match your search.</div>
+  {{end}}
 
   {{if not .FeedbackBannerDismissed}}
   <div class="feedback-banner" id="feedbackBanner"{{if not .FeedbackBannerInteracted}} hidden{{end}}>

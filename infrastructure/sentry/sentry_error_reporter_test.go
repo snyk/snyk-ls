@@ -17,8 +17,11 @@
 package sentry
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"testing"
+	"time"
 
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
@@ -57,6 +60,76 @@ func TestErrorReporting_CaptureError(t *testing.T) {
 
 	showMessageParams := <-channel
 	assert.Equal(t, "Snyk encountered an error: test error", showMessageParams.Message)
+}
+
+func TestErrorReporting_CaptureError_IgnoresCancellation(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	channel := make(chan sglsp.ShowMessageParams, 1)
+	notifier := notification.NewNotifier()
+	notifier.CreateListener(func(params any) {
+		if p, ok := params.(sglsp.ShowMessageParams); ok {
+			channel <- p
+		}
+	})
+	var target = NewSentryErrorReporter(engine.GetConfiguration(), engine.GetLogger(), engine, notifier, testutil.DefaultConfigResolver(engine))
+
+	// Error reporting is enabled, so only the cancellation guard can suppress the report.
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), true)
+
+	// Both a bare and a wrapped cancellation (e.g. "signal: killed" normalized to context.Canceled,
+	// then wrapped by getToken) must be treated as a non-error.
+	for _, err := range []error{context.Canceled, fmt.Errorf("error getting creds: %w", context.Canceled)} {
+		captured := target.CaptureError(err)
+		assert.False(t, captured, "cancellation must not be reported to Sentry")
+	}
+
+	select {
+	case msg := <-channel:
+		t.Fatalf("cancellation must not notify the user, got: %q", msg.Message)
+	case <-time.After(100 * time.Millisecond):
+		// no notification delivered — expected
+	}
+}
+
+func TestErrorReporting_CaptureError_NilNotifier_DoesNotPanic(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	// Reporting disabled so sendToSentry is a no-op; this only exercises the nil-notifier guard.
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), false)
+	var target = NewSentryErrorReporter(engine.GetConfiguration(), engine.GetLogger(), engine, nil, testutil.DefaultConfigResolver(engine))
+
+	assert.NotPanics(t, func() {
+		captured := target.CaptureError(errors.New("boom"))
+		assert.False(t, captured)
+	})
+}
+
+func TestErrorReporting_CaptureErrorAndReportAsIssue_IgnoresCancellation(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	path := types.FilePath("testPath")
+	channel := make(chan types.PublishDiagnosticsParams, 1)
+	notifier := notification.NewNotifier()
+	notifier.CreateListener(func(params any) {
+		if p, ok := params.(types.PublishDiagnosticsParams); ok {
+			channel <- p
+		}
+	})
+	var target = NewSentryErrorReporter(engine.GetConfiguration(), engine.GetLogger(), engine, notifier, testutil.DefaultConfigResolver(engine))
+
+	// Error reporting is enabled, so only the cancellation guard can suppress the report.
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSendErrorReports), true)
+
+	// Both a bare and a wrapped cancellation must be treated as a non-error.
+	for _, err := range []error{context.Canceled, fmt.Errorf("error getting creds: %w", context.Canceled)} {
+		captured := target.CaptureErrorAndReportAsIssue(path, err)
+		assert.False(t, captured, "cancellation must not be reported to Sentry")
+	}
+
+	select {
+	case diag := <-channel:
+		t.Fatalf("cancellation must not publish a diagnostic, got: %q", diag.Diagnostics[0].Message)
+	case <-time.After(100 * time.Millisecond):
+		// no diagnostic delivered — expected
+	}
 }
 
 func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
