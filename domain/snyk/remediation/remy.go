@@ -596,10 +596,10 @@ func (p *remyProvider) collectFileDiffs(ctx context.Context, runDir string) ([]t
 	enumCtx, enumCancel := context.WithTimeout(context.Background(), gitEnumerationTimeout)
 	defer enumCancel()
 
-	// Refresh the stat cache before diffing to prevent false-clean results when
-	// mtime+size happen to match the index (IDE-2289 / Windows coarse clock).
-	if err := refreshStatCache(enumCtx, runDir); err != nil {
-		return nil, fmt.Errorf("remy: refresh stat cache: %w", err)
+	// Invalidate the stat cache before diffing to prevent false-clean results
+	// when mtime+size happen to match the index (IDE-2289 / Windows coarse clock).
+	if err := invalidateStatCache(enumCtx, runDir); err != nil {
+		return nil, err
 	}
 
 	// Enumerate changed tracked files via NUL-delimited name-status.
@@ -883,48 +883,53 @@ func gitShowHEAD(ctx context.Context, root, relPath string) ([]byte, error) {
 	return stdout.Bytes(), nil
 }
 
-// refreshStatCache defeats git's stat-clean shortcut for all tracked files in
-// root, ensuring a subsequent git diff HEAD performs content-accurate change
-// detection regardless of mtime granularity.
+// invalidateStatCache forces git to content-compare every tracked file in
+// root on the next diff, defeating the index stat cache regardless of mtime
+// granularity.
 //
 // Root cause (IDE-2289): git caches mtime+size per file in the index. With
-// core.checkStat=minimal (second precision), a file write that lands in the
-// same clock second as the worktree checkout is indistinguishable from an
-// unchanged file — git skips content hashing and reports no diff, silently
-// discarding a completed fix. On Windows this is common because coarse NTFS
-// last-write-time granularity places the runner's write in the same tick as
-// the checkout.
+// core.checkStat=minimal (second precision), a fix that lands in the same
+// clock second as the worktree checkout and does not change the file's size
+// is indistinguishable from an unchanged file — git skips content hashing and
+// reports no diff, silently discarding a completed fix. On Windows this is
+// common because coarse NTFS last-write-time granularity places the runner's
+// write in the same tick as the checkout.
 //
-// Fix: set every tracked file's mtime to the Unix epoch (t=0). The epoch's
-// integer second (0) is guaranteed to differ from any modern checkout timestamp,
-// so git's stat comparison marks every file as "stat-dirty" and re-hashes
-// content before diffing. Unchanged files re-hash to HEAD blobs and vanish from
-// git diff output; modified files surface correctly.
+// Fix: git's racy-git rule re-reads any index entry whose cached mtime is
+// >= the index file's own mtime (the write could have raced with the index
+// write) — but ONLY if the index's recorded mtime is itself nonzero; git's
+// is_racy_timestamp() short-circuits to "not racy" when istate->timestamp.sec
+// is 0, treating an all-zero timestamp as "no timestamp recorded" rather than
+// "the year 1970". So the index mtime is set to 1 second past the Unix epoch,
+// not to the epoch itself: nonzero (so the check actually runs) and older
+// than any real checkout (so every entry's cached mtime is >= it). That makes
+// every entry racy, so git re-hashes content for all of them on the next
+// diff — one syscall, not one per tracked file. Unchanged files re-hash to
+// their HEAD blobs and vanish from git diff output; modified files surface
+// correctly. (Verified empirically: an index mtime of exactly 0 reproduces
+// the original bug — git reports no diff — while 1 second past epoch fixes it.)
 //
-// This intentionally touches files in an isolated, disposable worktree where
-// changing mtimes is harmless.
+// This only ever touches .git/index (never a worktree file) inside an
+// isolated, disposable worktree, where mutating it is harmless.
 //
-// Returns an error if git ls-files fails (e.g. root is not a git repo), so
-// callers can surface the failure rather than running git diff on an
-// un-refreshed index and silently dropping a completed fix.
-func refreshStatCache(ctx context.Context, root string) error {
-	lsOut, err := exec.CommandContext(ctx, "git", "-C", root, "ls-files", "-z").Output()
+// Returns an error if the index cannot be located or its mtime cannot be set
+// (e.g. root is not a git repo), so callers can surface the failure rather
+// than running git diff on a stale index and silently dropping a completed fix.
+func invalidateStatCache(ctx context.Context, root string) error {
+	// --git-path resolves the index correctly for linked worktrees, where it
+	// lives at .git/worktrees/<name>/index rather than .git/index.
+	out, err := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "--git-path", "index").Output()
 	if err != nil {
-		return fmt.Errorf("remy: refresh stat cache (ls-files): %w", err)
+		return fmt.Errorf("remy: invalidate stat cache (locate index): %w", err)
 	}
-	epoch := time.Unix(0, 0)
-	for _, f := range bytes.Split(lsOut, []byte{0}) {
-		if len(f) == 0 {
-			continue
-		}
-		// A tracked file deleted by the runner is still listed by git ls-files but
-		// absent on disk. os.IsNotExist is expected and harmless — git diff detects
-		// the deletion regardless of mtime. Any other Chtimes error (e.g. a Windows
-		// file locked by AV/IDE) would leave the stat-clean condition intact and
-		// silently drop that file's fix, so it must surface.
-		if err := os.Chtimes(filepath.Join(root, string(f)), epoch, epoch); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("remy: refresh stat cache chtimes %s: %w", string(f), err)
-		}
+	indexPath := strings.TrimSpace(string(out))
+	if !filepath.IsAbs(indexPath) {
+		indexPath = filepath.Join(root, indexPath)
+	}
+	// 1 second past the Unix epoch, not the epoch itself — see comment above.
+	pastMtime := time.Unix(1, 0)
+	if err := os.Chtimes(indexPath, pastMtime, pastMtime); err != nil {
+		return fmt.Errorf("remy: invalidate stat cache (chtimes %s): %w", indexPath, err)
 	}
 	return nil
 }
@@ -938,9 +943,9 @@ func refreshStatCache(ctx context.Context, root string) error {
 // causing the old-name snapshot lookup to miss and the deletion to be silently
 // dropped.
 func gitChangedFiles(ctx context.Context, root string) ([]string, error) {
-	// Refresh the stat cache before diffing to prevent false-clean results when
-	// mtime+size happen to match the index (IDE-2289 / Windows coarse clock).
-	if err := refreshStatCache(ctx, root); err != nil {
+	// Invalidate the stat cache before diffing to prevent false-clean results
+	// when mtime+size happen to match the index (IDE-2289 / Windows coarse clock).
+	if err := invalidateStatCache(ctx, root); err != nil {
 		return nil, err
 	}
 	cmd := exec.CommandContext(ctx, "git", "-C", root, "diff", "-z", "--name-only", "--no-renames", "HEAD")

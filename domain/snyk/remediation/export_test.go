@@ -110,9 +110,9 @@ func RootMuLen(p RemediationProvider) int {
 	return len(rp.rootMus)
 }
 
-// RefreshStatCacheForTest exposes refreshStatCache for black-box tests that
-// verify its error-propagation contract (e.g. that a non-git path returns an
-// error rather than silently no-oping).
-func RefreshStatCacheForTest(ctx context.Context, root string) error {
-	return refreshStatCache(ctx, root)
+// InvalidateStatCacheForTest exposes invalidateStatCache for black-box tests
+// that verify its error-propagation contract (e.g. that a non-git path returns
+// an error rather than silently no-oping).
+func InvalidateStatCacheForTest(ctx context.Context, root string) error {
+	return invalidateStatCache(ctx, root)
 }

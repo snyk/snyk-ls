@@ -22,7 +22,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -256,11 +255,13 @@ func setLocalGitConfig(t *testing.T, repoRoot, key, value string) {
 // and the racy check does NOT fire. We reproduce this deterministically on
 // Linux by advancing the worktree index file mtime to a future time.
 //
-// Fix: refreshStatCache sets every tracked file's mtime to the Unix epoch
-// (t=0) via os.Chtimes. The epoch's integer second (0) is guaranteed to differ
-// from any modern checkout timestamp, so git marks each file as "stat-dirty"
-// and re-hashes its content on the next diff. Unchanged files produce the same
-// blob hash as HEAD and vanish from diff output; the modified file is correctly
+// Fix: invalidateStatCache sets the index file's own mtime to 1 second past
+// the Unix epoch via os.Chtimes (not epoch itself — git's is_racy_timestamp()
+// treats a zero index mtime as "unset" and skips the racy check entirely).
+// Every tracked file's cached mtime is then >= the index mtime, so git's
+// racy-git rule re-reads and re-hashes every entry on the next diff — one
+// syscall, not one per tracked file. Unchanged files produce the same blob
+// hash as HEAD and vanish from diff output; the modified file is correctly
 // surfaced.
 // ---------------------------------------------------------------------------
 
@@ -278,9 +279,10 @@ func TestRemediate_StatCleanSameSize_StillDetected(t *testing.T) {
 
 	repoRoot := initGitRepo(t)
 	// core.checkStat=minimal (second-precision mtime) is the key prerequisite:
-	// the fix works by setting mtimes to epoch (integer second 0), which must
-	// differ from the checkout timestamp's integer second. Explicitly set it here
-	// so the test's premise is self-documenting and robust to initGitRepo changes.
+	// the fix works by setting the index mtime to 1 second past epoch, which
+	// must differ from the checkout timestamp's integer second. Explicitly set
+	// it here so the test's premise is self-documenting and robust to
+	// initGitRepo changes.
 	setLocalGitConfig(t, repoRoot, "core.checkStat", "minimal")
 	// Both versions must be exactly the same byte length — SIZE_CHANGED stays 0.
 	const v1 = "package main\nvar x = 1\n"
@@ -291,44 +293,7 @@ func TestRemediate_StatCleanSameSize_StillDetected(t *testing.T) {
 	commitFile(t, repoRoot, "main.go", v1)
 	absPath := filepath.Join(repoRoot, "main.go")
 
-	runner := func(_ context.Context, _ workflow.Engine, root string, _ string) error {
-		worktreeFile := filepath.Join(root, "main.go")
-
-		// Capture the mtime git recorded in the index at checkout time.
-		info, err := os.Stat(worktreeFile)
-		if err != nil {
-			return err
-		}
-		checkoutMtime := info.ModTime()
-
-		// Write a same-size change — SIZE_CHANGED bit stays 0.
-		if err := os.WriteFile(worktreeFile, []byte(v2), 0o644); err != nil {
-			return err
-		}
-
-		// Reset file mtime to checkout mtime: mtime+size now match the index entry.
-		if err := os.Chtimes(worktreeFile, checkoutMtime, checkoutMtime); err != nil {
-			return err
-		}
-
-		// Advance the worktree index file mtime to a time strictly after the
-		// file mtime. This defeats git's racy-git protection: the racy check fires
-		// only when index_mtime <= file_mtime. With index_mtime > file_mtime, git
-		// treats the index as having been written after the file, so it trusts the
-		// cached stat (mtime+size match → assume clean → skip content hashing).
-		// This is the exact Windows CI condition: git worktree add is slow enough
-		// that the index is written in a later clock tick than the checked-out files.
-		idxPathBytes, idxErr := exec.Command("git", "-C", root, "rev-parse", "--git-path", "index").Output()
-		if idxErr != nil {
-			return idxErr
-		}
-		idxPath := strings.TrimSpace(string(idxPathBytes))
-		if !filepath.IsAbs(idxPath) {
-			idxPath = filepath.Join(root, idxPath)
-		}
-		futureTime := checkoutMtime.Add(2 * time.Second)
-		return os.Chtimes(idxPath, futureTime, futureTime)
-	}
+	runner := statCleanRunner("main.go", v2)
 
 	p := remediation.NewRemyProvider(nil, runner)
 
@@ -343,14 +308,14 @@ func TestRemediate_StatCleanSameSize_StillDetected(t *testing.T) {
 	assert.Contains(t, edit.Changes, absPath)
 }
 
-// TestRefreshStatCache_GitFailure_PropagatesError verifies that when the
-// underlying git ls-files call fails (here: root is not a git repository),
-// refreshStatCache returns a non-nil error so callers surface the failure
-// rather than running git diff on an un-refreshed index and silently dropping
-// a completed fix.
-func TestRefreshStatCache_GitFailure_PropagatesError(t *testing.T) {
+// TestInvalidateStatCache_GitFailure_PropagatesError verifies that when the
+// underlying git rev-parse --git-path call fails (here: root is not a git
+// repository), invalidateStatCache returns a non-nil error so callers surface
+// the failure rather than running git diff on a stale index and silently
+// dropping a completed fix.
+func TestInvalidateStatCache_GitFailure_PropagatesError(t *testing.T) {
 	t.Parallel()
-	// A plain temp dir has no .git — git ls-files fails with a fatal error.
-	err := remediation.RefreshStatCacheForTest(context.Background(), t.TempDir())
-	require.Error(t, err, "refreshStatCache must propagate git ls-files failure instead of silently no-oping")
+	// A plain temp dir has no .git — git rev-parse --git-path fails with a fatal error.
+	err := remediation.InvalidateStatCacheForTest(context.Background(), t.TempDir())
+	require.Error(t, err, "invalidateStatCache must propagate git failure instead of silently no-oping")
 }
