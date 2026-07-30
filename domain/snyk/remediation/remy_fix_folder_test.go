@@ -778,3 +778,47 @@ func TestFixFolder_CancelledCallerContext_GuardsStillSucceed(t *testing.T) {
 	require.NotEmpty(t, results,
 		"FixFolder must return results even when the caller context is already canceled before the call")
 }
+
+// ---------------------------------------------------------------------------
+// UNIT-121: collectFileDiffs (the FixFolder path) must detect content changes
+// when git's stat cache considers the file clean (mtime+size identical to the
+// cached index entry) — the same IDE-2289 regression HARDEN-5 guards on the
+// Remediate path, reproduced here for FixFolder's independent invalidateStatCache
+// call and name-status parsing.
+// ---------------------------------------------------------------------------
+
+// TestFixFolder_StatCleanSameSize_StillDetected forces the exact Windows
+// stat-clean condition deterministically on Linux (see
+// TestRemediate_StatCleanSameSize_StillDetected in remy_remediate_harden_test.go
+// for the full mechanism explanation):
+//  1. Commit a file with content v1.
+//  2. In the folder, overwrite with SAME-BYTE-SIZE v2 and reset mtime via
+//     os.Chtimes → mtime+size match the index entry exactly (stat-clean).
+//  3. Advance the index file's mtime to a future time, defeating git's
+//     racy-git protection (which only fires when index_mtime <= file_mtime).
+//
+// Without the fix, git diff -z --name-status HEAD returns empty → no results.
+func TestFixFolder_StatCleanSameSize_StillDetected(t *testing.T) {
+	t.Parallel()
+
+	repo := initGitRepo(t)
+	// Both versions must be exactly the same byte length — SIZE_CHANGED stays 0.
+	const v1 = "package main\nvar x = 1\n"
+	const v2 = "package main\nvar x = 2\n"
+	if len(v1) != len(v2) {
+		t.Fatalf("test invariant broken: v1 (%d bytes) != v2 (%d bytes)", len(v1), len(v2))
+	}
+	commitFile(t, repo, "main.go", v1)
+
+	runner := statCleanRunner("main.go", v2)
+
+	p := remediation.NewRemyProvider(nil, runner)
+	fr, ok := p.(remediation.FolderRemediator)
+	require.True(t, ok, "remyProvider must implement FolderRemediator")
+
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	require.NoError(t, err)
+	require.Len(t, results, 1,
+		"content-changed file must produce a result even when git stat cache sees mtime+size unchanged (IDE-2289 regression guard)")
+	assert.Contains(t, results[0].Diff, "var x = 2")
+}
