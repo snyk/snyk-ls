@@ -38,6 +38,7 @@ type Downloader struct {
 	engine          workflow.Engine
 	removeFile      func(string) error
 	renameFile      func(string, string) error
+	mkdirTemp       func(string, string) (string, error)
 }
 
 func NewDownloader(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, httpClientFunc func() *http.Client) *Downloader {
@@ -48,6 +49,7 @@ func NewDownloader(engine workflow.Engine, errorReporter error_reporting.ErrorRe
 		engine:          engine,
 		removeFile:      os.Remove,
 		renameFile:      os.Rename,
+		mkdirTemp:       os.MkdirTemp,
 	}
 }
 
@@ -185,7 +187,7 @@ func (d *Downloader) Download(r *Release, cliPath string, isUpdate bool) (destin
 		logger.Err(err).Msg("couldn't create directory for Snyk CLI")
 		return "", err
 	}
-	tmpDirPath, err := os.MkdirTemp(cliDirectory, "downloads")
+	tmpDirPath, err := d.mkdirTempDir(cliDirectory, "downloads")
 	if err != nil {
 		logger.Err(err).Msg("couldn't create tmpdir")
 		return "", err
@@ -254,6 +256,13 @@ func (d *Downloader) rename(sourceFilePath string, destinationFilePath string) e
 		return d.renameFile(sourceFilePath, destinationFilePath)
 	}
 	return os.Rename(sourceFilePath, destinationFilePath)
+}
+
+func (d *Downloader) mkdirTempDir(dir string, pattern string) (string, error) {
+	if d.mkdirTemp != nil {
+		return d.mkdirTemp(dir, pattern)
+	}
+	return os.MkdirTemp(dir, pattern)
 }
 
 func (d *Downloader) existingDestinationMatchesChecksum(expectedChecksum HashSum, destinationFilePath string) bool {

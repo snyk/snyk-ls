@@ -257,14 +257,12 @@ func TestDownloaderDownload_ReportsFailureEndWhenMkdirTempFails(t *testing.T) {
 		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh, engine.GetLogger()),
 		httpClient:      func() *http.Client { return server.Client() },
 		engine:          engine,
+		mkdirTemp: func(string, string) (string, error) {
+			return "", errors.New("simulated mkdir temp failure")
+		},
 	}
 
-	// Pre-create the CLI directory without write permission. os.MkdirAll sees
-	// the directory already exists and returns nil, but the subsequent
-	// os.MkdirTemp inside it needs write permission and fails.
 	cliDirectory := filepath.Join(t.TempDir(), "clidir")
-	require.NoError(t, os.Mkdir(cliDirectory, 0o555))
-	t.Cleanup(func() { _ = os.Chmod(cliDirectory, 0o755) })
 	cliPath := filepath.Join(cliDirectory, exec)
 
 	_, err := d.Download(testRelease(server.URL, fmt.Sprintf("%x  %s", sha256.Sum256(binary), exec)), cliPath, false)
