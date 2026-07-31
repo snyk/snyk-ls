@@ -17,23 +17,29 @@
 package install
 
 import (
+	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path"
 	"path/filepath"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/infrastructure/cli/filename"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
 
 func TestInstaller_Find(t *testing.T) {
@@ -87,6 +93,387 @@ func Test_Find_CliPathInSettings_CliPathFound(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, cliPath, foundPath)
+}
+
+func TestDefaultConfigResolver_ResolvesCliPathFromMinimalEngine(t *testing.T) {
+	engine, err := testutil.NewMinimalEngine()
+	require.NoError(t, err)
+	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), cliPath)
+
+	assert.Equal(t, cliPath, testutil.DefaultConfigResolver(engine).GetString(types.SettingCliPath, nil))
+}
+
+func TestInstallRelease_ReturnsErrorWhenCliPathIsEmpty(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	resolver := mock_types.NewMockConfigResolverInterface(gomock.NewController(t))
+	resolver.EXPECT().GetString(types.SettingCliPath, nil).AnyTimes().Return("")
+	t.Chdir(t.TempDir())
+
+	binary := []byte("snyk-cli")
+	checksum := sha256.Sum256(binary)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(binary)
+	}))
+	t.Cleanup(server.Close)
+
+	installer := NewInstaller(
+		engine,
+		error_reporting.NewTestErrorReporter(engine),
+		func() *http.Client { return server.Client() },
+		resolver,
+	)
+
+	got, err := installer.installRelease(testRelease(server.URL, fmt.Sprintf("%x  %s", checksum, filename.ExecutableName)))
+
+	require.Error(t, err)
+	assert.Empty(t, got)
+	assert.NoFileExists(t, filename.ExecutableName)
+}
+
+func TestUpdateFromRelease_ReturnsErrorWhenCliPathIsEmpty(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	resolver := mock_types.NewMockConfigResolverInterface(gomock.NewController(t))
+	resolver.EXPECT().GetString(types.SettingCliPath, nil).AnyTimes().Return("")
+	t.Chdir(t.TempDir())
+
+	binary := []byte("snyk-cli")
+	checksum := sha256.Sum256(binary)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(binary)
+	}))
+	t.Cleanup(server.Close)
+
+	installer := NewInstaller(
+		engine,
+		error_reporting.NewTestErrorReporter(engine),
+		func() *http.Client { return server.Client() },
+		resolver,
+	)
+
+	updated, err := installer.updateFromRelease(testRelease(server.URL, fmt.Sprintf("%x  %s", checksum, filename.ExecutableName)))
+
+	require.Error(t, err)
+	assert.False(t, updated)
+}
+
+func TestInstallRelease_ReturnsInstalledPath_WhenResolverCannotRediscoverIt(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
+	resolver := mock_types.NewMockConfigResolverInterface(gomock.NewController(t))
+	reads := 0
+	resolver.EXPECT().GetString(types.SettingCliPath, nil).AnyTimes().DoAndReturn(func(string, *types.FolderConfig) string {
+		reads++
+		if reads == 1 {
+			return cliPath
+		}
+		return ""
+	})
+	t.Setenv("PATH", t.TempDir())
+	t.Chdir(t.TempDir())
+
+	binary := []byte("snyk-cli")
+	checksum := sha256.Sum256(binary)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(binary)
+	}))
+	t.Cleanup(server.Close)
+
+	installer := NewInstaller(
+		engine,
+		error_reporting.NewTestErrorReporter(engine),
+		func() *http.Client { return server.Client() },
+		resolver,
+	)
+
+	release := testRelease(server.URL, fmt.Sprintf("%x  %s", checksum, filename.ExecutableName))
+	got, err := installer.installRelease(release)
+
+	require.NoError(t, err)
+	assert.Equal(t, cliPath, got)
+	assert.FileExists(t, got)
+	assert.Equal(t, 1, reads)
+}
+
+func TestInstallerUpdate_ResolvesCliPathOnce(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
+	require.NoError(t, os.WriteFile(cliPath, []byte("outdated-cli"), 0755))
+	resolver := mock_types.NewMockConfigResolverInterface(gomock.NewController(t))
+	resolver.EXPECT().GetString(types.SettingCliPath, nil).Times(1).Return(cliPath)
+	t.Chdir(t.TempDir())
+
+	binary := []byte("latest-cli")
+	checksum := sha256.Sum256(binary)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(binary)
+	}))
+	t.Cleanup(server.Close)
+
+	installer := NewInstaller(
+		engine,
+		error_reporting.NewTestErrorReporter(engine),
+		func() *http.Client { return server.Client() },
+		resolver,
+	)
+
+	updated, err := installer.updateFromRelease(testRelease(server.URL, fmt.Sprintf("%x  %s", checksum, filename.ExecutableName)))
+
+	require.NoError(t, err)
+	assert.True(t, updated)
+	installedBinary, readErr := os.ReadFile(cliPath)
+	require.NoError(t, readErr)
+	assert.Equal(t, binary, installedBinary)
+}
+
+func TestInstallRelease_ReturnsConfiguredDestination_OnSuccessfulInstall(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
+	t.Setenv("PATH", t.TempDir())
+
+	binary := []byte("snyk-cli")
+	checksum := sha256.Sum256(binary)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(binary)
+	}))
+	t.Cleanup(server.Close)
+
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), cliPath)
+	installer := NewInstaller(
+		engine,
+		error_reporting.NewTestErrorReporter(engine),
+		func() *http.Client { return server.Client() },
+		testutil.DefaultConfigResolver(engine),
+	)
+
+	release := testRelease(server.URL, fmt.Sprintf("%x  %s", checksum, filename.ExecutableName))
+	got, err := installer.installRelease(release)
+
+	require.NoError(t, err)
+	assert.Equal(t, cliPath, got)
+	assert.FileExists(t, got)
+}
+
+func testRelease(url, checksumInfo string) *Release {
+	asset := &ReleaseAsset{URL: url, ChecksumInfo: checksumInfo}
+	return &Release{Assets: &ReleaseAssets{
+		AlpineLinux: asset,
+		Linux:       asset,
+		LinuxARM64:  asset,
+		MacOS:       asset,
+		MacOSARM64:  asset,
+		Windows:     asset,
+	}}
+}
+
+func TestDownloaderDestinationPath_ReturnsConfiguredPath(t *testing.T) {
+	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
+	downloader := &Downloader{}
+	destinationFileName := "snyk-linux-arm64.latest"
+
+	assert.Equal(t, filepath.Join(filepath.Dir(cliPath), destinationFileName), downloader.destinationPath(cliPath, destinationFileName))
+}
+
+func TestDownloaderMoveToDestination_ReturnsErrorWhenCliPathIsEmpty(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), nil)
+	t.Chdir(t.TempDir())
+
+	sourceFile, err := os.CreateTemp(t.TempDir(), "cli-source")
+	require.NoError(t, err)
+	_, err = sourceFile.WriteString("snyk-cli")
+	require.NoError(t, err)
+	require.NoError(t, sourceFile.Close())
+
+	got, err := downloader.moveToDestination("", filename.ExecutableName, sourceFile.Name(), nil)
+
+	require.Error(t, err)
+	assert.Empty(t, got)
+	assert.NoFileExists(t, filename.ExecutableName)
+}
+
+func TestDownloaderMoveToDestination_ReturnsExistingPathWhenConcurrentInstallAlreadyWroteExpectedBinary(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
+	existingBinary := []byte("expected-cli")
+	require.NoError(t, os.WriteFile(cliPath, existingBinary, 0755))
+
+	sourceFile, err := os.CreateTemp(t.TempDir(), "cli-source")
+	require.NoError(t, err)
+	_, err = sourceFile.Write([]byte("new-cli"))
+	require.NoError(t, err)
+	require.NoError(t, sourceFile.Close())
+
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), nil)
+	downloader.removeFile = func(string) error { return os.ErrPermission }
+	expectedChecksum := sha256.Sum256(existingBinary)
+
+	got, err := downloader.moveToDestination(cliPath, filename.ExecutableName, sourceFile.Name(), expectedChecksum[:])
+
+	require.NoError(t, err)
+	assert.Equal(t, cliPath, got)
+	assert.FileExists(t, got)
+	assert.Equal(t, existingBinary, readFile(t, got))
+}
+
+func TestDownloaderMoveToDestination_ReturnsExistingPathWhenConcurrentInstallRenamedExpectedBinary(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
+	existingBinary := []byte("expected-cli")
+
+	sourceFile, err := os.CreateTemp(t.TempDir(), "cli-source")
+	require.NoError(t, err)
+	_, err = sourceFile.Write([]byte("new-cli"))
+	require.NoError(t, err)
+	require.NoError(t, sourceFile.Close())
+
+	renameErr := os.ErrPermission
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), nil)
+	downloader.renameFile = func(_, destinationFilePath string) error {
+		require.NoError(t, os.WriteFile(destinationFilePath, existingBinary, 0755))
+		return renameErr
+	}
+	expectedChecksum := sha256.Sum256(existingBinary)
+
+	got, err := downloader.moveToDestination(cliPath, filename.ExecutableName, sourceFile.Name(), expectedChecksum[:])
+
+	require.NoError(t, err)
+	assert.Equal(t, cliPath, got)
+	assert.Equal(t, existingBinary, readFile(t, got))
+}
+
+func TestDownloaderMoveToDestination_ReturnsErrorWhenConcurrentInstallRenamedWrongBinary(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
+
+	sourceFile, err := os.CreateTemp(t.TempDir(), "cli-source")
+	require.NoError(t, err)
+	_, err = sourceFile.Write([]byte("new-cli"))
+	require.NoError(t, err)
+	require.NoError(t, sourceFile.Close())
+
+	renameErr := os.ErrPermission
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), nil)
+	downloader.renameFile = func(_, destinationFilePath string) error {
+		require.NoError(t, os.WriteFile(destinationFilePath, []byte("wrong-cli"), 0755))
+		return renameErr
+	}
+	expectedChecksum := sha256.Sum256([]byte("expected-cli"))
+
+	got, err := downloader.moveToDestination(cliPath, filename.ExecutableName, sourceFile.Name(), expectedChecksum[:])
+
+	require.Error(t, err)
+	assert.Empty(t, got)
+	assert.ErrorIs(t, err, renameErr)
+}
+
+func TestDownloaderMoveToDestination_ReturnsErrorWhenExistingBinaryCannotBeRemoved(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
+	require.NoError(t, os.WriteFile(cliPath, []byte("outdated-cli"), 0755))
+
+	sourceFile, err := os.CreateTemp(t.TempDir(), "cli-source")
+	require.NoError(t, err)
+	_, err = sourceFile.Write([]byte("new-cli"))
+	require.NoError(t, err)
+	require.NoError(t, sourceFile.Close())
+
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), nil)
+	downloader.removeFile = func(string) error { return os.ErrPermission }
+	expectedChecksum := sha256.Sum256([]byte("new-cli"))
+
+	got, err := downloader.moveToDestination(cliPath, filename.ExecutableName, sourceFile.Name(), expectedChecksum[:])
+
+	require.Error(t, err)
+	assert.Empty(t, got)
+	assert.ErrorIs(t, err, os.ErrPermission)
+}
+
+func readFile(t *testing.T, path string) []byte {
+	t.Helper()
+	contents, err := os.ReadFile(path)
+	require.NoError(t, err)
+	return contents
+}
+
+func TestDownloaderDownload_ReturnsExistingPathWhenConcurrentInstallRenamedExpectedBinary(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
+	existingBinary := []byte("expected-cli")
+	checksum := sha256.Sum256(existingBinary)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(existingBinary)
+	}))
+	t.Cleanup(server.Close)
+
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), func() *http.Client { return server.Client() })
+	downloader.renameFile = func(_, destinationFilePath string) error {
+		require.NoError(t, os.WriteFile(destinationFilePath, existingBinary, 0755))
+		return os.ErrPermission
+	}
+
+	got, err := downloader.Download(testRelease(server.URL, fmt.Sprintf("%x  %s", checksum, filename.ExecutableName)), cliPath, false)
+
+	require.NoError(t, err)
+	assert.Equal(t, cliPath, got)
+	assert.Equal(t, existingBinary, readFile(t, got))
+}
+
+func TestDownloaderDownload_ReturnsExistingPathWhenConcurrentInstallAlreadyWroteExpectedBinary(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
+	existingBinary := []byte("expected-cli")
+	require.NoError(t, os.WriteFile(cliPath, existingBinary, 0755))
+
+	checksum := sha256.Sum256(existingBinary)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(existingBinary)
+	}))
+	t.Cleanup(server.Close)
+
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), func() *http.Client { return server.Client() })
+	downloader.removeFile = func(string) error { return os.ErrPermission }
+
+	got, err := downloader.Download(testRelease(server.URL, fmt.Sprintf("%x  %s", checksum, filename.ExecutableName)), cliPath, false)
+
+	require.NoError(t, err)
+	assert.Equal(t, cliPath, got)
+	assert.Equal(t, existingBinary, readFile(t, got))
+}
+
+func TestDownloaderDownload_ReturnsErrorWhenConcurrentInstallWroteWrongBinary(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
+	require.NoError(t, os.WriteFile(cliPath, []byte("outdated-cli"), 0755))
+
+	newBinary := []byte("expected-cli")
+	checksum := sha256.Sum256(newBinary)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(newBinary)
+	}))
+	t.Cleanup(server.Close)
+
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), func() *http.Client { return server.Client() })
+	downloader.removeFile = func(string) error { return os.ErrPermission }
+
+	got, err := downloader.Download(testRelease(server.URL, fmt.Sprintf("%x  %s", checksum, filename.ExecutableName)), cliPath, false)
+
+	require.Error(t, err)
+	assert.Empty(t, got)
+	assert.ErrorIs(t, err, os.ErrPermission)
+}
+
+func TestFakeInstaller_Install_ReturnsPath(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), cliPath)
+	installer := NewFakeInstaller(engine, testutil.DefaultConfigResolver(engine))
+
+	got, err := installer.Install(t.Context())
+
+	require.NoError(t, err)
+	assert.Equal(t, cliPath, got)
+	assert.FileExists(t, got)
 }
 
 func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {

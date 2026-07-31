@@ -2538,14 +2538,13 @@ func substituteRemyFlow(t *testing.T, engine workflow.Engine) {
 	// Point SettingCliPath at the preview dir so the downloader writes there.
 	conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), previewCLIPath)
 	er := error_reporting.NewTestErrorReporter(engine)
-	resolver := testutil.DefaultConfigResolver(engine)
 	cliRelease := install.NewCLIRelease(engine, func() *http.Client { return http.DefaultClient })
 	release, err := cliRelease.GetLatestReleaseByChannel("preview", false)
 	if err != nil {
 		t.Skipf("skipping: preview CLI release fetch failed (no network?): %v", err)
 	}
-	downloader := install.NewDownloader(engine, er, func() *http.Client { return http.DefaultClient }, resolver)
-	if err = downloader.Download(release, false); err != nil {
+	downloader := install.NewDownloader(engine, er, func() *http.Client { return http.DefaultClient })
+	if _, err = downloader.Download(release, previewCLIPath, false); err != nil {
 		t.Skipf("skipping: preview CLI download failed (no network?): %v", err)
 	}
 
