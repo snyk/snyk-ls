@@ -33,12 +33,16 @@ type TestExecutor struct {
 	ExecuteResponse []byte
 	wasExecuted     bool
 	ExecuteDuration time.Duration
-	startedScans    int
-	finishedScans   int
-	counterLock     sync.RWMutex
-	cmd             []string
-	logger          *zerolog.Logger
-	engine          workflow.Engine
+	// ExecuteRelease, when non-nil, replaces the ExecuteDuration timer: Execute blocks
+	// until the channel is closed (or ctx is canceled) instead of racing a wall clock.
+	// Nil by default so existing timer-based tests are unaffected.
+	ExecuteRelease chan struct{}
+	startedScans   int
+	finishedScans  int
+	counterLock    sync.RWMutex
+	cmd            []string
+	logger         *zerolog.Logger
+	engine         workflow.Engine
 }
 
 func NewTestExecutor(engine workflow.Engine) *TestExecutor {
@@ -85,19 +89,36 @@ func (t *TestExecutor) Execute(ctx context.Context, cmd []string, workingDir typ
 	t.startedScans++
 	t.counterLock.Unlock()
 
-	select {
-	case <-time.After(t.ExecuteDuration):
-		t.logger.Debug().Msg("Dummy CLI Execution time finished")
-		// Indicate that the scan has finished and return the ExecuteResponse
-		t.wasExecuted = true
-		t.counterLock.Lock()
-		t.finishedScans++
-		t.counterLock.Unlock()
-		return t.ExecuteResponse, err
-	case <-ctx.Done():
-		t.logger.Debug().Msg("Dummy CLI Execution canceled")
-		return resp, ctx.Err()
+	if t.ExecuteRelease != nil {
+		select {
+		case <-ctx.Done():
+			t.logger.Debug().Msg("Dummy CLI Execution canceled")
+			return resp, ctx.Err()
+		case <-t.ExecuteRelease:
+		}
+	} else {
+		select {
+		case <-ctx.Done():
+			t.logger.Debug().Msg("Dummy CLI Execution canceled")
+			return resp, ctx.Err()
+		case <-time.After(t.ExecuteDuration):
+		}
 	}
+
+	// A select with both cases ready picks at random, so cancellation must win by fiat,
+	// not by luck - re-check here even though ctx.Done() was already a select case above.
+	if err = ctx.Err(); err != nil {
+		t.logger.Debug().Msg("Dummy CLI Execution canceled")
+		return resp, err
+	}
+
+	t.logger.Debug().Msg("Dummy CLI Execution time finished")
+	// Indicate that the scan has finished and return the ExecuteResponse
+	t.wasExecuted = true
+	t.counterLock.Lock()
+	t.finishedScans++
+	t.counterLock.Unlock()
+	return t.ExecuteResponse, nil
 }
 
 func (t *TestExecutor) ExpandParametersFromConfig(base []string, folderConfig *types.FolderConfig) []string {
