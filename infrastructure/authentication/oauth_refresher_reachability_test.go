@@ -70,6 +70,13 @@ func Test_IsAuthenticated_DoesNotUseOAuth2ProviderCustomRefresherFunc(t *testing
 			w.WriteHeader(http.StatusNotFound)
 		}
 	}))
+	// Disable keep-alives: the token-refresh request and the whoami request that
+	// immediately follows it can otherwise land on the same pooled connection, racing
+	// this server's teardown of that idle connection. That surfaces as a spurious
+	// io.EOF/net.OpError on the whoami call, which shouldCauseLogout's transient-network
+	// fallback (correctly, in general) treats as "don't log out" - flaking assertion 4
+	// below even though the real invalid_grant/401 path was exercised.
+	server.Config.SetKeepAlivesEnabled(false)
 	t.Cleanup(server.Close)
 
 	// Must be set before the OAuth authenticator is constructed - the refresh token URL is

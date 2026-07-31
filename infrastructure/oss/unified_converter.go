@@ -58,7 +58,13 @@ func convertTestResultToIssues(ctx context.Context, testResult testapi.TestResul
 	issues := []types.Issue{}
 	for _, trIssue := range issuesFromTestResult {
 		issue := processIssue(ctx, trIssue, logger, affectedFilePath, workDir)
-		issues = append(issues, issue)
+		// processIssue returns a nil *snyk.Issue for findings it cannot convert
+		// (e.g. unusable attributes, unresolved ecosystem). Guard the append on the
+		// concrete pointer: appending a typed-nil pointer into a []types.Issue would
+		// yield a non-nil interface wrapping a nil pointer, which later panics.
+		if issue != nil {
+			issues = append(issues, issue)
+		}
 	}
 	return issues, nil
 }
@@ -109,15 +115,20 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 	title := trIssue.GetTitle()
 	introducingOssIssueData, err := buildOssIssueData(ctx, trIssue, problem, introducingFinding, affectedFilePath, myRange, ecosystemStr, dependencyPath)
 	if err != nil {
+		// The introducing finding is unusable, so we cannot produce a
+		// content-bearing issue. Skip it rather than emitting a finding whose
+		// grouping key would be derived from empty attributes and collide with
+		// other degenerate findings at the same location.
 		logger.Warn().Err(err).Msg("failed to build oss issue data")
+		return nil
 	}
 
 	introducingOssIssueData.MatchingIssues = populateMatchingIssues(ctx, trIssue, problem, affectedFilePath, myRange, ecosystemStr, logger)
 
 	remediationAdvice := getRemediationAdvice(introducingOssIssueData)
 	// TODO: add ignore details once provenance and granularity are clarified
-	//ignoreDetails := trIssue.GetIgnoreDetails()
-	//isIgnored := ignoreDetails != nil && ignoreDetails.GetStatus() == testapi.SuppressionStatusIgnored
+	// ignoreDetails := trIssue.GetIgnoreDetails()
+	// isIgnored := ignoreDetails != nil && ignoreDetails.GetStatus() == testapi.SuppressionStatusIgnored
 	message := buildMessage(title, problem.PackageName, remediationAdvice)
 	severity := types.IssuesSeverity[strings.ToLower(trIssue.GetSeverity())]
 	configResolver, _ := ctx2.ConfigResolverFromContext(ctx)
@@ -158,7 +169,6 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 		CVEs:                introducingOssIssueData.Identifiers.CVE,
 		AdditionalData:      introducingOssIssueData,
 		LessonUrl:           introducingOssIssueData.Lesson,
-		FindingId:           introducingFinding.Id.String(),
 	}
 
 	// add code actions
@@ -169,12 +179,23 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 	// Calculate fingerprint
 	fingerprint := utils.CalculateFingerprintFromAdditionalData(issue)
 	issue.SetFingerPrint(fingerprint)
+	// The durable grouping key for an OSS finding is derived from stable
+	// vulnerability attributes (package name, version, dependency chain, rule
+	// id) rather than the per-scan testapi finding UUID, which the backend mints
+	// afresh on every scan. Using the fingerprint inputs keeps the finding
+	// identity identical across repeated scans of the same dependency graph; the
+	// conversion layer then adds the root-relative path and range to individuate
+	// multiple occurrences.
+	issue.FindingId = fingerprint
 	return issue
 }
 
 func populateMatchingIssues(ctx context.Context, trIssue testapi.Issue, problem *testapi.SnykVulnProblem, affectedFilePath types.FilePath, myRange types.Range, ecosystemStr string, logger zerolog.Logger) []snyk.OssIssueData {
 	var matching []snyk.OssIssueData
 	for _, finding := range trIssue.GetFindings() {
+		if finding == nil || finding.Attributes == nil {
+			continue
+		}
 		for _, evidence := range finding.Attributes.Evidence {
 			dependencyPathEvidence, err := evidence.AsDependencyPathEvidence()
 			if err != nil {
@@ -184,6 +205,7 @@ func populateMatchingIssues(ctx context.Context, trIssue testapi.Issue, problem 
 			issueData, err := buildOssIssueData(ctx, trIssue, problem, finding, affectedFilePath, myRange, ecosystemStr, stringPath)
 			if err != nil {
 				logger.Warn().Err(err).Msg("failed to build oss issue data")
+				continue
 			}
 			matching = append(matching, issueData)
 		}
@@ -347,7 +369,7 @@ func extractDependencyPath(finding *testapi.FindingData) []string {
 		return nil
 	}
 
-	//FIXME: don't stop at the first dependency path
+	// FIXME: don't stop at the first dependency path
 	for _, evidence := range finding.Attributes.Evidence {
 		disc, err := evidence.Discriminator()
 		if err == nil && disc == "dependency_path" {
@@ -456,6 +478,14 @@ func buildOssIssueData(
 ) (snyk.OssIssueData, error) {
 	logger := ctx2.LoggerFromContext(ctx).With().Str("method", "buildOssIssueData").Logger()
 	logger.Debug().Interface("problem", problem.Id).Interface("finding", finding.Id).Msg("building oss issue data")
+
+	if finding.Attributes == nil {
+		// Without attributes there is no package name, version or dependency
+		// chain to build from. Continuing would produce a content-less issue
+		// whose grouping key is derived from empty fields, so signal the caller
+		// to skip it entirely.
+		return snyk.OssIssueData{}, fmt.Errorf("finding has no attributes; cannot build OSS issue data")
+	}
 
 	attrs := finding.Attributes
 

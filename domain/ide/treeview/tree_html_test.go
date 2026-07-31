@@ -469,6 +469,32 @@ func TestTreeHtmlRenderer_FilterToolbar_ExpandCollapseButtons_NotRendered(t *tes
 	assert.NotContains(t, html, `id="collapseAllBtn"`)
 }
 
+func TestTreeHtmlRenderer_SearchBox_RenderedWhenIssuesPresent(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	html := renderer.RenderTreeView(TreeViewData{TotalIssues: 3})
+
+	assert.Contains(t, html, `id="treeSearchToggle"`, "toolbar search toggle should render when there are issues to search")
+	assert.Contains(t, html, `id="treeSearchInput"`, "search input should render when there are issues to search")
+	assert.Contains(t, html, `id="treeSearchEmpty"`, "no-results element should render alongside the search input")
+	// The box is hidden until the toggle opens it.
+	assert.Contains(t, html, `id="treeSearch" hidden>`, "search box should start hidden")
+}
+
+func TestTreeHtmlRenderer_SearchBox_OmittedWhenNoIssues(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
+	require.NoError(t, err)
+
+	html := renderer.RenderTreeView(TreeViewData{TotalIssues: 0})
+
+	assert.NotContains(t, html, `id="treeSearchToggle"`, "search toggle must not render when there are no issues")
+	assert.NotContains(t, html, `id="treeSearchInput"`, "search input must not render when there are no issues")
+	assert.NotContains(t, html, `id="treeSearchEmpty"`, "no-results element must not render when there are no issues")
+}
+
 func TestTreeHtmlRenderer_MultiRoot_FolderNodes_Rendered(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	renderer, err := NewTreeHtmlRenderer(engine.GetLogger())
