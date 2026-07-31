@@ -960,11 +960,22 @@ func Test_extractAudHost(t *testing.T) {
 		{name: "ftp scheme", token: testutil.OauthTokenJSONWithAud(t, "ftp://api.snyk.io"), expectedHost: ""},
 		{name: "http scheme", token: testutil.OauthTokenJSONWithAud(t, "http://api.snyk.io"), expectedHost: "api.snyk.io"},
 		{name: "null aud", token: testutil.OauthTokenJSONWithAud(t, nil), expectedHost: ""},
-		// Ticket IDE-1896 attack: a naive suffix match (without enforcing a
-		// label boundary) would let "evilsnyk.io" pass as a "snyk.io" host
-		// because the raw string ends with "snyk.io". IsValidSnykHost
-		// requires the allowlisted domain to start at a label boundary
-		// ("." + domain), so this attacker-crafted host must be rejected.
+		// Ticket IDE-1896's actual payload. The superseded GAF regex's
+		// wildcard segment ("(.+)") matched any character including "/", so
+		// "api.evil.com/x.snyk.io" satisfied it as an "api...snyk.io" host.
+		// This call site was never exploitable, though: parseCustomUrl /
+		// Hostname() strips the path before validation, so only
+		// "api.evil.com" ever reached the host check, which rejects it
+		// outright since "evil.com" is not an allowed domain. This case pins
+		// that shielding against a future refactor of either branch.
+		{name: "smuggled-path attacker host", token: testutil.OauthTokenJSONWithAud(t, "api.evil.com/x.snyk.io"), expectedHost: ""},
+		// Documents the label-boundary rule alone, not a behavior change:
+		// IsValidSnykHost requires the allowlisted domain to start at a
+		// label boundary ("." + domain), so a raw-suffix match like
+		// "evilsnyk.io" ending in "snyk.io" does not qualify. The superseded
+		// regex already rejected this host too (it required a literal "."
+		// immediately before "snyk.io"), so this case's outcome is
+		// unchanged by the migration.
 		{name: "attacker host defeats naive suffix match", token: testutil.OauthTokenJSONWithAud(t, "api.evilsnyk.io"), expectedHost: ""},
 		{name: "uppercase aud", token: testutil.OauthTokenJSONWithAud(t, "API.EU.SNYK.IO"), expectedHost: "api.eu.snyk.io"},
 		// Go's net/url.URL.Host includes the port (host:port) so a naive

@@ -434,9 +434,14 @@ func extractAudHost(token string, conf configuration.Configuration, logger *zero
 		logger.Debug().Err(err).Msg("cannot decode oauth token aud claim; skipping API URL discovery")
 		return ""
 	}
-	// Check the allowlist once up front so the per-entry hot loop doesn't
-	// repeat the conf.GetStringSlice lookup, and so the fail-closed branch
-	// triggers regardless of how many audiences are present.
+	// This is a deliberate duplicate of the fail-closed check IsValidSnykHost
+	// already does internally (auth.IsValidSnykHost re-reads the allowlist
+	// per claim, so this isn't caching that lookup). It exists because an
+	// unset allowlist is this language server's trust boundary: discovery
+	// must be skipped regardless of how the framework validator behaves
+	// internally, and this distinct log line is the only way to tell "no
+	// allowlist configured" apart from the per-claim "host rejected"
+	// messages logged below.
 	if len(conf.GetStringSlice(auth.CONFIG_KEY_ALLOWED_HOSTS)) == 0 {
 		logger.Debug().Msg("CONFIG_KEY_ALLOWED_HOSTS unset; skipping API URL discovery")
 		return ""
