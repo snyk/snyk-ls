@@ -960,8 +960,8 @@ func Test_extractAudHost(t *testing.T) {
 		{name: "ftp scheme", token: testutil.OauthTokenJSONWithAud(t, "ftp://api.snyk.io"), expectedHost: ""},
 		{name: "http scheme", token: testutil.OauthTokenJSONWithAud(t, "http://api.snyk.io"), expectedHost: "api.snyk.io"},
 		{name: "null aud", token: testutil.OauthTokenJSONWithAud(t, nil), expectedHost: ""},
-		// Ticket IDE-1896's actual payload. The superseded GAF regex's
-		// wildcard segment ("(.+)") matched any character including "/", so
+		// The superseded GAF regex's wildcard segment ("(.+)") matched any
+		// character including "/", so
 		// "api.evil.com/x.snyk.io" satisfied it as an "api...snyk.io" host.
 		// This call site was never exploitable, though: parseCustomUrl /
 		// Hostname() strips the path before validation, so only
