@@ -94,7 +94,7 @@ func parseFeatureScenarios(file string, content []byte) []featureScenario {
 
 func splitRequirementIDs(raw string) []string {
 	var ids []string
-	for _, part := range strings.Split(raw, ",") {
+	for part := range strings.SplitSeq(raw, ",") {
 		part = strings.TrimSpace(part)
 		if part != "" {
 			ids = append(ids, part)
