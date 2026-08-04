@@ -483,6 +483,62 @@ func Test_RegisterOAuthStorageBridge_EmptyStorageUpdateDoesNotClearAppliedToken(
 	)
 }
 
+// Test_QueueCredentialUpdate_StaleQueuedTokenDoesNotClobberSynchronousLogout is the
+// deterministic regression test for IDE-2402.
+//
+// Root cause: while doAuthCheck attempts to verify a token, GAF's OAuth2 authenticator
+// tries to refresh it; the refresh fails, but syncTokenRefresh's storage.Refresh() still
+// re-Sets the unchanged, still-expired token from disk into config, and that Set fires
+// the OAuth storage bridge callback, which queues an async credential update carrying
+// the SAME stale token via QueueCredentialUpdate. Moments later, once the auth check
+// definitively fails, doAuthCheck synchronously calls logout(), which clears the token.
+// Whether credentialUpdateWorker drains the queued stale update before or after that
+// synchronous clear is an unsynchronized ordering race: if the worker runs after the
+// clear, it reapplies the stale (expired) token, undoing the clear — the token
+// reappears in storage byte-for-byte, exactly as observed in IDE-2402.
+//
+// This test reproduces the adversarial ordering directly: queue the stale token first,
+// then synchronously clear via UpdateCredentials(""), mirroring logout(). require.Never
+// polls continuously for 2 seconds: without the fix the worker eventually (and often
+// immediately) drains the queued update after the clear and the token reappears
+// (reliable RED); with the generation-counter guard the queued update is recognized as
+// stale (superseded by the direct clear) and dropped, so the token stays cleared
+// (reliable GREEN), across -race and all GOMAXPROCS values.
+func Test_QueueCredentialUpdate_StaleQueuedTokenDoesNotClobberSynchronousLogout(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+
+	service := NewAuthenticationService(
+		engine,
+		tokenService,
+		nil,
+		error_reporting.NewTestErrorReporter(engine),
+		notification.NewNotifier(),
+		testutil.DefaultConfigResolver(engine),
+	)
+	t.Cleanup(func() { service.Shutdown() })
+
+	staleToken := "stale-expired-token"
+	tokenService.SetToken(conf, staleToken)
+	require.Equal(t, staleToken, config.GetToken(conf))
+
+	serviceImpl, ok := service.(*AuthenticationServiceImpl)
+	require.True(t, ok)
+
+	// Simulate GAF's storage-bridge echo of the unchanged, still-expired token during a
+	// failed refresh attempt.
+	serviceImpl.QueueCredentialUpdate(staleToken, true, false)
+	// Simulate doAuthCheck's subsequent synchronous logout clearing the token.
+	service.UpdateCredentials("", true, false)
+
+	require.Never(t,
+		func() bool { return config.GetToken(conf) == staleToken },
+		2*time.Second, time.Millisecond,
+		"stale queued credential update must not reappear after a synchronous clear",
+	)
+}
+
 // Test_oauthStorageBridgeCallback_DropsEmptyToken locks the fix at the unit level: the
 // bridge callback must not drive a credential update for an empty token. An applied
 // token is seeded, the callback is invoked with an empty value, and the token must

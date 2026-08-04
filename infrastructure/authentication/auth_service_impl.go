@@ -59,6 +59,9 @@ type credentialUpdate struct {
 	token            string
 	sendNotification bool
 	updateApiUrl     bool
+	// generation is the credentialGeneration value observed at enqueue time; see the
+	// credentialGeneration field doc on AuthenticationServiceImpl.
+	generation uint64
 }
 
 type AuthenticationServiceImpl struct {
@@ -111,6 +114,22 @@ type AuthenticationServiceImpl struct {
 	// the re-entrancy cycle.  External updates (from GAF refreshing the OAuth token) always
 	// carry a different token string and are never silently dropped by this guard.
 	writingToken atomic.Pointer[string]
+	// credentialGeneration increments on every synchronous ("direct") credential write —
+	// logout(), UpdateCredentials(), finishAuthenticate() — via updateCredentialsDirect.
+	// Each queued update captures the generation in effect when it was enqueued (see
+	// QueueCredentialUpdate). If a direct write happens after an update was queued (e.g.
+	// GAF's OAuth2 authenticator queues a stale, still-expired token via the storage
+	// bridge while refreshing, and doAuthCheck's subsequent failure synchronously logs
+	// out and clears credentials before the worker gets to the queued item), the
+	// generation observed by credentialUpdateWorker no longer matches and the stale
+	// update is dropped instead of clobbering the newer, authoritative write. See
+	// IDE-2402.
+	credentialGeneration atomic.Uint64
+	// credentialWriteMu serializes "bump generation, then write" (direct callers via
+	// updateCredentialsDirect) against "check generation, then write" (the worker), so
+	// the two can never interleave and the worker's generation check is never stale by
+	// the time it applies the update.
+	credentialWriteMu sync.Mutex
 }
 
 func NewAuthenticationService(engine workflow.Engine, tokenService types.TokenService, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier, configResolver types.ConfigResolverInterface) AuthenticationService {
@@ -156,6 +175,19 @@ func (a *AuthenticationServiceImpl) credentialUpdateWorker(ctx context.Context) 
 			// The clear is deferred so it always runs even if updateCredentials panics,
 			// preventing the guard from staying permanently armed for that token string.
 			func() {
+				a.credentialWriteMu.Lock()
+				defer a.credentialWriteMu.Unlock()
+				if a.credentialGeneration.Load() != update.generation {
+					// A synchronous write (logout, UpdateCredentials, finishAuthenticate)
+					// happened after this update was queued. That write is authoritative
+					// and this queued value — e.g. a stale, still-expired token echoed
+					// back by GAF's OAuth2 authenticator while it attempted a refresh —
+					// must not clobber it. See IDE-2402.
+					a.engine.GetLogger().Debug().
+						Str("method", "AuthenticationService.credentialUpdateWorker").
+						Msg("dropping stale queued credential update superseded by a direct write")
+					return
+				}
 				a.writingToken.Store(&update.token)
 				defer a.writingToken.Store(nil)
 				a.updateCredentials(update.token, update.sendNotification, update.updateApiUrl)
@@ -190,6 +222,7 @@ func (a *AuthenticationServiceImpl) QueueCredentialUpdate(token string, sendNoti
 		token:            token,
 		sendNotification: sendNotification,
 		updateApiUrl:     updateApiUrl,
+		generation:       a.credentialGeneration.Load(),
 	}:
 	default:
 		a.engine.GetLogger().Warn().
@@ -350,7 +383,7 @@ func (a *AuthenticationServiceImpl) finishAuthenticate(provider AuthenticationPr
 		config.UpdateApiEndpointsOnConfig(a.engine.GetConfiguration(), prioritizedUrl)
 	}
 
-	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification)
+	a.updateCredentialsDirect(token, true, shouldSendUrlUpdatedNotification)
 	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())
 	a.sendAuthenticationAnalytics()
 	return token, err
@@ -610,6 +643,20 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 	a.m.Lock()
 	defer a.m.Unlock()
 
+	a.updateCredentialsDirect(newToken, sendNotification, updateApiUrl)
+}
+
+// updateCredentialsDirect performs a synchronous credential write, as opposed to the
+// async writes applied by credentialUpdateWorker from the queue. It bumps
+// credentialGeneration before writing so any update already queued at this point is
+// recognized as stale by the worker and dropped, rather than being applied afterward
+// and clobbering this write. See the credentialGeneration field doc. All synchronous
+// callers of updateCredentials (logout, UpdateCredentials, finishAuthenticate) must go
+// through this wrapper rather than calling updateCredentials directly.
+func (a *AuthenticationServiceImpl) updateCredentialsDirect(newToken string, sendNotification bool, updateApiUrl bool) {
+	a.credentialWriteMu.Lock()
+	defer a.credentialWriteMu.Unlock()
+	a.credentialGeneration.Add(1)
 	a.updateCredentials(newToken, sendNotification, updateApiUrl)
 }
 
@@ -721,7 +768,7 @@ func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 			a.errorReporter.CaptureError(err)
 		}
 	}
-	a.updateCredentials("", true, false)
+	a.updateCredentialsDirect("", true, false)
 	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())
 
 	a.lastUsedTokenMu.Lock()
