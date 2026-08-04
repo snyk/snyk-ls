@@ -373,6 +373,26 @@ test("settings-fallback: after logout the status copy is concise", async () => {
   assert.strictEqual(textAfter, "Signed out.");
 });
 
+test("settings-fallback: a failed logout surfaces the error instead of claiming success", async () => {
+  const win = await buildFallbackDom();
+  let captured;
+  win.__ideExecuteCommand__ = (_cmd, _args, callback) => { captured = callback; };
+
+  const btn = win.document.getElementById("logout-button");
+  btn.dispatchEvent(new win.Event("click"));
+
+  // IDE bridge reports the command never reached the language server
+  // (e.g. it isn't initialized yet — IDE-2181).
+  captured({ error: "language server is not initialized" });
+
+  const status = win.document.getElementById("logout-status");
+  assert.strictEqual(
+    status.textContent.trim(),
+    "Failed to sign out: language server is not initialized"
+  );
+  assert.ok(!status.className.includes("hidden"), "status copy must be visible on failure too");
+});
+
 // ---------------------------------------------------------------------------
 // Payload snapshot
 // ---------------------------------------------------------------------------
