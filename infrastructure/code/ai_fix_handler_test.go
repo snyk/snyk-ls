@@ -17,8 +17,10 @@
 package code
 
 import (
+	"context"
 	"testing"
 
+	"github.com/snyk/code-client-go/llm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -29,6 +31,26 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
+
+func Test_EnrichWithExplain_SkipsWhenExplanationsPresent(t *testing.T) {
+	// When every suggestion already carries an explanation (newer Agent Fix backend),
+	// EnrichWithExplain must not call the deprecated AI Explain service and must leave
+	// the existing explanations untouched.
+	engine := testutil.UnitTest(t)
+	fixHandler := &AiFixHandler{}
+
+	suggestions := []llm.AutofixUnifiedDiffSuggestion{
+		{FixId: "fix-1", Explanation: "explanation from response 1"},
+		{FixId: "fix-2", Explanation: "explanation from response 2"},
+	}
+
+	// A nil issue is safe here: the skip path returns before the issue is ever dereferenced.
+	// If the call were not skipped, getExplainEndpoint/issue access would panic and fail the test.
+	fixHandler.EnrichWithExplain(context.Background(), engine, nil, suggestions)
+
+	assert.Equal(t, "explanation from response 1", suggestions[0].Explanation)
+	assert.Equal(t, "explanation from response 2", suggestions[1].Explanation)
+}
 
 func Test_getExplainEndpoint(t *testing.T) {
 	t.Run("should return default explain endpoint", func(t *testing.T) {
