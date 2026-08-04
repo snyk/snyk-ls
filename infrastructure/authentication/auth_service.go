@@ -39,9 +39,14 @@ type AuthenticationService interface {
 	UpdateCredentials(newToken string, sendNotification bool, updateApiUrl bool)
 
 	// updateCredentials stores the token in the configuration, and sends a $/snyk.hasAuthenticated notification to the
-	// client if sendNotification is true
-	// doesn't have a mutex lock
-	updateCredentials(newToken string, sendNotification bool, updateApiUrl bool)
+	// client if sendNotification is true.
+	// Does not acquire a.m itself; the caller must already hold it (write or read lock).
+	// releaseLock must be true iff the caller holds the write lock (a.m.Lock()): true releases
+	// a.m around the post-mutation hook/notification and re-acquires it before returning, so a
+	// hook that calls back into another a.m-locking method does not deadlock; false runs the
+	// hook/notification inline without touching a.m, required when the caller only holds the
+	// read lock (a.m.RLock()), since a read lock cannot be released via a.m.Unlock().
+	updateCredentials(newToken string, sendNotification bool, updateApiUrl bool, releaseLock bool)
 
 	Logout(ctx context.Context)
 

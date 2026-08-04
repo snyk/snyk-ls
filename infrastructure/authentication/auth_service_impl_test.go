@@ -2073,6 +2073,58 @@ func Test_CredentialUpdateWorker_HookCanAcquireLock(t *testing.T) {
 	}
 }
 
+// Test_UpdateCredentials_HookCanAcquireLock verifies that the synchronous
+// UpdateCredentials path (shared by Authenticate, Logout, and UpdateCredentials
+// itself via updateCredentials) does NOT hold a.m while calling the
+// postCredentialUpdateHook, mirroring the worker-path fix verified by
+// Test_CredentialUpdateWorker_HookCanAcquireLock above.
+//
+// Before the fix, updateCredentials ran runPostMutationEffects while still
+// holding a.m (acquired by the caller's own a.m.Lock()/defer a.m.Unlock()).
+// Since sync.RWMutex is not reentrant, a hook that called an a.m-locking
+// method (e.g. IsAuthenticated, Provider) from UpdateCredentials, Authenticate,
+// or Logout would deadlock that caller's own goroutine indefinitely.
+func Test_UpdateCredentials_HookCanAcquireLock(t *testing.T) {
+	t.Parallel()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+
+	hookCalled := make(chan struct{}, 1)
+
+	// Install a hook that calls IsAuthenticated (acquires a.m.RLock).
+	// If UpdateCredentials holds a.m.Lock() while calling the hook, IsAuthenticated
+	// will deadlock trying to acquire a.m.RLock on the same goroutine
+	// (sync.RWMutex is not reentrant).
+	service.SetPostCredentialUpdateHook(func() {
+		_ = service.IsAuthenticated()
+		select {
+		case hookCalled <- struct{}{}:
+		default:
+		}
+	})
+
+	done := make(chan struct{})
+	go func() {
+		service.UpdateCredentials("sync-path-token", false, false)
+		close(done)
+	}()
+
+	select {
+	case <-hookCalled:
+		// success: UpdateCredentials did not hold a.m while calling the hook
+	case <-time.After(5 * time.Second):
+		t.Fatal("postCredentialUpdateHook deadlocked: UpdateCredentials is holding a.m across the hook call")
+	}
+
+	select {
+	case <-done:
+		// success: UpdateCredentials returned with a.m correctly re-acquired and released
+	case <-time.After(5 * time.Second):
+		t.Fatal("UpdateCredentials did not return: a.m was not correctly re-acquired after the hook")
+	}
+}
+
 // Regression guard that pins the existing semantics of getPrioritizedApiUrl,
 // which the aud-claim discovery work explicitly leaves unchanged. Any future
 // "improvement" that breaks these rows should fail this test.
