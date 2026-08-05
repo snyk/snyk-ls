@@ -46,6 +46,19 @@ Scenario: a scenario with no maps anchor
 		assert.Contains(t, err.Error(), "a scenario with no maps anchor")
 	})
 
+	t.Run("maps anchor is still found across a Gherkin tag line", func(t *testing.T) {
+		fixture := []byte(`Feature: fixture with a tag between the anchor and the scenario
+
+  # maps: M1
+  @sometag
+Scenario: a tagged scenario mapped to M1
+  Given something
+`)
+		scenarios := parseFeatureScenarios("fixture.feature", fixture)
+		require.Len(t, scenarios, 1)
+		assert.Equal(t, []string{"M1"}, scenarios[0].mapsToID)
+	})
+
 	t.Run("requirement named by no scenario is reported", func(t *testing.T) {
 		fixture := []byte(`Feature: fixture with partial coverage
 

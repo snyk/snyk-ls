@@ -28,16 +28,20 @@ import (
 // test/acceptance package, precisely so its step definitions
 // (bdd_steps_test.go) can reuse that unexported harness instead of building
 // a second, divergent one.
+//
+// Options.TestingT is intentionally NOT set: bddSteps.beforeScenario/
+// afterScenario already run every scenario as its own t.Run subtest of t, so
+// that setupServer's t.Cleanup fires per scenario. Also setting TestingT
+// would make godog wrap the same scenario in a second, colliding subtest.
 func TestBDD(t *testing.T) {
 	suite := godog.TestSuite{
 		ScenarioInitializer: func(sc *godog.ScenarioContext) {
 			newBDDSteps(t).register(sc)
 		},
 		Options: &godog.Options{
-			Format:   "pretty",
-			Paths:    []string{"../../features"},
-			Strict:   true,
-			TestingT: t,
+			Format: "pretty",
+			Paths:  []string{"../../features"},
+			Strict: true,
 		},
 	}
 
