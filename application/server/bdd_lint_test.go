@@ -1,6 +1,8 @@
 package server
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -75,4 +77,27 @@ Scenario: a scenario mapped to X1 only
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "X2")
 	})
+}
+
+// Test_ParseFeatureDir_RecursesIntoSubdirectories guards against
+// parseFeatureDir silently ignoring feature files placed in a subdirectory
+// (e.g. features/auth/login.feature), the way godog's own loader does not.
+func Test_ParseFeatureDir_RecursesIntoSubdirectories(t *testing.T) {
+	dir := t.TempDir()
+	subDir := filepath.Join(dir, "auth")
+	require.NoError(t, os.Mkdir(subDir, 0o755))
+
+	nested := `Feature: nested fixture
+
+  # maps: N1
+Scenario: a scenario in a nested subdirectory
+  Given something
+`
+	require.NoError(t, os.WriteFile(filepath.Join(subDir, "login.feature"), []byte(nested), 0o644))
+
+	scenarios, err := parseFeatureDir(dir)
+	require.NoError(t, err)
+	require.Len(t, scenarios, 1, "expected the scenario in the nested subdirectory to be found")
+	assert.Equal(t, "a scenario in a nested subdirectory", scenarios[0].title)
+	assert.Equal(t, []string{"N1"}, scenarios[0].mapsToID)
 }

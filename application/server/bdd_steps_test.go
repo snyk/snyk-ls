@@ -94,10 +94,18 @@ func (s *bddSteps) afterScenario(ctx context.Context, sc *godog.Scenario, err er
 }
 
 // reported stops the deferred send from double-reporting when fn returns
-// normally instead of exiting via Goexit.
+// normally instead of exiting via Goexit. The same deferred func also
+// recovers a genuine panic from fn (or something it calls), so the send on
+// s.stepResult is guaranteed on every path - return, Goexit, or panic -
+// and a panicking step fails just that one scenario instead of crashing the
+// whole TestBDD process.
 func (s *bddSteps) runStep(fn func() error) {
 	reported := false
 	defer func() {
+		if r := recover(); r != nil {
+			s.stepResult <- fmt.Errorf("step panicked: %v", r)
+			return
+		}
 		if !reported {
 			s.stepResult <- fmt.Errorf("step aborted: scenario T.Fatal/FailNow was called")
 		}
@@ -208,6 +216,36 @@ func Test_BDDSteps_RunOnScenarioGoroutine_SurvivesGoexit(t *testing.T) {
 		assert.Error(t, err, "expected an error instead of the step's zero-value result once its goroutine exited via Goexit")
 	case <-time.After(5 * time.Second):
 		t.Fatal("runOnScenarioGoroutine hung after the step's own goroutine called runtime.Goexit (this is what t.Fatal does internally) - it must report an error instead")
+	}
+}
+
+// Test_BDDSteps_RunOnScenarioGoroutine_SurvivesPanic guards against a genuine
+// panic() in a step body (or something it calls) crashing the whole TestBDD
+// process instead of failing just that one scenario.
+func Test_BDDSteps_RunOnScenarioGoroutine_SurvivesPanic(t *testing.T) {
+	s := &bddSteps{
+		stepFunc:   make(chan func() error),
+		stepResult: make(chan error),
+	}
+	go func() {
+		for fn := range s.stepFunc {
+			s.runStep(fn)
+		}
+	}()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- s.runOnScenarioGoroutine(func() error {
+			panic("boom")
+		})
+	}()
+
+	select {
+	case err := <-done:
+		assert.Error(t, err, "expected an error instead of a crashed test binary once the step panicked")
+		assert.Contains(t, err.Error(), "boom")
+	case <-time.After(5 * time.Second):
+		t.Fatal("runOnScenarioGoroutine hung after the step's own goroutine panicked - it must report an error instead")
 	}
 }
 
