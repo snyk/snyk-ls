@@ -26,18 +26,9 @@ import (
 // the existing unexported test harness (setupServer, testutil.UnitTestWithEngine,
 // testsupport.JsonRPCRecorder) instead of a second, divergent one.
 //
-// Each scenario gets its own *testing.T (scenarioT), created via a t.Run
-// bridge in beforeScenario/afterScenario, so setupServer's t.Cleanup fires
-// when that one scenario ends rather than piling up until TestBDD returns.
-//
-// godog invokes registered Given/When/Then functions on its own goroutine,
-// which is not the goroutine s.t.Run spawns to own scenarioT. Step bodies
-// route through runOnScenarioGoroutine (via stepFunc/stepResult) specifically
-// because they call helpers (testutil.UnitTestWithEngine, setupServer) that
-// take scenarioT and can call t.Fatal/t.FailNow on it: FailNow's
-// runtime.Goexit only unwinds the goroutine that called it, so calling it
-// directly from godog's goroutine would Goexit the wrong goroutine and hang
-// the scenario's own goroutine forever instead of failing the subtest.
+// Each scenario gets its own *testing.T (scenarioT) via the t.Run bridge in
+// beforeScenario/afterScenario. Step bodies reach it through
+// runOnScenarioGoroutine (see below), never directly on godog's goroutine.
 type bddSteps struct {
 	t *testing.T // suite-level T, used only to spawn per-scenario subtests
 
@@ -74,10 +65,9 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 }
 
 // beforeScenario gives the upcoming scenario its own *testing.T by running it
-// as a subtest of the suite-level T. The subtest function loops, executing
-// step bodies handed to it over stepFunc, until scenarioDone is closed, so
-// subtest-registered t.Cleanup callbacks (e.g. setupServer's) fire per
-// scenario instead of only once at the end of TestBDD.
+// as a subtest of the suite-level T, so t.Cleanup callbacks registered
+// against scenarioT (e.g. setupServer's) fire when this scenario ends
+// instead of piling up until TestBDD returns.
 func (s *bddSteps) beforeScenario(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
 	ready := make(chan struct{})
 	s.scenarioDone = make(chan struct{})
@@ -113,12 +103,10 @@ func (s *bddSteps) afterScenario(ctx context.Context, sc *godog.Scenario, err er
 	return ctx, err
 }
 
-// runStep executes fn on the goroutine that owns scenarioT (see
-// beforeScenario) and reports its result over stepResult. If fn reaches
-// scenarioT.Fatal/FailNow, runtime.Goexit unwinds this call without fn ever
-// returning; the deferred send below still runs (Goexit always runs deferred
-// calls while unwinding the goroutine), so runOnScenarioGoroutine's caller is
-// unblocked with an error instead of hanging forever.
+// runStep runs fn on scenarioT's goroutine (see runOnScenarioGoroutine) and
+// reports its result over stepResult. The reported flag lets the deferred
+// send catch a Goexit from fn without double-sending on the normal return
+// path.
 func (s *bddSteps) runStep(fn func() error) {
 	reported := false
 	defer func() {
@@ -132,10 +120,11 @@ func (s *bddSteps) runStep(fn func() error) {
 }
 
 // runOnScenarioGoroutine hands fn to the scenario's own goroutine and blocks
-// for its result. Step definitions that pass s.scenarioT into helpers which
-// may call t.Fatal (testutil.UnitTestWithEngine, setupServer) must go through
-// this instead of running directly on godog's goroutine - see the bddSteps
-// doc comment.
+// for its result. Step definitions must go through this instead of running
+// directly on godog's goroutine: helpers like testutil.UnitTestWithEngine and
+// setupServer take scenarioT and may call t.Fatal/FailNow, whose
+// runtime.Goexit only unwinds the calling goroutine - calling it from
+// godog's goroutine would hang the scenario instead of failing it.
 func (s *bddSteps) runOnScenarioGoroutine(fn func() error) error {
 	s.stepFunc <- fn
 	return <-s.stepResult
@@ -174,12 +163,8 @@ func (s *bddSteps) theServerRespondsWithItsCapabilities() error {
 	return nil
 }
 
-// Test_BDDSteps_PerScenarioCleanup proves setupServer's t.Cleanup fires once
-// per scenario (via the sc.Before/sc.After t.Run bridge in beforeScenario/
-// afterScenario), not once for the whole TestBDD run. It drives two
-// scenarios' lifecycles directly against the real bddSteps/setupServer code
-// path and asserts the first scenario's server connection is already closed
-// before the second scenario starts.
+// Test_BDDSteps_PerScenarioCleanup guards against setupServer's t.Cleanup
+// firing once for the whole TestBDD run instead of once per scenario.
 func Test_BDDSteps_PerScenarioCleanup(t *testing.T) {
 	s := newBDDSteps(t)
 	ctx := context.Background()
@@ -208,17 +193,9 @@ func Test_BDDSteps_PerScenarioCleanup(t *testing.T) {
 	assert.True(t, secondClient.IsStopped(), "expected scenario two's server to be torn down by its own After hook")
 }
 
-// Test_BDDSteps_RunOnScenarioGoroutine_SurvivesGoexit proves that a step body
-// which reaches t.Fatal/t.FailNow through helpers like setupServer or
-// testutil.UnitTestWithEngine (both take scenarioT and can fail it) does not
-// hang the suite. FailNow's runtime.Goexit only unwinds the goroutine that
-// called it, so running the step body on a goroutine other than the one that
-// owns scenarioT (the one godog's ScenarioContext hooks run step definitions
-// on, vs. the one s.t.Run spawned for scenarioT) would Goexit the wrong
-// goroutine and leave the scenario's own goroutine blocked forever. This
-// simulates that failure with a bare runtime.Goexit (standing in for
-// t.Fatal's implementation) and asserts runOnScenarioGoroutine still reports
-// an error instead of hanging.
+// Test_BDDSteps_RunOnScenarioGoroutine_SurvivesGoexit guards the Goexit case
+// described on runOnScenarioGoroutine, using a bare runtime.Goexit to stand
+// in for t.Fatal.
 func Test_BDDSteps_RunOnScenarioGoroutine_SurvivesGoexit(t *testing.T) {
 	s := &bddSteps{
 		stepFunc:   make(chan func() error),
