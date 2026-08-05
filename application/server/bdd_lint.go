@@ -18,6 +18,7 @@ package server
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -39,32 +40,38 @@ var (
 	mapsLineRe     = regexp.MustCompile(`^#\s*maps:\s*(.+)$`)
 )
 
-// parseFeatureDir parses every *.feature file directly under dir.
+// parseFeatureDir parses every *.feature file under dir, recursing into
+// subdirectories the same way godog's own loader (godog.Options.Paths) does.
 func parseFeatureDir(dir string) ([]featureScenario, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("reading feature dir %q: %w", dir, err)
-	}
-
 	var scenarios []featureScenario
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".feature") {
-			continue
+	err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
 		}
-		path := filepath.Join(dir, entry.Name())
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".feature") {
+			return nil
+		}
 		content, err := os.ReadFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("reading feature file %q: %w", path, err)
+			return fmt.Errorf("reading feature file %q: %w", path, err)
 		}
-		scenarios = append(scenarios, parseFeatureScenarios(entry.Name(), content)...)
+		rel, err := filepath.Rel(dir, path)
+		if err != nil {
+			rel = path
+		}
+		scenarios = append(scenarios, parseFeatureScenarios(rel, content)...)
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("reading feature dir %q: %w", dir, err)
 	}
 	return scenarios, nil
 }
 
 // parseFeatureScenarios scans the given feature file content for
 // Scenario/Scenario Outline lines and the `# maps:` comment anchored
-// directly above each one (the nearest non-blank line above the scenario
-// line, skipping only blank lines).
+// directly above each one (the nearest line above the scenario line that
+// isn't blank, an `@tag`, or a plain `#` comment).
 func parseFeatureScenarios(file string, content []byte) []featureScenario {
 	lines := strings.Split(string(content), "\n")
 
@@ -90,6 +97,11 @@ func parseFeatureScenarios(file string, content []byte) []featureScenario {
 				// keep scanning upward for the real anchor.
 				continue
 			}
+			// Known limitation: any other line stops the scan, including Gherkin
+			// keywords such as `Background:`/`Rule:`/`Examples:` immediately above
+			// a Scenario. Generalizing to every Gherkin keyword is open-ended, so
+			// this is deliberately not handled - add the keyword here if it
+			// becomes a real problem.
 			break
 		}
 
