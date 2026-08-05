@@ -20,15 +20,10 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// bddSteps is the shared step registry for every .feature file in this
-// repository. One instance is created per scenario (see TestBDD), so no
-// state leaks between scenarios. Steps drive the real language server via
-// the existing unexported test harness (setupServer, testutil.UnitTestWithEngine,
-// testsupport.JsonRPCRecorder) instead of a second, divergent one.
-//
-// Each scenario gets its own *testing.T (scenarioT) via the t.Run bridge in
-// beforeScenario/afterScenario. Step bodies reach it through
-// runOnScenarioGoroutine (see below), never directly on godog's goroutine.
+// bddSteps is the step registry for every .feature file, created fresh per
+// scenario so no state leaks across scenarios. Steps drive the real language
+// server through the existing test harness rather than a new one; step
+// bodies reach scenarioT only via runOnScenarioGoroutine (see below).
 type bddSteps struct {
 	t *testing.T // suite-level T, used only to spawn per-scenario subtests
 
@@ -64,10 +59,8 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	})
 }
 
-// beforeScenario gives the upcoming scenario its own *testing.T by running it
-// as a subtest of the suite-level T, so t.Cleanup callbacks registered
-// against scenarioT (e.g. setupServer's) fire when this scenario ends
-// instead of piling up until TestBDD returns.
+// beforeScenario runs the scenario as a subtest of the suite-level T so
+// t.Cleanup (e.g. setupServer's) fires per scenario, not once at TestBDD's end.
 func (s *bddSteps) beforeScenario(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
 	ready := make(chan struct{})
 	s.scenarioDone = make(chan struct{})
@@ -94,19 +87,14 @@ func (s *bddSteps) beforeScenario(ctx context.Context, sc *godog.Scenario) (cont
 	return ctx, nil
 }
 
-// afterScenario unblocks the subtest spawned by beforeScenario and waits for
-// it (and any t.Cleanup it registered) to finish before the next scenario
-// starts.
 func (s *bddSteps) afterScenario(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
 	close(s.scenarioDone)
 	<-s.scenarioDied
 	return ctx, err
 }
 
-// runStep runs fn on scenarioT's goroutine (see runOnScenarioGoroutine) and
-// reports its result over stepResult. The reported flag lets the deferred
-// send catch a Goexit from fn without double-sending on the normal return
-// path.
+// reported stops the deferred send from double-reporting when fn returns
+// normally instead of exiting via Goexit.
 func (s *bddSteps) runStep(fn func() error) {
 	reported := false
 	defer func() {
@@ -223,9 +211,8 @@ func Test_BDDSteps_RunOnScenarioGoroutine_SurvivesGoexit(t *testing.T) {
 	}
 }
 
-// Test_BDDSteps_RunOnScenarioGoroutine_ReturnsStepResult proves the normal,
-// non-failing path is unaffected by the goroutine bridge: the step's actual
-// return value reaches the caller unchanged.
+// Test_BDDSteps_RunOnScenarioGoroutine_ReturnsStepResult proves the goroutine
+// bridge passes through the step's return value unchanged on the normal path.
 func Test_BDDSteps_RunOnScenarioGoroutine_ReturnsStepResult(t *testing.T) {
 	s := &bddSteps{
 		stepFunc:   make(chan func() error),
