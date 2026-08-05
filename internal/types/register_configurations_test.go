@@ -45,6 +45,8 @@ var allSettings = []string{
 	SettingCliReleaseChannel,
 	SettingOrganization,
 	SettingAutomaticAuthentication,
+	SettingLlmProvider,
+	SettingLlmBaseUrl,
 
 	SettingFormat,
 	SettingDeviceId,
@@ -157,6 +159,8 @@ var expectedAnnotations = map[string]struct {
 	// Machine-scope (continued)
 	SettingOrganization:            {machineScope, "", "Organization", "organization", false},
 	SettingAutomaticAuthentication: {machineScope, "", "Automatic Authentication", "automaticAuthentication", false},
+	SettingLlmProvider:             {machineScope, "", "LLM Provider", "llmProvider", false},
+	SettingLlmBaseUrl:              {machineScope, "", "Custom API Endpoint", "llmBaseUrl", false},
 
 	SettingFormat:                         {machineScope, "", "Output Format", "", false},
 	SettingDeviceId:                       {machineScope, "", "Device ID", "", false},
@@ -184,7 +188,7 @@ func TestRegisterAllConfigurations_FC048_ProducesFlagsWithCorrectAnnotations(t *
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	RegisterAllConfigurations(fs)
 
-	assert.Len(t, allSettings, 62, "allSettings should have 62 entries (28 machine + 5 write-only + 16 org + 13 folder)")
+	assert.Len(t, allSettings, 64, "allSettings should have 64 entries (30 machine + 5 write-only + 16 org + 13 folder)")
 
 	for _, name := range allSettings {
 		t.Run(name, func(t *testing.T) {
@@ -322,6 +326,27 @@ func TestIsFolderScopedSetting(t *testing.T) {
 	assert.True(t, IsFolderScopedSetting(fm, SettingSnykCodeEnabled))
 	assert.True(t, IsFolderScopedSetting(fm, SettingBaseBranch))
 	assert.False(t, IsFolderScopedSetting(fm, SettingCliPath))
+}
+
+// TestRegisterAllConfigurations_LlmSettingsAreMachineScope is IDE-2274's D1
+// guard: the LLM provider and custom endpoint settings must be machine-scope
+// (one choice for the whole daemon, not per folder/repo) and must not carry
+// an LDX-Sync remote key (D2 - this is a local-only, non-synced setting).
+func TestRegisterAllConfigurations_LlmSettingsAreMachineScope(t *testing.T) {
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	RegisterAllConfigurations(fs)
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
+
+	for _, name := range []string{SettingLlmProvider, SettingLlmBaseUrl} {
+		t.Run(name, func(t *testing.T) {
+			assert.True(t, IsMachineWideSetting(fm, name), "%q must be machine-scope", name)
+
+			flag := fs.Lookup(name)
+			require.NotNil(t, flag, "flag %q should exist", name)
+			_, hasRemoteKey := flag.Annotations[configresolver.AnnotationRemoteKey]
+			assert.False(t, hasRemoteKey, "%q must not have an LDX-Sync remote key", name)
+		})
+	}
 }
 
 func TestIsWriteOnlySetting(t *testing.T) {

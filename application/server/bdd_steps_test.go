@@ -7,11 +7,13 @@ import (
 	"os/exec"
 	"runtime"
 	"runtime/debug"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/creachadair/jrpc2/server"
 	"github.com/cucumber/godog"
+	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -41,8 +43,10 @@ type bddSteps struct {
 	loc             server.Local
 	jsonRPCRecorder *testsupport.JsonRPCRecorder
 
-	initResult types.InitializeResult
-	folderPath types.FilePath
+	initResult  types.InitializeResult
+	initialized bool
+	dialogHTML  string
+	folderPath  types.FilePath
 }
 
 func newBDDSteps(t *testing.T) *bddSteps {
@@ -73,6 +77,30 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	})
 	sc.Then(`^the folder's effective Ambient Canary autonomy is "([^"]*)"$`, func(autonomy string) error {
 		return s.runOnScenarioGoroutine(func() error { return s.theFoldersEffectiveAmbientCanaryAutonomyIs(autonomy) })
+	})
+	sc.When(`^a developer saves "([^"]*)" as the LLM provider with custom API endpoint "([^"]*)"$`, func(ctx context.Context, provider, endpoint string) error {
+		return s.runOnScenarioGoroutine(func() error { return s.aDeveloperSavesTheLlmProviderAndEndpoint(ctx, provider, endpoint) })
+	})
+	sc.When(`^the developer reopens the Snyk configuration dialog$`, func(ctx context.Context) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperReopensTheConfigurationDialog(ctx) })
+	})
+	sc.When(`^a developer reopens the Snyk configuration dialog$`, func(ctx context.Context) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperReopensTheConfigurationDialog(ctx) })
+	})
+	sc.When(`^a developer reopens the Snyk configuration dialog without ever choosing an LLM provider$`, func(ctx context.Context) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperReopensTheConfigurationDialog(ctx) })
+	})
+	sc.Then(`^the configuration dialog shows "([^"]*)" as the selected LLM provider$`, func(provider string) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theDialogShowsTheSelectedLlmProvider(provider) })
+	})
+	sc.Then(`^the configuration dialog shows "([^"]*)" as the custom API endpoint$`, func(endpoint string) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theDialogShowsTheCustomApiEndpoint(endpoint) })
+	})
+	sc.Then(`^the configuration dialog shows no LLM provider selected$`, func() error {
+		return s.runOnScenarioGoroutine(s.theDialogShowsNoLlmProviderSelected)
+	})
+	sc.Then(`^the configuration dialog contains no field for an LLM API key$`, func() error {
+		return s.runOnScenarioGoroutine(s.theDialogContainsNoLlmApiKeyField)
 	})
 }
 
@@ -154,7 +182,12 @@ func (s *bddSteps) runOnScenarioGoroutine(fn func() error) error {
 
 func (s *bddSteps) aRunningLanguageServer() error {
 	engine, tokenService := testutil.UnitTestWithEngine(s.scenarioT)
-	loc, jsonRPCRecorder, _ := setupServer(s.scenarioT, engine, tokenService)
+	// WithRealDI is required so workspace/executeCommand dispatches through the
+	// real command service rather than TestInit's mock - otherwise
+	// WorkspaceConfigurationCommand (used by the config-dialog scenarios) returns
+	// no HTML. Same requirement as configuration_smoke_test.go,
+	// background_init_lifecycle_test.go, and dispatch_starvation_test.go.
+	loc, jsonRPCRecorder, _ := setupServer(s.scenarioT, engine, tokenService, WithRealDI())
 	s.engine = engine
 	s.loc = loc
 	s.jsonRPCRecorder = jsonRPCRecorder
@@ -181,6 +214,119 @@ func (s *bddSteps) theServerRespondsWithItsCapabilities() error {
 	}
 	if s.initResult.Capabilities.TextDocumentSync == nil {
 		return fmt.Errorf("expected capabilities to be populated, got a zero value")
+	}
+	return nil
+}
+
+// ensureLspInitialized calls the "initialize" request exactly once per
+// scenario, ahead of the first real settings/dialog call. Both
+// workspace/didChangeConfiguration and workspace/executeCommand are only
+// meaningful after the LSP initialize handshake, mirroring how a real editor
+// drives the protocol.
+func (s *bddSteps) ensureLspInitialized(ctx context.Context) error {
+	if s.initialized {
+		return nil
+	}
+	if _, err := s.loc.Client.Call(ctx, "initialize", types.InitializeParams{}); err != nil {
+		return fmt.Errorf("initialize call failed: %w", err)
+	}
+	s.initialized = true
+	return nil
+}
+
+// aDeveloperSavesTheLlmProviderAndEndpoint drives the real
+// workspace/didChangeConfiguration request an editor sends when a developer
+// changes and saves settings in the configuration dialog.
+func (s *bddSteps) aDeveloperSavesTheLlmProviderAndEndpoint(ctx context.Context, provider, endpoint string) error {
+	if err := s.ensureLspInitialized(ctx); err != nil {
+		return err
+	}
+	params := types.DidChangeConfigurationParams{
+		Settings: types.LspConfigurationParam{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingLlmProvider: {Value: provider, Changed: true},
+				types.SettingLlmBaseUrl:  {Value: endpoint, Changed: true},
+			},
+		},
+	}
+	if _, err := s.loc.Client.Call(ctx, "workspace/didChangeConfiguration", params); err != nil {
+		return fmt.Errorf("workspace/didChangeConfiguration call failed: %w", err)
+	}
+	return nil
+}
+
+// theDeveloperReopensTheConfigurationDialog drives the real
+// workspace/executeCommand request the menubar sends to render the
+// configuration dialog, and stashes the returned HTML for the Then steps.
+func (s *bddSteps) theDeveloperReopensTheConfigurationDialog(ctx context.Context) error {
+	if err := s.ensureLspInitialized(ctx); err != nil {
+		return err
+	}
+	response, err := s.loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		Command:   types.WorkspaceConfigurationCommand,
+		Arguments: []any{},
+	})
+	if err != nil {
+		return fmt.Errorf("workspace/executeCommand call failed: %w", err)
+	}
+	var html string
+	if err := response.UnmarshalResult(&html); err != nil {
+		return fmt.Errorf("unmarshalling configuration dialog result failed: %w", err)
+	}
+	if html == "" {
+		return fmt.Errorf("expected non-empty configuration dialog HTML")
+	}
+	s.dialogHTML = html
+	return nil
+}
+
+func (s *bddSteps) theDialogShowsTheSelectedLlmProvider(provider string) error {
+	needle := `id="llm_provider"`
+	idx := strings.Index(s.dialogHTML, needle)
+	if idx == -1 {
+		return fmt.Errorf("expected an llm_provider field in the configuration dialog HTML")
+	}
+	// The selected <option> for the chosen provider must carry "selected" within
+	// the llm_provider <select> element.
+	selectEnd := strings.Index(s.dialogHTML[idx:], "</select>")
+	if selectEnd == -1 {
+		return fmt.Errorf("expected a closing </select> for the llm_provider field")
+	}
+	selectHTML := s.dialogHTML[idx : idx+selectEnd]
+	optionNeedle := fmt.Sprintf(`value="%s" selected`, provider)
+	if !strings.Contains(selectHTML, optionNeedle) {
+		return fmt.Errorf("expected provider %q to be selected in the llm_provider field, got: %s", provider, selectHTML)
+	}
+	return nil
+}
+
+func (s *bddSteps) theDialogShowsTheCustomApiEndpoint(endpoint string) error {
+	if !strings.Contains(s.dialogHTML, endpoint) {
+		return fmt.Errorf("expected custom API endpoint %q to be shown in the configuration dialog HTML", endpoint)
+	}
+	return nil
+}
+
+func (s *bddSteps) theDialogShowsNoLlmProviderSelected() error {
+	needle := `id="llm_provider"`
+	idx := strings.Index(s.dialogHTML, needle)
+	if idx == -1 {
+		return fmt.Errorf("expected an llm_provider field in the configuration dialog HTML")
+	}
+	selectEnd := strings.Index(s.dialogHTML[idx:], "</select>")
+	if selectEnd == -1 {
+		return fmt.Errorf("expected a closing </select> for the llm_provider field")
+	}
+	selectHTML := s.dialogHTML[idx : idx+selectEnd]
+	if !strings.Contains(selectHTML, `value="" selected`) {
+		return fmt.Errorf("expected no provider (the empty \"Automatic\" option) to be selected, got: %s", selectHTML)
+	}
+	return nil
+}
+
+func (s *bddSteps) theDialogContainsNoLlmApiKeyField() error {
+	if strings.Contains(strings.ToLower(s.dialogHTML), "llm_api_key") {
+		return fmt.Errorf("configuration dialog must never contain an LLM API key field")
 	}
 	return nil
 }
@@ -278,8 +424,12 @@ func (s *bddSteps) theFoldersEffectiveAmbientCanaryAutonomyIs(autonomy string) e
 	return nil
 }
 
-// Test_BDDSteps_PerScenarioCleanup guards against setupServer's t.Cleanup
-// firing once for the whole TestBDD run instead of once per scenario.
+// Test_BDDSteps_PerScenarioCleanup proves setupServer's t.Cleanup fires once
+// per scenario (via the sc.Before/sc.After t.Run bridge in beforeScenario/
+// afterScenario), not once for the whole TestBDD run. It drives two
+// scenarios' lifecycles directly against the real bddSteps/setupServer code
+// path and asserts the first scenario's server connection is already closed
+// before the second scenario starts.
 func Test_BDDSteps_PerScenarioCleanup(t *testing.T) {
 	s := newBDDSteps(t)
 	ctx := context.Background()

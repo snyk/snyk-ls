@@ -52,6 +52,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	infraconfig "github.com/snyk/snyk-ls/infrastructure/configuration"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
@@ -3709,4 +3710,186 @@ func Test_ProcessConfigSettings_GlobalReset(t *testing.T) {
 				"count=0 means effectivelyChanged was false (GetGlobalString regression: "+
 				"both before/after read as '' so oldVal==newVal guard short-circuits analytics)")
 	})
+}
+
+// TestUpdateSettings_LlmProviderRoundTripsToConfigDialog is CP-1's ACC-level
+// integration test (IDE-2274): real UpdateSettings -> real
+// ConstructSettingsFromConfig -> real ConfigHtmlRenderer, nothing mocked. It
+// proves the provider and endpoint a developer saves come back selected in
+// the re-rendered dialog HTML, i.e. the choice survives reopening the dialog.
+func TestUpdateSettings_LlmProviderRoundTripsToConfigDialog(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	cr := testutil.DefaultConfigResolver(engine)
+	ctx := testCtx(t, t.Context(), engine, tokenService)
+
+	settings := map[string]*types.ConfigSetting{
+		types.SettingLlmProvider: {Value: "ollama", Changed: true},
+		types.SettingLlmBaseUrl:  {Value: "http://localhost:11434", Changed: true},
+	}
+	UpdateSettings(ctx, conf, engine, engine.GetLogger(), settings, nil, analytics.TriggerSourceTest, cr)
+
+	m, folderConfigs := command.ConstructSettingsFromConfig(engine, cr)
+	assert.Equal(t, "ollama", m[types.SettingLlmProvider])
+	assert.Equal(t, "http://localhost:11434", m[types.SettingLlmBaseUrl])
+
+	renderer, err := infraconfig.NewConfigHtmlRenderer(engine, cr)
+	require.NoError(t, err)
+	html := renderer.GetConfigHtml(m, folderConfigs)
+	require.NotEmpty(t, html)
+	assert.Contains(t, html, `value="ollama" selected`, "the saved provider must come back selected in the re-rendered dialog")
+	assert.Contains(t, html, "http://localhost:11434", "the saved endpoint must come back in the re-rendered dialog")
+}
+
+func TestApplyLlmProviderConfig_PersistsProviderAndBaseUrl(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingLlmProvider: {Value: "anthropic", Changed: true},
+		types.SettingLlmBaseUrl:  {Value: "https://llm-gateway.internal", Changed: true},
+	})
+
+	assert.Equal(t, "anthropic", types.GetGlobalString(conf, types.SettingLlmProvider))
+	assert.Equal(t, "https://llm-gateway.internal", types.GetGlobalString(conf, types.SettingLlmBaseUrl))
+}
+
+func TestApplyLlmProviderConfig_AbsentSettingsLeaveConfigAndEnvUntouched(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	require.NoError(t, os.Unsetenv("ANTHROPIC_BASE_URL"))
+
+	// M5 guard: neither field present/Changed in this settings payload.
+	applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingSnykOssEnabled: {Value: true, Changed: true},
+	})
+
+	assert.Equal(t, "", types.GetGlobalString(conf, types.SettingLlmProvider))
+	assert.Equal(t, "", types.GetGlobalString(conf, types.SettingLlmBaseUrl))
+	_, present := os.LookupEnv("ANTHROPIC_BASE_URL")
+	assert.False(t, present, "no LLM env var should be set when the developer never touched these fields")
+}
+
+func TestApplyLlmProviderConfig_SetsProviderSpecificBaseUrlEnv(t *testing.T) {
+	tests := []struct {
+		provider string
+		envVar   string
+	}{
+		{"anthropic", "ANTHROPIC_BASE_URL"},
+		{"vertex", "VERTEX_BASE_URL"},
+		{"litellm", "LITELLM_BASE_URL"},
+		{"ollama", "OLLAMA_HOST"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.provider, func(t *testing.T) {
+			engine, _ := testutil.UnitTestWithEngine(t)
+			conf := engine.GetConfiguration()
+			logger := engine.GetLogger()
+			t.Setenv(tc.envVar, "")
+
+			applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{
+				types.SettingLlmProvider: {Value: tc.provider, Changed: true},
+				types.SettingLlmBaseUrl:  {Value: "https://example.internal", Changed: true},
+			})
+
+			assert.Equal(t, "https://example.internal", os.Getenv(tc.envVar))
+		})
+	}
+
+	t.Run("openai", func(t *testing.T) {
+		engine, _ := testutil.UnitTestWithEngine(t)
+		conf := engine.GetConfiguration()
+		logger := engine.GetLogger()
+
+		applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{
+			types.SettingLlmProvider: {Value: "openai", Changed: true},
+			types.SettingLlmBaseUrl:  {Value: "https://example.internal", Changed: true},
+		})
+
+		// openai has no base-url env var on the remy-cli-extension side; the value is
+		// still persisted (asserted elsewhere) but no environment variable is set.
+		assert.Equal(t, "https://example.internal", types.GetGlobalString(conf, types.SettingLlmBaseUrl))
+	})
+}
+
+func TestApplyLlmProviderConfig_ClearedBaseUrlUnsetsPreviouslyAppliedEnv(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+
+	applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingLlmProvider: {Value: "anthropic", Changed: true},
+		types.SettingLlmBaseUrl:  {Value: "https://example.internal", Changed: true},
+	})
+	require.Equal(t, "https://example.internal", os.Getenv("ANTHROPIC_BASE_URL"))
+
+	applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingLlmProvider: {Value: "anthropic", Changed: true},
+		types.SettingLlmBaseUrl:  {Value: "", Changed: true},
+	})
+
+	_, present := os.LookupEnv("ANTHROPIC_BASE_URL")
+	assert.False(t, present, "clearing the endpoint must unset the previously-applied env var")
+	assert.Equal(t, "", types.GetGlobalString(conf, types.SettingLlmBaseUrl))
+}
+
+func TestApplyLlmProviderConfig_ProviderSwitchUnsetsPreviousProvidersBaseUrlEnv(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("VERTEX_BASE_URL", "")
+
+	applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingLlmProvider: {Value: "anthropic", Changed: true},
+		types.SettingLlmBaseUrl:  {Value: "https://example.internal", Changed: true},
+	})
+	require.Equal(t, "https://example.internal", os.Getenv("ANTHROPIC_BASE_URL"))
+
+	applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingLlmProvider: {Value: "vertex", Changed: true},
+		types.SettingLlmBaseUrl:  {Value: "https://example.internal", Changed: true},
+	})
+
+	_, present := os.LookupEnv("ANTHROPIC_BASE_URL")
+	assert.False(t, present, "switching provider must unset the previous provider's env var")
+	assert.Equal(t, "https://example.internal", os.Getenv("VERTEX_BASE_URL"))
+}
+
+func TestApplyLlmProviderConfig_DoesNotUnsetEnvItNeverSet(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	// D4 guard: a pre-existing ANTHROPIC_BASE_URL from the developer's own shell
+	// environment must survive an unrelated settings save that never touched the
+	// LLM provider fields.
+	t.Setenv("ANTHROPIC_BASE_URL", "developer-own-value")
+
+	applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingSnykOssEnabled: {Value: true, Changed: true},
+	})
+
+	assert.Equal(t, "developer-own-value", os.Getenv("ANTHROPIC_BASE_URL"))
+}
+
+func TestApplyLlmProviderConfig_UnknownProviderPersistsWithoutEnvWrite(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	require.NotPanics(t, func() {
+		applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{
+			types.SettingLlmProvider: {Value: "some-unknown-provider", Changed: true},
+			types.SettingLlmBaseUrl:  {Value: "https://example.internal", Changed: true},
+		})
+	})
+
+	assert.Equal(t, "some-unknown-provider", types.GetGlobalString(conf, types.SettingLlmProvider))
+	assert.Equal(t, "https://example.internal", types.GetGlobalString(conf, types.SettingLlmBaseUrl))
 }

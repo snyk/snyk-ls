@@ -973,6 +973,7 @@ func TestGetCliReleaseChannel(t *testing.T) {
 	})
 }
 
+<<<<<<< HEAD
 // renderFolderPaneWithEffectiveConfig renders the config dialog for a single folder whose
 // EffectiveConfig is exactly what the test supplies (bypassing computeEffectiveConfig), matching
 // the pattern used by TestConfigHtmlRenderer_SourceIndicatorsInOutput.
@@ -1081,4 +1082,48 @@ func TestConfigHtml_LockedFolderAutonomyIsDisabled(t *testing.T) {
 	require.NotEmpty(t, match)
 
 	assert.Contains(t, match, "disabled", "org-locked folder autonomy control must be disabled")
+=======
+// TestConfigHtmlRenderer_RendersLlmProviderSection is IDE-2274 CP-1's UNIT-9:
+// the "Autonomous remediation" section, all five provider options, the
+// custom-endpoint input, and the "key comes from your environment" note must
+// all be present in the rendered dialog.
+func TestConfigHtmlRenderer_RendersLlmProviderSection(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
+	require.NoError(t, err)
+
+	settings := map[string]any{
+		types.SettingLlmProvider: "",
+		types.SettingLlmBaseUrl:  "",
+	}
+
+	html := renderer.GetConfigHtml(settings, []types.FolderConfig{})
+
+	assert.Contains(t, html, "Autonomous remediation")
+	assert.Contains(t, html, `id="llm_provider"`)
+	assert.Contains(t, html, `id="llm_base_url"`)
+	for _, option := range []string{"Automatic", "Anthropic", "OpenAI", "Ollama", "Vertex AI", "LiteLLM"} {
+		assert.Contains(t, html, option, "provider option %q must be present", option)
+	}
+	assert.Contains(t, html, "never stored or sent by Snyk", "the API-key-comes-from-your-environment note must be present")
+}
+
+// TestConfigHtmlRenderer_LlmProviderSelectionRoundTrips proves a previously
+// saved provider comes back marked selected in the re-rendered <select>,
+// which is what "the choice survives reopening the dialog" depends on.
+func TestConfigHtmlRenderer_LlmProviderSelectionRoundTrips(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
+	require.NoError(t, err)
+
+	settings := map[string]any{
+		types.SettingLlmProvider: "ollama",
+		types.SettingLlmBaseUrl:  "http://localhost:11434",
+	}
+
+	html := renderer.GetConfigHtml(settings, []types.FolderConfig{})
+
+	assert.Contains(t, html, `value="ollama" selected`)
+	assert.Contains(t, html, `value="http://localhost:11434"`)
+>>>>>>> a2f4b7d7 (feat(config): add LLM provider and endpoint settings to the config dialog [IDE-2274])
 }
