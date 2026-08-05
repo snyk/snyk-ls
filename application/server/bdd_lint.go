@@ -78,7 +78,7 @@ func parseFeatureScenarios(file string, content []byte) []featureScenario {
 		var ids []string
 		for j := i - 1; j >= 0; j-- {
 			prev := strings.TrimSpace(lines[j])
-			if prev == "" {
+			if prev == "" || strings.HasPrefix(prev, "@") {
 				continue
 			}
 			if mm := mapsLineRe.FindStringSubmatch(prev); mm != nil {
