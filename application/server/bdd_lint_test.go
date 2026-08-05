@@ -7,17 +7,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ide2418Requirements lists the requirement IDs this repository's feature
-// files are expected to name via `# maps:` anchors. It grows one checkpoint
-// at a time: each of IDE-2418's checkpoints adds its own feature file plus
-// the requirement IDs that file covers, in the same commit, so this list and
-// the real coverage under features/ never drift apart.
+// ide2418Requirements is a manually-maintained ratchet: extend it alongside
+// each new feature file so it can't silently drift from real coverage.
 var ide2418Requirements = []string{"M1"}
 
-// Test_FeatureFiles_MapEveryRequirement asserts every scenario under
-// features/ carries a `# maps: M<n>` anchor, and that every requirement
-// currently claimed as covered (ide2418Requirements) is named by at least
-// one scenario.
 func Test_FeatureFiles_MapEveryRequirement(t *testing.T) {
 	scenarios, err := parseFeatureDir("../../features")
 	require.NoError(t, err)
@@ -26,11 +19,7 @@ func Test_FeatureFiles_MapEveryRequirement(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// Test_FeatureFiles_ScenarioWithoutMapsAnchorFails proves the mapping lint
-// actually fails an unmapped scenario and an uncovered requirement, rather
-// than silently passing everything. It exercises the same
-// checkFeatureMappings function that Test_FeatureFiles_MapEveryRequirement
-// uses, against fixtures that never touch the real features/ directory.
+// Test_FeatureFiles_ScenarioWithoutMapsAnchorFails exists so the lint itself can't become a ghost check that never actually fails anything.
 func Test_FeatureFiles_ScenarioWithoutMapsAnchorFails(t *testing.T) {
 	t.Run("scenario missing a maps anchor is reported", func(t *testing.T) {
 		fixture := []byte(`Feature: fixture with a missing anchor
