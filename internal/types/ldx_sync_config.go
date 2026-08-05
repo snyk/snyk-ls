@@ -87,6 +87,7 @@ const (
 	SettingAutomaticAuthentication         = "automatic_authentication"
 	SettingLlmProvider                     = "llm_provider"
 	SettingLlmBaseUrl                      = "llm_base_url"
+	SettingLlmModel                        = "llm_model"
 
 	SettingTrustedFolders               = "trusted_folders"
 	SettingToken                        = "token"

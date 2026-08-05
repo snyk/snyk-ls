@@ -1382,10 +1382,16 @@ var llmProviderBaseUrlEnvVar = map[string]string{
 // concurrently spawned CLI subprocess.
 var llmProviderConfigMu sync.Mutex
 
-// applyLlmProviderConfig persists the developer's chosen LLM provider and custom API
-// endpoint for autonomous remediation (IDE-2274, CP-1: settings-only, behavior-neutral).
-// It never touches the API key - that continues to come only from the developer's own
-// process environment (M4).
+// applyLlmProviderConfig persists the developer's chosen LLM provider, model and
+// custom API endpoint for autonomous remediation (IDE-2274, CP-1: settings-only,
+// behavior-neutral). It never touches the API key - that continues to come only
+// from the developer's own process environment (M4).
+//
+// The model (OD-1) goes through the identical persist path as provider and base
+// URL - ollama and litellm have no default model in remy-cli-extension, so without
+// it those two providers would be unusable. Unlike base URL, the model has no
+// environment-variable side effect here: CP-2's buildRemyFixConfig reads it and
+// sets it as a GAF config key at fix time, the same lever used for provider.
 //
 // D4: it never unsets an environment variable it did not itself previously set - it
 // diffs against the persisted provider/base-URL (not the live env), so a base-URL env
@@ -1396,8 +1402,9 @@ func applyLlmProviderConfig(conf configuration.Configuration, logger *zerolog.Lo
 
 	provider, providerOk := settingStr(settings, types.SettingLlmProvider)
 	baseUrl, baseUrlOk := settingStr(settings, types.SettingLlmBaseUrl)
-	if !providerOk && !baseUrlOk {
-		// M5 guard: neither field was touched in this save - leave config and env alone.
+	model, modelOk := settingStr(settings, types.SettingLlmModel)
+	if !providerOk && !baseUrlOk && !modelOk {
+		// M5 guard: none of the fields were touched in this save - leave config and env alone.
 		return
 	}
 
@@ -1413,6 +1420,9 @@ func applyLlmProviderConfig(conf configuration.Configuration, logger *zerolog.Lo
 		types.SetGlobalUser(conf, types.SettingLlmBaseUrl, baseUrl)
 	} else {
 		baseUrl = types.GetGlobalString(conf, types.SettingLlmBaseUrl)
+	}
+	if modelOk {
+		types.SetGlobalUser(conf, types.SettingLlmModel, model)
 	}
 
 	newEnvVar, newHasEnvVar := llmProviderBaseUrlEnvVar[provider]

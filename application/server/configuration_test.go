@@ -3741,6 +3741,32 @@ func TestUpdateSettings_LlmProviderRoundTripsToConfigDialog(t *testing.T) {
 	assert.Contains(t, html, "http://localhost:11434", "the saved endpoint must come back in the re-rendered dialog")
 }
 
+// TestUpdateSettings_LlmModelRoundTripsToConfigDialog is IDE-2274's CP-1
+// integration coverage for the model field (OD-1): ollama and litellm have no
+// default model in remy-cli-extension, so the model a developer saves must
+// survive reopening the dialog exactly like provider and endpoint do.
+func TestUpdateSettings_LlmModelRoundTripsToConfigDialog(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	cr := testutil.DefaultConfigResolver(engine)
+	ctx := testCtx(t, t.Context(), engine, tokenService)
+
+	settings := map[string]*types.ConfigSetting{
+		types.SettingLlmProvider: {Value: "ollama", Changed: true},
+		types.SettingLlmModel:    {Value: "llama3.1", Changed: true},
+	}
+	UpdateSettings(ctx, conf, engine, engine.GetLogger(), settings, nil, analytics.TriggerSourceTest, cr)
+
+	m, folderConfigs := command.ConstructSettingsFromConfig(engine, cr)
+	assert.Equal(t, "llama3.1", m[types.SettingLlmModel])
+
+	renderer, err := infraconfig.NewConfigHtmlRenderer(engine, cr)
+	require.NoError(t, err)
+	html := renderer.GetConfigHtml(m, folderConfigs)
+	require.NotEmpty(t, html)
+	assert.Contains(t, html, "llama3.1", "the saved model must come back in the re-rendered dialog")
+}
+
 func TestApplyLlmProviderConfig_PersistsProviderAndBaseUrl(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
@@ -3753,6 +3779,38 @@ func TestApplyLlmProviderConfig_PersistsProviderAndBaseUrl(t *testing.T) {
 
 	assert.Equal(t, "anthropic", types.GetGlobalString(conf, types.SettingLlmProvider))
 	assert.Equal(t, "https://llm-gateway.internal", types.GetGlobalString(conf, types.SettingLlmBaseUrl))
+}
+
+// TestApplyLlmProviderConfig_PersistsModel is IDE-2274's OD-1 unit coverage:
+// the model field goes through the identical persist path as provider and
+// base URL, with no environment-variable side effect (that belongs to CP-2's
+// buildRemyFixConfig, which sets it as a GAF config key at fix time).
+func TestApplyLlmProviderConfig_PersistsModel(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingLlmProvider: {Value: "ollama", Changed: true},
+		types.SettingLlmModel:    {Value: "llama3.1", Changed: true},
+	})
+
+	assert.Equal(t, "llama3.1", types.GetGlobalString(conf, types.SettingLlmModel))
+}
+
+// TestApplyLlmProviderConfig_ModelOnlySaveIsNotSwallowedByM5Guard proves the
+// M5 "nothing touched" guard checks all three fields, not just provider and
+// base URL - a save that only changes the model must not be dropped.
+func TestApplyLlmProviderConfig_ModelOnlySaveIsNotSwallowedByM5Guard(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingLlmModel: {Value: "llama3.1", Changed: true},
+	})
+
+	assert.Equal(t, "llama3.1", types.GetGlobalString(conf, types.SettingLlmModel))
 }
 
 func TestApplyLlmProviderConfig_AbsentSettingsLeaveConfigAndEnvUntouched(t *testing.T) {
@@ -3770,6 +3828,7 @@ func TestApplyLlmProviderConfig_AbsentSettingsLeaveConfigAndEnvUntouched(t *test
 
 	assert.Equal(t, "", types.GetGlobalString(conf, types.SettingLlmProvider))
 	assert.Equal(t, "", types.GetGlobalString(conf, types.SettingLlmBaseUrl))
+	assert.Equal(t, "", types.GetGlobalString(conf, types.SettingLlmModel))
 	_, present := os.LookupEnv("ANTHROPIC_BASE_URL")
 	assert.False(t, present, "no LLM env var should be set when the developer never touched these fields")
 }

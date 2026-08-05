@@ -1095,6 +1095,7 @@ func TestConfigHtmlRenderer_RendersLlmProviderSection(t *testing.T) {
 	settings := map[string]any{
 		types.SettingLlmProvider: "",
 		types.SettingLlmBaseUrl:  "",
+		types.SettingLlmModel:    "",
 	}
 
 	html := renderer.GetConfigHtml(settings, []types.FolderConfig{})
@@ -1102,6 +1103,7 @@ func TestConfigHtmlRenderer_RendersLlmProviderSection(t *testing.T) {
 	assert.Contains(t, html, "Autonomous remediation")
 	assert.Contains(t, html, `id="llm_provider"`)
 	assert.Contains(t, html, `id="llm_base_url"`)
+	assert.Contains(t, html, `id="llm_model"`)
 	for _, option := range []string{"Automatic", "Anthropic", "OpenAI", "Ollama", "Vertex AI", "LiteLLM"} {
 		assert.Contains(t, html, option, "provider option %q must be present", option)
 	}
@@ -1119,10 +1121,12 @@ func TestConfigHtmlRenderer_LlmProviderSelectionRoundTrips(t *testing.T) {
 	settings := map[string]any{
 		types.SettingLlmProvider: "ollama",
 		types.SettingLlmBaseUrl:  "http://localhost:11434",
+		types.SettingLlmModel:    "llama3.1",
 	}
 
 	html := renderer.GetConfigHtml(settings, []types.FolderConfig{})
 
 	assert.Contains(t, html, `value="ollama" selected`)
 	assert.Contains(t, html, `value="http://localhost:11434"`)
+	assert.Contains(t, html, `value="llama3.1"`)
 }

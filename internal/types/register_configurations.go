@@ -142,6 +142,11 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"Custom API Endpoint"},
 		configresolver.AnnotationDescription: {"Point the selected LLM provider at a self-hosted or gateway endpoint"},
 	})
+	registerFlag(fs, SettingLlmModel, "", "Model for the selected LLM provider", map[string][]string{
+		configresolver.AnnotationScope:       {machineScope},
+		configresolver.AnnotationDisplayName: {"LLM Model"},
+		configresolver.AnnotationDescription: {"Model id for the selected LLM provider; required for Ollama and LiteLLM"},
+	})
 	registerFlag(fs, SettingFormat, "md", "Output format", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationDisplayName: {"Output Format"},
