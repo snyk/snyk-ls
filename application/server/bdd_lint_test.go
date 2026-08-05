@@ -7,15 +7,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ide2418Requirements is a manually-maintained ratchet: extend it alongside
+// trackedFeatureRequirements is a manually-maintained ratchet: extend it alongside
 // each new feature file so it can't silently drift from real coverage.
-var ide2418Requirements = []string{"M1"}
+var trackedFeatureRequirements = []string{"M1"}
 
 func Test_FeatureFiles_MapEveryRequirement(t *testing.T) {
 	scenarios, err := parseFeatureDir("../../features")
 	require.NoError(t, err)
 
-	err = checkFeatureMappings(scenarios, ide2418Requirements)
+	err = checkFeatureMappings(scenarios, trackedFeatureRequirements)
 	require.NoError(t, err)
 }
 
