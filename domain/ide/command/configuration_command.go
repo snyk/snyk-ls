@@ -168,6 +168,7 @@ func computeEffectiveConfig(fc *types.FolderConfig) map[string]types.EffectiveVa
 		types.SettingSnykIacEnabled,
 		types.SettingSnykSecretsEnabled,
 		types.SettingRiskScoreThreshold,
+		types.SettingAmbientCanaryAutonomy,
 	}
 
 	for _, settingName := range orgScopeSettings {

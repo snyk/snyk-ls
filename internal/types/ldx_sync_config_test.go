@@ -129,6 +129,12 @@ func testFm(t *testing.T) workflow.ConfigurationOptionsMetaData {
 	return workflow.ConfigurationOptionsFromFlagset(fs)
 }
 
+// Test_SettingAmbientCanaryAutonomy_ExactName pins the wire key string that ambient-canary reads
+// as a plain string (it cannot import a Go constant across repos) — see IDE-2426/IDE-2279.
+func Test_SettingAmbientCanaryAutonomy_ExactName(t *testing.T) {
+	assert.Equal(t, "ambient_canary_autonomy", SettingAmbientCanaryAutonomy)
+}
+
 func TestGetSettingScope(t *testing.T) {
 	fm := testFm(t)
 
