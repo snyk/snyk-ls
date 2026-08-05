@@ -33,12 +33,12 @@ commit_subjects="$(git log --format=%s "$BASE_REF..$HEAD_REF")"
 hard_fail=false
 while IFS= read -r subject; do
   [ -z "$subject" ] && continue
-  if echo "$subject" | grep -qE '^feat(\(.+\))?:'; then
+  if echo "$subject" | grep -qE '^feat(\(.+\))?!?:'; then
     if [ "$feature_changed" = false ]; then
       echo "ERROR: commit \"$subject\" is feat: but this PR changes no features/*.feature file."
       hard_fail=true
     fi
-  elif echo "$subject" | grep -qE '^fix(\(.+\))?:'; then
+  elif echo "$subject" | grep -qE '^fix(\(.+\))?!?:'; then
     if [ "$feature_changed" = false ]; then
       echo "WARNING: commit \"$subject\" is fix: with no features/*.feature change. Consider adding a scenario."
     fi
