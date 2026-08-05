@@ -1056,6 +1056,42 @@ button.secondary[disabled] {
                     <div class="col-md-12">
                         <div class="section">
                             <div class="section-header">
+                                <h2>Autonomous remediation</h2>
+                                <button type="button" class="reset-section-btn" data-section="autonomousRemediation" title="Reset this section to defaults">Reset</button>
+                            </div>
+
+                            <div class="form-group half-width">
+                                <label for="llm_provider"><span data-toggle="tooltip" title="Which LLM backend the Snyk Remediation Agent uses to generate fixes. Leave as &quot;Automatic&quot; to keep the current behaviour.">LLM provider</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="llm_provider"></span></label>
+                                <select id="llm_provider" name="llm_provider">
+                                    <option value="" >Automatic</option>
+                                    <option value="anthropic" >Anthropic</option>
+                                    <option value="openai" >OpenAI</option>
+                                    <option value="ollama" >Ollama</option>
+                                    <option value="vertex" >Vertex AI</option>
+                                    <option value="litellm" >LiteLLM</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group half-width">
+                                <label for="llm_model"><span data-toggle="tooltip" title="Model id. Required for Ollama and LiteLLM; an optional override for the other providers.">Model</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="llm_model"></span></label>
+                                <input type="text" id="llm_model" name="llm_model" value="" placeholder="e.g. llama3.1">
+                            </div>
+
+                            <div class="form-group half-width">
+                                <label for="llm_base_url"><span data-toggle="tooltip" title="Point the selected provider at a self-hosted or gateway endpoint. Honoured for Anthropic, Ollama, Vertex AI and LiteLLM. Not yet supported for OpenAI.">Custom API endpoint</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="llm_base_url"></span></label>
+                                <input type="text" id="llm_base_url" name="llm_base_url" value="" placeholder="https://llm-gateway.internal">
+                            </div>
+
+                            <p class="form-text">Your LLM API key is never stored or sent by Snyk. Set it in the environment Snyk runs in (for example ANTHROPIC_API_KEY).</p>
+                        </div>
+                    </div>
+                </div>
+
+                
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="section">
+                            <div class="section-header">
                                 <h2>Trust settings</h2>
                                 <button type="button" class="reset-section-btn" data-section="permissions" title="Reset this section to defaults">Reset</button>
                             </div>
@@ -3761,6 +3797,11 @@ if (window.cssVars) {
 		},
 		permissions: {
 			trusted_folders: []
+		},
+		autonomousRemediation: {
+			llm_provider: "",
+			llm_model: "",
+			llm_base_url: ""
 		}
 	};
 

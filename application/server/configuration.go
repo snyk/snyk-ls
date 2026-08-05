@@ -450,6 +450,7 @@ func processConfigSettings(ctx context.Context, conf configuration.Configuration
 	applyProxyConfig(conf, settings)
 	applyCodeEndpoint(conf, settings)
 	applyCliReleaseChannel(conf, settings)
+	applyLlmProviderConfig(conf, logger, settings)
 
 	return globalOrgChanged, lockedMachineFields
 }
@@ -1355,6 +1356,70 @@ func applyPublishSecurityAtInceptionRules(conf configuration.Configuration, sett
 func applyCliReleaseChannel(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
 	if v, ok := settingStr(settings, types.SettingCliReleaseChannel); ok && v != "" {
 		types.SetGlobalUser(conf, types.SettingCliReleaseChannel, strings.TrimSpace(v))
+	}
+}
+
+// llmProviderBaseUrlEnvVar maps a Remy LLM provider id to the env var remy-cli-extension reads
+// for its custom endpoint. OpenAI has no entry: base_url is a no-op for it until IDE-2431 lands
+// (OD-3). The developer's own LLM API key is never part of this settings flow — it is only ever
+// read by Remy from the developer's own process environment (M4).
+var llmProviderBaseUrlEnvVar = map[string]string{
+	"anthropic": "ANTHROPIC_BASE_URL",
+	"vertex":    "VERTEX_BASE_URL",
+	"litellm":   "LITELLM_BASE_URL",
+	"ollama":    "OLLAMA_HOST",
+}
+
+// applyLlmProviderConfig persists the developer's chosen Remy LLM provider/model/endpoint and
+// mirrors the endpoint into the provider-specific env var remy-cli-extension reads (D3). It never
+// clobbers an env var it did not itself set (D4): a variable is only unset here if it belongs to
+// a provider this function previously applied.
+func applyLlmProviderConfig(conf configuration.Configuration, logger *zerolog.Logger, settings map[string]*types.ConfigSetting) {
+	providerVal, providerOk := settingStr(settings, types.SettingLlmProvider)
+	modelVal, modelOk := settingStr(settings, types.SettingLlmModel)
+	baseUrlVal, baseUrlOk := settingStr(settings, types.SettingLlmBaseUrl)
+
+	if !providerOk && !modelOk && !baseUrlOk {
+		return
+	}
+
+	oldProvider := types.GetGlobalString(conf, types.SettingLlmProvider)
+
+	if providerOk {
+		types.SetGlobalUser(conf, types.SettingLlmProvider, strings.TrimSpace(providerVal))
+	}
+	if modelOk {
+		types.SetGlobalUser(conf, types.SettingLlmModel, strings.TrimSpace(modelVal))
+	}
+	if baseUrlOk {
+		types.SetGlobalUser(conf, types.SettingLlmBaseUrl, strings.TrimSpace(baseUrlVal))
+	}
+
+	newProvider := types.GetGlobalString(conf, types.SettingLlmProvider)
+	currentBaseUrl := types.GetGlobalString(conf, types.SettingLlmBaseUrl)
+
+	oldEnvVar, oldKnown := llmProviderBaseUrlEnvVar[oldProvider]
+	newEnvVar, newKnown := llmProviderBaseUrlEnvVar[newProvider]
+
+	if oldKnown && oldEnvVar != newEnvVar {
+		if err := os.Unsetenv(oldEnvVar); err != nil {
+			logger.Err(err).Msgf("couldn't unset env variable %s", oldEnvVar)
+		}
+	}
+
+	if !newKnown {
+		return
+	}
+
+	if currentBaseUrl == "" {
+		if err := os.Unsetenv(newEnvVar); err != nil {
+			logger.Err(err).Msgf("couldn't unset env variable %s", newEnvVar)
+		}
+		return
+	}
+
+	if err := os.Setenv(newEnvVar, currentBaseUrl); err != nil {
+		logger.Err(err).Msgf("couldn't set env variable %s", newEnvVar)
 	}
 }
 

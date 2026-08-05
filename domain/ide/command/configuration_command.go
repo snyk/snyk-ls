@@ -107,6 +107,11 @@ func ConstructSettingsFromConfig(engine workflow.Engine, r types.ConfigResolverI
 		// Env is stored as string under SettingAdditionalEnvironment UserGlobalKey (written by applyEnvironment).
 		types.SettingAdditionalParameters:  strings.Join(r.GetStringSlice(types.SettingCliAdditionalOssParameters, nil), " "),
 		types.SettingAdditionalEnvironment: r.GetString(types.SettingAdditionalEnvironment, nil),
+		// Remy LLM provider settings (IDE-2274). The API key is never part of this map (M4) —
+		// it is only ever read by Remy from the developer's own process environment.
+		types.SettingLlmProvider: r.GetString(types.SettingLlmProvider, nil),
+		types.SettingLlmModel:    r.GetString(types.SettingLlmModel, nil),
+		types.SettingLlmBaseUrl:  r.GetString(types.SettingLlmBaseUrl, nil),
 	}
 
 	folderConfigs := collectFolderConfigs(conf, logger, engine, r)

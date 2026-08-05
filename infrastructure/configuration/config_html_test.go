@@ -161,6 +161,38 @@ func TestConfigHtmlRenderer_ProjectDefaultsAdvancedFieldsRenderValues(t *testing
 	assert.Contains(t, html, `value="MY_VAR=hello;ANOTHER=world"`)
 }
 
+// TestConfigHtmlRenderer_RendersLlmProviderSection is UNIT-9 (IDE-2274): the "Autonomous
+// remediation" section, all five provider options, the endpoint input, and the note telling
+// the developer their API key is never handled by Snyk (M4) must all be present.
+func TestConfigHtmlRenderer_RendersLlmProviderSection(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
+	require.NoError(t, err)
+
+	settings := map[string]any{
+		types.SettingLlmProvider: "ollama",
+		types.SettingLlmModel:    "llama3.1",
+		types.SettingLlmBaseUrl:  "http://localhost:11434",
+	}
+
+	html := renderer.GetConfigHtml(settings, nil)
+
+	assert.Contains(t, html, "Autonomous remediation")
+	assert.Contains(t, html, `data-setting-key="llm_provider"`)
+	assert.Contains(t, html, `data-setting-key="llm_model"`)
+	assert.Contains(t, html, `data-setting-key="llm_base_url"`)
+	assert.Contains(t, html, `<option value="" >Automatic</option>`)
+	assert.Contains(t, html, `<option value="anthropic" >Anthropic</option>`)
+	assert.Contains(t, html, `<option value="openai" >OpenAI</option>`)
+	assert.Contains(t, html, `<option value="ollama" selected>Ollama</option>`)
+	assert.Contains(t, html, `<option value="vertex" >Vertex AI</option>`)
+	assert.Contains(t, html, `<option value="litellm" >LiteLLM</option>`)
+	assert.Contains(t, html, `value="llama3.1"`)
+	assert.Contains(t, html, `value="http://localhost:11434"`)
+	assert.Contains(t, html, "Your LLM API key is never stored or sent by Snyk")
+}
+
 func TestConfigHtmlRenderer_LdxSyncConfigAlwaysRendered(t *testing.T) {
 	engine := testutil.UnitTest(t)
 

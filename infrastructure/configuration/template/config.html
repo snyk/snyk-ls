@@ -161,6 +161,42 @@
                     </div>
                 </div>
 
+                <!-- Autonomous remediation -->
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="section">
+                            <div class="section-header">
+                                <h2>Autonomous remediation</h2>
+                                <button type="button" class="reset-section-btn" data-section="autonomousRemediation" title="Reset this section to defaults">Reset</button>
+                            </div>
+
+                            <div class="form-group half-width">
+                                <label for="llm_provider"><span data-toggle="tooltip" title="Which LLM backend the Snyk Remediation Agent uses to generate fixes. Leave as &quot;Automatic&quot; to keep the current behaviour.">LLM provider</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="llm_provider"></span></label>
+                                <select id="llm_provider" name="llm_provider">
+                                    <option value="" {{if eq (index .Settings "llm_provider") ""}}selected{{end}}>Automatic</option>
+                                    <option value="anthropic" {{if eq (index .Settings "llm_provider") "anthropic"}}selected{{end}}>Anthropic</option>
+                                    <option value="openai" {{if eq (index .Settings "llm_provider") "openai"}}selected{{end}}>OpenAI</option>
+                                    <option value="ollama" {{if eq (index .Settings "llm_provider") "ollama"}}selected{{end}}>Ollama</option>
+                                    <option value="vertex" {{if eq (index .Settings "llm_provider") "vertex"}}selected{{end}}>Vertex AI</option>
+                                    <option value="litellm" {{if eq (index .Settings "llm_provider") "litellm"}}selected{{end}}>LiteLLM</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group half-width">
+                                <label for="llm_model"><span data-toggle="tooltip" title="Model id. Required for Ollama and LiteLLM; an optional override for the other providers.">Model</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="llm_model"></span></label>
+                                <input type="text" id="llm_model" name="llm_model" value="{{index .Settings "llm_model"}}" placeholder="e.g. llama3.1">
+                            </div>
+
+                            <div class="form-group half-width">
+                                <label for="llm_base_url"><span data-toggle="tooltip" title="Point the selected provider at a self-hosted or gateway endpoint. Honoured for Anthropic, Ollama, Vertex AI and LiteLLM. Not yet supported for OpenAI.">Custom API endpoint</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="llm_base_url"></span></label>
+                                <input type="text" id="llm_base_url" name="llm_base_url" value="{{index .Settings "llm_base_url"}}" placeholder="https://llm-gateway.internal">
+                            </div>
+
+                            <p class="form-text">Your LLM API key is never stored or sent by Snyk. Set it in the environment Snyk runs in (for example ANTHROPIC_API_KEY).</p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Trust Settings -->
                 <div class="row">
                     <div class="col-md-12">

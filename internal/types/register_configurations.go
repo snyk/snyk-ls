@@ -130,6 +130,21 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"Automatic Authentication"},
 		configresolver.AnnotationDescription: {"Enable automatic authentication"},
 	})
+	registerFlag(fs, SettingLlmProvider, "", "Remy LLM provider", map[string][]string{
+		configresolver.AnnotationScope:       {machineScope},
+		configresolver.AnnotationDisplayName: {"LLM Provider"},
+		configresolver.AnnotationDescription: {"Which LLM backend the Snyk Remediation Agent uses to generate fixes"},
+	})
+	registerFlag(fs, SettingLlmModel, "", "Remy LLM model", map[string][]string{
+		configresolver.AnnotationScope:       {machineScope},
+		configresolver.AnnotationDisplayName: {"LLM Model"},
+		configresolver.AnnotationDescription: {"Model id passed to the selected LLM provider"},
+	})
+	registerFlag(fs, SettingLlmBaseUrl, "", "Remy LLM custom API endpoint", map[string][]string{
+		configresolver.AnnotationScope:       {machineScope},
+		configresolver.AnnotationDisplayName: {"LLM Custom API Endpoint"},
+		configresolver.AnnotationDescription: {"Custom endpoint for the selected LLM provider"},
+	})
 	registerFlag(fs, SettingFormat, "md", "Output format", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationDisplayName: {"Output Format"},

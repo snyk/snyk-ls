@@ -322,6 +322,26 @@ func TestIsFolderScopedSetting(t *testing.T) {
 	assert.False(t, IsFolderScopedSetting(fm, SettingCliPath))
 }
 
+// TestRegisterAllConfigurations_LlmSettingsAreMachineScope is UNIT-8 (IDE-2274), the D1 guard:
+// the Remy LLM provider/model/endpoint settings are machine-scoped and carry no LDX-Sync
+// remote key (D2 — a developer's local LLM backend is not org-managed).
+func TestRegisterAllConfigurations_LlmSettingsAreMachineScope(t *testing.T) {
+	fm := fmFromFlags(t)
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	RegisterAllConfigurations(fs)
+
+	for _, name := range []string{SettingLlmProvider, SettingLlmModel, SettingLlmBaseUrl} {
+		t.Run(name, func(t *testing.T) {
+			assert.True(t, IsMachineWideSetting(fm, name), "expected %q to be machine-scoped", name)
+
+			flag := fs.Lookup(name)
+			require.NotNil(t, flag, "flag %q should exist", name)
+			_, hasRemoteKey := flag.Annotations[configresolver.AnnotationRemoteKey]
+			assert.False(t, hasRemoteKey, "%q must not carry a LDX-Sync remote key", name)
+		})
+	}
+}
+
 func TestIsWriteOnlySetting(t *testing.T) {
 	fm := fmFromFlags(t)
 	for _, name := range []string{

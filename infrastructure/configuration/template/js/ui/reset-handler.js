@@ -39,6 +39,11 @@
 		},
 		permissions: {
 			trusted_folders: []
+		},
+		autonomousRemediation: {
+			llm_provider: "",
+			llm_model: "",
+			llm_base_url: ""
 		}
 	};
 

@@ -85,6 +85,9 @@ const (
 	SettingCliReleaseChannel               = "cli_release_channel"
 	SettingOrganization                    = "organization"
 	SettingAutomaticAuthentication         = "automatic_authentication"
+	SettingLlmProvider                     = "llm_provider"
+	SettingLlmModel                        = "llm_model"
+	SettingLlmBaseUrl                      = "llm_base_url"
 
 	SettingTrustedFolders               = "trusted_folders"
 	SettingToken                        = "token"
