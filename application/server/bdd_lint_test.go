@@ -59,6 +59,19 @@ Scenario: a tagged scenario mapped to M1
 		assert.Equal(t, []string{"M1"}, scenarios[0].mapsToID)
 	})
 
+	t.Run("maps anchor is still found across a plain comment line", func(t *testing.T) {
+		fixture := []byte(`Feature: fixture with a plain comment between the anchor and the scenario
+
+  # maps: M1
+  # a plain documentation comment, not a maps anchor
+Scenario: a scenario mapped to M1 past a plain comment
+  Given something
+`)
+		scenarios := parseFeatureScenarios("fixture.feature", fixture)
+		require.Len(t, scenarios, 1)
+		assert.Equal(t, []string{"M1"}, scenarios[0].mapsToID)
+	})
+
 	t.Run("requirement named by no scenario is reported", func(t *testing.T) {
 		fixture := []byte(`Feature: fixture with partial coverage
 
