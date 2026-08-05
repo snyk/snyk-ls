@@ -83,6 +83,12 @@ func parseFeatureScenarios(file string, content []byte) []featureScenario {
 			}
 			if mm := mapsLineRe.FindStringSubmatch(prev); mm != nil {
 				ids = splitRequirementIDs(mm[1])
+				break
+			}
+			if strings.HasPrefix(prev, "#") {
+				// A plain documentation comment, not the maps anchor itself -
+				// keep scanning upward for the real anchor.
+				continue
 			}
 			break
 		}
