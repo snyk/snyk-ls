@@ -1889,14 +1889,17 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	})
 
 	t.Run("unauthenticated - re-adding folder with changing the config through workspace/didChangeConfiguration", func(t *testing.T) {
+		t.Parallel()
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {
 			s, _ := folderconfig.ConfigFileFromConfig(engine.GetConfiguration())
 			_ = os.Remove(s)
 		})
-		prev := os.Getenv("SNYK_TOKEN")
-		_ = os.Setenv("SNYK_TOKEN", "")                         //nolint:usetesting // t.Setenv panics in parent-parallel subtests
-		t.Cleanup(func() { _ = os.Setenv("SNYK_TOKEN", prev) }) //nolint:usetesting // restoring env, not setting for test isolation
+		// Blank the token on this test's own engine config rather than in the
+		// process environment: the parallel SHARD_3 siblings read SNYK_TOKEN
+		// lazily at test-body time, so os.Setenv("SNYK_TOKEN", "") here races
+		// them into an unauthenticated state.
+		tokenService.SetToken(engine.GetConfiguration(), "")
 
 		ensureInitialized(t, engine, tokenService, loc, initParams, nil)
 

@@ -128,10 +128,9 @@ func Test_SmokeSecretsScan(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
 	engineConfig := engine.GetConfiguration()
 	engineConfig.Set(configresolver.UserGlobalKey(types.SettingOrganization), secretsSmokeOrg)
-	prevLogLevel := os.Getenv("SNYK_LOG_LEVEL")
-	os.Setenv("SNYK_LOG_LEVEL", "debug")                                //nolint:usetesting // t.Setenv panics after t.Parallel()
-	t.Cleanup(func() { _ = os.Setenv("SNYK_LOG_LEVEL", prevLogLevel) }) //nolint:usetesting // t.Setenv panics after t.Parallel()
-
+	// No SNYK_LOG_LEVEL override here: it is a process-global that this test's
+	// parallel siblings also read, and zerolog's level is global too, so forcing
+	// debug would race them and flood the whole shard's output.
 	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlySecrets(engine)
 
