@@ -37,6 +37,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/codeaction"
@@ -68,6 +69,7 @@ import (
 	storage2 "github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
+	"github.com/snyk/snyk-ls/internal/user_interface"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -91,6 +93,14 @@ func Start(engine workflow.Engine, tokenService *config.TokenServiceImpl) {
 	logger := engine.GetLogger()
 	startLogger := logger.With().Str("method", "server.Start").Logger()
 	deps := di.Init(engine, tokenService)
+
+	// Bars must come from the server-scoped Tracker, whose channel
+	// createProgressListener drains; an undrained channel fills up and then
+	// blocks the reporting workflow forever.
+	engine.SetUserInterface(user_interface.NewLsUserInterface(
+		user_interface.WithLogger(logger),
+		user_interface.WithProgressBarFactory(func() ui.ProgressBar { return deps.ProgressTracker.New(false) })))
+
 	initHandlers(srv, handlers, conf, engine, logger, deps)
 
 	startLogger.Info().Msg("Starting up Language Server...")
