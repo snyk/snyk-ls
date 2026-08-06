@@ -63,20 +63,8 @@ var (
 	scanInitializer       initialize.Initializer               //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
 	authenticationService authentication.AuthenticationService //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
 	learnService          learn.Service                        //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
-	errorReporter         er.ErrorReporter                     //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
-	installer             install.Installer                    //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
-	hoverService          hover.Service                        //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
-	scanner               scanner2.Scanner                     //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
-	featureFlagService    featureflag.Service                  //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
-	scanNotifier          scanner2.ScanNotifier                //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
-	codeActionService     *codeaction.CodeActionsService       //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
-	fileWatcher           *watcher.FileWatcher                 //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
 	initMutex             = &sync.Mutex{}                      //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
-	notifier              domainNotify.Notifier                //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
-	scanPersister         persistence.ScanSnapshotPersister    //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
-	scanStateAggregator   scanstates.Aggregator                //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
 	treeEmitterInstance   *treeview.TreeScanStateEmitter       //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
-	ldxSyncService        command.LdxSyncService               //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
 	configResolver        types.ConfigResolverInterface        //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
 	commandService        types.CommandService                 //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
 )
@@ -249,21 +237,9 @@ func Init(engine workflow.Engine, tokenService types.TokenService) Dependencies 
 	deps, initializer, treeEmitter := buildDependencies(engine, tokenService, globalOwner)
 
 	// Populate package-level globals for accessor functions.
-	notifier = deps.Notifier
 	configResolver = deps.ConfigResolver
-	errorReporter = deps.ErrorReporter
 	authenticationService = deps.AuthenticationService
-	hoverService = deps.HoverService
-	scanPersister = deps.ScanPersister
-	scanStateAggregator = deps.ScanStateAggregator
-	scanNotifier = deps.ScanNotifier
-	scanner = deps.Scanner
-	installer = deps.Installer
-	codeActionService = deps.CodeActionService
-	fileWatcher = deps.FileWatcher
 	learnService = deps.LearnService
-	featureFlagService = deps.FeatureFlagService
-	ldxSyncService = deps.LdxSyncService
 	treeEmitterInstance = treeEmitter
 	commandService = deps.CommandService
 	scanInitializer = initializer
@@ -286,52 +262,10 @@ TODO Accessors: This should go away, since all dependencies should be satisfied 
 they can be returned by the test helper for unit/integration tests
 */
 
-func Notifier() domainNotify.Notifier {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return notifier
-}
-
-func ErrorReporter() er.ErrorReporter {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return errorReporter
-}
-
 func AuthenticationService() authentication.AuthenticationService {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return authenticationService
-}
-
-func HoverService() hover.Service {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return hoverService
-}
-
-func ScanPersister() persistence.ScanSnapshotPersister {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return scanPersister
-}
-
-func ScanStateAggregator() scanstates.Aggregator {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return scanStateAggregator
-}
-
-func ScanNotifier() scanner2.ScanNotifier {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return scanNotifier
-}
-
-func Scanner() scanner2.Scanner {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return scanner
 }
 
 func Initializer() initialize.Initializer {
@@ -340,55 +274,10 @@ func Initializer() initialize.Initializer {
 	return scanInitializer
 }
 
-func Installer() install.Installer {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return installer
-}
-
-func CodeActionService() *codeaction.CodeActionsService {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return codeActionService
-}
-
-func FileWatcher() *watcher.FileWatcher {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return fileWatcher
-}
-
 func LearnService() learn.Service {
 	initMutex.Lock()
 	defer initMutex.Unlock()
 	return learnService
-}
-
-func FeatureFlagService() featureflag.Service {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return featureFlagService
-}
-
-// SetFeatureFlagService replaces the global featureFlagService for future calls
-// to FeatureFlagService(). Objects already constructed before this call retain
-// their previous reference. Intended for test use only.
-func SetFeatureFlagService(service featureflag.Service) {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	featureFlagService = service
-}
-
-func LdxSyncService() command.LdxSyncService {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return ldxSyncService
-}
-
-func SetLdxSyncService(service command.LdxSyncService) {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	ldxSyncService = service
 }
 
 func DisposeTreeEmitter() {
