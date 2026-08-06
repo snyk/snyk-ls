@@ -40,7 +40,6 @@ import (
 // 5. Includes authentication and logout triggers
 func Test_SmokeConfigurationDialog(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
-	testutil.CreateDummyProgressListener(t)
 
 	// Setup server with LSP client
 	loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())

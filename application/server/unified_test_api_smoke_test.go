@@ -164,7 +164,6 @@ func runOSSComparisonTest(t *testing.T, unifiedScan bool, dir string) []types.Di
 func setupOSSComparisonTest(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder) {
 	t.Helper()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretNameForRiskScore, "SMOKE_SHARD_4")
-	testutil.CreateDummyProgressListener(t)
 	// Set the endpoint on this server's engine config instead of os.Setenv so
 	// parallel smoke tests cannot clobber each other's endpoint.
 	endpoint := os.Getenv("SNYK_API")

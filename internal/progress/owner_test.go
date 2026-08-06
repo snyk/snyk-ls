@@ -27,7 +27,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// UNIT-110 (IDE-2036): Two separate owners cancel independently.
+// IDE-2036-UNIT-110: Two separate owners cancel independently.
 // Canceling a task on owner A must NOT affect tasks on owner B.
 func TestTracker_CancelIsolation(t *testing.T) {
 	logger := zerolog.Nop()
@@ -62,7 +62,7 @@ func TestTracker_CancelIsolation(t *testing.T) {
 	}
 }
 
-// UNIT-111 (IDE-2036): Two separate owners route to separate channels.
+// IDE-2036-UNIT-111: Two separate owners route to separate channels.
 // Progress events from owner A must NOT appear on owner B's channel.
 func TestTracker_ChannelIsolation(t *testing.T) {
 	logger := zerolog.Nop()
@@ -165,7 +165,7 @@ func TestTask_ImplementsProgressBar(t *testing.T) {
 	_ = task
 }
 
-// UNIT-113 (IDE-2036): A drained 1000-item channel does not deadlock producers.
+// IDE-2036-UNIT-113: A drained 1000-item channel does not deadlock producers.
 // This verifies the NewTestProgressTracker helper's cleanup contract: a test that
 // creates an owner, fires >1000 progress events, and relies on the t.Cleanup
 // drainer will not block even if the test never reads from the channel itself.

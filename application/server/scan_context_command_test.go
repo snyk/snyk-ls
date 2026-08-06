@@ -157,7 +157,8 @@ func (w *folderCommandCapturingWorkspace) capturedTrustCtx() context.Context {
 // scanCtx (canceled on shutdown), NOT context.Background() which never cancels.
 // ---------------------------------------------------------------------------
 func TestWorkspaceScanCommandCtxCanceledOnShutdown(t *testing.T) {
-	// Not parallel: injects a workspace into the configuration (engine-global state).
+	t.Parallel()
+
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 
@@ -214,7 +215,8 @@ func TestWorkspaceScanCommandCtxCanceledOnShutdown(t *testing.T) {
 // goroutines are canceled on shutdown.
 // ---------------------------------------------------------------------------
 func TestWorkspaceFolderScanCommandUntrustedCtxCanceledOnShutdown(t *testing.T) {
-	// Not parallel: modifies engine-global workspace.
+	t.Parallel()
+
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 
@@ -286,7 +288,8 @@ func TestWorkspaceFolderScanCommandUntrustedCtxCanceledOnShutdown(t *testing.T) 
 // canceled on shutdown.
 // ---------------------------------------------------------------------------
 func TestClearCacheCommandScanFolderCtxCanceledOnShutdown(t *testing.T) {
-	// Not parallel: modifies engine-global workspace.
+	t.Parallel()
+
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 

@@ -83,7 +83,6 @@ func Test_SmokeInstanceTest(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	ossFile := "package.json"
 	codeFile := "app.js"
-	testutil.CreateDummyProgressListener(t)
 	runSmokeTest(t, engine, tokenService, testsupport.NodejsGoof, "0336589", ossFile, codeFile, true, endpoint, product.ProductOpenSource, product.ProductCode)
 }
 
@@ -92,7 +91,6 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 	ossFile := "package.json"
 	iacFile := "main.tf"
 	codeFile := "app.js"
-	testutil.CreateDummyProgressListener(t)
 
 	type test struct {
 		name                 string
@@ -2488,7 +2486,6 @@ func monorepoLeafFoldersHaveMatchingDiagnostics(jsonRPCRecorder *testsupport.Jso
 func Test_SmokeRealScanMonorepoFixture(t *testing.T) {
 	testsupport.SkipUnlessBenchmarkRealScanMonorepo(t)
 
-	testutil.CreateDummyProgressListener(t)
 	if os.Getenv("SNYK_API") == "" {
 		t.Setenv("SNYK_API", "https://api.snyk.io")
 	}

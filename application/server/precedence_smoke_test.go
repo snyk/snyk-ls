@@ -543,7 +543,6 @@ func Test_SmokePrecedence_LoginRefreshesConfig_WithFolderOverridesPreserved(t *t
 func Test_SmokePrecedence_ActivateSnykCodeSecurity_OR_Reconciliation(t *testing.T) {
 	t.Parallel()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
-	testutil.CreateDummyProgressListener(t)
 
 	loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine)
@@ -592,7 +591,6 @@ func Test_SmokePrecedence_ActivateSnykCodeSecurity_OR_Reconciliation(t *testing.
 func Test_SmokePrecedence_DefaultValues_WhenNoUserOrRemoteConfig(t *testing.T) {
 	t.Parallel()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
-	testutil.CreateDummyProgressListener(t)
 
 	loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine)

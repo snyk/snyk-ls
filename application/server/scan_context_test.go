@@ -80,8 +80,7 @@ func (w *contextCapturingWorkspace) capturedCtx() context.Context {
 }
 
 func TestScanContextCanceledOnShutdown(t *testing.T) {
-	// Not parallel: injects a workspace into the configuration, which modifies
-	// engine-global state. Run sequentially so it does not interfere with other tests.
+	t.Parallel()
 
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
@@ -234,7 +233,8 @@ func (w *changeCapturingWorkspace) ChangeWorkspaceFolders(_ types.DidChangeWorks
 //
 //	go test ./application/server/... -run TestTextDocumentDidSaveHandlerUsesScanCtx -v -count=1
 func TestTextDocumentDidSaveHandlerUsesScanCtx(t *testing.T) {
-	// Not parallel: replaces the global workspace in the config.
+	t.Parallel()
+
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 
@@ -359,8 +359,7 @@ func (w *trustCapturingWorkspace) capturedCtx() context.Context {
 //
 //	go test ./application/server/... -run TestHandleFoldersScanCtxCanceledOnShutdown -v -count=1
 func TestHandleFoldersScanCtxCanceledOnShutdown(t *testing.T) {
-	// Not parallel: injects a workspace into the configuration, modifying
-	// engine-global state. Run sequentially so it does not interfere with others.
+	t.Parallel()
 
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
@@ -425,7 +424,8 @@ func TestHandleFoldersScanCtxCanceledOnShutdown(t *testing.T) {
 //
 //	go test ./application/server/... -run TestWorkspaceDidChangeFoldersHandlerUsesScanCtx -v -count=1
 func TestWorkspaceDidChangeFoldersHandlerUsesScanCtx(t *testing.T) {
-	// Not parallel: replaces the global workspace in the config.
+	t.Parallel()
+
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 

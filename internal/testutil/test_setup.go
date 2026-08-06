@@ -197,12 +197,6 @@ func CLIDownloadLockFileCleanUp(t *testing.T, conf configuration.Configuration) 
 	})
 }
 
-// CreateDummyProgressListener is retained for call-site compatibility.
-// The process-global progress channel has been removed [IDE-2036]; each server
-// now uses a per-server progress owner, so no global drainer is needed.
-// Callers that still invoke this function are safe to keep it — it is a no-op.
-func CreateDummyProgressListener(_ *testing.T) {}
-
 func NewTestProgressTracker(t *testing.T) *progress.Tracker {
 	t.Helper()
 	return NewDrainedProgressTracker()

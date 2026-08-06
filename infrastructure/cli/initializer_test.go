@@ -77,7 +77,6 @@ func Test_EnsureCliShouldFindOrDownloadCliAndAddPathToEnv(t *testing.T) {
 	engine, tokenService := testutil.IntegTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	initializer := SetupInitializer(t, conf, engine.GetLogger(), engine)
-	testutil.CreateDummyProgressListener(t)
 
 	conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), "")
 	if config.GetToken(conf) == "" {

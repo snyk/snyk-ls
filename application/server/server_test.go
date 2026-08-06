@@ -1213,7 +1213,6 @@ func Test_textDocumentWillSaveHandler_shouldBeServed(t *testing.T) {
 func Test_workspaceDidChangeWorkspaceFolders_shouldProcessChanges(t *testing.T) {
 	engine, tokenService := testutil.IntegTestWithEngine(t)
 	loc, _, _ := setupServer(t, engine, tokenService)
-	testutil.CreateDummyProgressListener(t)
 	file := testsupport.CreateTempFile(t, t.TempDir())
 	w := config.GetWorkspace(engine.GetConfiguration())
 
