@@ -1315,6 +1315,20 @@ button.secondary[disabled] {
                                 </div>
                             </div>
 
+                            <div class="override-indicator-wrapper ">
+                                <div class="form-group half-width">
+                                    <label for="folder_0_ambient_canary_autonomy">
+                                        <span data-toggle="tooltip" title="Choose whether Ambient Canary may apply fixes automatically for this folder, or only notify you.">Ambient Canary autonomy</span>
+                                        
+                                    </label>
+                                    
+                                    <select id="folder_0_ambient_canary_autonomy" name="folder_0_ambient_canary_autonomy" data-setting="ambient_canary_autonomy" >
+                                        <option value="notify_only" >Notify only</option>
+                                        <option value="autonomous_fixes" >Allow autonomous fixes</option>
+                                    </select>
+                                </div>
+                            </div>
+
                             <div class="override-indicator-wrapper">
                                 <div class="form-group half-width">
                                     <label for="folder_0_preferred_org"><span data-toggle="tooltip" title="Specify the organization (ID or name) for this folder. If auto-select is enabled, this will show the automatically determined organization (read-only).">Organization</span></label>
@@ -2661,6 +2675,7 @@ if (window.cssVars) {
 	var FOLDER_RESET_FIELDS = [
 		"scan_automatic",
 		"scan_net_new",
+		"ambient_canary_autonomy",
 		"severity_filter_critical",
 		"severity_filter_high",
 		"severity_filter_medium",

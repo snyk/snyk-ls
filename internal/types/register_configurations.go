@@ -356,6 +356,12 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"SAST Settings"},
 		configresolver.AnnotationDescription: {"SAST configuration from Snyk API (autofix, local code engine)"},
 	})
+	registerFlag(fs, SettingAmbientCanaryAutonomy, "", "Ambient Canary autonomy for this folder", map[string][]string{
+		configresolver.AnnotationScope:       {folderScope},
+		configresolver.AnnotationRemoteKey:   {"ambient_canary_autonomy"},
+		configresolver.AnnotationDisplayName: {"Ambient Canary Autonomy"},
+		configresolver.AnnotationDescription: {"Whether Ambient Canary notifies only or applies fixes automatically for this folder"},
+	})
 
 	registerFlag(fs, SettingSnykAdvisorEnabled, false, "Enable Snyk Advisor", map[string][]string{
 		configresolver.AnnotationScope:       {folderScope},

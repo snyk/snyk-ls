@@ -109,6 +109,7 @@ const (
 	SettingSnykSecretsEnabled     = "snyk_secrets_enabled"
 	SettingScanAutomatic          = "scan_automatic"
 	SettingScanNetNew             = "scan_net_new"
+	SettingAmbientCanaryAutonomy  = "ambient_canary_autonomy"
 	SettingIssueViewOpenIssues    = "issue_view_open_issues"
 	SettingIssueViewIgnoredIssues = "issue_view_ignored_issues"
 	SettingReferenceFolder        = "reference_folder"

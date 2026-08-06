@@ -21,6 +21,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/uri"
 )
 
 // bddSteps is the step registry for every .feature file, created fresh per
@@ -41,6 +42,7 @@ type bddSteps struct {
 	jsonRPCRecorder *testsupport.JsonRPCRecorder
 
 	initResult types.InitializeResult
+	folderPath types.FilePath
 }
 
 func newBDDSteps(t *testing.T) *bddSteps {
@@ -59,6 +61,18 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	})
 	sc.Then(`^the server responds with its capabilities$`, func() error {
 		return s.runOnScenarioGoroutine(s.theServerRespondsWithItsCapabilities)
+	})
+	sc.Given(`^a workspace folder is open$`, func() error {
+		return s.runOnScenarioGoroutine(s.aWorkspaceFolderIsOpen)
+	})
+	sc.Then(`^the folder has no Ambient Canary autonomy override$`, func() error {
+		return s.runOnScenarioGoroutine(s.theFolderHasNoAmbientCanaryAutonomyOverride)
+	})
+	sc.When(`^the editor sets the folder's Ambient Canary autonomy to "([^"]*)"$`, func(ctx context.Context, autonomy string) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theEditorSetsTheFoldersAmbientCanaryAutonomyTo(ctx, autonomy) })
+	})
+	sc.Then(`^the folder's effective Ambient Canary autonomy is "([^"]*)"$`, func(autonomy string) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theFoldersEffectiveAmbientCanaryAutonomyIs(autonomy) })
 	})
 }
 
@@ -167,6 +181,99 @@ func (s *bddSteps) theServerRespondsWithItsCapabilities() error {
 	}
 	if s.initResult.Capabilities.TextDocumentSync == nil {
 		return fmt.Errorf("expected capabilities to be populated, got a zero value")
+	}
+	return nil
+}
+
+func (s *bddSteps) aWorkspaceFolderIsOpen() error {
+	folderPath := types.FilePath(s.scenarioT.TempDir())
+	initParams := types.InitializeParams{
+		WorkspaceFolders: []types.WorkspaceFolder{
+			{Uri: uri.PathToUri(folderPath), Name: "bdd-folder"},
+		},
+	}
+	if _, err := s.loc.Client.Call(s.scenarioT.Context(), "initialize", initParams); err != nil {
+		return fmt.Errorf("initialize call failed: %w", err)
+	}
+
+	disableAutoScan(s.scenarioT, s.engine.GetConfiguration())
+
+	if _, err := s.loc.Client.Call(s.scenarioT.Context(), "initialized", types.InitializedParams{}); err != nil {
+		return fmt.Errorf("initialized call failed: %w", err)
+	}
+	types.WaitForLspInitialized(s.engine.GetConfiguration())
+
+	s.folderPath = folderPath
+	return nil
+}
+
+// latestFolderConfigNotification polls $/snyk.configuration notifications
+// (didChangeConfiguration processing runs in the background) for the one
+// carrying this scenario's folder.
+func (s *bddSteps) latestFolderConfigNotification() (types.LspFolderConfig, error) {
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		notifications := s.jsonRPCRecorder.FindNotificationsByMethod("$/snyk.configuration")
+		for i := len(notifications) - 1; i >= 0; i-- {
+			var param types.LspConfigurationParam
+			if err := notifications[i].UnmarshalParams(&param); err != nil {
+				continue
+			}
+			for _, fc := range param.FolderConfigs {
+				if folderConfigPathsMatch(fc.FolderPath, s.folderPath) {
+					return fc, nil
+				}
+			}
+		}
+		if time.Now().After(deadline) {
+			return types.LspFolderConfig{}, fmt.Errorf("no $/snyk.configuration notification found for folder %s", s.folderPath)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func (s *bddSteps) theFolderHasNoAmbientCanaryAutonomyOverride() error {
+	fc, err := s.latestFolderConfigNotification()
+	if err != nil {
+		return err
+	}
+	if setting := fc.Settings[types.SettingAmbientCanaryAutonomy]; setting != nil {
+		return fmt.Errorf("expected no ambient_canary_autonomy override, got %v", setting.Value)
+	}
+	return nil
+}
+
+func (s *bddSteps) theEditorSetsTheFoldersAmbientCanaryAutonomyTo(ctx context.Context, autonomy string) error {
+	s.jsonRPCRecorder.ClearNotifications()
+	params := types.DidChangeConfigurationParams{
+		Settings: types.LspConfigurationParam{
+			FolderConfigs: []types.LspFolderConfig{
+				{
+					FolderPath: s.folderPath,
+					Settings: map[string]*types.ConfigSetting{
+						types.SettingAmbientCanaryAutonomy: {Value: autonomy, Changed: true},
+					},
+				},
+			},
+		},
+	}
+	if _, err := s.loc.Client.Call(ctx, "workspace/didChangeConfiguration", params); err != nil {
+		return fmt.Errorf("didChangeConfiguration call failed: %w", err)
+	}
+	return nil
+}
+
+func (s *bddSteps) theFoldersEffectiveAmbientCanaryAutonomyIs(autonomy string) error {
+	fc, err := s.latestFolderConfigNotification()
+	if err != nil {
+		return err
+	}
+	setting := fc.Settings[types.SettingAmbientCanaryAutonomy]
+	if setting == nil {
+		return fmt.Errorf("expected ambient_canary_autonomy override %q, got no override", autonomy)
+	}
+	if setting.Value != autonomy {
+		return fmt.Errorf("expected ambient_canary_autonomy override %q, got %v", autonomy, setting.Value)
 	}
 	return nil
 }
