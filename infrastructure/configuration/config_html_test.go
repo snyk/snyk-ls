@@ -973,7 +973,6 @@ func TestGetCliReleaseChannel(t *testing.T) {
 	})
 }
 
-<<<<<<< HEAD
 // renderFolderPaneWithEffectiveConfig renders the config dialog for a single folder whose
 // EffectiveConfig is exactly what the test supplies (bypassing computeEffectiveConfig), matching
 // the pattern used by TestConfigHtmlRenderer_SourceIndicatorsInOutput.
@@ -1082,7 +1081,8 @@ func TestConfigHtml_LockedFolderAutonomyIsDisabled(t *testing.T) {
 	require.NotEmpty(t, match)
 
 	assert.Contains(t, match, "disabled", "org-locked folder autonomy control must be disabled")
-=======
+}
+
 // TestConfigHtmlRenderer_RendersLlmProviderSection is IDE-2274 CP-1's UNIT-9:
 // the "Autonomous remediation" section, all five provider options, the
 // custom-endpoint input, and the "key comes from your environment" note must
@@ -1125,5 +1125,4 @@ func TestConfigHtmlRenderer_LlmProviderSelectionRoundTrips(t *testing.T) {
 
 	assert.Contains(t, html, `value="ollama" selected`)
 	assert.Contains(t, html, `value="http://localhost:11434"`)
->>>>>>> a2f4b7d7 (feat(config): add LLM provider and endpoint settings to the config dialog [IDE-2274])
 }
