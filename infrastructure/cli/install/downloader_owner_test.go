@@ -23,24 +23,35 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-// UNIT-112 (IDE-2036): NewDownloader routes progress events to the owner
-// channel supplied at construction rather than the global ToServerProgressChannel.
 func TestNewDownloader_RoutesToInjectedOwnerChannel(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	logger := zerolog.Nop()
 
 	owner := progress.NewTracker(&logger)
 
-	// NewDownloader must accept an *Owner and use owner.New(true) as the
-	// progressTracker field so that progress events reach owner.Channel().
-	d := NewDownloaderWithOwner(engine, nil, nil, testutil.DefaultConfigResolver(engine), owner)
+	d := NewDownloader(engine, nil, nil, testutil.DefaultConfigResolver(engine), owner)
 
-	// The downloader's internal task must route to the owner's channel.
 	require.NotNil(t, d.progressTask, "progressTask must be set")
 	assert.Equal(t, owner.Channel(), d.progressTask.GetChannel(),
 		"progressTask's channel must be the owner's channel")
+}
+
+// The installer must thread its injected owner into every downloader it builds,
+// otherwise download progress goes to a channel nothing drains.
+func TestInstall_NewDownloader_RoutesToInjectedOwnerChannel(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	owner := testutil.NewTestProgressTracker(t)
+
+	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine), owner)
+
+	d := i.newDownloader()
+
+	require.NotNil(t, d.progressTask, "progressTask must be set")
+	assert.Equal(t, owner.Channel(), d.progressTask.GetChannel(),
+		"the installer-produced downloader must route to the injected owner's channel")
 }
