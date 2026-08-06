@@ -345,43 +345,16 @@ func (tcs *testCommandService) ExecuteCommandData(ctx context.Context, cmdData t
 	return tcs.testCmd.Execute(ctx)
 }
 
-// myTestCommandService is a pointer-type sentinel used to prove pointer identity.
-type myTestCommandService struct {
-	called bool
-}
-
-func (m *myTestCommandService) ExecuteCommandData(_ context.Context, _ types.CommandData, _ types.Server) (any, error) {
-	m.called = true
-	return "sentinel-called", nil
-}
-
-// Test_ExecuteCommandHandler_UsesContextInjectedCommandService proves that
-// executeCommandHandler reads CommandService from the context deps map (injected
-// by withContext) and NOT from the command.Service() process-global.
-//
-// It sets a different sentinel as the process-global and verifies the handler
-// invokes the deps-injected sentinel.
-func Test_ExecuteCommandHandler_UsesContextInjectedCommandService(t *testing.T) {
+func Test_WithContext_InjectsCommandServiceFromDeps(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 
-	// contextSentinel is the instance we inject via deps — the handler must use this.
-	contextSentinel := &myTestCommandService{}
-	// globalSentinel is set as the process-global — the handler must NOT use this.
-	globalSentinel := &myTestCommandService{}
+	injected := types.NewCommandServiceMock()
 
-	// Prime the mandatory deps base, then override CommandService with contextSentinel.
-	baseDeps := di.TestInit(t, engine, tokenService, nil)
-	deps := baseDeps
-	deps.CommandService = contextSentinel
+	deps := di.TestInit(t, engine, tokenService, nil)
+	deps.CommandService = injected
 
-	// Set the global to globalSentinel to detect if the handler accidentally reads it.
-	command.SetService(globalSentinel)
-	t.Cleanup(func() { command.SetService(nil) })
-
-	// Use withContext to inject deps (including CommandService) into the handler context,
-	// and read back what CommandService the handler sees.
 	var gotCommandService types.CommandService
 	wrapped := withContext(
 		handler.New(func(ctx context.Context, _ *jrpc2.Request) (any, error) {
@@ -394,12 +367,9 @@ func Test_ExecuteCommandHandler_UsesContextInjectedCommandService(t *testing.T) 
 	_, err := wrapped(t.Context(), nil)
 	require.NoError(t, err)
 
-	// Proof: the context must carry the deps-injected sentinel, not the global one.
 	require.NotNil(t, gotCommandService, "CommandService must be injected into context by withContext")
-	assert.Same(t, contextSentinel, gotCommandService,
-		"withContext must inject deps.CommandService into context, not the command.Service() global")
-	assert.NotSame(t, globalSentinel, gotCommandService,
-		"handler must not see the command.Service() process-global")
+	assert.Same(t, injected, gotCommandService,
+		"withContext must inject deps.CommandService into context")
 }
 
 func Test_ExecuteCommand_CancelRequest(t *testing.T) {
