@@ -107,6 +107,8 @@ func ConstructSettingsFromConfig(engine workflow.Engine, r types.ConfigResolverI
 		// Env is stored as string under SettingAdditionalEnvironment UserGlobalKey (written by applyEnvironment).
 		types.SettingAdditionalParameters:  strings.Join(r.GetStringSlice(types.SettingCliAdditionalOssParameters, nil), " "),
 		types.SettingAdditionalEnvironment: r.GetString(types.SettingAdditionalEnvironment, nil),
+		types.SettingLlmProvider:           r.GetString(types.SettingLlmProvider, nil),
+		types.SettingLlmBaseUrl:            r.GetString(types.SettingLlmBaseUrl, nil),
 	}
 
 	folderConfigs := collectFolderConfigs(conf, logger, engine, r)
