@@ -102,35 +102,31 @@ func TestToDiagnostics_CodeDescription(t *testing.T) {
 		{name: "open source", issueProduct: product.ProductOpenSource, descriptionURL: mustParse("https://snyk.io/vuln/SNYK-JS-LODASH-567746"), wantHref: "https://snyk.io/vuln/SNYK-JS-LODASH-567746"},
 		{name: "code", issueProduct: product.ProductCode, descriptionURL: mustParse("https://docs.snyk.io/scan-using-snyk/snyk-code/snyk-code-security-rules"), wantHref: "https://docs.snyk.io/scan-using-snyk/snyk-code/snyk-code-security-rules"},
 		{name: "infrastructure as code", issueProduct: product.ProductInfrastructureAsCode, descriptionURL: mustParse("https://security.snyk.io/rules/cloud/SNYK-CC-TF-1"), wantHref: "https://security.snyk.io/rules/cloud/SNYK-CC-TF-1"},
-		{name: "http url is sent as the link target", descriptionURL: mustParse("http://docs.snyk.io/secrets"), wantHref: "http://docs.snyk.io/secrets"},
+		{name: "http url is sent as the link target", issueProduct: product.ProductSecrets, descriptionURL: mustParse("http://docs.snyk.io/secrets"), wantHref: "http://docs.snyk.io/secrets"},
 
-		{name: "no url", descriptionURL: nil},
-		{name: "relative url resolves against the workspace", descriptionURL: mustParse("generic-secret")},
-		{name: "empty url", descriptionURL: mustParse("")},
+		{name: "no url", issueProduct: product.ProductSecrets, descriptionURL: nil},
+		{name: "relative url resolves against the workspace", issueProduct: product.ProductSecrets, descriptionURL: mustParse("generic-secret")},
+		{name: "empty url", issueProduct: product.ProductSecrets, descriptionURL: mustParse("")},
 		// Defensive — no producer emits these today. IssueDescriptionURL is an
 		// exported field, and ToDiagnostics is the boundary where whatever a
 		// future scanner puts there reaches the client.
-		{name: "file url", descriptionURL: mustParse("file:///etc/passwd")},
-		{name: "javascript url", descriptionURL: mustParse("javascript:alert(1)")},
-		{name: "data url", descriptionURL: mustParse("data:text/html,<script>alert(1)</script>")},
-		{name: "opaque url has a scheme but no host", descriptionURL: mustParse("https:docs.snyk.io")},
+		{name: "file url", issueProduct: product.ProductSecrets, descriptionURL: mustParse("file:///etc/passwd")},
+		{name: "javascript url", issueProduct: product.ProductSecrets, descriptionURL: mustParse("javascript:alert(1)")},
+		{name: "data url", issueProduct: product.ProductSecrets, descriptionURL: mustParse("data:text/html,<script>alert(1)</script>")},
+		{name: "opaque url has a scheme but no host", issueProduct: product.ProductSecrets, descriptionURL: mustParse("https:docs.snyk.io")},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			issueProduct := tc.issueProduct
-			if issueProduct == "" {
-				issueProduct = product.ProductSecrets
-			}
 			testIssue := &snyk.Issue{
 				ID:                  "generic-secret",
 				Severity:            types.High,
-				Product:             issueProduct,
+				Product:             tc.issueProduct,
 				IssueDescriptionURL: tc.descriptionURL,
 			}
 
 			// ToDiagnostics passes a nil logger, so this also covers the
-			// pull-diagnostics path where the drop cannot be logged.
+			// code-action path, the only remaining caller that cannot log the drop.
 			diagnostics := ToDiagnostics([]types.Issue{testIssue})
 			require.Len(t, diagnostics, 1)
 
