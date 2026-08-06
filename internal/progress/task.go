@@ -17,9 +17,8 @@
 package progress
 
 // Task is the per-operation progress handle. One Task represents a single
-// in-flight progress operation. Obtain a Task from Tracker.New(cancellable)
-// when you need owner-managed cancellation, or from NewTaskWithChannel when
-// you hold a channel reference directly.
+// in-flight progress operation. Obtain a Task from Tracker.New(cancellable),
+// which registers it so the owner can resolve it for cancellation.
 //
 // All ui.ProgressBar methods (Begin/Report/End/Clear/CancelOrDone/…) are
 // implemented here.
@@ -67,8 +66,8 @@ func (t *Task) GetCancelChannel() chan bool {
 }
 
 // IsCanceled delegates to the owner registry: the task is canceled when it has
-// been removed from the registry. For ownerless tasks (created by
-// NewTaskWithChannel), always returns false.
+// been removed from the registry. Ownerless tasks (test-only, see NewTestTask)
+// always report false.
 func (t *Task) IsCanceled() bool {
 	if t.owner == nil {
 		return false
@@ -86,8 +85,10 @@ func (t *Task) begin(title, message string, unquantifiableLength bool) {
 	params := newTaskProgressParams(title, message, t.cancellable, unquantifiableLength)
 	params.Token = t.token
 	t.send(params, logger)
+	t.m.Lock()
 	t.lastReport = time.Now()
 	t.setLastMessage(message)
+	t.m.Unlock()
 }
 
 // Begin starts a quantifiable progress operation.

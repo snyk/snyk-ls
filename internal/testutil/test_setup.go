@@ -205,12 +205,15 @@ func CreateDummyProgressListener(_ *testing.T) {}
 
 // NewTestProgressTracker creates a per-test *progress.Tracker with a 1000-item
 // buffered channel. A t.Cleanup drainer prevents the channel from blocking
-// producers after the test ends. The caller may pass the tracker's channel to
-// any scanner constructor, achieving full per-test isolation [IDE-2036].
+// producers after the test ends. The caller may pass the tracker to any scanner
+// constructor, achieving full per-test isolation [IDE-2036].
 func NewTestProgressTracker(t *testing.T) *progress.Tracker {
 	t.Helper()
 	ch := make(chan types.ProgressParams, 1000)
-	owner := progress.NewTrackerWithChannel(ch, nil)
+	// Nop rather than a test writer: producers can outlive the test, and logging
+	// after it finishes panics.
+	logger := zerolog.Nop()
+	owner := progress.NewTrackerWithChannel(ch, &logger)
 	t.Cleanup(func() {
 	drain:
 		for {

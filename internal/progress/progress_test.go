@@ -86,26 +86,6 @@ func TestEndProgress(t *testing.T) {
 	assert.Equal(t, output, <-channel)
 }
 
-// TestNewTaskWithChannel_RoutesToGivenChannel (IDE-2036-UNIT-001) verifies
-// that NewTaskWithChannel sends progress events to the supplied channel.
-// The process-global ToServerProgressChannel and NewTracker() wrapper have been
-// removed [IDE-2036]; each server/test now owns its own isolated channel.
-func TestNewTaskWithChannel_RoutesToGivenChannel(t *testing.T) {
-	t.Parallel()
-
-	logger := zerolog.Nop()
-	customCh := make(chan types.ProgressParams, 10)
-
-	tr := NewTaskWithChannel(customCh, false, &logger)
-	tr.Begin("test-title")
-	tr.End()
-
-	// custom channel must receive the begin event
-	if len(customCh) == 0 {
-		t.Fatal("expected progress event on customCh, got none")
-	}
-}
-
 func TestEndProgressTwice(t *testing.T) {
 	output := types.ProgressParams{
 		Value: types.WorkDoneProgressEnd{

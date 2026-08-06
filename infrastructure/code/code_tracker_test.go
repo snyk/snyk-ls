@@ -23,16 +23,16 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var testProgressChannels = make(chan types.ProgressParams, 10000)
-var testCancelProgressChannel = make(chan bool, 10000)
 
 func Test_Tracker_Begin(t *testing.T) {
 	testutil.UnitTest(t)
-	tracker := newCodeTracker(testProgressChannels, testCancelProgressChannel)
+	tracker := newCodeTracker(testProgressChannels)
 	tracker.Begin("title", "message")
 
 	hasBegun := false
@@ -62,7 +62,7 @@ func Test_Tracker_Begin(t *testing.T) {
 }
 func Test_Tracker_End(t *testing.T) {
 	testutil.UnitTest(t)
-	tracker := newCodeTracker(testProgressChannels, testCancelProgressChannel)
+	tracker := newCodeTracker(testProgressChannels)
 	tracker.End("message")
 
 	assert.Eventually(
@@ -90,8 +90,9 @@ func Test_Tracker_End(t *testing.T) {
 }
 
 // TestGenerateTrackerRoutesToInjectedChannel (IDE-2036) verifies that
-// GenerateTracker routes progress events to the per-server channel injected
-// via NewCodeTrackerFactory, NOT to the global progress.ToServerProgressChannel.
+// GenerateTracker routes progress events to the channel of the per-server owner
+// injected via NewCodeTrackerFactory, NOT to the global
+// progress.ToServerProgressChannel.
 //
 // This ensures upload-phase progress events from code-client-go are isolated
 // per language-server instance, preventing cross-test context cancellations in
@@ -102,7 +103,7 @@ func TestGenerateTrackerRoutesToInjectedChannel(t *testing.T) {
 	ch := make(chan types.ProgressParams, 100)
 
 	logger := zerolog.Nop()
-	factory := NewCodeTrackerFactory(&logger, ch)
+	factory := NewCodeTrackerFactory(progress.NewTrackerWithChannel(ch, &logger))
 
 	ct := factory.GenerateTracker()
 
