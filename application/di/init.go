@@ -134,14 +134,11 @@ func Init(engine workflow.Engine, tokenService types.TokenService) Dependencies 
 
 	localSummaryEmitter := scanstates.NewSummaryEmitter(conf, logger, localNotifier, engine, localConfigResolver)
 	localTreeEmitter, localTreeEmitterErr := treeview.NewTreeScanStateEmitter(conf, logger, localNotifier)
-	var localTreeEmitterInstance *treeview.TreeScanStateEmitter
 	var localScanStateChangeEmitter scanstates.ScanStateChangeEmitter
 	if localTreeEmitterErr != nil {
 		logger.Warn().Err(localTreeEmitterErr).Msg("failed to create tree scan state emitter, using summary emitter only")
-		localTreeEmitterInstance = nil
 		localScanStateChangeEmitter = localSummaryEmitter
 	} else {
-		localTreeEmitterInstance = localTreeEmitter
 		localScanStateChangeEmitter = scanstates.NewCompositeEmitter(localSummaryEmitter, localTreeEmitter)
 	}
 
@@ -200,7 +197,7 @@ func Init(engine workflow.Engine, tokenService types.TokenService) Dependencies 
 		LdxSyncService:        localLdxSyncService,
 		ScanStateAggregator:   localScanStateAggregator,
 		InlineValueProvider:   localInlineValueProvider,
-		TreeEmitter:           localTreeEmitterInstance,
+		TreeEmitter:           localTreeEmitter,
 		Scanner:               localScanner,
 		HoverService:          localHoverService,
 		ScanNotifier:          localScanNotifier,

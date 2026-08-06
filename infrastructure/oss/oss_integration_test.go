@@ -50,6 +50,7 @@ func Test_Scan(t *testing.T) {
 	ctx := t.Context()
 	deps := di.Init(engine, tokenService)
 	t.Cleanup(deps.TreeEmitter.Dispose)
+	t.Cleanup(deps.ScanCancel)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
 	deps.AuthenticationService.ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
 

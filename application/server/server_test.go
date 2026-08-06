@@ -166,6 +166,7 @@ func setupServer(
 	if cfg.useRealDI {
 		deps = di.Init(engine, tokenService)
 		t.Cleanup(deps.TreeEmitter.Dispose)
+		t.Cleanup(deps.ScanCancel)
 	} else {
 		deps = di.TestInit(t, engine, tokenService, cfg.overrideDeps)
 

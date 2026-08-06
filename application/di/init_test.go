@@ -53,9 +53,7 @@ func TestDependencies_AllFieldsPopulated(t *testing.T) {
 	assert.NotNil(t, deps.ScanNotifier, "ScanNotifier must be set")
 	assert.NotNil(t, deps.CodeActionService, "CodeActionService must be set")
 	assert.NotNil(t, deps.Installer, "Installer must be set")
-	// Initializer is absent from di.Dependencies by design: the struct carries what
-	// handlers read, and no handler reads the Initializer — it is consumed once at
-	// startup by NewDelegatingScanner.
+	// Initializer is absent from di.Dependencies by design — see the struct comment.
 }
 
 // TestTestInit_ReturnedDepsAreIndependent verifies that two consecutive TestInit
@@ -110,6 +108,7 @@ func TestInit_ParallelSafe(t *testing.T) {
 
 	for i, deps := range results {
 		t.Cleanup(deps.TreeEmitter.Dispose)
+		t.Cleanup(deps.ScanCancel)
 		require.NotNil(t, deps.Scanner, "Scanner nil for instance %d", i)
 		require.NotNil(t, deps.Notifier, "Notifier nil for instance %d", i)
 		require.NotNil(t, deps.AuthenticationService, "AuthService nil for instance %d", i)
