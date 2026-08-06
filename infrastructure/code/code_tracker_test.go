@@ -39,26 +39,20 @@ func Test_Tracker_Begin(t *testing.T) {
 	assert.Eventually(
 		t,
 		func() bool {
-			for {
-				select {
-				case p := <-testProgressChannels:
-					if p.Value == nil {
-						hasBegun = true
-						return false
-					} else {
-						switch value := p.Value.(type) {
-						case types.WorkDoneProgressBegin:
-							if !hasBegun {
-								return false
-							}
-							return value.Title == "title" && value.Message == "message"
-						case types.WorkDoneProgressEnd:
-							return false
-						}
-					}
-				default:
+			// Eventually already retries; consume at most one event per tick.
+			select {
+			case p := <-testProgressChannels:
+				if p.Value == nil {
+					hasBegun = true
+					return false
 				}
-				break //nolint:staticcheck // unconditional termination is intentional — poll once per Eventually tick
+				switch value := p.Value.(type) {
+				case types.WorkDoneProgressBegin:
+					return hasBegun && value.Title == "title" && value.Message == "message"
+				case types.WorkDoneProgressEnd:
+					return false
+				}
+			default:
 			}
 			return false
 		},
@@ -74,22 +68,19 @@ func Test_Tracker_End(t *testing.T) {
 	assert.Eventually(
 		t,
 		func() bool {
-			for {
-				select {
-				case p := <-testProgressChannels:
-					if p.Value == nil {
-						return false
-					} else {
-						switch value := p.Value.(type) {
-						case types.WorkDoneProgressBegin:
-							return false
-						case types.WorkDoneProgressEnd:
-							return value.Message == "message"
-						}
-					}
-				default:
+			// Eventually already retries; consume at most one event per tick.
+			select {
+			case p := <-testProgressChannels:
+				if p.Value == nil {
+					return false
 				}
-				break //nolint:staticcheck // unconditional termination is intentional — poll once per Eventually tick
+				switch value := p.Value.(type) {
+				case types.WorkDoneProgressBegin:
+					return false
+				case types.WorkDoneProgressEnd:
+					return value.Message == "message"
+				}
+			default:
 			}
 			return false
 		},

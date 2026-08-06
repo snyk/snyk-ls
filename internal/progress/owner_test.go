@@ -52,10 +52,13 @@ func TestTracker_CancelIsolation(t *testing.T) {
 	assert.True(t, ownerA.IsCanceled(tokenA), "taskA should be canceled after Cancel")
 	assert.False(t, ownerB.IsCanceled(tokenB), "taskB on ownerB must not be affected by canceling ownerA's task")
 
-	// Draining cancel channel so the goroutine can proceed.
+	// The cancel signal must actually have been delivered, not just removed from
+	// the registry. Tracker.Cancel writes before returning, so no waiting needed.
 	select {
 	case <-taskA.GetCancelChannel():
+		// good: cancel signal received
 	default:
+		t.Fatal("expected cancel signal on taskA's cancelChannel")
 	}
 }
 

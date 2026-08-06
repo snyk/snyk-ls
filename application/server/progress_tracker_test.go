@@ -20,9 +20,7 @@ package server
 // Canceling a progress token on server A must not affect server B's tasks.
 
 import (
-	"context"
 	"testing"
-	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -71,11 +69,12 @@ func TestTwoServerCancelIsolation_ViaTracker(t *testing.T) {
 	assert.True(t, depsA.ProgressTracker.IsCanceled(tokenA), "taskA should be canceled after Cancel")
 	assert.False(t, depsB.ProgressTracker.IsCanceled(tokenB), "taskB on ownerB must NOT be affected by canceling ownerA's task")
 
-	// Drain cancel channel.
+	// Tracker.Cancel writes to the buffered cancel channel before returning, so
+	// the signal must already be there — no waiting required.
 	select {
 	case <-taskA.GetCancelChannel():
-	case <-time.After(time.Second):
-		t.Fatal("expected cancel signal on taskA")
+	default:
+		t.Fatal("expected cancel signal on taskA to be available immediately after Cancel")
 	}
 }
 
@@ -96,7 +95,7 @@ func TestProgressTrackerInjectedIntoContext(t *testing.T) {
 	injectCoreServicesIntoMap(ctxDeps, deps)
 	injectScanServicesIntoMap(ctxDeps, deps)
 
-	ctx := ctx2.NewContextWithDependencies(context.Background(), ctxDeps)
+	ctx := ctx2.NewContextWithDependencies(t.Context(), ctxDeps)
 
 	// The Tracker retrieved from context must be exactly the one we injected.
 	got := mustProgressTrackerFromContext(ctx)

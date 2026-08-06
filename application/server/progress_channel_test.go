@@ -16,18 +16,13 @@
 
 package server
 
-// TestValidateProgressChannelIsolation (IDE-2036-INTEG-003) verifies that two
-// servers each receive progress events only through their own ProgressTracker,
-// never through the other server's channel.
-//
-// Run with: go test -race ./application/server/... -run TestValidateProgressChannelIsolation -v
 import (
-	"context"
 	"testing"
 	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/internal/progress"
@@ -35,6 +30,11 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+// TestValidateProgressChannelIsolation (IDE-2036-INTEG-003) verifies that two
+// servers each receive progress events only through their own ProgressTracker,
+// never through the other server's channel.
+//
+// Run with: go test -race ./application/server/... -run TestValidateProgressChannelIsolation -v
 func TestValidateProgressChannelIsolation(t *testing.T) {
 	t.Parallel()
 
@@ -50,6 +50,12 @@ func TestValidateProgressChannelIsolation(t *testing.T) {
 
 	depsA := di.TestInit(t, engineA, tokenServiceA, &di.Dependencies{ProgressTracker: ownerA})
 	depsB := di.TestInit(t, engineB, tokenServiceB, &di.Dependencies{ProgressTracker: ownerB})
+
+	// TestInit must hand back the injected Tracker verbatim — otherwise the
+	// channels below would be some other tracker's and the isolation assertions
+	// would be vacuous.
+	require.Same(t, ownerA, depsA.ProgressTracker, "TestInit must use the injected ProgressTracker for server A")
+	require.Same(t, ownerB, depsB.ProgressTracker, "TestInit must use the injected ProgressTracker for server B")
 
 	// Verify each deps routes through the right channel.
 	chFromA := depsA.ProgressTracker.Channel()
@@ -79,21 +85,4 @@ func TestValidateProgressChannelIsolation(t *testing.T) {
 		"server B's channel must receive progress events from trackerB")
 	assert.Never(t, func() bool { return len(chFromA) > 0 }, 50*time.Millisecond, time.Millisecond,
 		"server A's channel must not receive progress events from trackerB")
-
-	// Ensure the createProgressListener goroutine in each real server also routes
-	// to the correct server. We do this by calling the initialize handler on each
-	// server and verifying progress messages flow through the per-server deps channel.
-	locA, _, _ := setupServer(t, engineA, tokenServiceA, WithDeps(di.Dependencies{ProgressTracker: ownerA}))
-	locB, _, _ := setupServer(t, engineB, tokenServiceB, WithDeps(di.Dependencies{ProgressTracker: ownerB}))
-	_ = locA
-	_ = locB
-
-	// A task created through chA's scanner should not write to chB — this is
-	// proven structurally above (NewTaskWithChannel(chFromA, ...)).
-	// The createProgressListener routing test requires calling initialize on each
-	// server, which is an end-to-end smoke test and requires credentials.
-	// The structural proof above is sufficient for the unit scope of this test.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_ = ctx
 }

@@ -360,7 +360,8 @@ func (m *myTestCommandService) ExecuteCommandData(_ context.Context, _ types.Com
 // by withContext) and NOT from the command.Service() process-global.
 //
 // It sets a different sentinel as the process-global and verifies the handler
-// invokes the deps-injected sentinel, not the global one.
+// invokes the deps-injected sentinel, neither the command.Service() global nor
+// the di.CommandService() global from init.go.
 func Test_ExecuteCommandHandler_UsesContextInjectedCommandService(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
@@ -400,6 +401,12 @@ func Test_ExecuteCommandHandler_UsesContextInjectedCommandService(t *testing.T) 
 		"withContext must inject deps.CommandService into context, not the command.Service() global")
 	assert.NotSame(t, globalSentinel, gotCommandService,
 		"handler must not see the command.Service() process-global")
+
+	// The second process-global — di.CommandService() in init.go — is only written
+	// by di.Init(), never by di.TestInit(). It is therefore nil here, so had the
+	// handler read it instead of the context deps, gotCommandService would be nil.
+	require.Nil(t, di.CommandService(),
+		"di.TestInit must not write the init.go CommandService process-global")
 }
 
 func Test_ExecuteCommand_CancelRequest(t *testing.T) {

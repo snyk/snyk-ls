@@ -135,6 +135,11 @@ func TestScanContextCanceledOnShutdown(t *testing.T) {
 		return scanCtx.Err() != nil
 	}, 3*time.Second, time.Millisecond,
 		"scan context must be canceled after shutdown (currently uses context.Background() which never cancels)")
+
+	// The reason matters: shutdown must cancel the context, not let it expire on
+	// a deadline (context.DeadlineExceeded) that happens to fire at the same time.
+	assert.ErrorIs(t, scanCtx.Err(), context.Canceled,
+		"scan context must end with context.Canceled after shutdown")
 }
 
 // contextCapturingFolder wraps a types.Folder and captures the context passed
