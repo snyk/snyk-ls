@@ -81,7 +81,8 @@ Scenario: a scenario mapped to X1 only
 
 // Test_ParseFeatureDir_RecursesIntoSubdirectories guards against
 // parseFeatureDir silently ignoring feature files placed in a subdirectory
-// (e.g. features/auth/login.feature), the way godog's own loader does not.
+// (e.g. features/auth/login.feature). godog's own loader recurses into
+// subdirectories correctly; parseFeatureDir must match that behavior.
 func Test_ParseFeatureDir_RecursesIntoSubdirectories(t *testing.T) {
 	dir := t.TempDir()
 	subDir := filepath.Join(dir, "auth")
