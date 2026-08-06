@@ -127,7 +127,7 @@ func TestInitializer_whenNoCli_InstallsToDefaultCliPath(t *testing.T) {
 	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), true)
 
 	clientFunc := func() *http.Client { return http.DefaultClient }
-	installer := install.NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), clientFunc, testutil.DefaultConfigResolver(engine))
+	installer := install.NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), clientFunc, testutil.DefaultConfigResolver(engine), testutil.NewTestProgressTracker(t))
 	initializer := SetupInitializerWithInstaller(t, conf, engine.GetLogger(), engine, installer)
 
 	// ensure CLI is not installed on the system

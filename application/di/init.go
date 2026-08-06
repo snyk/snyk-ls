@@ -125,7 +125,7 @@ func Init(engine workflow.Engine, tokenService types.TokenService) Dependencies 
 	localConfigResolver := types.ConfigResolverInterface(resolver)
 
 	localErrorReporter := sentry.NewSentryErrorReporter(conf, logger, engine, localNotifier, localConfigResolver)
-	localInstaller := install.NewInstaller(engine, localErrorReporter, unauthorizedHttpClient, localConfigResolver)
+	localInstaller := install.NewInstaller(engine, localErrorReporter, unauthorizedHttpClient, localConfigResolver, progressOwner)
 	localLearnService := learn.New(gafConfiguration, logger, unauthorizedHttpClient)
 	localInstrumentor := performance2.NewInstrumentor()
 	localFeatureFlagService := featureflag.New(conf, logger, engine, localConfigResolver)

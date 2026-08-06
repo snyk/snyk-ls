@@ -40,7 +40,7 @@ func TestDownloader_Download(t *testing.T) {
 	r := getTestAsset()
 	progressCh := make(chan types.ProgressParams, 100000)
 	owner := progress.NewTrackerWithChannel(progressCh, engine.GetLogger())
-	d := NewDownloaderWithOwner(engine, nil, func() *http.Client { return http.DefaultClient }, testutil.DefaultConfigResolver(engine), owner)
+	d := NewDownloader(engine, nil, func() *http.Client { return http.DefaultClient }, testutil.DefaultConfigResolver(engine), owner)
 	exec := (&Discovery{}).ExecutableName(false)
 	destination := filepath.Join(t.TempDir(), exec)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), destination)
@@ -67,7 +67,7 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	engine := testutil.IntegTest(t)
 	progressCh := make(chan types.ProgressParams, 100000)
 	owner := progress.NewTrackerWithChannel(progressCh, engine.GetLogger())
-	d := NewDownloaderWithOwner(engine, nil, func() *http.Client { return http.DefaultClient }, testutil.DefaultConfigResolver(engine), owner)
+	d := NewDownloader(engine, nil, func() *http.Client { return http.DefaultClient }, testutil.DefaultConfigResolver(engine), owner)
 
 	r := getTestAsset()
 

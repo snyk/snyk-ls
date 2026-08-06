@@ -203,27 +203,23 @@ func CLIDownloadLockFileCleanUp(t *testing.T, conf configuration.Configuration) 
 // Callers that still invoke this function are safe to keep it — it is a no-op.
 func CreateDummyProgressListener(_ *testing.T) {}
 
-// NewTestProgressTracker creates a per-test *progress.Tracker with a 1000-item
-// buffered channel. A t.Cleanup drainer prevents the channel from blocking
-// producers after the test ends. The caller may pass the tracker to any scanner
-// constructor, achieving full per-test isolation [IDE-2036].
 func NewTestProgressTracker(t *testing.T) *progress.Tracker {
 	t.Helper()
-	ch := make(chan types.ProgressParams, 1000)
-	// Nop rather than a test writer: producers can outlive the test, and logging
-	// after it finishes panics.
+	return NewDrainedProgressTracker()
+}
+
+// NewDrainedProgressTracker is usable from TestMain, where there is no *testing.T.
+// Nop logger rather than a test writer: producers can outlive the test, and
+// logging after it finishes panics.
+// ponytail: the drain goroutine never exits — the channel is never closed. Fine
+// for test binaries; close the channel if a leak check ever lands.
+func NewDrainedProgressTracker() *progress.Tracker {
 	logger := zerolog.Nop()
-	owner := progress.NewTrackerWithChannel(ch, &logger)
-	t.Cleanup(func() {
-	drain:
-		for {
-			select {
-			case <-ch:
-			default:
-				break drain
-			}
+	owner := progress.NewTracker(&logger)
+	go func() {
+		for range owner.Channel() {
 		}
-	})
+	}()
 	return owner
 }
 

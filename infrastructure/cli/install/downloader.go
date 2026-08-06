@@ -33,33 +33,18 @@ import (
 )
 
 type Downloader struct {
-	progressTask   *progress.Task // per-download task; always set by both constructors
+	progressTask   *progress.Task
 	errorReporter  error_reporting.ErrorReporter
 	httpClient     func() *http.Client
 	engine         workflow.Engine
 	configResolver types.ConfigResolverInterface
 }
 
-func NewDownloader(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, httpClientFunc func() *http.Client, configResolver types.ConfigResolverInterface) *Downloader {
-	// Create a standalone per-call tracker for the legacy constructor path.
-	// This tracker is not shared with any server — it is APPROVED-KEEP as a
-	// per-invocation value, not a package-global [IDE-2036].
-	standaloneOwner := progress.NewTracker(engine.GetLogger())
+// The progressOwner must be non-nil and its channel drained: a long download blocks on
+// a full channel and never finishes.
+func NewDownloader(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, httpClientFunc func() *http.Client, configResolver types.ConfigResolverInterface, progressOwner *progress.Tracker) *Downloader {
 	return &Downloader{
-		progressTask:   standaloneOwner.New(true),
-		errorReporter:  errorReporter,
-		httpClient:     httpClientFunc,
-		engine:         engine,
-		configResolver: configResolver,
-	}
-}
-
-// NewDownloaderWithOwner creates a Downloader whose progress events are routed
-// to the caller-supplied per-server Tracker instead of the global channel.
-// This is the preferred constructor for production use [IDE-2036].
-func NewDownloaderWithOwner(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, httpClientFunc func() *http.Client, configResolver types.ConfigResolverInterface, owner *progress.Tracker) *Downloader {
-	return &Downloader{
-		progressTask:   owner.New(true),
+		progressTask:   progressOwner.New(true),
 		errorReporter:  errorReporter,
 		httpClient:     httpClientFunc,
 		engine:         engine,
