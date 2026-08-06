@@ -424,12 +424,8 @@ func (s *bddSteps) theFoldersEffectiveAmbientCanaryAutonomyIs(autonomy string) e
 	return nil
 }
 
-// Test_BDDSteps_PerScenarioCleanup proves setupServer's t.Cleanup fires once
-// per scenario (via the sc.Before/sc.After t.Run bridge in beforeScenario/
-// afterScenario), not once for the whole TestBDD run. It drives two
-// scenarios' lifecycles directly against the real bddSteps/setupServer code
-// path and asserts the first scenario's server connection is already closed
-// before the second scenario starts.
+// Test_BDDSteps_PerScenarioCleanup guards against setupServer's t.Cleanup
+// firing once for the whole TestBDD run instead of once per scenario.
 func Test_BDDSteps_PerScenarioCleanup(t *testing.T) {
 	s := newBDDSteps(t)
 	ctx := context.Background()
