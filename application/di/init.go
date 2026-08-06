@@ -19,7 +19,6 @@ package di
 
 import (
 	"context"
-	"sync"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
@@ -59,16 +58,6 @@ import (
 	performance2 "github.com/snyk/snyk-ls/internal/observability/performance"
 )
 
-var (
-	scanInitializer       initialize.Initializer               //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
-	authenticationService authentication.AuthenticationService //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
-	learnService          learn.Service                        //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
-	initMutex             = &sync.Mutex{}                      //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
-	treeEmitterInstance   *treeview.TreeScanStateEmitter       //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
-	configResolver        types.ConfigResolverInterface        //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
-	commandService        types.CommandService                 //nolint:gochecknoglobals // legacy process-global DI state; targeted for elimination (IDE-2036)
-)
-
 type Dependencies struct {
 	AuthenticationService authentication.AuthenticationService
 	ConfigResolver        types.ConfigResolverInterface
@@ -78,10 +67,14 @@ type Dependencies struct {
 	LdxSyncService        command.LdxSyncService
 	ScanStateAggregator   scanstates.Aggregator
 	InlineValueProvider   snyk.InlineValueProvider
-	TreeEmitter           command.TreeEmitter
-	// Handler-accessed dependencies (previously read via di.*() globals).
-	// Note: Initializer is intentionally absent — it is a process-lifecycle
-	// dependency used during startup only.
+	// TreeEmitter is the concrete type rather than command.TreeEmitter because
+	// the server owns its disposal on shutdown, and disposal is a lifecycle
+	// concern that the consumer-facing interface has no reason to carry. Nil
+	// when emitter construction failed; Dispose tolerates that.
+	TreeEmitter *treeview.TreeScanStateEmitter
+	// Handler-accessed dependencies. Only what handlers read belongs here, which
+	// is why initialize.Initializer does not: no handler reads it, it is consumed
+	// once during startup by NewDelegatingScanner.
 	Scanner           scanner2.Scanner
 	HoverService      hover.Service
 	ScanNotifier      scanner2.ScanNotifier
@@ -102,15 +95,14 @@ type Dependencies struct {
 	ScanCancel context.CancelFunc
 }
 
-// buildDependencies constructs a fully-initialized set of production dependencies
-// using only local variables, so multiple callers (e.g. parallel smoke-test servers)
-// are safe to run concurrently without data races on package-level globals.
-// It returns the Dependencies struct, the initialize.Initializer, and the concrete
-// *treeview.TreeScanStateEmitter (nil when creation failed) so Init() can assign
-// the global treeEmitterInstance without a runtime type assertion.
-func buildDependencies(engine workflow.Engine, tokenService types.TokenService, progressOwner *progress.Tracker) (Dependencies, initialize.Initializer, *treeview.TreeScanStateEmitter) {
+// Init constructs a fully-initialized set of production dependencies using only
+// local variables, so multiple callers (e.g. parallel smoke-test servers) are
+// safe to run concurrently. The caller owns the returned graph, including
+// disposing Dependencies.TreeEmitter and calling Dependencies.ScanCancel.
+func Init(engine workflow.Engine, tokenService types.TokenService) Dependencies {
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
+	progressOwner := progress.NewTracker(logger)
 
 	gafConfiguration := conf
 	gafConfiguration.Set(configuration.STOP_REQUESTS_WITHOUT_AUTH, true)
@@ -222,86 +214,5 @@ func buildDependencies(engine workflow.Engine, tokenService types.TokenService, 
 		ScanCtx:               localScanCtx,
 		ScanCancel:            localScanCancel,
 	}
-	return deps, localScanInitializer, localTreeEmitterInstance
-}
-
-func Init(engine workflow.Engine, tokenService types.TokenService) Dependencies {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-
-	if treeEmitterInstance != nil {
-		treeEmitterInstance.Dispose()
-	}
-
-	globalOwner := progress.NewTracker(engine.GetLogger())
-	deps, initializer, treeEmitter := buildDependencies(engine, tokenService, globalOwner)
-
-	// Populate package-level globals for accessor functions.
-	configResolver = deps.ConfigResolver
-	authenticationService = deps.AuthenticationService
-	learnService = deps.LearnService
-	treeEmitterInstance = treeEmitter
-	commandService = deps.CommandService
-	scanInitializer = initializer
-
 	return deps
-}
-
-// RealDependencies builds a fully-initialized set of production dependencies
-// using only local variables. It mirrors Init but never writes to any
-// package-level global, so multiple callers (e.g. parallel smoke-test servers)
-// are safe to run concurrently without a data race.
-func RealDependencies(engine workflow.Engine, tokenService types.TokenService) Dependencies {
-	owner := progress.NewTracker(engine.GetLogger())
-	deps, _, _ := buildDependencies(engine, tokenService, owner)
-	return deps
-}
-
-/*
-TODO Accessors: This should go away, since all dependencies should be satisfied at startup-time, if needed for testing
-they can be returned by the test helper for unit/integration tests
-*/
-
-func AuthenticationService() authentication.AuthenticationService {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return authenticationService
-}
-
-func Initializer() initialize.Initializer {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return scanInitializer
-}
-
-func LearnService() learn.Service {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return learnService
-}
-
-func DisposeTreeEmitter() {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	if treeEmitterInstance != nil {
-		treeEmitterInstance.Dispose()
-	}
-}
-
-func ConfigResolver() types.ConfigResolverInterface {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return configResolver
-}
-
-func SetConfigResolver(resolver types.ConfigResolverInterface) {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	configResolver = resolver
-}
-
-func CommandService() types.CommandService {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return commandService
 }

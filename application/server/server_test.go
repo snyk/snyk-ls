@@ -164,7 +164,8 @@ func setupServer(
 	// Initialize dependencies
 	var deps di.Dependencies
 	if cfg.useRealDI {
-		deps = di.RealDependencies(engine, tokenService)
+		deps = di.Init(engine, tokenService)
+		t.Cleanup(deps.TreeEmitter.Dispose)
 	} else {
 		deps = di.TestInit(t, engine, tokenService, cfg.overrideDeps)
 
@@ -242,7 +243,7 @@ func (s *sentinelHoverService) GetHover(_ types.FilePath, _ types.Position) hove
 
 // TestTextDocumentHover_UsesHoverServiceFromContext verifies that textDocumentHover
 // reads HoverService from the request context (injected via withContext) rather than
-// calling the di.HoverService() global.
+// from any other source.
 func TestTextDocumentHover_UsesHoverServiceFromContext(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	logger := zerolog.Nop()
@@ -261,7 +262,7 @@ func TestTextDocumentHover_UsesHoverServiceFromContext(t *testing.T) {
 	_, err := h(t.Context(), &req)
 
 	require.NoError(t, err)
-	require.True(t, sentinel.called, "textDocumentHover should use HoverService from context, not di global")
+	require.True(t, sentinel.called, "textDocumentHover should use HoverService from the request context")
 }
 
 func TestWithContext_InjectsAuthenticationService(t *testing.T) {

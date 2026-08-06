@@ -1574,7 +1574,6 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 
 		// Set up a real ConfigResolver so validateLockedFields can use it.
 		resolver := testutil.DefaultConfigResolver(setup.engine)
-		di.SetConfigResolver(resolver)
 
 		// Incoming update: switch to org-B AND change SnykCodeEnabled (which org-B locks)
 		newOrg := "org-b"
@@ -1612,7 +1611,6 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 		// org-B has no locks
 
 		resolver := testutil.DefaultConfigResolver(setup.engine)
-		di.SetConfigResolver(resolver)
 
 		// Incoming update: switch to org-B AND change SnykCodeEnabled
 		newOrg := "org-b"
@@ -1771,7 +1769,6 @@ func Test_validateLockedFields_RestoresConfigAfterValidation(t *testing.T) {
 	types.WriteOrgConfigToConfiguration(prefixKeyConf, orgConfigB)
 
 	resolver := testutil.DefaultConfigResolver(setup.engine)
-	di.SetConfigResolver(resolver)
 
 	// Capture original config state
 	folderPath := string(types.PathKey(setup.folderPath))

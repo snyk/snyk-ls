@@ -53,8 +53,9 @@ func TestDependencies_AllFieldsPopulated(t *testing.T) {
 	assert.NotNil(t, deps.ScanNotifier, "ScanNotifier must be set")
 	assert.NotNil(t, deps.CodeActionService, "CodeActionService must be set")
 	assert.NotNil(t, deps.Installer, "Installer must be set")
-	// Initializer is a process-lifecycle dep intentionally absent from di.Dependencies;
-	// it is only set by di.Init() (production path), not di.TestInit().
+	// Initializer is absent from di.Dependencies by design: the struct carries what
+	// handlers read, and no handler reads the Initializer — it is consumed once at
+	// startup by NewDelegatingScanner.
 }
 
 // TestTestInit_ReturnedDepsAreIndependent verifies that two consecutive TestInit
@@ -79,11 +80,11 @@ func TestTestInit_ReturnedDepsAreIndependent(t *testing.T) {
 		"each TestInit call must return an independent ErrorReporter, not a shared global")
 }
 
-// TestRealDependencies_ParallelSafe confirms that concurrent calls to
-// RealDependencies() with separate engines do not race on any shared global
-// state. Uses unit-test engines (no network required) because the test is
-// exercising constructor isolation, not end-to-end scanning.
-func TestRealDependencies_ParallelSafe(t *testing.T) {
+// TestInit_ParallelSafe confirms that concurrent calls to Init() with separate
+// engines do not race on any shared global state. Uses unit-test engines (no
+// network required) because the test is exercising constructor isolation, not
+// end-to-end scanning.
+func TestInit_ParallelSafe(t *testing.T) {
 	t.Parallel()
 	const N = 3
 	type pair struct {
@@ -102,12 +103,13 @@ func TestRealDependencies_ParallelSafe(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			results[i] = di.RealDependencies(pairs[i].engine, pairs[i].tokenService)
+			results[i] = di.Init(pairs[i].engine, pairs[i].tokenService)
 		}()
 	}
 	wg.Wait()
 
 	for i, deps := range results {
+		t.Cleanup(deps.TreeEmitter.Dispose)
 		require.NotNil(t, deps.Scanner, "Scanner nil for instance %d", i)
 		require.NotNil(t, deps.Notifier, "Notifier nil for instance %d", i)
 		require.NotNil(t, deps.AuthenticationService, "AuthService nil for instance %d", i)

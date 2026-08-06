@@ -32,7 +32,6 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
-	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/oss"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -49,28 +48,25 @@ func Test_Scan(t *testing.T) {
 	testutil.CreateDummyProgressListener(t)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 	ctx := t.Context()
-	di.Init(engine, tokenService)
+	deps := di.Init(engine, tokenService)
+	t.Cleanup(deps.TreeEmitter.Dispose)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
-	authenticationService := di.AuthenticationService()
-	authenticationService.ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
+	deps.AuthenticationService.ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
 
 	// Use the CLI binary pre-downloaded by TestMain when running the full smoke suite.
 	// Fall back to an on-demand download only when running this test in isolation.
 	if sharedCLIPath != "" {
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), sharedCLIPath)
 	} else if !config.CliInstalled(engine.GetConfiguration()) {
-		exec := (&install.Discovery{}).ExecutableName(false)
-		destination := filepath.Join(t.TempDir(), exec)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), destination)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), true)
-		_ = di.Initializer().Init(ctx)
+		_, err := downloadCLI(engine, t.TempDir())
+		require.NoError(t, err, "on-demand CLI download should succeed")
 	}
 
 	instrumentor := performance.NewInstrumentor()
 	er := error_reporting.NewTestErrorReporter(engine)
 	notifier := notification.NewMockNotifier()
 	cliExecutor := cli.NewExecutor(engine, er, notifier, testutil.DefaultConfigResolver(engine))
-	scanner := oss.NewCLIScanner(engine, instrumentor, er, cliExecutor, di.LearnService(), notifier, di.ConfigResolver(), testutil.NewTestProgressTracker(t))
+	scanner := oss.NewCLIScanner(engine, instrumentor, er, cliExecutor, deps.LearnService, notifier, deps.ConfigResolver, testutil.NewTestProgressTracker(t))
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(filepath.Join(workingDir, "testdata", "package.json"))

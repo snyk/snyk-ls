@@ -56,30 +56,28 @@ func (s *diTestHoverService) Channel() chan hover.DocumentHovers {
 	return make(chan hover.DocumentHovers, 1)
 }
 
-// Test_withContext_injectsHoverService_isolatedFromGlobal proves that
-// withContext injects the HoverService from the deps struct into the handler
-// context, and that the injected value is the deps-provided instance — NOT
-// the di.HoverService() package global.
+// Test_withContext_injectsHoverService proves that withContext injects the
+// HoverService held by the deps struct it is handed, not one captured earlier.
 //
 // This is the key regression guard for IDE-1898: if withContext stops injecting
-// HoverService, or a handler reverts to calling di.HoverService() directly,
-// the two sentinels will differ and the assertions will fail.
-func Test_withContext_injectsHoverService_isolatedFromGlobal(t *testing.T) {
+// HoverService, or a handler resolves it from anywhere else, the two sentinels
+// will differ and the assertions will fail.
+func Test_withContext_injectsHoverService(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 
-	globalSentinel := &diTestHoverService{}
+	baseSentinel := &diTestHoverService{}
 	contextSentinel := &diTestHoverService{}
 
-	// Set the di package-level global to globalSentinel. Use the returned deps
-	// as a base so all mandatory fields (e.g. ConfigResolver) are populated.
+	// Seed the base deps with baseSentinel so all mandatory fields (e.g.
+	// ConfigResolver) are populated alongside it.
 	baseDeps := di.TestInit(t, engine, tokenService, &di.Dependencies{
-		HoverService: globalSentinel,
+		HoverService: baseSentinel,
 	})
 
 	// Override only HoverService — withContext must inject contextSentinel, not
-	// the globalSentinel that was passed to TestInit above.
+	// the baseSentinel that was passed to TestInit above.
 	deps := baseDeps
 	deps.HoverService = contextSentinel
 
@@ -95,9 +93,9 @@ func Test_withContext_injectsHoverService_isolatedFromGlobal(t *testing.T) {
 	gotSentinel, ok := gotService.(*diTestHoverService)
 	require.True(t, ok, "expected *diTestHoverService from context")
 	assert.True(t, gotSentinel == contextSentinel,
-		"withContext must inject the deps.HoverService into context, not read di.HoverService() global")
-	assert.True(t, gotSentinel != globalSentinel,
-		"handler must not use the di.HoverService() global")
+		"withContext must inject the deps.HoverService it was handed into the context")
+	assert.True(t, gotSentinel != baseSentinel,
+		"handler must not use the HoverService from the pre-override base deps")
 }
 
 // Test_withContext_injectsNewHandlerDependencies verifies that withContext

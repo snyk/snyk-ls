@@ -47,6 +47,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/ide/treeview"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -285,7 +286,7 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	handlers["textDocument/willSave"] = enrich(noOpHandler())
 	handlers["textDocument/willSaveWaitUntil"] = enrich(noOpHandler())
 	handlers["codeAction/resolve"] = enrich(codeActionResolveHandler(logger, deps.CodeActionService, srv))
-	handlers["shutdown"] = enrich(shutdownHandler(progressStopChan, scanCancel))
+	handlers["shutdown"] = enrich(shutdownHandler(progressStopChan, scanCancel, deps.TreeEmitter))
 	handlers["exit"] = enrich(exitHandler(srv))
 	handlers["workspace/didChangeWorkspaceFolders"] = enrich(workspaceDidChangeWorkspaceFoldersHandler(conf, engine, srv, scanCtx))
 	handlers["workspace/willDeleteFiles"] = enrich(workspaceWillDeleteFilesHandler(conf))
@@ -1107,7 +1108,7 @@ func monitorClientProcess(pid int) time.Duration {
 	return time.Since(start)
 }
 
-func shutdownHandler(progressStopChan chan<- bool, scanCancel context.CancelFunc) jrpc2.Handler {
+func shutdownHandler(progressStopChan chan<- bool, scanCancel context.CancelFunc, treeEmitter *treeview.TreeScanStateEmitter) jrpc2.Handler {
 	return handler.New(func(ctx context.Context) (any, error) {
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "Shutdown").Logger()
 		logger.Info().Msg("ENTERING")
@@ -1117,7 +1118,7 @@ func shutdownHandler(progressStopChan chan<- bool, scanCancel context.CancelFunc
 		if cacheCheckCancel != nil {
 			cacheCheckCancel()
 		}
-		di.DisposeTreeEmitter()
+		treeEmitter.Dispose()
 		// Non-blocking: if initialize was never called the listener goroutine was
 		// never started, so no one reads the channel. A second shutdown call (e.g.
 		// from t.Cleanup after an explicit shutdown in the test body) must not block.

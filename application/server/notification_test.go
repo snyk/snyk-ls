@@ -243,10 +243,6 @@ func TestShowMessageRequest(t *testing.T) {
 		engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
 		actionCommandMap := data_structure.NewOrderedMap[types.MessageAction, types.CommandData]()
 		expectedTitle := "test title"
-		// data, err := command.CreateFromCommandData(snyk.CommandData{
-		// 	CommandId: snyk.OpenBrowserCommand,
-		// 	Arguments: []any{"https://snyk.io"},
-		// }, loc.Server, di.AuthenticationService(), di.LearnService(), di.Notifier(), nil, nil)
 		data := types.CommandData{
 			CommandId: types.OpenBrowserCommand,
 			Arguments: []any{"https://snyk.io"},

@@ -67,7 +67,7 @@ func buildInitParams(t *testing.T, n int) types.InitializeParams {
 // disableAutoScan prevents the initialized handler from calling ScanWorkspace.
 // SettingScanAutomatic is folder-scoped; the resolver checks remoteOrg (IsLocked) before
 // UserGlobal, so we pin it via RemoteOrgKey with IsLocked:true.  effectiveOrg="" because
-// di.ConfigResolver().GetBool(SettingScanAutomatic, nil) resolves with nil folderConfig.
+// the resolver reads GetBool(SettingScanAutomatic, nil) with a nil folderConfig.
 func disableAutoScan(t *testing.T, conf interface{ Set(string, any) }) {
 	t.Helper()
 	conf.Set(
