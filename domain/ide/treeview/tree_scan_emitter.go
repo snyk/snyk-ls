@@ -85,8 +85,8 @@ func (e *TreeScanStateEmitter) Emit(state scanstates.StateSnapshot) {
 }
 
 // Dispose stops the background render goroutine. Safe to call multiple times,
-// and on a nil receiver: emitter construction is allowed to fail, so callers
-// hold an optional emitter and would otherwise all need their own nil check.
+// and on a nil receiver: emitter construction is allowed to fail, so owners
+// hold an optional emitter and can dispose it unconditionally.
 func (e *TreeScanStateEmitter) Dispose() {
 	if e == nil {
 		return
