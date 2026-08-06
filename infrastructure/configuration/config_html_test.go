@@ -972,3 +972,113 @@ func TestGetCliReleaseChannel(t *testing.T) {
 		assert.Equal(t, "v1.1292.0", channel)
 	})
 }
+
+// renderFolderPaneWithEffectiveConfig renders the config dialog for a single folder whose
+// EffectiveConfig is exactly what the test supplies (bypassing computeEffectiveConfig), matching
+// the pattern used by TestConfigHtmlRenderer_SourceIndicatorsInOutput.
+func renderFolderPaneWithEffectiveConfig(t *testing.T, effectiveConfig map[string]types.EffectiveValue) string {
+	t.Helper()
+	engine := testutil.UnitTest(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+	mockFolder := mock_types.NewMockFolder(ctrl)
+
+	folderPath := types.FilePath("/path/to/a_folder")
+	mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
+	mockFolder.EXPECT().Name().Return("a_folder").AnyTimes()
+	mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
+	mockWorkspace.EXPECT().GetFolderContaining(folderPath).Return(mockFolder).AnyTimes()
+	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
+
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
+	require.NoError(t, err)
+
+	folderConfigs := []types.FolderConfig{
+		{
+			FolderPath:      folderPath,
+			ConfigResolver:  testutil.DefaultConfigResolver(engine),
+			EffectiveConfig: effectiveConfig,
+		},
+	}
+
+	return renderer.GetConfigHtml(map[string]any{}, folderConfigs)
+}
+
+func TestConfigHtml_FolderAutonomyRendersTwoOptionsOnly(t *testing.T) {
+	html := renderFolderPaneWithEffectiveConfig(t, map[string]types.EffectiveValue{})
+
+	re := regexp.MustCompile(`(?s)<select id="folder_0_ambient_canary_autonomy".*?</select>`)
+	match := re.FindString(html)
+	require.NotEmpty(t, match, "expected an ambient_canary_autonomy select in the rendered HTML")
+
+	optionCount := strings.Count(match, "<option")
+	assert.Equal(t, 2, optionCount, "control must offer exactly two options, no unset/use-default option")
+	assert.Contains(t, match, `value="notify_only"`)
+	assert.Contains(t, match, `value="autonomous_fixes"`)
+}
+
+func TestConfigHtml_AutonomySelectionPersistsPerFolder(t *testing.T) {
+	html := renderFolderPaneWithEffectiveConfig(t, map[string]types.EffectiveValue{
+		"ambient_canary_autonomy": {Value: "notify_only", Source: "user-override"},
+	})
+
+	re := regexp.MustCompile(`(?s)<select id="folder_0_ambient_canary_autonomy".*?</select>`)
+	match := re.FindString(html)
+	require.NotEmpty(t, match)
+
+	notifyOpt := regexp.MustCompile(`<option value="notify_only"[^>]*>`).FindString(match)
+	autonomousOpt := regexp.MustCompile(`<option value="autonomous_fixes"[^>]*>`).FindString(match)
+	assert.Contains(t, notifyOpt, "selected", "the explicitly-saved choice must still be selected on reopen")
+	assert.NotContains(t, autonomousOpt, "selected")
+}
+
+func TestConfigHtml_ExplicitFolderAutonomyShowsUserOverrideIndicator(t *testing.T) {
+	html := renderFolderPaneWithEffectiveConfig(t, map[string]types.EffectiveValue{
+		"ambient_canary_autonomy": {Value: "notify_only", Source: "user-override"},
+	})
+
+	re := regexp.MustCompile(`(?s)<div class="override-indicator-wrapper[^"]*"[^>]*>\s*<div class="form-group half-width">\s*<label for="folder_0_ambient_canary_autonomy".*?</div>\s*</div>`)
+	block := re.FindString(html)
+	require.NotEmpty(t, block, "expected the ambient_canary_autonomy wrapper block")
+
+	assert.Contains(t, block, "source-user-override", "explicit choice must render the user-override wrapper class")
+	assert.Contains(t, block, "👤", "explicit choice must render the per-project source indicator")
+}
+
+func TestConfigHtml_UnsetFolderAutonomyShowsNoOverrideIndicator(t *testing.T) {
+	html := renderFolderPaneWithEffectiveConfig(t, map[string]types.EffectiveValue{})
+
+	re := regexp.MustCompile(`(?s)<div class="override-indicator-wrapper[^"]*"[^>]*>\s*<div class="form-group half-width">\s*<label for="folder_0_ambient_canary_autonomy".*?</div>\s*</div>`)
+	block := re.FindString(html)
+	require.NotEmpty(t, block, "expected the ambient_canary_autonomy wrapper block")
+
+	assert.NotContains(t, block, "source-user-override")
+	assert.NotContains(t, block, "source-org")
+	assert.NotContains(t, block, "source-indicator", "an untouched folder must show no source indicator at all")
+}
+
+func TestConfigHtml_UnsetFolderAutonomyDoesNotSelectAutonomousFixes(t *testing.T) {
+	html := renderFolderPaneWithEffectiveConfig(t, map[string]types.EffectiveValue{})
+
+	re := regexp.MustCompile(`(?s)<select id="folder_0_ambient_canary_autonomy".*?</select>`)
+	match := re.FindString(html)
+	require.NotEmpty(t, match)
+
+	autonomousOpt := regexp.MustCompile(`<option value="autonomous_fixes"[^>]*>`).FindString(match)
+	assert.NotContains(t, autonomousOpt, "selected", "an unset folder must not render an explicit choice; the registry default is empty, not autonomous_fixes")
+}
+
+func TestConfigHtml_LockedFolderAutonomyIsDisabled(t *testing.T) {
+	html := renderFolderPaneWithEffectiveConfig(t, map[string]types.EffectiveValue{
+		"ambient_canary_autonomy": {Value: "notify_only", Source: "ldx-sync-locked"},
+	})
+
+	re := regexp.MustCompile(`(?s)<select id="folder_0_ambient_canary_autonomy".*?</select>`)
+	match := re.FindString(html)
+	require.NotEmpty(t, match)
+
+	assert.Contains(t, match, "disabled", "org-locked folder autonomy control must be disabled")
+}

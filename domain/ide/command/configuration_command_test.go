@@ -68,3 +68,18 @@ func TestConstructSettingsFromConfig_AdditionalParamsAndEnv(t *testing.T) {
 	assert.True(t, ok, "additional_environment must be present in settings map")
 	assert.Equal(t, "A=B;C=D", envVal)
 }
+
+// Test_computeEffectiveConfig_IncludesAmbientCanaryAutonomy guards the exact regression IDE-2426
+// calls out: computeEffectiveConfig is the one non-generic place a new per-folder dialog setting
+// must be registered — omitting it here renders the setting blank in the dialog even though
+// registration/storage/transmission are all otherwise correct.
+func Test_computeEffectiveConfig_IncludesAmbientCanaryAutonomy(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
+	fc.ConfigResolver = testutil.DefaultConfigResolver(engine)
+
+	effectiveConfig := computeEffectiveConfig(fc)
+
+	_, ok := effectiveConfig[types.SettingAmbientCanaryAutonomy]
+	assert.True(t, ok, "computeEffectiveConfig must include ambient_canary_autonomy so the dialog can render it")
+}
