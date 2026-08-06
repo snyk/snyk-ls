@@ -18,7 +18,6 @@ package code
 
 import (
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
 	codeClientScan "github.com/snyk/code-client-go/scan"
@@ -29,31 +28,30 @@ import (
 )
 
 type trackerFactory struct {
-	logger          *zerolog.Logger
-	progressChannel chan types.ProgressParams
+	progressOwner *progress.Tracker
 }
 
-func NewCodeTrackerFactory(logger *zerolog.Logger, progressChannel chan types.ProgressParams) codeClientScan.TrackerFactory {
-	return &trackerFactory{logger: logger, progressChannel: progressChannel}
+func NewCodeTrackerFactory(progressOwner *progress.Tracker) codeClientScan.TrackerFactory {
+	return &trackerFactory{progressOwner: progressOwner}
 }
 
+// GenerateTracker takes the owner's channel rather than a registered task: this
+// tracker mints its own token and code-client-go exposes no cancel hook for the
+// upload phase, so a registry entry would never be resolved nor released.
 func (t trackerFactory) GenerateTracker() codeClientScan.Tracker {
-	newTracker := progress.NewTaskWithChannel(t.progressChannel, true, t.logger)
-	return newCodeTracker(newTracker.GetChannel(), newTracker.GetCancelChannel())
+	return newCodeTracker(t.progressOwner.Channel())
 }
 
 type tracker struct {
-	token         types.ProgressToken
-	finished      bool
-	channel       chan types.ProgressParams
-	cancelChannel chan bool
+	token    types.ProgressToken
+	finished bool
+	channel  chan types.ProgressParams
 }
 
-func newCodeTracker(channel chan types.ProgressParams, cancelChannel chan bool) codeClientScan.Tracker {
+func newCodeTracker(channel chan types.ProgressParams) codeClientScan.Tracker {
 	return &tracker{
-		channel:       channel,
-		cancelChannel: cancelChannel,
-		finished:      false,
+		channel:  channel,
+		finished: false,
 	}
 }
 

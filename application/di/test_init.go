@@ -159,11 +159,9 @@ func buildTestDependencies(t *testing.T, engine workflow.Engine, tokenService ty
 	} else {
 		localProgressOwner = progress.NewTracker(logger)
 	}
-	localProgressChannel := localProgressOwner.Channel()
-
-	localSnykCodeScanner := code.New(engine, localInstrumentor, localSnykApiClient, localCodeErrorReporter, localLearnService, localFeatureFlagService, localNotifier, localCodeInstrumentor, localCodeErrorReporter, code.NewFakeCodeScannerClient, localConfigResolver, localProgressChannel)
-	localOpenSourceScanner := oss.NewCLIScanner(engine, localInstrumentor, localErrorReporter, localSnykCli, localLearnService, localNotifier, localConfigResolver, localProgressChannel)
-	localIaCScanner := iac.New(gafConfiguration, logger, localInstrumentor, localErrorReporter, localSnykCli, localConfigResolver, localProgressChannel)
+	localSnykCodeScanner := code.New(engine, localInstrumentor, localSnykApiClient, localCodeErrorReporter, localLearnService, localFeatureFlagService, localNotifier, localCodeInstrumentor, localCodeErrorReporter, code.NewFakeCodeScannerClient, localConfigResolver, localProgressOwner)
+	localOpenSourceScanner := oss.NewCLIScanner(engine, localInstrumentor, localErrorReporter, localSnykCli, localLearnService, localNotifier, localConfigResolver, localProgressOwner)
+	localIaCScanner := iac.New(gafConfiguration, logger, localInstrumentor, localErrorReporter, localSnykCli, localConfigResolver, localProgressOwner)
 	localScanner := scanner2.NewDelegatingScanner(engine, tokenService, localScanInitializer, localInstrumentor, localScanNotifier, localSnykApiClient, localAuthenticationService, localNotifier, localScanPersister, localScanStateAggregator, localConfigResolver, localSnykCodeScanner, localIaCScanner, localOpenSourceScanner)
 
 	var localHoverService hover.Service

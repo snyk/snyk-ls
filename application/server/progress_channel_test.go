@@ -62,27 +62,27 @@ func TestValidateProgressChannelIsolation(t *testing.T) {
 	chFromB := depsB.ProgressTracker.Channel()
 
 	// Create a task routed through server A's channel.
-	trackerA := progress.NewTaskWithChannel(chFromA, false, &logger)
-	trackerA.Begin("scan-A")
-	trackerA.End()
+	taskA := ownerA.New(false)
+	taskA.Begin("scan-A")
+	taskA.End()
 
 	// chA must receive events; chB must not.
 	assert.Eventually(t, func() bool { return len(chFromA) > 0 }, time.Second, time.Millisecond,
-		"server A's channel must receive progress events from trackerA")
+		"server A's channel must receive progress events from taskA")
 	assert.Never(t, func() bool { return len(chFromB) > 0 }, 50*time.Millisecond, time.Millisecond,
-		"server B's channel must not receive progress events from trackerA")
+		"server B's channel must not receive progress events from taskA")
 
 	// Drain chA and now verify server B's channel.
 	for len(chFromA) > 0 {
 		<-chFromA
 	}
 
-	trackerB := progress.NewTaskWithChannel(chFromB, false, &logger)
-	trackerB.Begin("scan-B")
-	trackerB.End()
+	taskB := ownerB.New(false)
+	taskB.Begin("scan-B")
+	taskB.End()
 
 	assert.Eventually(t, func() bool { return len(chFromB) > 0 }, time.Second, time.Millisecond,
-		"server B's channel must receive progress events from trackerB")
+		"server B's channel must receive progress events from taskB")
 	assert.Never(t, func() bool { return len(chFromA) > 0 }, 50*time.Millisecond, time.Millisecond,
-		"server A's channel must not receive progress events from trackerB")
+		"server A's channel must not receive progress events from taskB")
 }

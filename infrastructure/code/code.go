@@ -98,7 +98,7 @@ type Scanner struct {
 	codeErrorReporter codeClientObservability.ErrorReporter
 	codeScanner       func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error)
 	configResolver    types.ConfigResolverInterface
-	progressChannel   chan types.ProgressParams
+	progressOwner     *progress.Tracker
 }
 
 func (sc *Scanner) BundleHashes() map[types.FilePath]string {
@@ -116,7 +116,7 @@ func (sc *Scanner) AddBundleHash(key types.FilePath, value string) {
 	sc.bundleHashes[key] = value
 }
 
-func New(engine workflow.Engine, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, featureFlagService featureflag.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter, codeScanner func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error), configResolver types.ConfigResolverInterface, progressChannel chan types.ProgressParams) *Scanner {
+func New(engine workflow.Engine, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, featureFlagService featureflag.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter, codeScanner func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error), configResolver types.ConfigResolverInterface, progressOwner *progress.Tracker) *Scanner {
 	return &Scanner{
 		IssueCache:         issuecache.NewIssueCache(product.ProductCode),
 		SnykApiClient:      apiClient,
@@ -135,7 +135,7 @@ func New(engine workflow.Engine, instrumentor performance.Instrumentor, apiClien
 		codeErrorReporter:  codeErrorReporter,
 		codeScanner:        codeScanner,
 		configResolver:     configResolver,
-		progressChannel:    progressChannel,
+		progressOwner:      progressOwner,
 	}
 }
 
@@ -266,7 +266,7 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, l
 		Int("fileCount", len(filesToBeScanned)).
 		Msg("Code scanner: files to be scanned")
 
-	t := progress.NewTaskWithChannel(sc.progressChannel, true, sc.engine.GetLogger())
+	t := sc.progressOwner.New(true)
 	go func() { t.CancelOrDone(cancel, ctx.Done()) }()
 
 	t.BeginWithMessage(string("Snyk Code: scanning "+folderPath), "starting scan")
@@ -549,7 +549,7 @@ func CreateCodeScanner(scanner *Scanner, folderConfig *types.FolderConfig) (code
 	return codeClient.NewCodeScanner(
 		codeConfig,
 		httpClient,
-		codeClient.WithTrackerFactory(NewCodeTrackerFactory(scanner.engine.GetLogger(), scanner.progressChannel)),
+		codeClient.WithTrackerFactory(NewCodeTrackerFactory(scanner.progressOwner)),
 		codeClient.WithLogger(scanner.engine.GetLogger()),
 		codeClient.WithInstrumentor(scanner.codeInstrumentor),
 		codeClient.WithErrorReporter(scanner.codeErrorReporter),

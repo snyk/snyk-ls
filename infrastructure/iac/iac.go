@@ -80,10 +80,10 @@ type Scanner struct {
 	conf           configuration.Configuration
 	logger         *zerolog.Logger
 	configResolver types.ConfigResolverInterface
-	progressCh     chan types.ProgressParams
+	progressOwner  *progress.Tracker
 }
 
-func New(conf configuration.Configuration, logger *zerolog.Logger, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, configResolver types.ConfigResolverInterface, progressCh chan types.ProgressParams) *Scanner {
+func New(conf configuration.Configuration, logger *zerolog.Logger, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, configResolver types.ConfigResolverInterface, progressOwner *progress.Tracker) *Scanner {
 	return &Scanner{
 		instrumentor:   instrumentor,
 		errorReporter:  errorReporter,
@@ -93,7 +93,7 @@ func New(conf configuration.Configuration, logger *zerolog.Logger, instrumentor 
 		conf:           conf,
 		logger:         logger,
 		configResolver: configResolver,
-		progressCh:     progressCh,
+		progressOwner:  progressOwner,
 	}
 }
 
@@ -156,7 +156,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 		logger.Debug().Msg("IaC scan skipped: path is not a supported IaC file or directory")
 		return []types.Issue{}, nil
 	}
-	p := progress.NewTaskWithChannel(iac.progressCh, true, iac.logger)
+	p := iac.progressOwner.New(true)
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
 	p.BeginUnquantifiableLength("Scanning for Snyk IaC issues", string(pathToScan))
 	defer p.EndWithMessage("Snyk Iac Scan completed.")

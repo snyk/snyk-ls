@@ -18,7 +18,6 @@
 package progress
 
 import (
-	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/internal/types"
@@ -38,32 +37,5 @@ func NewTestTask(channel chan types.ProgressParams, cancelChannel chan bool, log
 		cancellable:          true,
 		lastReportPercentage: -1,
 		logger:               logger,
-	}
-}
-
-// NewTaskWithChannel creates a standalone Task that routes progress events to
-// the provided channel. This is the correct constructor for per-server
-// isolation: each server passes its own channel so progress events are never
-// misrouted to another server's listener.
-//
-// Unlike Tracker.New(), this constructor does NOT register the task with any
-// Tracker. Use it when you already hold a channel reference (e.g. from
-// Tracker.Channel()) and need a Task with a specific cancellable setting but
-// no owner-managed registry entry.
-//
-// WARNING: the returned Task has no owner, so Task.IsCanceled() always reports
-// false and no Tracker can cancel it — a $/cancelRequest for its token will be
-// dropped. Only the holder of the Task can signal it, by writing to
-// Task.GetCancelChannel() directly. If the caller needs registry-driven
-// cancellation, use Tracker.New() instead.
-func NewTaskWithChannel(channel chan types.ProgressParams, cancellable bool, logger *zerolog.Logger) *Task {
-	return &Task{
-		owner:         nil,
-		channel:       channel,
-		cancelChannel: make(chan bool, 1),
-		cancellable:   cancellable,
-		finished:      false,
-		token:         types.ProgressToken(uuid.NewString()),
-		logger:        logger,
 	}
 }

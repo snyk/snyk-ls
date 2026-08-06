@@ -42,6 +42,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/scans"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -569,7 +570,7 @@ func Test_NewCLIScanner_ProgressChannelIsolation(t *testing.T) {
 	newScanner := func(progressCh chan types.ProgressParams) types.ProductScanner {
 		return NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine),
 			cli.NewTestExecutor(engine), learnMock, notification.NewMockNotifier(),
-			defaultResolver(t, engine), progressCh)
+			defaultResolver(t, engine), progress.NewTrackerWithChannel(progressCh, engine.GetLogger()))
 	}
 
 	// Both scanners and both channels exist before any scan runs, so an empty

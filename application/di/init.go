@@ -176,11 +176,10 @@ func buildDependencies(engine workflow.Engine, tokenService types.TokenService, 
 	localCodeInstrumentor := code.NewCodeInstrumentor()
 	localCodeErrorReporter := code.NewCodeErrorReporter(localErrorReporter)
 
-	progressCh := progressOwner.Channel()
-	localIaCScanner := iac.New(conf, logger, localInstrumentor, localErrorReporter, localSnykCli, localConfigResolver, progressCh)
-	localOpenSourceScanner := oss.NewCLIScanner(engine, localInstrumentor, localErrorReporter, localSnykCli, localLearnService, localNotifier, localConfigResolver, progressCh)
+	localIaCScanner := iac.New(conf, logger, localInstrumentor, localErrorReporter, localSnykCli, localConfigResolver, progressOwner)
+	localOpenSourceScanner := oss.NewCLIScanner(engine, localInstrumentor, localErrorReporter, localSnykCli, localLearnService, localNotifier, localConfigResolver, progressOwner)
 	localScanNotifier, _ := appNotification.NewScanNotifier(localNotifier, localConfigResolver)
-	localSnykCodeScanner := code.New(engine, localInstrumentor, localSnykApiClient, localCodeErrorReporter, localLearnService, localFeatureFlagService, localNotifier, localCodeInstrumentor, localCodeErrorReporter, code.CreateCodeScanner, localConfigResolver, progressCh)
+	localSnykCodeScanner := code.New(engine, localInstrumentor, localSnykApiClient, localCodeErrorReporter, localLearnService, localFeatureFlagService, localNotifier, localCodeInstrumentor, localCodeErrorReporter, code.CreateCodeScanner, localConfigResolver, progressOwner)
 	localSecretsScanner := secrets.New(conf, engine, logger, localInstrumentor, localSnykApiClient, localFeatureFlagService, localNotifier, localConfigResolver)
 
 	localCLIInitializer := cli.NewInitializer(conf, logger, localErrorReporter, localInstaller, localNotifier, localSnykCli, localConfigResolver)
