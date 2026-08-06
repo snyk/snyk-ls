@@ -359,6 +359,20 @@ func (mr *MockFolderMockRecorder) IsAutoScanEnabled() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsAutoScanEnabled", reflect.TypeOf((*MockFolder)(nil).IsAutoScanEnabled))
 }
 
+// IsDeltaAppliedForProduct mocks base method.
+func (m *MockFolder) IsDeltaAppliedForProduct(arg0 product.Product) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsDeltaAppliedForProduct", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsDeltaAppliedForProduct indicates an expected call of IsDeltaAppliedForProduct.
+func (mr *MockFolderMockRecorder) IsDeltaAppliedForProduct(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDeltaAppliedForProduct", reflect.TypeOf((*MockFolder)(nil).IsDeltaAppliedForProduct), arg0)
+}
+
 // IsDeltaFindingsEnabled mocks base method.
 func (m *MockFolder) IsDeltaFindingsEnabled() bool {
 	m.ctrl.T.Helper()
