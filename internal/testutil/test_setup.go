@@ -154,7 +154,6 @@ func UnitTestWithEngine(t *testing.T) (workflow.Engine, *config.TokenServiceImpl
 	})
 	t.Cleanup(func() {
 		cleanupFakeCliFile(conf, logger)
-		progress.CleanupChannels()
 	})
 
 	return engine, ts
@@ -198,24 +197,24 @@ func CLIDownloadLockFileCleanUp(t *testing.T, conf configuration.Configuration) 
 	})
 }
 
-func CreateDummyProgressListener(t *testing.T) {
+func NewTestProgressTracker(t *testing.T) *progress.Tracker {
 	t.Helper()
-	var dummyProgressStopChannel = make(chan bool, 1)
+	return NewDrainedProgressTracker()
+}
 
-	t.Cleanup(func() {
-		dummyProgressStopChannel <- true
-	})
-
+// NewDrainedProgressTracker is usable from TestMain, where there is no *testing.T.
+// Nop logger rather than a test writer: producers can outlive the test, and
+// logging after it finishes panics.
+// ponytail: the drain goroutine never exits — the channel is never closed. Fine
+// for test binaries; close the channel if a leak check ever lands.
+func NewDrainedProgressTracker() *progress.Tracker {
+	logger := zerolog.Nop()
+	owner := progress.NewTracker(&logger)
 	go func() {
-		for {
-			select {
-			case <-progress.ToServerProgressChannel:
-				continue
-			case <-dummyProgressStopChannel:
-				return
-			}
+		for range owner.Channel() {
 		}
 	}()
+	return owner
 }
 
 func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) (workflow.Engine, *config.TokenServiceImpl) {
@@ -247,7 +246,6 @@ func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) (wor
 	CLIDownloadLockFileCleanUp(t, conf)
 	t.Cleanup(func() {
 		cleanupFakeCliFile(conf, logger)
-		progress.CleanupChannels()
 	})
 	return engine, ts
 }

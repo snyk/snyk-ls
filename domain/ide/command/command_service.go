@@ -39,8 +39,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
-var instance types.CommandService
-
 type serviceImpl struct {
 	authService         authentication.AuthenticationService
 	featureFlagService  featureflag.Service
@@ -55,9 +53,17 @@ type serviceImpl struct {
 	engine              workflow.Engine
 	logger              *zerolog.Logger
 	remediationProvider remediation.FolderRemediator
+	// scanCtx is the server-lifetime context injected at construction. Scan commands
+	// that spawn un-awaited goroutines use this context so they are canceled on
+	// server shutdown rather than living forever on context.Background() [IDE-2036].
+	scanCtx context.Context
 }
 
-func NewService(engine workflow.Engine, logger *zerolog.Logger, authService authentication.AuthenticationService, featureFlagService featureflag.Service, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor, ldxSyncService LdxSyncService, configResolver types.ConfigResolverInterface, scanStateFunc func() scanstates.StateSnapshot, remediationProvider remediation.FolderRemediator) types.CommandService {
+// NewService constructs the command service. scanCtx must be the server-lifetime
+// context (sourced from di.Dependencies.ScanCtx) so that background scan goroutines
+// spawned by WorkspaceScanCommand, WorkspaceFolderScanCommand, and ClearCacheCommand
+// are canceled on shutdown [IDE-2036].
+func NewService(engine workflow.Engine, logger *zerolog.Logger, authService authentication.AuthenticationService, featureFlagService featureflag.Service, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor, ldxSyncService LdxSyncService, configResolver types.ConfigResolverInterface, scanStateFunc func() scanstates.StateSnapshot, remediationProvider remediation.FolderRemediator, scanCtx context.Context) types.CommandService { //nolint:revive // context.Context as non-first param: scanCtx is a stored dependency, not a call-scoped context
 	return &serviceImpl{
 		authService:         authService,
 		featureFlagService:  featureFlagService,
@@ -72,17 +78,8 @@ func NewService(engine workflow.Engine, logger *zerolog.Logger, authService auth
 		engine:              engine,
 		logger:              logger,
 		remediationProvider: remediationProvider,
+		scanCtx:             scanCtx,
 	}
-}
-
-// SetService sets the singleton instance of the command service.
-func SetService(service types.CommandService) {
-	instance = service
-}
-
-// Service returns the singleton instance of the command service.
-func Service() types.CommandService {
-	return instance
 }
 
 func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.CommandData, server types.Server) (any, error) {
@@ -94,7 +91,7 @@ func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.
 
 	logger.Debug().Msgf("executing command %s", commandData.CommandId)
 	// TODO: move to DI
-	command, err := CreateFromCommandData(ctx, s.engine, commandData, server, s.authService, s.featureFlagService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli, s.ldxSyncService, s.configResolver, s.scanStateFunc, s.remediationProvider)
+	command, err := CreateFromCommandData(ctx, s.engine, commandData, server, s.authService, s.featureFlagService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli, s.ldxSyncService, s.configResolver, s.scanStateFunc, s.remediationProvider, s.scanCtx)
 	if err != nil {
 		logger.Err(err).Msg("failed to create command")
 		return nil, err

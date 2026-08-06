@@ -26,7 +26,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -62,7 +61,7 @@ func contentRootForFile(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecord
 // sub-path is scanned).
 func TestFinding_RootAttribution_MultiRoot(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService)
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	require.NoError(t, err)
@@ -76,9 +75,9 @@ func TestFinding_RootAttribution_MultiRoot(t *testing.T) {
 	newFolder := func(root types.FilePath, name string) *workspace.Folder {
 		return workspace.NewFolder(
 			engine.GetConfiguration(), engine.GetLogger(), root, name,
-			di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(),
-			di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(),
-			di.ConfigResolver(), engine,
+			deps.Scanner, deps.HoverService, deps.ScanNotifier, deps.Notifier,
+			deps.ScanPersister, deps.ScanStateAggregator, featureflag.NewFakeService(),
+			deps.ConfigResolver, engine,
 		)
 	}
 	folderA := newFolder(rootA, "rootA")
@@ -123,7 +122,7 @@ func TestFinding_RootAttribution_MultiRoot(t *testing.T) {
 // ContentRoot instead of the folder's canonical path.
 func Test_workspaceDiagnostic_usesCanonicalFolderRoot(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _, _ := setupServer(t, engine, tokenService)
+	loc, _, deps := setupServer(t, engine, tokenService)
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	require.NoError(t, err)
@@ -136,9 +135,9 @@ func Test_workspaceDiagnostic_usesCanonicalFolderRoot(t *testing.T) {
 	newFolder := func(root types.FilePath, name string) *workspace.Folder {
 		return workspace.NewFolder(
 			engine.GetConfiguration(), engine.GetLogger(), root, name,
-			di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(),
-			di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(),
-			di.ConfigResolver(), engine,
+			deps.Scanner, deps.HoverService, deps.ScanNotifier, deps.Notifier,
+			deps.ScanPersister, deps.ScanStateAggregator, featureflag.NewFakeService(),
+			deps.ConfigResolver, engine,
 		)
 	}
 	folderB := newFolder(rootB, "rootB")
@@ -179,7 +178,7 @@ func Test_workspaceDiagnostic_usesCanonicalFolderRoot(t *testing.T) {
 // registered folder root, not to the ContentRoot on the issue itself.
 func Test_textDocumentDiagnostic_usesCanonicalFolderRoot(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _, _ := setupServer(t, engine, tokenService)
+	loc, _, deps := setupServer(t, engine, tokenService)
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	require.NoError(t, err)
@@ -192,9 +191,9 @@ func Test_textDocumentDiagnostic_usesCanonicalFolderRoot(t *testing.T) {
 	newFolder := func(root types.FilePath, name string) *workspace.Folder {
 		return workspace.NewFolder(
 			engine.GetConfiguration(), engine.GetLogger(), root, name,
-			di.Scanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(),
-			di.ScanPersister(), di.ScanStateAggregator(), featureflag.NewFakeService(),
-			di.ConfigResolver(), engine,
+			deps.Scanner, deps.HoverService, deps.ScanNotifier, deps.Notifier,
+			deps.ScanPersister, deps.ScanStateAggregator, featureflag.NewFakeService(),
+			deps.ConfigResolver, engine,
 		)
 	}
 	folderB := newFolder(rootB, "rootB")

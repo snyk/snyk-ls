@@ -20,45 +20,39 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
 var testProgressChannels = make(chan types.ProgressParams, 10000)
-var testCancelProgressChannel = make(chan bool, 10000)
 
 func Test_Tracker_Begin(t *testing.T) {
 	testutil.UnitTest(t)
-	tracker := newCodeTracker(testProgressChannels, testCancelProgressChannel)
+	tracker := newCodeTracker(testProgressChannels)
 	tracker.Begin("title", "message")
 
 	hasBegun := false
 	assert.Eventually(
 		t,
 		func() bool {
-			for {
-				select {
-				case p := <-testProgressChannels:
-					if p.Value == nil {
-						hasBegun = true
-						return false
-					} else {
-						switch value := p.Value.(type) {
-						case types.WorkDoneProgressBegin:
-							if !hasBegun {
-								return false
-							}
-							return value.Title == "title" && value.Message == "message"
-						case types.WorkDoneProgressEnd:
-							return false
-						}
-					}
-				default:
-					break
+			// Eventually already retries; consume at most one event per tick.
+			select {
+			case p := <-testProgressChannels:
+				if p.Value == nil {
+					hasBegun = true
+					return false
 				}
-				break //nolint:staticcheck // we want to do this until a message is seen
+				switch value := p.Value.(type) {
+				case types.WorkDoneProgressBegin:
+					return hasBegun && value.Title == "title" && value.Message == "message"
+				case types.WorkDoneProgressEnd:
+					return false
+				}
+			default:
 			}
 			return false
 		},
@@ -68,33 +62,65 @@ func Test_Tracker_Begin(t *testing.T) {
 }
 func Test_Tracker_End(t *testing.T) {
 	testutil.UnitTest(t)
-	tracker := newCodeTracker(testProgressChannels, testCancelProgressChannel)
+	tracker := newCodeTracker(testProgressChannels)
 	tracker.End("message")
 
 	assert.Eventually(
 		t,
 		func() bool {
-			for {
-				select {
-				case p := <-testProgressChannels:
-					if p.Value == nil {
-						return false
-					} else {
-						switch value := p.Value.(type) {
-						case types.WorkDoneProgressBegin:
-							return false
-						case types.WorkDoneProgressEnd:
-							return value.Message == "message"
-						}
-					}
-				default:
-					break
+			// Eventually already retries; consume at most one event per tick.
+			select {
+			case p := <-testProgressChannels:
+				if p.Value == nil {
+					return false
 				}
-				break //nolint:staticcheck // we want to do this until a message is seen
+				switch value := p.Value.(type) {
+				case types.WorkDoneProgressBegin:
+					return false
+				case types.WorkDoneProgressEnd:
+					return value.Message == "message"
+				}
+			default:
 			}
 			return false
 		},
 		5*time.Second,
 		10*time.Millisecond,
 	)
+}
+
+// TestGenerateTrackerRoutesToInjectedChannel (IDE-2036) verifies that
+// GenerateTracker routes progress events to the channel of the per-server owner
+// injected via NewCodeTrackerFactory, NOT to the global
+// progress.ToServerProgressChannel.
+//
+// This ensures upload-phase progress events from code-client-go are isolated
+// per language-server instance, preventing cross-test context cancellations in
+// parallel smoke tests.
+func TestGenerateTrackerRoutesToInjectedChannel(t *testing.T) {
+	testutil.UnitTest(t)
+
+	ch := make(chan types.ProgressParams, 100)
+
+	logger := zerolog.Nop()
+	factory := NewCodeTrackerFactory(progress.NewTrackerWithChannel(ch, &logger))
+
+	ct := factory.GenerateTracker()
+
+	// The returned value must be our internal *tracker type.
+	internal, ok := ct.(*tracker)
+	if !ok {
+		t.Fatalf("GenerateTracker returned unexpected type %T; expected *tracker", ct)
+	}
+
+	// The channel held by the tracker must be the injected per-server channel,
+	// NOT the global ToServerProgressChannel.
+	if internal.channel != ch {
+		t.Error("GenerateTracker must route to the injected per-server channel, not the global channel")
+	}
+	// Verify that the tracker does NOT route to an unrelated sibling channel.
+	siblingCh := make(chan types.ProgressParams, 100)
+	if internal.channel == siblingCh {
+		t.Error("GenerateTracker must NOT route to a sibling channel unrelated to this factory")
+	}
 }

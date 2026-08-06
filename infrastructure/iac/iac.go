@@ -54,17 +54,17 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-var scanCount = 1
+var scanCount = 1 //nolint:gochecknoglobals // legacy process-global state
 var _ types.ProductScanner = (*Scanner)(nil)
 
 var (
-	issueSeverities = map[string]types.Severity{
+	issueSeverities = map[string]types.Severity{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 		"high": types.High,
 		"low":  types.Low,
 	}
 )
 
-var extensions = map[string]bool{
+var extensions = map[string]bool{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	".yaml": true,
 	".yml":  true,
 	".json": true,
@@ -80,9 +80,10 @@ type Scanner struct {
 	conf           configuration.Configuration
 	logger         *zerolog.Logger
 	configResolver types.ConfigResolverInterface
+	progressOwner  *progress.Tracker
 }
 
-func New(conf configuration.Configuration, logger *zerolog.Logger, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, configResolver types.ConfigResolverInterface) *Scanner {
+func New(conf configuration.Configuration, logger *zerolog.Logger, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, configResolver types.ConfigResolverInterface, progressOwner *progress.Tracker) *Scanner {
 	return &Scanner{
 		instrumentor:   instrumentor,
 		errorReporter:  errorReporter,
@@ -92,6 +93,7 @@ func New(conf configuration.Configuration, logger *zerolog.Logger, instrumentor 
 		conf:           conf,
 		logger:         logger,
 		configResolver: configResolver,
+		progressOwner:  progressOwner,
 	}
 }
 
@@ -154,7 +156,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 		logger.Debug().Msg("IaC scan skipped: path is not a supported IaC file or directory")
 		return []types.Issue{}, nil
 	}
-	p := progress.NewScanTracker(true, iac.logger, workspaceFolder)
+	p := iac.progressOwner.NewScan(true, workspaceFolder)
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
 	p.BeginUnquantifiableLength("Scanning for Snyk IaC issues", string(pathToScan))
 	defer p.EndWithMessage("Snyk Iac Scan completed.")

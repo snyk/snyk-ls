@@ -34,7 +34,7 @@ import (
 // SNYK-CLI-0016 (FeatureNotEnabled) is intentionally excluded: it signals an
 // org-level state change and should surface as a real error rather than silently
 // clearing cached findings.
-var ignorableSecretsErrorCodes = map[string]bool{
+var ignorableSecretsErrorCodes = map[string]bool{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	"SNYK-CLI-0008": true, // NoSupportedFilesFound: file ignored or unsupported type
 }
 

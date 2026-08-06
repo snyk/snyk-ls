@@ -50,9 +50,11 @@ type SnykCli struct {
 	configResolver types.ConfigResolverInterface
 }
 
-var Mutex = &sync.Mutex{}
+var Mutex = &sync.Mutex{} //nolint:gochecknoglobals // process-global CLI concurrency limiter
 
-var concurrencyLimit = calcConcurrencyLimit()
+var concurrencyLimit = calcConcurrencyLimit() //nolint:gochecknoglobals // process-global CLI concurrency limiter
+
+var sharedSemaphore = semaphore.NewWeighted(int64(concurrencyLimit)) //nolint:gochecknoglobals // process-global CLI concurrency limiter shared across all SnykCli executors
 
 func calcConcurrencyLimit() int {
 	cpus := runtime.NumCPU()
@@ -66,7 +68,7 @@ func calcConcurrencyLimit() int {
 func NewExecutor(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier, configResolver types.ConfigResolverInterface) Executor {
 	return &SnykCli{
 		errorReporter:  errorReporter,
-		semaphore:      semaphore.NewWeighted(int64(concurrencyLimit)),
+		semaphore:      sharedSemaphore,
 		cliTimeout:     90 * time.Minute, // TODO: add preference to make this configurable [ROAD-1184]
 		notifier:       notifier,
 		engine:         engine,

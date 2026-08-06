@@ -18,7 +18,6 @@ package code
 
 import (
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
 	codeClientScan "github.com/snyk/code-client-go/scan"
@@ -29,35 +28,32 @@ import (
 )
 
 type trackerFactory struct {
-	logger *zerolog.Logger
+	progressOwner *progress.Tracker
 }
 
-func NewCodeTrackerFactory(logger *zerolog.Logger) codeClientScan.TrackerFactory {
-	return &trackerFactory{logger: logger}
+func NewCodeTrackerFactory(progressOwner *progress.Tracker) codeClientScan.TrackerFactory {
+	return &trackerFactory{progressOwner: progressOwner}
 }
 
+// GenerateTracker takes the owner's channel rather than a registered task: this
+// tracker mints its own token and code-client-go exposes no cancel hook for the
+// upload phase, so a registry entry would never be resolved nor released. That
+// also keeps the token out of the scan-token registry, which is what we want —
+// it reports Cancellable: false and has no folder to reset.
 func (t trackerFactory) GenerateTracker() codeClientScan.Tracker {
-	// No folder path in scope here, and it wouldn't matter: newCodeTracker
-	// below mints its own token and reports Cancellable: false, so this
-	// tracker's token is never the one the IDE echoes back on cancel. Use
-	// NewTracker (not NewScanTracker) — this token must never be classified
-	// as a scan token with no folder to reset.
-	newTracker := progress.NewTracker(true, t.logger)
-	return newCodeTracker(newTracker.GetChannel(), newTracker.GetCancelChannel())
+	return newCodeTracker(t.progressOwner.Channel())
 }
 
 type tracker struct {
-	token         types.ProgressToken
-	finished      bool
-	channel       chan types.ProgressParams
-	cancelChannel chan bool
+	token    types.ProgressToken
+	finished bool
+	channel  chan types.ProgressParams
 }
 
-func newCodeTracker(channel chan types.ProgressParams, cancelChannel chan bool) codeClientScan.Tracker {
+func newCodeTracker(channel chan types.ProgressParams) codeClientScan.Tracker {
 	return &tracker{
-		channel:       channel,
-		cancelChannel: cancelChannel,
-		finished:      false,
+		channel:  channel,
+		finished: false,
 	}
 }
 

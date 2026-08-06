@@ -32,6 +32,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -46,15 +47,21 @@ type Install struct {
 	httpClient     func() *http.Client
 	engine         workflow.Engine
 	configResolver types.ConfigResolverInterface
+	progressOwner  *progress.Tracker
 }
 
-func NewInstaller(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, client func() *http.Client, configResolver types.ConfigResolverInterface) *Install {
+func NewInstaller(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, client func() *http.Client, configResolver types.ConfigResolverInterface, progressOwner *progress.Tracker) *Install {
 	return &Install{
 		errorReporter:  errorReporter,
 		httpClient:     client,
 		engine:         engine,
 		configResolver: configResolver,
+		progressOwner:  progressOwner,
 	}
+}
+
+func (i *Install) newDownloader() *Downloader {
+	return NewDownloader(i.engine, i.errorReporter, i.httpClient, i.progressOwner)
 }
 
 func (i *Install) Find() (string, error) {
@@ -85,7 +92,7 @@ func (i *Install) Install(ctx context.Context) (string, error) {
 }
 
 func (i *Install) installRelease(release *Release) (string, error) {
-	d := NewDownloader(i.engine, i.errorReporter, i.httpClient)
+	d := i.newDownloader()
 	lockFileName, err := createLockFile(i.engine, d)
 	if err != nil {
 		return "", err
@@ -117,7 +124,7 @@ func (i *Install) Update(ctx context.Context) (bool, error) {
 }
 
 func (i *Install) updateFromRelease(r *Release) (bool, error) {
-	d := NewDownloader(i.engine, i.errorReporter, i.httpClient)
+	d := i.newDownloader()
 	lockFileName, err := createLockFile(i.engine, d)
 	if err != nil {
 		return false, err

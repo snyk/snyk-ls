@@ -37,6 +37,7 @@ import (
 	sglsp "github.com/sourcegraph/go-lsp"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/codeaction"
@@ -47,6 +48,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
+	"github.com/snyk/snyk-ls/domain/ide/treeview"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -67,10 +69,11 @@ import (
 	storage2 "github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
+	"github.com/snyk/snyk-ls/internal/user_interface"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
-var cacheCheckCancel context.CancelFunc
+var cacheCheckCancel context.CancelFunc //nolint:gochecknoglobals // process-global cancel for the periodic cache-check goroutine
 
 // Background scanner-init lifecycle (IDE-2181). initializedHandler launches the heavy
 // scanner init in a background goroutine; shutdownHandler must cancel and await it
@@ -78,8 +81,8 @@ var cacheCheckCancel context.CancelFunc
 // synchronously in the initialized handler (mirroring cacheCheckCancel) and read by
 // shutdown, which runs later in the LSP lifecycle.
 var (
-	backgroundInitCancel context.CancelFunc
-	backgroundInitDone   chan struct{}
+	backgroundInitCancel context.CancelFunc //nolint:gochecknoglobals // written by the initialized handler, read by shutdown — same LSP lifecycle, one per process
+	backgroundInitDone   chan struct{}      //nolint:gochecknoglobals // written by the initialized handler, read by shutdown — same LSP lifecycle, one per process
 )
 
 // backgroundInitShutdownTimeout bounds how long shutdown waits for the background
@@ -106,6 +109,14 @@ func Start(engine workflow.Engine, tokenService *config.TokenServiceImpl) {
 	logger := engine.GetLogger()
 	startLogger := logger.With().Str("method", "server.Start").Logger()
 	deps := di.Init(engine, tokenService)
+
+	// Bars must come from the server-scoped Tracker, whose channel
+	// createProgressListener drains; an undrained channel fills up and then
+	// blocks the reporting workflow forever.
+	engine.SetUserInterface(user_interface.NewLsUserInterface(
+		user_interface.WithLogger(logger),
+		user_interface.WithProgressBarFactory(func() ui.ProgressBar { return deps.ProgressTracker.New(false) })))
+
 	initHandlers(srv, handlers, conf, engine, logger, deps)
 
 	startLogger.Info().Msg("Starting up Language Server...")
@@ -122,38 +133,32 @@ func Start(engine workflow.Engine, tokenService *config.TokenServiceImpl) {
 // All deps in this list are always created by di.Init and di.TestInit; a nil value
 // means the server was started with broken wiring and cannot function correctly.
 func validateMandatoryDeps(deps di.Dependencies) error {
-	switch {
-	case deps.ConfigResolver == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: ConfigResolver")
-	case deps.AuthenticationService == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: AuthenticationService")
-	case deps.LdxSyncService == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: LdxSyncService")
-	case deps.Notifier == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: Notifier")
-	case deps.FeatureFlagService == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: FeatureFlagService")
-	case deps.ErrorReporter == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: ErrorReporter")
-	case deps.LearnService == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: LearnService")
-	case deps.Scanner == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: Scanner")
-	case deps.HoverService == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: HoverService")
-	case deps.ScanNotifier == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: ScanNotifier")
-	case deps.ScanPersister == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: ScanPersister")
-	case deps.ScanStateAggregator == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: ScanStateAggregator")
-	case deps.FileWatcher == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: FileWatcher")
-	case deps.CodeActionService == nil:
-		return errors.New("snyk-ls: mandatory DI dependency missing: CodeActionService")
-	default:
-		return nil
+	checks := []struct {
+		name  string
+		value any
+	}{
+		{"ConfigResolver", deps.ConfigResolver},
+		{"AuthenticationService", deps.AuthenticationService},
+		{"LdxSyncService", deps.LdxSyncService},
+		{"Notifier", deps.Notifier},
+		{"FeatureFlagService", deps.FeatureFlagService},
+		{"ErrorReporter", deps.ErrorReporter},
+		{"LearnService", deps.LearnService},
+		{"Scanner", deps.Scanner},
+		{"HoverService", deps.HoverService},
+		{"ScanNotifier", deps.ScanNotifier},
+		{"ScanPersister", deps.ScanPersister},
+		{"ScanStateAggregator", deps.ScanStateAggregator},
+		{"FileWatcher", deps.FileWatcher},
+		{"CodeActionService", deps.CodeActionService},
+		{"CommandService", deps.CommandService},
 	}
+	for _, c := range checks {
+		if c.value == nil {
+			return fmt.Errorf("snyk-ls: mandatory DI dependency missing: %s", c.name)
+		}
+	}
+	return nil
 }
 
 // withContext wraps a jrpc2.Handler to inject logger, configuration, engine,
@@ -249,6 +254,12 @@ func injectCoreServicesIntoMap(m map[string]any, deps di.Dependencies) {
 	if deps.TreeEmitter != nil {
 		m[ctx2.DepTreeEmitter] = deps.TreeEmitter
 	}
+	if deps.CommandService != nil {
+		m[ctx2.DepCommandService] = deps.CommandService
+	}
+	if deps.ProgressTracker != nil {
+		m[ctx2.DepProgressTracker] = deps.ProgressTracker
+	}
 }
 
 func injectScanServicesIntoMap(m map[string]any, deps di.Dependencies) {
@@ -277,7 +288,18 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	enrich := func(h jrpc2.Handler) jrpc2.Handler {
 		return withContext(h, logger, conf, engine, deps, srv)
 	}
-	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv))
+	// progressStopChan is per-server: only this server's shutdown handler can stop
+	// this server's progress listener, preventing cross-test signal interference.
+	progressStopChan := make(chan bool, 1)
+	// scanCtx/scanCancel are owned by the DI Dependencies so the same server-lifetime
+	// context is shared by initHandlers, initializedHandler, and shutdownHandler
+	// without passing it through multiple closures [IDE-2036 Decision D1].
+	scanCtx := deps.ScanCtx
+	scanCancel := deps.ScanCancel
+	// Use the per-server progress channel from ProgressTracker so that progress
+	// events from this server's scanners are never misrouted to another server's listener.
+	progressCh := deps.ProgressTracker.Channel()
+	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv, progressStopChan, progressCh))
 	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv))
 	var onFileChange func(types.FilePath)
 	if deps.RemediationNotifier != nil {
@@ -286,7 +308,7 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	handlers["textDocument/didChange"] = enrich(textDocumentDidChangeHandler(conf, onFileChange))
 	handlers["textDocument/didClose"] = enrich(noOpHandler())
 	handlers[textDocumentDidOpenOperation] = enrich(textDocumentDidOpenHandler(conf))
-	handlers[textDocumentDidSaveOperation] = enrich(textDocumentDidSaveHandler(conf, onFileChange))
+	handlers[textDocumentDidSaveOperation] = enrich(textDocumentDidSaveHandler(conf, onFileChange, scanCtx))
 	handlers["textDocument/hover"] = enrich(textDocumentHover())
 	handlers["textDocument/codeAction"] = enrich(textDocumentCodeActionHandler(logger, deps.CodeActionService))
 	handlers["textDocument/codeLens"] = enrich(codeLensHandler())
@@ -294,9 +316,9 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	handlers["textDocument/willSave"] = enrich(noOpHandler())
 	handlers["textDocument/willSaveWaitUntil"] = enrich(noOpHandler())
 	handlers["codeAction/resolve"] = enrich(codeActionResolveHandler(logger, deps.CodeActionService, srv))
-	handlers["shutdown"] = enrich(shutdownHandler())
+	handlers["shutdown"] = enrich(shutdownHandler(progressStopChan, scanCancel, deps.TreeEmitter))
 	handlers["exit"] = enrich(exitHandler(srv))
-	handlers["workspace/didChangeWorkspaceFolders"] = enrich(workspaceDidChangeWorkspaceFoldersHandler(conf, engine, srv))
+	handlers["workspace/didChangeWorkspaceFolders"] = enrich(workspaceDidChangeWorkspaceFoldersHandler(conf, engine, srv, scanCtx))
 	handlers["workspace/willDeleteFiles"] = enrich(workspaceWillDeleteFilesHandler(conf))
 	handlers["workspace/didChangeConfiguration"] = enrich(workspaceDidChangeConfiguration(conf, srv))
 	handlers["window/workDoneProgress/cancel"] = enrich(windowWorkDoneProgressCancelHandler(conf))
@@ -523,6 +545,40 @@ func mustConfigResolverFromContext(ctx context.Context) types.ConfigResolverInte
 	return cr
 }
 
+func commandServiceFromContext(ctx context.Context) (types.CommandService, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	svc, ok := deps[ctx2.DepCommandService].(types.CommandService)
+	return svc, ok
+}
+
+func mustCommandServiceFromContext(ctx context.Context) types.CommandService {
+	svc, ok := commandServiceFromContext(ctx)
+	if !ok {
+		panic("CommandService missing from context")
+	}
+	return svc
+}
+
+func progressTrackerFromContext(ctx context.Context) (*progress.Tracker, bool) {
+	deps, ok := ctx2.DependenciesFromContext(ctx)
+	if !ok {
+		return nil, false
+	}
+	tracker, ok := deps[ctx2.DepProgressTracker].(*progress.Tracker)
+	return tracker, ok
+}
+
+func mustProgressTrackerFromContext(ctx context.Context) *progress.Tracker {
+	owner, ok := progressTrackerFromContext(ctx)
+	if !ok {
+		panic("ProgressTracker missing from context")
+	}
+	return owner
+}
+
 func textDocumentDidChangeHandler(conf configuration.Configuration, onFileChange func(types.FilePath)) jrpc2.Handler {
 	return handler.New(func(ctx context.Context, params sglsp.DidChangeTextDocumentParams) (any, error) {
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "TextDocumentDidChangeHandler").Logger()
@@ -591,11 +647,13 @@ func codeLensHandler() jrpc2.Handler {
 	})
 }
 
-func workspaceDidChangeWorkspaceFoldersHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server) jrpc2.Handler {
+func workspaceDidChangeWorkspaceFoldersHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server, scanCtx context.Context) jrpc2.Handler { //nolint:revive // scanCtx follows stdlib convention for context parameters passed by value
 	return handler.New(func(ctx context.Context, params types.DidChangeWorkspaceFoldersParams) (any, error) {
 		// The context provided by the JSON-RPC server is canceled once a new message is being processed,
-		// so we don't want to propagate it to functions that start background operations
-		bgCtx := context.Background()
+		// so we don't want to propagate it to functions that start background operations.
+		// Use the server-lifetime scanCtx instead of context.Background() so that all
+		// background work started here (config refresh, folder init, and scans) respects
+		// the shutdown cancel signal and does not leak goroutines or file handles [IDE-2036].
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "WorkspaceDidChangeWorkspaceFoldersHandler").Logger()
 
 		logger.Info().Msg("RECEIVING")
@@ -611,13 +669,13 @@ func workspaceDidChangeWorkspaceFoldersHandler(conf configuration.Configuration,
 		configResolver := mustConfigResolverFromContext(ctx)
 
 		if authService.IsAuthenticated() {
-			ldxSyncSvc.RefreshConfigFromLdxSync(bgCtx, conf, engine, &logger, changedFolders, notifier)
+			ldxSyncSvc.RefreshConfigFromLdxSync(scanCtx, conf, engine, &logger, changedFolders, notifier)
 		}
 
 		command.HandleFolders(conf, engine, &logger, notifier, scanPersister, scanStateAgg, featureFlags, configResolver)
 		for _, f := range changedFolders {
 			if f.IsAutoScanEnabled() {
-				go f.ScanFolder(bgCtx)
+				go f.ScanFolder(scanCtx)
 			}
 		}
 		return nil, nil
@@ -631,7 +689,7 @@ func initNetworkAccessHeaders(engine workflow.Engine) {
 	engine.GetNetworkAccess().AddHeaderField("User-Agent", ua.String())
 }
 
-func initializeHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server) handler.Func {
+func initializeHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server, progressStopChan <-chan bool, progressCh chan types.ProgressParams) handler.Func {
 	return handler.New(func(ctx context.Context, params types.InitializeParams) (any, error) {
 		method := "initializeHandler"
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", method).Logger()
@@ -681,8 +739,8 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		// NewLspInitializedChannel must precede registerNotifier: the notifier
 		// goroutine reads this channel on its first message.
 		types.NewLspInitializedChannel(conf)
-		go createProgressListener(progress.ToServerProgressChannel, srv, &logger)
-		registerNotifier(conf, engine, mustConfigResolverFromContext(ctx), &logger, srv, mustNotifierFromContext(ctx))
+		go createProgressListener(progressCh, progressStopChan, srv, &logger)
+		registerNotifier(conf, engine, mustConfigResolverFromContext(ctx), &logger, srv, mustNotifierFromContext(ctx), mustCommandServiceFromContext(ctx))
 
 		result := types.InitializeResult{
 			ServerInfo: types.ServerInfo{
@@ -1174,7 +1232,7 @@ func monitorClientProcess(pid int) time.Duration {
 	return time.Since(start)
 }
 
-func shutdownHandler() jrpc2.Handler {
+func shutdownHandler(progressStopChan chan<- bool, scanCancel context.CancelFunc, treeEmitter *treeview.TreeScanStateEmitter) jrpc2.Handler {
 	return handler.New(func(ctx context.Context) (any, error) {
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "Shutdown").Logger()
 		logger.Info().Msg("ENTERING")
@@ -1201,8 +1259,21 @@ func shutdownHandler() jrpc2.Handler {
 		if cacheCheckCancel != nil {
 			cacheCheckCancel()
 		}
-		di.DisposeTreeEmitter()
-		disposeProgressListener()
+		treeEmitter.Dispose()
+		// Non-blocking: if initialize was never called the listener goroutine was
+		// never started, so no one reads the channel. A second shutdown call (e.g.
+		// from t.Cleanup after an explicit shutdown in the test body) must not block.
+		select {
+		case progressStopChan <- true:
+		default:
+		}
+		// Cancel the server-lifetime scan context so that any in-flight workspace
+		// scan goroutines exit cleanly. context.WithCancel cancel funcs are
+		// idempotent, so a second shutdown call is safe. Guard against nil in case
+		// a caller has not set ScanCancel in deps (should not happen after D1).
+		if scanCancel != nil {
+			scanCancel()
+		}
 		mustNotifierFromContext(ctx).DisposeListener()
 		command.StopPendingRescanTimers()
 		return nil, nil
@@ -1269,9 +1340,8 @@ func textDocumentDidOpenHandler(conf configuration.Configuration) jrpc2.Handler 
 	})
 }
 
-func textDocumentDidSaveHandler(conf configuration.Configuration, onFileChange func(types.FilePath)) jrpc2.Handler {
+func textDocumentDidSaveHandler(conf configuration.Configuration, onFileChange func(types.FilePath), scanCtx context.Context) jrpc2.Handler { //nolint:revive // scanCtx follows stdlib convention for context parameters passed by value
 	return handler.New(func(ctx context.Context, params sglsp.DidSaveTextDocumentParams) (any, error) {
-		bgCtx := context.Background()
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "TextDocumentDidSaveHandler").Logger()
 		logger.Debug().Interface("params", params).Msg("Receiving")
 
@@ -1294,12 +1364,12 @@ func textDocumentDidSaveHandler(conf configuration.Configuration, onFileChange f
 		}
 
 		if folder.IsAutoScanEnabled() && uri.IsDotSnykFile(params.TextDocument.URI) {
-			go folder.ScanFolder(bgCtx)
+			go folder.ScanFolder(scanCtx)
 			return nil, nil
 		}
 
 		if folder.IsAutoScanEnabled() {
-			go folder.ScanFile(bgCtx, filePath)
+			go folder.ScanFile(scanCtx, filePath)
 		} else {
 			logger.Warn().Msg("Not scanning, auto-scan is disabled")
 		}
@@ -1330,16 +1400,25 @@ func handleWindowWorkDoneProgressCancel(ctx context.Context, params types.Workdo
 	logger := ctx2.LoggerFromContext(ctx)
 	logger.Debug().Str("method", "WindowWorkDoneProgressCancelHandler").Interface("params", params).Msg("RECEIVING")
 
+	// Cancel through the per-server tracker: tokens are server-scoped, so a
+	// cancel from this server cannot affect another server's tasks [IDE-2036].
+	tracker, ok := progressTrackerFromContext(ctx)
+	if !ok {
+		logger.Warn().Str("token", string(params.Token)).
+			Msg("WindowWorkDoneProgressCancelHandler: no per-server tracker in context, ignoring cancel")
+		return nil, nil
+	}
+
 	// Only reset the summary panel for scan cancellations. Generic progress
 	// tokens (e.g. CLI download/install) must not wipe valid scan results.
-	isScan := progress.IsScanToken(params.Token)
+	isScan := tracker.IsScanToken(params.Token)
 
 	// Defer the cancel so any RegisterCancelCallback below is in place
 	// before scan goroutines observe cancellation and drain through
 	// consumeCancelCallback (scanner.go). Otherwise the reset can be
 	// silently dropped, and a stale callback fires on the folder's
 	// next scan (IDE-1035 register-vs-consume race).
-	defer progress.Cancel(params.Token)
+	defer tracker.Cancel(params.Token)
 
 	if !isScan {
 		return nil, nil
@@ -1354,7 +1433,7 @@ func handleWindowWorkDoneProgressCancel(ctx context.Context, params types.Workdo
 	// Scope the reset to the folder the canceled token actually belongs to.
 	// Canceling folder A's scan must never arm a pending reset on folder B
 	// or C.
-	folderPath, folderOk := progress.FolderForScanToken(params.Token)
+	folderPath, folderOk := tracker.FolderForScanToken(params.Token)
 	if !folderOk {
 		logger.Debug().Str("method", "WindowWorkDoneProgressCancelHandler").
 			Msg("scan token's folder not found; summary panel will not be reset")
