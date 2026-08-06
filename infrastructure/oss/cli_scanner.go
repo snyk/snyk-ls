@@ -611,11 +611,6 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 				return
 			}
 
-			if newCtx.Err() != nil {
-				logger.Info().Msg("Scheduled scan canceled")
-				return
-			}
-
 			scanCtx := ctx2.NewContextWithFolderConfig(newCtx, folderConfig)
 			span := cliScanner.instrumentor.NewTransaction(context.WithValue(scanCtx, cliScanner.Product(), cliScanner),
 				string(cliScanner.Product()),
