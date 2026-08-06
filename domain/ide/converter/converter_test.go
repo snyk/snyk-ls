@@ -88,7 +88,7 @@ func TestToDiagnostics_CodeDescription(t *testing.T) {
 		require.NoError(t, err)
 		return parsed
 	}
-	docsURL := "https://docs.snyk.io/scan-fix-and-prevent/scan-with-snyk/snyk-secrets"
+	secretsDocsUrl := "https://docs.snyk.io/scan-fix-and-prevent/scan-with-snyk/snyk-secrets"
 
 	tests := []struct {
 		name           string
@@ -98,7 +98,7 @@ func TestToDiagnostics_CodeDescription(t *testing.T) {
 	}{
 		// One row per shipping product, at the URL its converter actually produces,
 		// so a future tightening of the guard cannot drop a product's links silently.
-		{name: "secrets", issueProduct: product.ProductSecrets, descriptionURL: mustParse(docsURL), wantHref: docsURL},
+		{name: "secrets", issueProduct: product.ProductSecrets, descriptionURL: mustParse(secretsDocsUrl), wantHref: secretsDocsUrl},
 		{name: "open source", issueProduct: product.ProductOpenSource, descriptionURL: mustParse("https://snyk.io/vuln/SNYK-JS-LODASH-567746"), wantHref: "https://snyk.io/vuln/SNYK-JS-LODASH-567746"},
 		{name: "code", issueProduct: product.ProductCode, descriptionURL: mustParse("https://docs.snyk.io/scan-using-snyk/snyk-code/snyk-code-security-rules"), wantHref: "https://docs.snyk.io/scan-using-snyk/snyk-code/snyk-code-security-rules"},
 		{name: "infrastructure as code", issueProduct: product.ProductInfrastructureAsCode, descriptionURL: mustParse("https://security.snyk.io/rules/cloud/SNYK-CC-TF-1"), wantHref: "https://security.snyk.io/rules/cloud/SNYK-CC-TF-1"},

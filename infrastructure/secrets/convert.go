@@ -32,17 +32,14 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
-// secretsDocsURL documents Secrets scanning. It is the link target behind the
+// secretsDocsUrl documents Secrets scanning. It is the link target behind the
 // rule id shown next to a finding, and must be an http(s) URL: clients resolve a
 // relative href against the workspace and try to open it as a file.
-const secretsDocsURL = "https://docs.snyk.io/scan-fix-and-prevent/scan-with-snyk/snyk-secrets"
+const secretsDocsUrl = "https://docs.snyk.io/scan-fix-and-prevent/scan-with-snyk/snyk-secrets"
 
-// secretsDocsLink is parsed once and shared by every issue, as infrastructure/code
-// shares one parsed ruleLink per scan. Consumers only read it (the diagnostic
-// converter renders Scheme, Host and String), so the same pointer is safe to hand
-// out. Note that infrastructure/oss took the other route for this field:
-// urlParseCachedCopy returns a copy per consumer so no one can mutate another's.
-var secretsDocsLink, _ = url.Parse(secretsDocsURL)
+// secretsDocsLink is parsed once and shared by every issue found by the Secrets scanner.
+// Consumers only read it, so the same pointer is safe to hand out.
+var secretsDocsLink, _ = url.Parse(secretsDocsUrl)
 
 // FindingsConverter converts unified API findings into internal Issue types.
 type FindingsConverter struct {

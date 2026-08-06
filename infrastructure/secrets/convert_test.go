@@ -636,7 +636,7 @@ func TestToIssues_SetsIssueDescriptionURL(t *testing.T) {
 		require.NotNil(t, descriptionURL)
 		assert.True(t, descriptionURL.IsAbs(),
 			"a relative link is resolved against the workspace and opens a non-existent file")
-		assert.Equal(t, secretsDocsURL, descriptionURL.String())
+		assert.Equal(t, secretsDocsUrl, descriptionURL.String())
 	}
 }
 
@@ -662,7 +662,7 @@ func TestToIssues_RuleIDLinksToDocsInDiagnostic(t *testing.T) {
 	assert.Equal(t, "generic-secret", decoded["code"])
 	codeDescription, ok := decoded["codeDescription"].(map[string]any)
 	require.True(t, ok, "diagnostic must carry a codeDescription: %s", payload)
-	assert.Equal(t, secretsDocsURL, codeDescription["href"])
+	assert.Equal(t, secretsDocsUrl, codeDescription["href"])
 }
 
 func TestToIssues_NilFindingId(t *testing.T) {
