@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"runtime/debug"
 	"testing"
 	"time"
 
@@ -103,7 +104,7 @@ func (s *bddSteps) runStep(fn func() error) {
 	reported := false
 	defer func() {
 		if r := recover(); r != nil {
-			s.stepResult <- fmt.Errorf("step panicked: %v", r)
+			s.stepResult <- fmt.Errorf("step panicked: %v\n%s", r, debug.Stack())
 			return
 		}
 		if !reported {
@@ -246,6 +247,36 @@ func Test_BDDSteps_RunOnScenarioGoroutine_SurvivesPanic(t *testing.T) {
 		assert.Contains(t, err.Error(), "boom")
 	case <-time.After(5 * time.Second):
 		t.Fatal("runOnScenarioGoroutine hung after the step's own goroutine panicked - it must report an error instead")
+	}
+}
+
+// Test_BDDSteps_RunStep_PanicIncludesStackTrace guards against the panic
+// recovery in runStep discarding the stack trace Go would otherwise print
+// for an unrecovered panic, which makes real panics hard to diagnose.
+func Test_BDDSteps_RunStep_PanicIncludesStackTrace(t *testing.T) {
+	s := &bddSteps{
+		stepFunc:   make(chan func() error),
+		stepResult: make(chan error),
+	}
+	go func() {
+		for fn := range s.stepFunc {
+			s.runStep(fn)
+		}
+	}()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- s.runOnScenarioGoroutine(func() error {
+			panic("boom")
+		})
+	}()
+
+	select {
+	case err := <-done:
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "goroutine", "expected the panic error to include a stack trace")
+	case <-time.After(5 * time.Second):
+		t.Fatal("runOnScenarioGoroutine hung after the step's own goroutine panicked")
 	}
 }
 
