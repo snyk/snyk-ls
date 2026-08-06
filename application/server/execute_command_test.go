@@ -111,9 +111,9 @@ func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostic
 	assert.Equal(t, 1, len(dontClear.IssuesForFile(dontClearIssuePath)))
 }
 
-func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
+func Test_executeWorkspaceScanCommand_doesNotScanUntrustedFolder(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
+	loc, _, deps := setupServer(t, engine, tokenService, WithRealDI())
 
 	s := &scanner.TestScanner{}
 	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", s, deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine))
@@ -125,28 +125,28 @@ func Test_executeWorkspaceScanCommand_shouldAskForTrust(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Eventually(t, func() bool {
-		return s.Calls() == 0 && checkTrustMessageRequest(jsonRPCRecorder, engine)
-	}, 2*time.Second, time.Millisecond)
+	// The folder is untrusted, so it must never be scanned (the tree-view trust
+	// banner drives trusting now; there is no modal trust prompt).
+	assert.Never(t, func() bool { return s.Calls() > 0 }, 2*time.Second, time.Millisecond)
 }
 
 func Test_executeWorkspaceScanCommand_shouldAcceptScanSourceParam(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
+	loc, _, deps := setupServer(t, engine, tokenService, WithRealDI())
 
 	s := &scanner.TestScanner{}
 	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", s, deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine))
 	// explicitly enable folder trust which is disabled by default in tests
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
 
+	// The command must accept the scan-source argument without erroring. The folder
+	// is untrusted, so it must never be scanned (no modal trust prompt anymore).
 	params := sglsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand, Arguments: []any{"LLM"}}
 	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Eventually(t, func() bool {
-		return s.Calls() == 0 && checkTrustMessageRequest(jsonRPCRecorder, engine)
-	}, 2*time.Second, time.Millisecond)
+	assert.Never(t, func() bool { return s.Calls() > 0 }, 2*time.Second, time.Millisecond)
 }
 
 func Test_loginCommand_StartsAuthentication(t *testing.T) {
@@ -164,7 +164,7 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	baseDeps := di.TestInit(t, engine, tokenService, &di.Dependencies{
 		LdxSyncService: mockLdxSyncService,
 	})
-	realCommandService := command.NewService(engine, engine.GetLogger(), baseDeps.AuthenticationService, baseDeps.FeatureFlagService, baseDeps.Notifier, baseDeps.LearnService, nil, nil, nil, mockLdxSyncService, nil, nil, baseDeps.ScanCtx)
+	realCommandService := command.NewService(engine, engine.GetLogger(), baseDeps.AuthenticationService, baseDeps.FeatureFlagService, baseDeps.Notifier, baseDeps.LearnService, nil, nil, nil, mockLdxSyncService, nil, nil, nil, baseDeps.ScanCtx)
 	baseDeps.CommandService = realCommandService
 
 	// Pass all pre-built deps so setupServer reuses the same service instances.
@@ -203,7 +203,11 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	_, err = loc.Client.Call(t.Context(), "initialized", types.InitializedParams{})
 	assert.NoError(t, err)
 
-	// Clear the token written by the scanner-init auth check during `initialized`. Without
+	// Scanner init now runs in the background (IDE-2181); wait for it to finish so the
+	// auth check has written its token before we clear it for the login assertion below.
+	types.WaitForLspInitialized(engine.GetConfiguration())
+
+	// Clear the token written by the background scanner-init auth check. Without
 	// this, snyk.login's Authenticate would re-store the same fake token, updateCredentials
 	// would early-return on the no-op, and the post-credential hook (where the login-time
 	// RefreshConfigFromLdxSync now lives) would never fire.
@@ -249,7 +253,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
 		loc, _, deps := setupServer(t, engine, tokenService, WithRealDI())
 
-		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath1, "dummy", nil, deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine))
+		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath1, "dummy", scanner.NewTestScanner(), deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine))
 
 		params := sglsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
@@ -265,8 +269,8 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
 		loc, _, deps := setupServer(t, engine, tokenService, WithRealDI())
 
-		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath1, "dummy", nil, deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine))
-		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath2, "dummy", nil, deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine))
+		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath1, "dummy", scanner.NewTestScanner(), deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine))
+		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath2, "dummy", scanner.NewTestScanner(), deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine))
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
 
 		params := sglsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
@@ -285,7 +289,7 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
 		loc, _, deps := setupServer(t, engine, tokenService, WithRealDI())
 
-		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath1, "dummy", nil, deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine))
+		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath1, "dummy", scanner.NewTestScanner(), deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine))
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{folderPath2})
 

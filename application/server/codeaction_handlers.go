@@ -37,7 +37,7 @@ func ResolveCodeActionHandler(logger *zerolog.Logger, service *codeaction.CodeAc
 		l = l.With().Interface("request", params).Logger()
 		l.Debug().Msg("RECEIVING")
 
-		action, err := service.ResolveCodeAction(params)
+		action, err := service.ResolveCodeAction(ctx, params)
 		if err != nil {
 			if codeaction.IsMissingKeyError(err) {
 				l.Debug().Msg("Skipping code action - missing key")

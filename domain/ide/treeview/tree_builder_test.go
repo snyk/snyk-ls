@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -647,6 +648,355 @@ func TestBuildTree_ProductNode_ZeroFixable_ShowsNoFixableMessage(t *testing.T) {
 	require.NotNil(t, noFixableNode, "should have 'no fixable' info node")
 }
 
+// codeIssue is a small helper for the Agent-Fix gating tests below.
+func codeIssue(t *testing.T, id string, hasAIFix bool) *snyk.Issue {
+	t.Helper()
+	issue := testutil.NewMockIssueWithSeverity(id, "/project/main.go", types.High)
+	issue.Product = product.ProductCode
+	issue.AdditionalData = snyk.CodeIssueData{Key: id, Title: "Hardcoded Secret", HasAIFix: hasAIFix}
+	return issue
+}
+
+func TestBuildTree_Code_AgentFixEnabled_ShowsFixableLine(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+	issue := codeIssue(t, "code-1", true)
+	issues := snyk.IssuesByFile{issue.AffectedFilePath: {issue}}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           issues, FilteredIssues: issues,
+		AgentFixEnabled: true,
+	}})
+
+	codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+	require.NotNil(t, codeNode)
+	infoNodes := filterChildrenByType(codeNode.Children, NodeTypeInfo)
+	fixableNode := findInfoNodeContaining(infoNodes, "fixable")
+	require.NotNil(t, fixableNode, "Code with Agent Fix enabled should show the fixable line")
+	assert.Contains(t, fixableNode.Label, "fixable automatically")
+}
+
+func TestBuildTree_Code_AgentFixDisabled_HidesFixableLine(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+	issue := codeIssue(t, "code-1", true) // fixable, but Agent Fix is off
+	issues := snyk.IssuesByFile{issue.AffectedFilePath: {issue}}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           issues, FilteredIssues: issues,
+		AgentFixEnabled: false,
+	}})
+
+	codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+	require.NotNil(t, codeNode)
+	infoNodes := filterChildrenByType(codeNode.Children, NodeTypeInfo)
+	assert.Nil(t, findInfoNodeContaining(infoNodes, "fixable"),
+		"Code with Agent Fix disabled must hide the fixable line entirely")
+	// The issue-count line must still be present so the product node isn't empty.
+	require.NotEmpty(t, infoNodes, "issue-count info node should still render")
+}
+
+func TestBuildTree_Code_AgentFixDisabled_NoFixableIssues_HidesNoFixableLine(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+	issue := codeIssue(t, "code-1", false) // not fixable
+	issues := snyk.IssuesByFile{issue.AffectedFilePath: {issue}}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           issues, FilteredIssues: issues,
+		AgentFixEnabled: false,
+	}})
+
+	codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+	require.NotNil(t, codeNode)
+	infoNodes := filterChildrenByType(codeNode.Children, NodeTypeInfo)
+	assert.Nil(t, findInfoNodeContaining(infoNodes, "automatically fixable"),
+		"Code with Agent Fix disabled must not show the 'no issues automatically fixable' line either")
+}
+
+// TestBuildTree_Code_AgentFixEnabled_ZeroFixable_ShowsNoFixableMessage covers the branch
+// at tree_builder.go where AgentFixEnabled=true but fixableCount==0: the "no issues
+// automatically fixable" message must appear (tree_builder.go:420).
+func TestBuildTree_Code_AgentFixEnabled_ZeroFixable_ShowsNoFixableMessage(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+	issue := codeIssue(t, "code-1", false) // HasAIFix=false → fixableCount stays 0
+	issues := snyk.IssuesByFile{issue.AffectedFilePath: {issue}}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           issues, FilteredIssues: issues,
+		AgentFixEnabled: true,
+	}})
+
+	codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+	require.NotNil(t, codeNode)
+	infoNodes := filterChildrenByType(codeNode.Children, NodeTypeInfo)
+	fixableNode := findInfoNodeContaining(infoNodes, "no issues automatically fixable")
+	require.NotNil(t, fixableNode, "Code with Agent Fix enabled and zero fixable issues should show 'no issues automatically fixable'")
+	assert.Contains(t, fixableNode.Label, "no issues automatically fixable")
+}
+
+func TestBuildTree_IaCAndSecrets_NeverShowFixableLine(t *testing.T) {
+	cases := []struct {
+		name       string
+		prod       product.Product
+		filterType product.FilterableIssueType
+		additional types.IssueAdditionalData
+	}{
+		{"IaC", product.ProductInfrastructureAsCode, product.FilterableIssueTypeInfrastructureAsCode, snyk.IaCIssueData{Key: "iac-1"}},
+		{"Secrets", product.ProductSecrets, product.FilterableIssueTypeSecrets, snyk.SecretsIssueData{Key: "sec-1"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			builder := newBuilderWithCompletedScans()
+			issue := testutil.NewMockIssueWithSeverity("issue-1", "/project/main.go", types.High)
+			issue.Product = tc.prod
+			issue.AdditionalData = tc.additional
+			issues := snyk.IssuesByFile{issue.AffectedFilePath: {issue}}
+
+			data := builder.BuildTreeFromFolderData([]FolderData{{
+				FolderPath: "/project", FolderName: "project",
+				SupportedIssueTypes: map[product.FilterableIssueType]bool{tc.filterType: true},
+				AllIssues:           issues, FilteredIssues: issues,
+			}})
+
+			node := findChildByProduct(data.Nodes, tc.prod)
+			require.NotNil(t, node)
+			infoNodes := filterChildrenByType(node.Children, NodeTypeInfo)
+			assert.Nil(t, findInfoNodeContaining(infoNodes, "fixable"),
+				"%s must never show a fixable line", tc.name)
+		})
+	}
+}
+
+// fakeFilteringFolder adapts a MockFolder (which satisfies types.Folder) to also implement
+// snyk.FilteringIssueProvider, returning a fixed set of issues. BuildTree requires a value that
+// is both, and the generated MockFolder does not expose the issue-provider methods.
+type fakeFilteringFolder struct {
+	*mock_types.MockFolder
+	issues snyk.IssuesByFile
+}
+
+func (f *fakeFilteringFolder) Issues() snyk.IssuesByFile { return f.issues }
+func (f *fakeFilteringFolder) FilterIssues(issues snyk.IssuesByFile, _ map[product.FilterableIssueType]bool) snyk.IssuesByFile {
+	return issues
+}
+func (f *fakeFilteringFolder) IssuesForFile(path types.FilePath) []types.Issue          { return f.issues[path] }
+func (f *fakeFilteringFolder) IssuesForRange(types.FilePath, types.Range) []types.Issue { return nil }
+func (f *fakeFilteringFolder) Issue(string) types.Issue                                 { return nil }
+
+// TestBuildTree_ReadsAgentFixEnabledFromSastSettings exercises the production wiring in
+// BuildTree (not BuildTreeFromFolderData): it seeds SAST settings into config exactly as
+// the settings fetch does, and asserts BuildTree reads AutofixEnabled through
+// GetSastSettings(cfg.Conf(), cfg.FolderPath) and gates the Code fixable line on it.
+func TestBuildTree_ReadsAgentFixEnabledFromSastSettings(t *testing.T) {
+	cases := []struct {
+		name           string
+		autofixEnabled bool
+		wantFixable    bool
+	}{
+		{"autofix enabled in SAST settings shows the Code fixable line", true, true},
+		{"autofix disabled in SAST settings hides the Code fixable line", false, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			conf := engine.GetConfiguration()
+			folderPath := types.FilePath("/project")
+
+			// Seed SAST settings the same way the settings fetch does, so BuildTree's
+			// GetSastSettings read returns them for this folder.
+			types.SetSastSettings(conf, folderPath, &sast_contract.SastResponse{
+				SastEnabled:    true,
+				AutofixEnabled: tc.autofixEnabled,
+			})
+			fc := &types.FolderConfig{
+				FolderPath:     folderPath,
+				ConfigResolver: types.NewMinimalConfigResolver(conf),
+				Engine:         engine,
+			}
+
+			// One fixable Code issue so the product node renders a fixable line.
+			issue := codeIssue(t, "code-1", true)
+			issues := snyk.IssuesByFile{issue.AffectedFilePath: {issue}}
+
+			ctrl := gomock.NewController(t)
+			folder := mock_types.NewMockFolder(ctrl)
+			folder.EXPECT().Path().Return(folderPath).AnyTimes()
+			folder.EXPECT().Name().Return("project").AnyTimes()
+			folder.EXPECT().FolderConfigReadOnly().Return(fc).AnyTimes()
+			folder.EXPECT().DisplayableIssueTypesFromConfig(gomock.Any()).
+				Return(map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true}).AnyTimes()
+			folder.EXPECT().IsDeltaFindingsEnabledFromConfig(gomock.Any()).Return(false).AnyTimes()
+			folder.EXPECT().IssueViewOptionsFromConfig(gomock.Any()).Return(types.IssueViewOptions{}).AnyTimes()
+
+			// MockFolder satisfies types.Folder but not snyk.FilteringIssueProvider (the
+			// real *workspace.Folder adds those methods); wrap it so BuildTree's
+			// f.(snyk.FilteringIssueProvider) assertion succeeds and returns our issues.
+			ff := &fakeFilteringFolder{MockFolder: folder, issues: issues}
+
+			ws := mock_types.NewMockWorkspace(ctrl)
+			ws.EXPECT().Folders().Return([]types.Folder{ff}).AnyTimes()
+			ws.EXPECT().GetFolderTrust().Return([]types.Folder{ff}, nil).AnyTimes()
+
+			builder := newBuilderWithCompletedScans()
+			data := builder.BuildTree(ws)
+
+			codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+			require.NotNil(t, codeNode)
+			infoNodes := filterChildrenByType(codeNode.Children, NodeTypeInfo)
+			fixableNode := findInfoNodeContaining(infoNodes, "fixable")
+			if tc.wantFixable {
+				require.NotNil(t, fixableNode, "Code fixable line should show when SAST autofix is enabled")
+				assert.Contains(t, fixableNode.Label, "fixable automatically")
+			} else {
+				assert.Nil(t, fixableNode, "Code fixable line should be hidden when SAST autofix is disabled")
+			}
+		})
+	}
+}
+
+func TestBuildTree_AllUntrusted_ShowsBannerAndDimmedFolderNode(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	untrusted := mock_types.NewMockFolder(ctrl)
+	untrusted.EXPECT().Path().Return(types.FilePath("/untrusted")).AnyTimes()
+	untrusted.EXPECT().Name().Return("untrusted").AnyTimes()
+
+	ws := mock_types.NewMockWorkspace(ctrl)
+	ws.EXPECT().Folders().Return([]types.Folder{untrusted}).AnyTimes()
+	ws.EXPECT().GetFolderTrust().Return(nil, []types.Folder{untrusted}).AnyTimes()
+
+	data := newBuilderWithCompletedScans().BuildTree(ws)
+
+	require.Len(t, data.Nodes, 2, "banner + the untrusted folder's dimmed node")
+	banner := data.Nodes[0]
+	assert.Equal(t, NodeTypeInfo, banner.Type)
+	assert.Equal(t, "untrusted-folder", banner.InfoVariant)
+	assert.Equal(t, []string{"/untrusted"}, banner.FolderPaths)
+	assert.Contains(t, banner.Label, "You should only scan folders you trust")
+
+	// Untrusted folder renders as a dimmed, non-expandable node: no children means
+	// the template draws no chevron.
+	node := data.Nodes[1]
+	assert.Equal(t, NodeTypeFolder, node.Type)
+	assert.Equal(t, "untrusted", node.Label)
+	assert.True(t, node.Untrusted, "node must be flagged untrusted for dimming")
+	assert.Empty(t, node.Children, "untrusted folder must have no children (no chevron)")
+}
+
+// TestBuildTree_MixedTrust_BannerPlusTrustedBody verifies the banner is prepended,
+// lists only the untrusted folder, and that the untrusted folder is excluded from
+// the scanned tree body while the trusted folder's products still render.
+func TestBuildTree_MixedTrust_BannerPlusTrustedBody(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	trustedIssue := testutil.NewMockIssueWithSeverity("oss-1", "/trusted/go.mod", types.High)
+	trustedIssue.Product = product.ProductOpenSource
+	trusted := mock_types.NewMockFolder(ctrl)
+	trusted.EXPECT().Path().Return(types.FilePath("/trusted")).AnyTimes()
+	trusted.EXPECT().Name().Return("trusted").AnyTimes()
+	trusted.EXPECT().FolderConfigReadOnly().Return(nil).AnyTimes()
+	trusted.EXPECT().DisplayableIssueTypesFromConfig(gomock.Any()).
+		Return(map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true}).AnyTimes()
+	trusted.EXPECT().IsDeltaFindingsEnabledFromConfig(gomock.Any()).Return(false).AnyTimes()
+	trusted.EXPECT().IssueViewOptionsFromConfig(gomock.Any()).Return(types.IssueViewOptions{}).AnyTimes()
+	trustedFF := &fakeFilteringFolder{MockFolder: trusted, issues: snyk.IssuesByFile{"/trusted/go.mod": {trustedIssue}}}
+
+	untrusted := mock_types.NewMockFolder(ctrl)
+	untrusted.EXPECT().Path().Return(types.FilePath("/untrusted")).AnyTimes()
+	untrusted.EXPECT().Name().Return("untrusted").AnyTimes()
+
+	ws := mock_types.NewMockWorkspace(ctrl)
+	ws.EXPECT().Folders().Return([]types.Folder{trustedFF, untrusted}).AnyTimes()
+	ws.EXPECT().GetFolderTrust().Return([]types.Folder{trustedFF}, []types.Folder{untrusted}).AnyTimes()
+
+	data := newBuilderWithCompletedScans().BuildTree(ws)
+
+	// Layout: banner, then the trusted folder's (expandable) root node, then the
+	// untrusted folder's dimmed, non-expandable node.
+	require.Len(t, data.Nodes, 3, "banner + trusted folder node + untrusted folder node")
+
+	banner := data.Nodes[0]
+	assert.Equal(t, "untrusted-folder", banner.InfoVariant, "banner must come first")
+	assert.Equal(t, []string{"/untrusted"}, banner.FolderPaths, "banner lists only untrusted folders")
+
+	// Regression (IDE-1882): the trusted folder must keep its own root node so the
+	// user can tell projects apart.
+	trustedNode := data.Nodes[1]
+	assert.Equal(t, NodeTypeFolder, trustedNode.Type, "trusted folder must keep its root node")
+	assert.Equal(t, "trusted", trustedNode.Label)
+	assert.False(t, trustedNode.Untrusted)
+	ossNode := findChildByProduct(trustedNode.Children, product.ProductOpenSource)
+	require.NotNil(t, ossNode, "trusted folder's products should render under its root node")
+
+	// The untrusted folder is shown dimmed and non-expandable (no children).
+	untrustedNode := data.Nodes[2]
+	assert.Equal(t, NodeTypeFolder, untrustedNode.Type)
+	assert.Equal(t, "untrusted", untrustedNode.Label)
+	assert.True(t, untrustedNode.Untrusted)
+	assert.Empty(t, untrustedNode.Children, "untrusted folder must have no children (no chevron)")
+}
+
+// TestBuildTree_MultipleUntrustedFolders_BannerListsAllAndOneNodeEach verifies
+// the builder handles 2+ untrusted folders correctly:
+//   - the banner's FolderPaths slice contains every untrusted path (for the
+//     per-folder Trust buttons in the template)
+//   - buildUntrustedFolderNodes emits exactly one dimmed, non-expandable node
+//     per folder in the same order they were returned by GetFolderTrust
+//
+// (IDE-1882)
+func TestBuildTree_MultipleUntrustedFolders_BannerListsAllAndOneNodeEach(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	u1 := mock_types.NewMockFolder(ctrl)
+	u1.EXPECT().Path().Return(types.FilePath("/repo/alpha")).AnyTimes()
+	u1.EXPECT().Name().Return("alpha").AnyTimes()
+
+	u2 := mock_types.NewMockFolder(ctrl)
+	u2.EXPECT().Path().Return(types.FilePath("/repo/beta")).AnyTimes()
+	u2.EXPECT().Name().Return("beta").AnyTimes()
+
+	u3 := mock_types.NewMockFolder(ctrl)
+	u3.EXPECT().Path().Return(types.FilePath("/repo/gamma")).AnyTimes()
+	u3.EXPECT().Name().Return("gamma").AnyTimes()
+
+	ws := mock_types.NewMockWorkspace(ctrl)
+	ws.EXPECT().Folders().Return([]types.Folder{u1, u2, u3}).AnyTimes()
+	ws.EXPECT().GetFolderTrust().Return(nil, []types.Folder{u1, u2, u3}).AnyTimes()
+
+	// NewTreeBuilder suffices — all folders are untrusted and bypass scan-state logic.
+	data := NewTreeBuilder().BuildTree(ws)
+
+	// Layout: banner at index 0, then one dimmed node per folder in order.
+	require.Len(t, data.Nodes, 4, "banner + one node per untrusted folder (3)")
+
+	banner := data.Nodes[0]
+	assert.Equal(t, NodeTypeInfo, banner.Type)
+	assert.Equal(t, "untrusted-folder", banner.InfoVariant)
+	// All three paths must appear in the banner so the template renders three Trust buttons.
+	assert.Equal(t, []string{"/repo/alpha", "/repo/beta", "/repo/gamma"}, banner.FolderPaths,
+		"banner FolderPaths must list all untrusted folders in order")
+
+	// Each untrusted folder gets its own dimmed, non-expandable node in the same order.
+	for i, want := range []struct{ label, path string }{
+		{"alpha", "/repo/alpha"},
+		{"beta", "/repo/beta"},
+		{"gamma", "/repo/gamma"},
+	} {
+		node := data.Nodes[i+1]
+		assert.Equal(t, NodeTypeFolder, node.Type, "node[%d] must be a folder node", i+1)
+		assert.Equal(t, want.label, node.Label, "node[%d] label must match folder name", i+1)
+		assert.True(t, node.Untrusted, "node[%d] must be flagged untrusted for dimming", i+1)
+		assert.Empty(t, node.Children, "node[%d] must have no children (no chevron)", i+1)
+		assert.Equal(t, types.FilePath(want.path), node.FilePath,
+			"node[%d] must carry the correct folder path for future trust resolution", i+1)
+	}
+}
+
 func TestBuildTree_EmptyProduct_ShowsCongratsInfoChild(t *testing.T) {
 	builder := newBuilderWithCompletedScans()
 
@@ -660,9 +1010,39 @@ func TestBuildTree_EmptyProduct_ShowsCongratsInfoChild(t *testing.T) {
 	ossNode := findChildByProduct(data.Nodes, product.ProductOpenSource)
 	require.NotNil(t, ossNode, "empty product should still appear")
 
+	// Scanner row shows just the ✅ tick with a "No issues found" tooltip.
+	assert.Equal(t, "✅", ossNode.Description, "zero-issue scanner row should show only the tick")
+	assert.Equal(t, "No issues found", ossNode.Tooltip)
+
 	infoNodes := filterChildrenByType(ossNode.Children, NodeTypeInfo)
 	congratsNode := findInfoNodeContaining(infoNodes, "No issues found")
 	require.NotNil(t, congratsNode, "empty product should show congrats info child")
+	// Child carries the plain text, without the tick (which is on the parent row).
+	assert.NotContains(t, congratsNode.Label, "✅", "child info node should not repeat the tick emoji")
+}
+
+func TestBuildTree_AllIssuesFilteredOut_ShowsFilterAwareEmptyState(t *testing.T) {
+	builder := newBuilderWithCompletedScans()
+	filePath := types.FilePath("/project/main.go")
+
+	issue := testutil.NewMockIssueWithSeverity("code-1", filePath, types.High)
+	issue.Product = product.ProductCode
+	issue.AdditionalData = &snyk.CodeIssueData{Key: "k1", Title: "Hardcoded Secret"}
+
+	data := builder.BuildTreeFromFolderData([]FolderData{{
+		FolderPath: "/project", FolderName: "project",
+		SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		AllIssues:           snyk.IssuesByFile{filePath: {issue}},
+		FilteredIssues:      snyk.IssuesByFile{}, // active filters hide every issue
+	}})
+
+	codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+	require.NotNil(t, codeNode)
+	assert.Equal(t, "✅", codeNode.Description, "scanner with all issues filtered still shows the tick")
+
+	infoNodes := filterChildrenByType(codeNode.Children, NodeTypeInfo)
+	require.NotNil(t, findInfoNodeContaining(infoNodes, "No issues found with these filters"),
+		"child should explain the empty state is filter-driven")
 }
 
 func TestBuildTree_OssIssueLabel_PackageAtVersionTitle(t *testing.T) {
@@ -725,7 +1105,7 @@ func TestBuildTree_CodeIssueLabel_TitleWithLineCol(t *testing.T) {
 	assert.Equal(t, "SQL Injection [42, 10]", issueNodes[0].Label)
 }
 
-func TestBuildTree_OssFileDescription_SaysVulnerabilities(t *testing.T) {
+func TestBuildTree_OssFileDescription_SaysIssues(t *testing.T) {
 	builder := newBuilderWithCompletedScans()
 	filePath := types.FilePath("/project/package.json")
 
@@ -745,7 +1125,8 @@ func TestBuildTree_OssFileDescription_SaysVulnerabilities(t *testing.T) {
 	require.NotNil(t, ossNode)
 	fileNodes := filterChildrenByType(ossNode.Children, NodeTypeFile)
 	require.GreaterOrEqual(t, len(fileNodes), 1)
-	assert.Contains(t, fileNodes[0].Description, "vulnerabilit")
+	assert.Contains(t, fileNodes[0].Description, "issue")
+	assert.NotContains(t, fileNodes[0].Description, "vulnerabilit")
 }
 
 func TestBuildTree_CodeFileDescription_SaysIssues(t *testing.T) {
@@ -1164,6 +1545,72 @@ func TestBuildTree_ProductNode_ScanError_ShowsErrorSuffix(t *testing.T) {
 	assert.Equal(t, "dependency graph failed", ossNode.ErrorMessage, "product node should carry the full error message")
 }
 
+func TestBuildTree_DisabledScanner_TooltipVariesByReason(t *testing.T) {
+	t.Run("disabled in plugin settings", func(t *testing.T) {
+		builder := newBuilderWithCompletedScans()
+		// Code is absent from SupportedIssueTypes → disabled via the settings toggle.
+		data := builder.BuildTreeFromFolderData([]FolderData{{
+			FolderPath: "/project", FolderName: "project",
+			SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
+		}})
+
+		codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+		require.NotNil(t, codeNode)
+		assert.Contains(t, codeNode.Tooltip, "disabled in Snyk plugin settings")
+		assert.Contains(t, codeNode.Tooltip, "gear icon")
+	})
+
+	t.Run("disabled at the organization", func(t *testing.T) {
+		builder := newBuilderWithCompletedScans()
+		builder.SetProductScanErrors(map[types.FilePath]map[product.Product]string{
+			"/project": {product.ProductCode: utils.ErrSnykCodeNotEnabled},
+		})
+		data := builder.BuildTreeFromFolderData([]FolderData{{
+			FolderPath: "/project", FolderName: "project",
+			SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
+		}})
+
+		codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+		require.NotNil(t, codeNode)
+		assert.Contains(t, codeNode.Tooltip, "disabled for your Snyk organization")
+		assert.Contains(t, codeNode.Tooltip, "org admin")
+	})
+
+	t.Run("disabled for this folder reuses the settings message", func(t *testing.T) {
+		// Folder config is part of plugin settings, so a folder-level disable shows
+		// the same tooltip as the product toggle being off.
+		builder := newBuilderWithCompletedScans()
+		builder.SetProductScanErrors(map[types.FilePath]map[product.Product]string{
+			"/project": {product.ProductOpenSource: utils.ErrSnykOssNotEnabledForFolder},
+		})
+		data := builder.BuildTreeFromFolderData([]FolderData{{
+			FolderPath: "/project", FolderName: "project",
+			SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
+		}})
+
+		ossNode := findChildByProduct(data.Nodes, product.ProductOpenSource)
+		require.NotNil(t, ossNode)
+		assert.Contains(t, ossNode.Tooltip, "disabled in Snyk plugin settings")
+		assert.Contains(t, ossNode.Tooltip, "gear icon")
+	})
+
+	t.Run("genuine scan failure keeps the generic hint", func(t *testing.T) {
+		builder := newBuilderWithCompletedScans()
+		builder.SetProductScanErrors(map[types.FilePath]map[product.Product]string{
+			"/project": {product.ProductOpenSource: "dependency graph failed"},
+		})
+		data := builder.BuildTreeFromFolderData([]FolderData{{
+			FolderPath: "/project", FolderName: "project",
+			SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
+		}})
+
+		ossNode := findChildByProduct(data.Nodes, product.ProductOpenSource)
+		require.NotNil(t, ossNode)
+		assert.Contains(t, ossNode.Tooltip, "couldn't be scanned")
+		assert.Contains(t, ossNode.Tooltip, "Click for details")
+	})
+}
+
 func TestBuildTree_ProductNode_ScanError_UsesErrorCatalogTreeSuffix(t *testing.T) {
 	cases := []struct {
 		errMsg     string
@@ -1312,7 +1759,7 @@ func TestBuildTree_SingleFolder_DeltaEnabled_BothSet_ReferenceFolderTakesPrecede
 
 // --- Info node: issue view options awareness ---
 
-func TestBuildTree_ConsistentIgnoresEnabled_IgnoredDisabled_ZeroFiltered_ShowsAdjustHint(t *testing.T) {
+func TestBuildTree_ConsistentIgnoresEnabled_IgnoredDisabled_ZeroFiltered_ShowsFilterAwareEmpty(t *testing.T) {
 	builder := newBuilderWithCompletedScans()
 	filePath := types.FilePath("/project/main.go")
 
@@ -1333,11 +1780,13 @@ func TestBuildTree_ConsistentIgnoresEnabled_IgnoredDisabled_ZeroFiltered_ShowsAd
 	require.NotNil(t, codeNode)
 
 	infoNodes := filterChildrenByType(codeNode.Children, NodeTypeInfo)
-	hintNode := findInfoNodeContaining(infoNodes, "Adjust your settings to view Ignored issues")
-	require.NotNil(t, hintNode, "should show hint about ignored issues being filtered")
+	require.NotNil(t, findInfoNodeContaining(infoNodes, "No issues found with these filters"),
+		"filter-hidden empty state should explain filters are active")
+	assert.Nil(t, findInfoNodeContaining(infoNodes, "Adjust your settings"),
+		"redundant 'Adjust your settings' hint should no longer be shown")
 }
 
-func TestBuildTree_ConsistentIgnoresEnabled_OpenDisabled_ZeroFiltered_ShowsAdjustHint(t *testing.T) {
+func TestBuildTree_ConsistentIgnoresEnabled_OpenDisabled_ZeroFiltered_ShowsFilterAwareEmpty(t *testing.T) {
 	builder := newBuilderWithCompletedScans()
 	filePath := types.FilePath("/project/main.go")
 
@@ -1357,8 +1806,10 @@ func TestBuildTree_ConsistentIgnoresEnabled_OpenDisabled_ZeroFiltered_ShowsAdjus
 	require.NotNil(t, ossNode)
 
 	infoNodes := filterChildrenByType(ossNode.Children, NodeTypeInfo)
-	hintNode := findInfoNodeContaining(infoNodes, "Adjust your settings to view Open issues")
-	require.NotNil(t, hintNode, "should show hint about open issues being filtered")
+	require.NotNil(t, findInfoNodeContaining(infoNodes, "No issues found with these filters"),
+		"filter-hidden empty state should explain filters are active")
+	assert.Nil(t, findInfoNodeContaining(infoNodes, "Adjust your settings"),
+		"redundant 'Adjust your settings' hint should no longer be shown")
 }
 
 func TestBuildTree_ConsistentIgnoresDisabled_NoHint(t *testing.T) {

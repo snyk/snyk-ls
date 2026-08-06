@@ -329,7 +329,7 @@ func (s *DefaultLdxSyncService) updateGlobalConfig(conf configuration.Configurat
 	}
 
 	if configUpdated && notifier != nil {
-		lspConfig := BuildLspConfiguration(conf, engine, logger, nil, s.configResolver)
+		lspConfig := BuildLspConfiguration(conf, engine, logger, s.configResolver)
 		notifier.Send(lspConfig)
 		logger.Debug().Msg("Sent $/snyk.configuration notification after global config update")
 	}

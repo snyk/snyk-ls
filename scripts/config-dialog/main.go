@@ -150,7 +150,7 @@ func main() {
 	config.SetWorkspace(gafConf, w)
 
 	// Create renderer
-	renderer, err := configuration.NewConfigHtmlRenderer(engine)
+	renderer, err := configuration.NewConfigHtmlRenderer(engine, resolver)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("Error creating renderer")
 		os.Exit(1)

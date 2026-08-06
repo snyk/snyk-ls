@@ -32,11 +32,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/code-client-go/http/mocks"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/runtimeinfo"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func Test_GetLatestRelease_downloadURLShouldBeNotEmpty(t *testing.T) {
@@ -86,6 +88,32 @@ func Test_getDistributionChannel(t *testing.T) {
 		channel := getDistributionChannel(engine)
 
 		assert.Equal(t, "rc", channel)
+	})
+	t.Run("configured setting overrides runtime version", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		runtimeInfo := runtimeinfo.New(
+			runtimeinfo.WithName("snyk-cli"),
+			runtimeinfo.WithVersion("v1.1234.4-preview."),
+		)
+		engine.SetRuntimeInfo(runtimeInfo)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliReleaseChannel), "rc")
+
+		channel := getDistributionChannel(engine)
+
+		assert.Equal(t, "rc", channel)
+	})
+	t.Run("configured pinned version overrides runtime version", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		runtimeInfo := runtimeinfo.New(
+			runtimeinfo.WithName("snyk-cli"),
+			runtimeinfo.WithVersion("v1.1234.4"),
+		)
+		engine.SetRuntimeInfo(runtimeInfo)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliReleaseChannel), "v1.1292.0")
+
+		channel := getDistributionChannel(engine)
+
+		assert.Equal(t, "v1.1292.0", channel)
 	})
 }
 
@@ -166,6 +194,18 @@ func Test_GetCLIDownloadURL(t *testing.T) {
 		actual := GetCLIDownloadURL(engine, DefaultBaseURL, httpClient)
 
 		assert.Equal(t, "https://downloads.snyk.io/cli/v1.234-preview./"+name, actual)
+	})
+	t.Run("CLI, pinned version, skips protocol lookup", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliReleaseChannel), "v1.1292.0")
+		ctrl := gomock.NewController(t)
+		httpClient := mocks.NewMockHTTPClient(ctrl)
+		httpClient.EXPECT().Do(gomock.Any()).Times(0)
+		discovery := Discovery{}
+
+		actual := GetCLIDownloadURL(engine, DefaultBaseURL, httpClient)
+
+		assert.Equal(t, "https://downloads.snyk.io/cli/v1.1292.0/"+discovery.ExecutableName(false), actual)
 	})
 }
 

@@ -28,7 +28,6 @@ import (
 
 type workspaceScanCommand struct {
 	command types.CommandData
-	srv     types.Server
 	engine  workflow.Engine
 	// scanCtx is the server-lifetime context shared across all scan goroutines.
 	// It is canceled on shutdown so that in-flight scans exit cleanly [IDE-2036].
@@ -43,12 +42,11 @@ func (cmd *workspaceScanCommand) Execute(_ context.Context) (any, error) {
 	w := config.GetWorkspace(cmd.engine.GetConfiguration())
 	w.Clear()
 	args := cmd.command.Arguments
-	// HandleUntrustedFolders and ScanWorkspace spawn un-awaited goroutines that outlive this
-	// command's execution. They must not reuse the per-request ctx (canceled when the command
-	// returns). Use the server-lifetime scanCtx so they are canceled on shutdown [IDE-2036].
+	// ScanWorkspace spawns un-awaited goroutines that outlive this command's execution,
+	// so it must not reuse the per-request ctx (canceled when the command returns). Use
+	// the server-lifetime scanCtx so they are canceled on shutdown instead [IDE-2036].
 	enrichedCtx := cmd.enrichContextWithScanSource(cmd.scanCtx, args)
 	w.ScanWorkspace(enrichedCtx)
-	HandleUntrustedFolders(enrichedCtx, cmd.engine.GetConfiguration(), cmd.engine.GetLogger(), cmd.srv)
 	return nil, nil
 }
 

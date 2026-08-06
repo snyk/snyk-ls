@@ -28,9 +28,11 @@ import (
 	"time"
 
 	http2 "github.com/snyk/code-client-go/http"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 const DefaultBaseURL = "https://downloads.snyk.io"
@@ -126,6 +128,12 @@ func (r *CLIRelease) GetLatestRelease() (*Release, error) {
 
 func getDistributionChannel(engine workflow.Engine) string {
 	logger := engine.GetLogger().With().Str("method", "getDistributionChannel").Logger()
+
+	if configured := engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingCliReleaseChannel)); configured != "" {
+		logger.Debug().Str("configuredChannel", configured).Msg("using configured release channel")
+		return configured
+	}
+
 	info := engine.GetRuntimeInfo()
 	if info == nil {
 		logger.Debug().Msg("no runtime info, assuming stable")
@@ -145,6 +153,11 @@ func getDistributionChannel(engine workflow.Engine) string {
 	return "stable"
 }
 
+// isKnownChannel reports whether s is a named release channel rather than a pinned CLI version.
+func isKnownChannel(s string) bool {
+	return s == "stable" || s == "rc" || s == "preview"
+}
+
 func GetCLIDownloadURL(engine workflow.Engine, baseURL string, httpClient http2.HTTPClient) string {
 	return GetCLIDownloadURLForProtocol(engine, baseURL, httpClient, config.LsProtocolVersion)
 }
@@ -157,7 +170,13 @@ func GetLSDownloadURL(engine workflow.Engine, httpClient http2.HTTPClient) strin
 func GetCLIDownloadURLForProtocol(engine workflow.Engine, baseURL string, httpClient http2.HTTPClient, protocolVersion string) string {
 	logger := engine.GetLogger().With().Str("method", "getCLIDownloadURLForProtocol").Logger()
 	defaultFallBack := "https://github.com/snyk/cli/releases"
+	discovery := Discovery{}
 	releaseChannel := getDistributionChannel(engine)
+	if !isKnownChannel(releaseChannel) {
+		// releaseChannel is a pinned CLI version (e.g. "v1.1292.0"), not a named channel.
+		pinnedVersion := strings.TrimPrefix(releaseChannel, "v")
+		return fmt.Sprintf("%s/cli/v%s/%s", baseURL, pinnedVersion, discovery.ExecutableName(false))
+	}
 	versionURL := fmt.Sprintf("%s/cli/%s/ls-protocol-version-%s", baseURL, releaseChannel, protocolVersion)
 
 	logger.Debug().Str("versionURL", versionURL).Msg("determined base version URL")
@@ -185,7 +204,6 @@ func GetCLIDownloadURLForProtocol(engine workflow.Engine, baseURL string, httpCl
 	version := string(versionBytes)
 	logger.Debug().Str("version", version).Msg("retrieved version from web")
 
-	discovery := Discovery{}
 	downloadURL := fmt.Sprintf("%s/cli/v%s/%s", baseURL, version, discovery.ExecutableName(false))
 	return downloadURL
 }

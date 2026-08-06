@@ -160,7 +160,7 @@ func Test_FindRange(t *testing.T) {
 	const content = "0\n1\n2\n  implementation 'a:test:4.17.4'"
 
 	var p = "build.gradle"
-	node := getDependencyNode(engine.GetLogger(), types.FilePath(p), issue.PackageManager, issue.From, []byte(content))
+	node := getDependencyNode(engine.GetLogger(), types.FilePath(p), issue.PackageManager, issue.From, []byte(content), "")
 	foundRange := getRangeFromNode(node)
 
 	assert.Equal(t, 3, foundRange.Start.Line)
@@ -604,8 +604,10 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 	workingDir, _ := os.Getwd()
 	folderPath := workingDir
 	fakeCli := cli.NewTestExecutor(engine)
-	fakeCli.ExecuteDuration = 200 * time.Millisecond
-	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), fakeCli, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewTestProgressTracker(t))
+	// Execute blocks on this channel instead of a wall-clock timer, so which scan is the
+	// "winner" (last registered, never canceled) is decided by scanCount, not by timing.
+	fakeCli.ExecuteRelease = make(chan struct{})
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), fakeCli, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewTestProgressTracker(t)).(*CLIScanner)
 	wg := sync.WaitGroup{}
 	p, _ := filepath.Abs(workingDir + testDataPackageJson)
 
@@ -613,8 +615,6 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 	for i := 0; i < concurrentScanRequests; i++ {
 		wg.Add(1)
 		go func() {
-			// Adding a short delay so the cancel listener will start before a new scan is sending the cancel signal
-			time.Sleep(20 * time.Millisecond)
 			ctx := EnrichContextForTest(t, t.Context(), engine, workingDir)
 			folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), types.FilePath(folderPath), engine.GetLogger())
 			ctx = ctx2.NewContextWithFolderConfig(ctx, folderConfig)
@@ -622,6 +622,17 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 			wg.Done()
 		}()
 	}
+
+	// scanCount starts at 1 (NewCLIScanner), so 10 registrations => 11. Every predecessor's
+	// CancelScan() runs inside the same critical section, before scanCount++, so reaching
+	// 11 means all 9 victims are already canceled - only the winner is left waiting below.
+	require.Eventually(t, func() bool {
+		scanner.mutex.RLock()
+		defer scanner.mutex.RUnlock()
+		return scanner.scanCount == concurrentScanRequests+1
+	}, 10*time.Second, time.Millisecond, "all scans should register")
+	close(fakeCli.ExecuteRelease)
+
 	wg.Wait()
 
 	// Assert

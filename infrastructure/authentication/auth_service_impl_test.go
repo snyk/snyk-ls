@@ -32,6 +32,7 @@ import (
 	"github.com/golang/mock/gomock"
 	pkgerrors "github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -52,6 +53,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 func TestAuthenticateSendsAuthenticationEventOnSuccess(t *testing.T) {
@@ -121,7 +123,7 @@ func TestAuthenticationAnalytics_OrgSelection(t *testing.T) {
 				mockFolder2.EXPECT().Path().Return(folder2Path).AnyTimes()
 
 				mockWorkspace := mock_types.NewMockWorkspace(ctrl)
-				// FYI, mock returns deterministic slice order, but real Workspace.Folders() returns the slice in a random order
+				// FYI, both the mock and the real Workspace.Folders() now return a deterministic, ascending path-sorted slice
 				mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder1, mockFolder2}).AnyTimes()
 
 				return mockWorkspace
@@ -380,6 +382,104 @@ func TestIsAuthenticated_ConcurrentCallsSendOnlyOneNotification(t *testing.T) {
 		"concurrent IsAuthenticated() calls should make exactly one auth API call via singleflight, not one per caller")
 }
 
+// TestIsAuthenticated_ConcurrentCallsAllReturnSharedResult guards against a regression
+// where a token-keyed "already in flight" guard around authCheckGroup.Do (added to fix
+// IDE-2178's reentrant-call deadlock, see git history) also short-circuited legitimate
+// concurrent callers on other goroutines to a hardcoded false, instead of letting them
+// share the correct singleflight result. The actual reentrant deadlock is fixed at its
+// source instead: the OAuth token refresher (auth_configuration.go) no longer calls back
+// into IsAuthenticated() on refresh failure, since the in-flight check that triggered the
+// refresh observes the same failure itself and runs the notification/logout handling.
+func TestIsAuthenticated_ConcurrentCallsAllReturnSharedResult(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
+	ts.SetToken(engine.GetConfiguration(), "some-test-token")
+
+	provider := &FakeAuthenticationProvider{
+		IsAuthenticated: true,
+		Engine:          engine,
+		CheckAuthDelay:  50 * time.Millisecond,
+	}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+
+	const concurrency = 3
+	ready := make(chan struct{})
+	results := make([]bool, concurrency)
+	var wg sync.WaitGroup
+	wg.Add(concurrency)
+	for i := range concurrency {
+		go func(i int) {
+			defer wg.Done()
+			<-ready
+			results[i] = service.IsAuthenticated()
+		}(i)
+	}
+	close(ready)
+	wg.Wait()
+
+	for i, result := range results {
+		assert.Truef(t, result, "caller %d must observe the shared singleflight result (true), not a hardcoded false", i)
+	}
+	assert.Equal(t, 1, int(atomic.LoadInt32(&provider.AuthCallCount)),
+		"concurrent IsAuthenticated() calls should make exactly one auth API call via singleflight, not one per caller")
+}
+
+// errorFakeAuthProvider's check function always fails with a configurable error,
+// simulating the whoami call failing because the OAuth token could not be refreshed.
+type errorFakeAuthProvider struct {
+	err error
+}
+
+func (p *errorFakeAuthProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
+	return func(_ workflow.Engine) (string, error) { return "", p.err }
+}
+func (p *errorFakeAuthProvider) Authenticate(_ context.Context) (string, error) { return "", nil }
+func (p *errorFakeAuthProvider) ClearAuthentication(_ context.Context) error    { return nil }
+func (p *errorFakeAuthProvider) AuthURL(_ context.Context) string               { return "" }
+func (p *errorFakeAuthProvider) setAuthUrl(_ string)                            {}
+func (p *errorFakeAuthProvider) AuthenticationMethod() types.AuthenticationMethod {
+	return types.FakeAuthentication
+}
+
+// TestIsAuthenticated_PermanentAuthErrorStillTriggersReAuthNotification proves the
+// notification/logout side effect that the deleted reentrant IsAuthenticated() call in
+// the OAuth refresher (auth_configuration.go) used to trigger on refresh failure is still
+// produced - now by the single, outer doAuthCheck() call observing the same error itself,
+// with no reentrant call needed.
+func TestIsAuthenticated_PermanentAuthErrorStillTriggersReAuthNotification(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	errorReporter := error_reporting.NewTestErrorReporter(engine)
+	notifier := notification.NewNotifier()
+	// A non-JSON token is parsed as a legacy token, so a permanent failure routes through
+	// handleInvalidCredentials() -> sendAuthenticationRequest(), same as TestHandleInvalidCredentials.
+	ts.SetToken(engine.GetConfiguration(), "invalidCreds")
+	provider := &errorFakeAuthProvider{err: buildWhoamiErr(fmt.Errorf("API request failed (status: 401)"))}
+	service := NewAuthenticationService(engine, ts, provider, errorReporter, notifier, testutil.DefaultConfigResolver(engine))
+
+	var mu sync.RWMutex
+	messageRequestReceived := false
+	go notifier.CreateListener(func(params any) {
+		if p, ok := params.(types.ShowMessageRequest); ok {
+			keys := p.Actions.Keys()
+			loginAction, ok := p.Actions.Get(keys[0])
+			require.True(t, ok)
+			require.Equal(t, types.LoginCommand, loginAction.CommandId)
+			mu.Lock()
+			messageRequestReceived = true
+			mu.Unlock()
+		}
+	})
+
+	isAuthenticated := service.IsAuthenticated()
+
+	assert.False(t, isAuthenticated)
+	assert.Eventuallyf(t, func() bool {
+		mu.RLock()
+		defer mu.RUnlock()
+		return messageRequestReceived
+	}, 10*time.Second, time.Millisecond, "expected a re-authenticate request notification after a permanent auth failure")
+}
+
 func Test_IsAuthenticated(t *testing.T) {
 	t.Run("User is authenticated", func(t *testing.T) {
 		engine, ts := testutil.UnitTestWithEngine(t)
@@ -494,6 +594,20 @@ func Test_shouldCauseLogout(t *testing.T) {
 		selfURLErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self", Err: tokenURLErr}
 		assert.False(t, shouldCauseLogout(buildWhoamiErr(selfURLErr), &logger))
 	})
+
+	t.Run("permanent 401 snyk_errors.Error wrapped in url.Error causes logout", func(t *testing.T) {
+		// Mirrors what http.Client.Do returns for a real, permanent 401: it always wraps the
+		// RoundTripper error in *url.Error, regardless of whether the cause is transient or not.
+		snykErr := snyk_errors.Error{StatusCode: 401, Title: "Authentication error"}
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self?version=2024-04-22", Err: snykErr}
+		assert.True(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
+	})
+
+	t.Run("permanent 400 snyk_errors.Error wrapped in url.Error causes logout", func(t *testing.T) {
+		snykErr := snyk_errors.Error{StatusCode: 400, Title: "Bad request"}
+		urlErr := &url.Error{Op: "Get", URL: "https://api.snyk.io/rest/self?version=2024-04-22", Err: snykErr}
+		assert.True(t, shouldCauseLogout(buildWhoamiErr(urlErr), &logger))
+	})
 }
 
 func Test_Logout(t *testing.T) {
@@ -589,6 +703,19 @@ func Test_Logout_CallsClearAuthentication(t *testing.T) {
 	service.Logout(t.Context())
 
 	assert.True(t, provider.ClearAuthenticationCalled, "Logout() must call ClearAuthentication on the provider")
+}
+
+func Test_Logout_ResetsLastUsedToken(t *testing.T) {
+	// Without this reset, re-authenticating with the same PAT/API token after logout
+	// leaves isNewToken false in doAuthCheck, silently skipping sendAuthenticationAnalytics.
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+	service.lastUsedToken = "some-previously-seen-token"
+
+	service.Logout(t.Context())
+
+	assert.Empty(t, service.lastUsedToken, "Logout() must reset lastUsedToken so re-auth with the same token is treated as new")
 }
 
 func Test_ConfigureProviders_CredentialMismatch_CallsClearAuthentication(t *testing.T) {
@@ -809,11 +936,11 @@ func Test_extractAudHost(t *testing.T) {
 	logger := zerolog.Nop()
 
 	type tc struct {
-		name         string
-		token        string
-		overrideRgx  bool
-		regexValue   string
-		expectedHost string
+		name          string
+		token         string
+		overrideHosts bool
+		hostsValue    []string
+		expectedHost  string
 	}
 
 	cases := []tc{
@@ -824,18 +951,32 @@ func Test_extractAudHost(t *testing.T) {
 		{name: "opaque token", token: "opaque-pat-style", expectedHost: ""},
 		{name: "empty aud", token: testutil.OauthTokenJSONWithAud(t, ""), expectedHost: ""},
 		{name: "invalid host", token: testutil.OauthTokenJSONWithAud(t, "api.malicious.io"), expectedHost: ""},
-		// "empty regex" exercises overrideRgx=true with regexValue="" — i.e.
-		// the user explicitly cleared the allowed-host regex. A truly *unset*
-		// regex is hard to test cleanly because GAF's app initializer wires a
-		// default-value function for CONFIG_KEY_ALLOWED_HOST_REGEXP at engine
-		// creation, so the only way to observe an empty string from
-		// conf.GetString is to set it back to "".
-		{name: "empty regex", token: testutil.OauthTokenJSONWithAud(t, "api.eu.snyk.io"), overrideRgx: true, regexValue: "", expectedHost: ""},
+		// "empty allowlist" exercises overrideHosts=true with hostsValue=nil —
+		// i.e. the user (or a private-cloud deployment) explicitly cleared
+		// CONFIG_KEY_ALLOWED_HOSTS. IsValidSnykHost fails closed: an empty
+		// allowlist means no host is ever considered valid.
+		{name: "empty allowlist", token: testutil.OauthTokenJSONWithAud(t, "api.eu.snyk.io"), overrideHosts: true, hostsValue: nil, expectedHost: ""},
 		{name: "FedRAMP", token: testutil.OauthTokenJSONWithAud(t, "api.fedramp.snykgov.io"), expectedHost: "api.fedramp.snykgov.io"},
 		{name: "ftp scheme", token: testutil.OauthTokenJSONWithAud(t, "ftp://api.snyk.io"), expectedHost: ""},
 		{name: "http scheme", token: testutil.OauthTokenJSONWithAud(t, "http://api.snyk.io"), expectedHost: "api.snyk.io"},
 		{name: "null aud", token: testutil.OauthTokenJSONWithAud(t, nil), expectedHost: ""},
-		{name: "regex compile error", token: testutil.OauthTokenJSONWithAud(t, "api.snyk.io"), overrideRgx: true, regexValue: "[invalid", expectedHost: ""},
+		// The superseded GAF regex's wildcard segment ("(.+)") matched any
+		// character including "/", so
+		// "api.evil.com/x.snyk.io" satisfied it as an "api...snyk.io" host.
+		// This call site was never exploitable, though: parseCustomUrl /
+		// Hostname() strips the path before validation, so only
+		// "api.evil.com" ever reached the host check, which rejects it
+		// outright since "evil.com" is not an allowed domain. This case pins
+		// that shielding against a future refactor of either branch.
+		{name: "smuggled-path attacker host", token: testutil.OauthTokenJSONWithAud(t, "api.evil.com/x.snyk.io"), expectedHost: ""},
+		// Documents the label-boundary rule alone, not a behavior change:
+		// IsValidSnykHost requires the allowlisted domain to start at a
+		// label boundary ("." + domain), so a raw-suffix match like
+		// "evilsnyk.io" ending in "snyk.io" does not qualify. The superseded
+		// regex already rejected this host too (it required a literal "."
+		// immediately before "snyk.io"), so this case's outcome is
+		// unchanged by the migration.
+		{name: "attacker host defeats naive suffix match", token: testutil.OauthTokenJSONWithAud(t, "api.evilsnyk.io"), expectedHost: ""},
 		{name: "uppercase aud", token: testutil.OauthTokenJSONWithAud(t, "API.EU.SNYK.IO"), expectedHost: "api.eu.snyk.io"},
 		// Go's net/url.URL.Host includes the port (host:port) so a naive
 		// parsed.Host read would feed "api.snyk.io:8443" into swapHost,
@@ -856,19 +997,19 @@ func Test_extractAudHost(t *testing.T) {
 		// Path-only aud ("/path-only") survives parseCustomUrl with an
 		// empty Host on both the original and the re-parse, so Hostname()
 		// returns "" and the Path-fallback branch assigns host = "/path-only"
-		// which IsValidAuthHost then rejects. Locks in the fallback branch.
+		// which IsValidSnykHost then rejects. Locks in the fallback branch.
 		{name: "path-only aud", token: testutil.OauthTokenJSONWithAud(t, "/path-only"), expectedHost: ""},
 		// Query-only aud ("?x=y") yields an empty Host AND an empty Path
 		// (the value lives in RawQuery), so even after the Path fallback
 		// host stays "" and extractAudHost must return "" without invoking
-		// the regex check. Locks in the post-fallback empty-host guard.
+		// the IsValidSnykHost check. Locks in the post-fallback empty-host guard.
 		{name: "query-only aud", token: testutil.OauthTokenJSONWithAud(t, "?x=y"), expectedHost: ""},
 		// RFC 7519 says `aud` MAY be a single string OR an array, and when
 		// an array there is no guaranteed ordering. Snyk OAuth tokens can
 		// carry the API host in any position of the array (e.g. preceded
 		// by a client ID). extractAudHost must iterate every entry and
 		// return the first one that passes the full validation chain
-		// (parse -> scheme allowlist -> IsValidAuthHost), not just look
+		// (parse -> scheme allowlist -> IsValidSnykHost), not just look
 		// at index 0 — otherwise discovery silently fails for legitimate
 		// tokens whose host is at index >= 1.
 		{name: "aud array with host at second position",
@@ -885,15 +1026,15 @@ func Test_extractAudHost(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	conf := engine.GetConfiguration()
 
-	defaultRegex := conf.GetString(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP)
-	require.NotEmpty(t, defaultRegex,
-		"GAF default CONFIG_KEY_ALLOWED_HOST_REGEXP must be present in test engine")
+	defaultHosts := conf.GetStringSlice(auth.CONFIG_KEY_ALLOWED_HOSTS)
+	require.NotEmpty(t, defaultHosts,
+		"GAF default CONFIG_KEY_ALLOWED_HOSTS must be present in test engine")
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.overrideRgx {
-				conf.Set(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, tt.regexValue)
-				t.Cleanup(func() { conf.Set(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP, defaultRegex) })
+			if tt.overrideHosts {
+				conf.Set(auth.CONFIG_KEY_ALLOWED_HOSTS, tt.hostsValue)
+				t.Cleanup(func() { conf.Set(auth.CONFIG_KEY_ALLOWED_HOSTS, defaultHosts) })
 			}
 
 			actual := extractAudHost(tt.token, conf, &logger)
@@ -955,6 +1096,131 @@ func Test_authenticate_PropagatesEndpointWhenTokenAudDiffers(t *testing.T) {
 	assert.Equal(t, 1, endpointUpdateMsgCount, "exactly one endpoint-update Info message must be sent")
 }
 
+// With a.m released during the provider call, the deferred cleanup must not read
+// a.previousAuthCtxCancelFunc lock-free: a concurrent Authenticate writes it under its own mutex, so
+// an unsynchronized read both data-races and could cancel the wrong (newer) login. Run under -race.
+func Test_Authenticate_ConcurrentCalls_NoDataRaceOnCancelFunc(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{Engine: engine, AuthenticateErr: fmt.Errorf("boom")}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = service.Authenticate(context.Background())
+		}()
+	}
+	wg.Wait()
+}
+
+// tokenOnReleaseProvider enters Authenticate, signals via started, blocks until release is closed,
+// then returns a valid token regardless of ctx — modeling a provider that has already obtained a
+// token when a cancellation (e.g. Logout) arrives moments later.
+type tokenOnReleaseProvider struct {
+	token   string
+	started chan struct{}
+	release chan struct{}
+}
+
+func (p *tokenOnReleaseProvider) Authenticate(_ context.Context) (string, error) {
+	close(p.started)
+	<-p.release
+	return p.token, nil
+}
+func (p *tokenOnReleaseProvider) ClearAuthentication(_ context.Context) error { return nil }
+func (p *tokenOnReleaseProvider) AuthURL(_ context.Context) string            { return "" }
+func (p *tokenOnReleaseProvider) setAuthUrl(_ string)                         {}
+func (p *tokenOnReleaseProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
+	return func(_ workflow.Engine) (string, error) { return "", nil }
+}
+func (p *tokenOnReleaseProvider) AuthenticationMethod() types.AuthenticationMethod {
+	return types.FakeAuthentication
+}
+
+// A login whose provider returns a token just as the user logs out must not re-establish credentials.
+// With a.m released during the interactive provider call, finishAuthenticate races Logout for the
+// mutex; it must detect the canceled context and discard its result rather than re-applying a token
+// that Logout just cleared.
+func Test_Authenticate_SupersededByLogout_DoesNotReapplyCredentials(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	provider := &tokenOnReleaseProvider{
+		token:   "e448dc1a-26c6-11ed-a261-0242ac120002",
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+
+	authDone := make(chan struct{})
+	go func() { _, _ = service.Authenticate(context.Background()); close(authDone) }()
+
+	<-provider.started // provider entered; the auth's cancel func is registered and a.m is released
+
+	// The user logs out while the browser flow is completing: this cancels the in-flight auth's
+	// context and clears credentials.
+	service.Logout(context.Background())
+
+	close(provider.release) // provider now returns a valid token; finishAuthenticate races for a.m
+	<-authDone
+
+	assert.Empty(t, config.GetToken(conf), "a login superseded by Logout must not re-establish credentials")
+}
+
+// Authenticate must not hold the auth mutex during the interactive provider call. If it does,
+// ConfigureProviders (called e.g. from a didChangeConfiguration notification handler) blocks behind
+// the in-flight login, which stalls the whole LSP request pipeline via jrpc2's notification barrier
+// and prevents a subsequent login from canceling the stuck one.
+func Test_ConfigureProviders_NotBlockedByInFlightAuthenticate(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := NewBlockingFakeAuthProvider()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
+	t.Cleanup(service.CancelOngoingAuth) // unblock the in-flight Authenticate goroutine at teardown
+
+	go func() { _, _ = service.Authenticate(context.Background()) }()
+
+	select {
+	case <-provider.Started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Authenticate did not start")
+	}
+
+	done := make(chan struct{})
+	go func() {
+		service.ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("ConfigureProviders blocked behind an in-flight Authenticate — the auth mutex must not be held during the interactive provider call")
+	}
+}
+
+// A canceled OAuth login must propagate through authenticate() as a cancellation (recognized by
+// util.IsCancellation) and not an error.
+func Test_authenticate_OAuthCanceled_TreatedAsCancellation(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	authenticator := NewFakeOauthAuthenticator(defaultExpiry, true, conf, true)
+	authenticator.canceled = true
+	provider := newOAuthProvider(conf, authenticator, engine.GetLogger())
+
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	token, err := service.Authenticate(t.Context())
+
+	assert.Empty(t, token)
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.True(t, util.IsCancellation(err), "a canceled OAuth login must be recognized as a cancellation")
+	assert.Zero(t, mockNotifier.SendErrorCount(), "a canceled OAuth login must not be surfaced to the user")
+}
+
 // When the new OAuth token's `aud` matches the configured custom endpoint,
 // the discovery branch is a no-op: no endpoint mutation, no "API Endpoint has
 // been updated" notification, AuthenticationParams carries an empty ApiUrl.
@@ -993,7 +1259,8 @@ func Test_authenticate_DiscoveryNoOp_WhenAudMatches(t *testing.T) {
 }
 
 // A malicious / non-Snyk `aud` claim must be rejected by the allowed-host
-// regex check inside extractAudHost. Authenticate still succeeds (returning
+// (IsValidSnykHost / CONFIG_KEY_ALLOWED_HOSTS) check inside extractAudHost.
+// Authenticate still succeeds (returning
 // the token) but the override branch must NOT trigger: no "API Endpoint has
 // been updated" notification is sent, the user's pre-configured
 // SettingApiEndpoint is not overwritten by the new (rejected) host, and

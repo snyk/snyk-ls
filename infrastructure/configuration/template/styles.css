@@ -123,6 +123,7 @@ form > .section {
 
 /* Direct tab-pane children miss the 10px col-md-* gutter; offset them so all blocks share one edge. */
 .tab-pane > .info-box,
+.tab-pane > .section,
 .folder-pane > .section,
 .folder-pane > .reset-overrides-btn {
     margin-left: 10px;
@@ -226,6 +227,14 @@ h3 {
     color: var(--text-color);
     font-size: var(--base-font-size);
     line-height: 1.5;
+}
+
+/* Folder override disclaimer: text on the left, "Reset overrides" button top-right. */
+.folder-disclaimer {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--container-padding);
 }
 
 .folder-config {
@@ -707,22 +716,56 @@ button.secondary[disabled] {
     cursor: not-allowed;
 }
 
+/* Outlined (ghost) danger button: red text + border on a transparent fill reads clearly on the
+   dark panel. A solid --error-background fill is a subtle marker color and washes out light text. */
 .reset-overrides-btn {
-    display: none;
     padding: 4px 12px;
+    white-space: nowrap;
     font-size: var(--tiny-font-size);
-    background-color: var(--error-background);
-    border: 1px solid var(--error-background);
-    color: var(--input-foreground);
+    background-color: transparent;
+    border: 1px solid var(--error-foreground);
+    color: var(--error-foreground);
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .reset-overrides-btn:hover {
-    color: var(--editor-foreground);
-    background-color: var(--error-background);
-    border-color: var(--error-background);
+    background-color: var(--error-foreground);
+    border-color: var(--error-foreground);
+    color: var(--background-color);
+}
+
+/* Lay out the fallbacks-pane Reset-overrides info-box as a single row so the
+   "Reset overrides" button sits inline at the right of the description paragraph
+   instead of wrapping to a second line (the default .info-box uses
+   flex-direction: column). The child combinator (>) targets only the direct-child
+   info-box at the top of #fallbacks-pane (the Reset-overrides row) and leaves
+   the nested info-box inside the "Advanced" collapsible unaffected. */
+#fallbacks-pane > .info-box {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.reset-global-overrides-btn {
+    flex-shrink: 0;
+    padding: 4px 12px;
+    white-space: nowrap;
+    font-size: var(--tiny-font-size);
+    background-color: transparent;
+    border: 1px solid var(--error-foreground);
+    color: var(--error-foreground);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.reset-global-overrides-btn:hover {
+    background-color: var(--error-foreground);
+    border-color: var(--error-foreground);
+    color: var(--background-color);
 }
 
 /* - - - Settings Tabs - - - */

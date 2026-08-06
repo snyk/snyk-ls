@@ -17,18 +17,22 @@
 package command
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/golang/mock/gomock"
-	"github.com/snyk/go-application-framework/pkg/configuration"
+	gafconfiguration "github.com/snyk/go-application-framework/pkg/configuration"
 	localworkflows "github.com/snyk/go-application-framework/pkg/local_workflows"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/application/config"
+	lsconfig "github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -37,6 +41,36 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
 )
+
+// initGitRepoWithRemote turns repoPath into a git repository with one commit
+// and an origin remote so that submitIgnoreRequest.validateIgnoreRequest can
+// resolve the repository URL via scan.NewRepositoryTarget. Integration tests
+// previously used a bare TempDir; the IDE-1453 validation now requires a
+// real repo on the IAW submit path.
+func initGitRepoWithRemote(t *testing.T, repoPath types.FilePath) {
+	t.Helper()
+	repo, err := git.PlainInit(string(repoPath), false)
+	require.NoError(t, err)
+
+	worktree, err := repo.Worktree()
+	require.NoError(t, err)
+	seed := filepath.Join(string(repoPath), "seed.txt")
+	require.NoError(t, os.WriteFile(seed, []byte("seed"), 0600))
+	_, err = worktree.Add(filepath.Base(seed))
+	require.NoError(t, err)
+	_, err = worktree.Commit("init", &git.CommitOptions{
+		Author: &object.Signature{Name: t.Name()},
+	})
+	require.NoError(t, err)
+
+	repoConfig, err := repo.Config()
+	require.NoError(t, err)
+	repoConfig.Remotes["origin"] = &config.RemoteConfig{
+		Name: "origin",
+		URLs: []string{"git@github.com:snyk/snyk-goof.git"},
+	}
+	require.NoError(t, repo.Storer.SetConfig(repoConfig))
+}
 
 // testIgnoreOperationUsesFolderOrg is a shared helper function that tests ignore operations
 // (create/edit/delete) use the correct folder-specific org for a single folder scenario.
@@ -63,7 +97,7 @@ func testIgnoreOperationUsesFolderOrg(
 	// The storage is shared, so folder configs will be accessible, but we need to ensure the global org is set
 	mockEngine, mockEngineConfig := testutil.SetUpEngineMock(t, engine)
 	// Ensure the global org is set on the mock engine config (needed for FolderOrganization fallback)
-	mockEngineConfig.Set(configuration.ORGANIZATION, engine.GetConfiguration().GetString(configuration.ORGANIZATION))
+	mockEngineConfig.Set(gafconfiguration.ORGANIZATION, engine.GetConfiguration().GetString(gafconfiguration.ORGANIZATION))
 
 	// Re-save folder config to ensure it's accessible through the mock engine's config
 	// This is necessary because GetOrCreateFolderConfig might create new configs if not found
@@ -71,7 +105,7 @@ func testIgnoreOperationUsesFolderOrg(
 
 	// Verify folder config is accessible after mock engine setup (storage is shared)
 	resolver := testutil.DefaultConfigResolver(mockEngine)
-	folderConfig := config.GetFolderConfigFromEngine(mockEngine, resolver, folderPath, mockEngine.GetLogger())
+	folderConfig := lsconfig.GetFolderConfigFromEngine(mockEngine, resolver, folderPath, mockEngine.GetLogger())
 	require.NotNil(t, folderConfig, "Folder config should be accessible")
 	require.Equal(t, expectedOrg, folderConfig.PreferredOrg(), "Folder should have the expected org")
 	require.True(t, folderConfig.OrgSetByUser(), "Folder should have OrgSetByUser=true")
@@ -79,8 +113,8 @@ func testIgnoreOperationUsesFolderOrg(
 	// Capture the config from the workflow invocation
 	var capturedOrg string
 	mockEngine.EXPECT().InvokeWithConfig(workflowID, gomock.Any()).
-		Do(func(_ workflow.Identifier, cfg configuration.Configuration) {
-			capturedOrg = cfg.GetString(configuration.ORGANIZATION)
+		Do(func(_ workflow.Identifier, cfg gafconfiguration.Configuration) {
+			capturedOrg = cfg.GetString(gafconfiguration.ORGANIZATION)
 		}).
 		Return([]workflow.Data{workflow.NewData(workflow.NewTypeIdentifier(workflowID, "test"), "json", []byte(`{"id":"`+ignoreID+`"}`))}, nil).
 		Times(1)
@@ -121,6 +155,12 @@ func Test_IgnoreOperations_UseFolderOrganization(t *testing.T) {
 
 	// Set up two folders with different orgs
 	folderPath1, folderPath2, _, folderOrg1, folderOrg2 := testutil.SetupFoldersWithOrgs(t, engine)
+
+	// IDE-1453: submitIgnoreRequest now validates the content root resolves
+	// to a repo URL via scan.NewRepositoryTarget. Init both folders as real
+	// git repos with a remote so validation passes.
+	initGitRepoWithRemote(t, folderPath1)
+	initGitRepoWithRemote(t, folderPath2)
 
 	// Set up workspace with the folders
 	// This is required for FolderOrganizationForSubPath to work (used by initializeCreateConfiguration, initializeEditConfigurations, initializeDeleteConfiguration)

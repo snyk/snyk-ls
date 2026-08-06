@@ -52,7 +52,7 @@ The tree follows a four-level hierarchy:
 | `domain/ide/treeview/expand_state.go` | LS-side expand/collapse state persistence |
 | `domain/ide/treeview/template/tree.js` | ES5 expand/collapse, filter toggle handlers |
 | `domain/ide/command/get_tree_view.go` | `snyk.getTreeView` command (on-demand full HTML) |
-| `domain/ide/command/toggle_tree_filter.go` | `snyk.toggleTreeFilter` command (severity/issueView toggles) |
+| `domain/ide/command/toggle_tree_filter.go` | `snyk.toggleTreeFilter` command (severity / issueView / riskScore / reset filters) |
 | `domain/ide/command/set_node_expanded.go` | `snyk.setNodeExpanded` command (expand/collapse persistence) |
 | `domain/ide/command/update_folder_config.go` | `snyk.updateFolderConfig` command (delta reference updates) |
 | `domain/ide/command/navigate_to_range.go` | `snyk.navigateToRange` command (navigation + detail panel) |
@@ -71,13 +71,22 @@ Returns the full tree view HTML. Used for initial load or manual refresh.
 
 #### `snyk.toggleTreeFilter`
 
-Toggles a filter setting. The updated tree HTML is pushed via `$/snyk.treeView` notification (not returned directly).
+Toggles a filter setting. The updated tree HTML is pushed via `$/snyk.treeView` notification (not returned directly). Every variant applies the change to **all open folders** (the toolbar is workspace-wide).
 
-**Arguments:** `[filterType: string, filterValue: string, enabled: boolean]`
+**Arguments:** `args[0]` is a combined filter token; `args[1]` is always the value (or omitted for `reset`):
 
-- `filterType`: `"severity"` or `"issueView"`
-- `filterValue`: for severity: `"critical"`, `"high"`, `"medium"`, `"low"`; for issueView: `"openIssues"`, `"ignoredIssues"`
-- `enabled`: `true` to enable, `false` to disable
+| `args[0]` token | `args[1]` | Notes |
+|-----------------|-----------|-------|
+| `"severity_critical"` | `enabled: boolean` | enable/disable the Critical severity filter |
+| `"severity_high"` | `enabled: boolean` | enable/disable the High severity filter |
+| `"severity_medium"` | `enabled: boolean` | enable/disable the Medium severity filter |
+| `"severity_low"` | `enabled: boolean` | enable/disable the Low severity filter |
+| `"issueView_openIssues"` | `enabled: boolean` | enable/disable Open Issues in the issue view |
+| `"issueView_ignoredIssues"` | `enabled: boolean` | enable/disable Ignored Issues in the issue view |
+| `"riskScore"` | `threshold: number` | minimum risk score, clamped to `0`–`1000` |
+| `"reset"` | _(none)_ | restores risk score + issue-view options to their defaults; takes no further arguments |
+
+`enabled`: `true` to enable, `false` to disable. JSON numbers arrive as `float64` over LSP; the handler coerces to `int` and rejects non-finite values.
 
 **Returns:** `null`
 
@@ -197,8 +206,44 @@ window.__ideExecuteCommand__ = function(command, args, callback) {
 | Call | Command | Args |
 |------|---------|------|
 | Issue click | `snyk.navigateToRange` | `[filePath, { start: { line, character }, end: { line, character } }, issueId, product]` |
-| Filter toggle | `snyk.toggleTreeFilter` | `[filterType, filterValue, enabled]` |
+| Filter toggle | `snyk.toggleTreeFilter` | combined token in `args[0]` — `["severity_high", enabled]`, `["issueView_openIssues", enabled]`, `["riskScore", threshold]`, `["reset"]` |
 | Expand/collapse | `snyk.setNodeExpanded` | `[nodeID, expanded]` |
+
+### File / Issue Search (client-side)
+
+A magnifier toggle (`#treeSearchToggle`) sits in the filter toolbar next to the
+severity icons whenever there are issues to search (`TotalIssues > 0`). Clicking it
+reveals a search box above the tree; clicking it again (or pressing `Escape` in the
+field) hides the box and resets the filter. It reproduces the native JetBrains
+`TreeSpeedSearch` that the old Swing tree got for free, but as a web-native control
+it benefits every IDE.
+
+The filter is entirely **client-side and transient** — it runs in `tree.js`, never
+calls the LS, and persists no state:
+
+- As the user types, each node is matched against its own label (the full,
+  pre-truncation value) and, for file nodes, the full file path.
+- A node stays visible when it matches or when any descendant matches; ancestors
+  of a match are auto-expanded so the match is reachable. Non-matching nodes get
+  the `tree-search-hidden` class (`display: none`).
+- The pre-search expand state is snapshotted on the first keystroke and restored
+  verbatim when the query is cleared, so searching never disturbs the user's
+  layout. The auto-expand during search is **not** persisted via
+  `snyk.setNodeExpanded`.
+- When nothing matches, a "No files or issues match your search" message
+  (`#treeSearchEmpty`) is shown.
+- Closing the box (toggle again or `Escape`) clears the query and resets the
+  filter. Input is debounced to one pass per animation frame.
+
+Because a `$/snyk.treeView` push replaces the entire HTML (scan complete, severity
+toggle, …), the search text is reset on re-render — matching the transient nature
+of the original speed search.
+
+| File | Role |
+|------|------|
+| `domain/ide/treeview/template/tree.html` | Renders `#treeSearchToggle` in the toolbar + hidden `#treeSearch` input + `#treeSearchEmpty` (gated on `TotalIssues > 0`) |
+| `domain/ide/treeview/template/tree.js` | Toolbar toggle (open/close + reset), client-side recursive filter, auto-expand tracking, no-results toggle |
+| `domain/ide/treeview/template/styles.css` | `.tree-search-toggle`, `.tree-search`, `.tree-search-input`, `.tree-node.tree-search-hidden`, `.tree-search-empty` |
 
 ### Filter Architecture
 
@@ -210,9 +255,9 @@ sequenceDiagram
     participant LS
 
     User->>WebView: Click severity button "High"
-    WebView->>WebView: JS: read data-filter-type, data-filter-value
-    WebView->>IDE: __ideExecuteCommand__("snyk.toggleTreeFilter", ["severity", "high", false])
-    IDE->>LS: workspace/executeCommand snyk.toggleTreeFilter ["severity", "high", false]
+    WebView->>WebView: JS: build token "severity_" + data-filter-value
+    WebView->>IDE: __ideExecuteCommand__("snyk.toggleTreeFilter", ["severity_high", false])
+    IDE->>LS: workspace/executeCommand snyk.toggleTreeFilter ["severity_high", false]
     LS->>LS: Update Config.SetSeverityFilter
     LS->>LS: HandleConfigChange → CompositeEmitter.Emit
     LS-->>IDE: $/snyk.treeView notification (re-rendered HTML)
@@ -271,7 +316,7 @@ All JS is ES5 (no arrow functions, no `const`/`let`, no template literals). CSS 
 
 **Unit tests (`make test`):**
 - Tree builder: empty, single, multi-folder, filtered, sorted, TotalIssues computation, deterministic IDs, expand state defaults + overrides, product display names, product order, disabled products, fixable info nodes, scanning description
-- HTML renderer: valid output, node rendering, filter toolbar, badge ordering, disabled product class, isEnabled template function
+- HTML renderer: valid output, node rendering, filter toolbar, badge ordering, disabled product class, isEnabled template function, search box rendered/omitted based on TotalIssues
 - Emitter: notification sent, TotalIssues propagated, per-product scan status in HTML, concurrent Emit() calls (race detector)
 - ExpandState: set/get, defaults by node type, overrides, concurrent access
 - ScanStateAggregator: ProductScanStates populated from per-product scan states
@@ -322,6 +367,15 @@ Located in `domain/ide/treeview/template/js-tests/tree-runtime.test.mjs`. These 
 | issue click applies .selected | clicking issue node highlights it, removes from previous |
 | __selectTreeNode__ programmatic select | IDE→JS bridge selects node by ID |
 | __selectTreeNode__ unknown ID | no crash when nodeId not found |
+| file/issue search hides non-matches | typing filters file nodes, matches label + path, case-insensitive |
+| search reveals matched issues | matching an issue title keeps its ancestor file visible, hides siblings |
+| search auto-expands ancestors | ancestors of a match expand without persisting expand state to the LS |
+| clearing search restores state | visibility and pre-search expand state restored, no LS calls |
+| search no-results message | empty message shown when nothing matches, hidden otherwise |
+| search absent input no-op | tree.js tolerates a missing search input |
+| toolbar toggle opens the box | box hidden until the toggle is clicked, then shown + focused |
+| toolbar toggle closes + resets | second click hides the box, clears the query, resets the filter |
+| Escape closes + resets search | Escape in the field hides the box and resets the filter |
 
 Run JS tests standalone: `make test-js`
 

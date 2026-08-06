@@ -28,10 +28,13 @@ type mavenRangeFinder struct {
 	path        types.FilePath
 	fileContent []byte
 	logger      *zerolog.Logger
+	// root is the workspace folder; parent POMs reached via <relativePath> are
+	// constrained to stay within it. Empty disables the check.
+	root types.FilePath
 }
 
 func (m *mavenRangeFinder) find(introducingPackageName string, introducingVersion string) (*ast.Node, *ast.Tree) {
-	parser := maven.New(m.logger)
+	parser := maven.New(m.logger, m.root)
 	tree := parser.Parse(string(m.fileContent), m.path)
 	for _, depNode := range tree.Root.Children {
 		if introducingPackageName == depNode.Name {

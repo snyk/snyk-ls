@@ -188,7 +188,7 @@ func buildTestDependencies(t *testing.T, engine workflow.Engine, tokenService ty
 	w := workspace.New(gafConfiguration, logger, localInstrumentor, localScanner, localHoverService, localScanNotifier, localNotifier, localScanPersister, localScanStateAggregator, localFeatureFlagService, localConfigResolver, engine)
 	config.SetWorkspace(gafConfiguration, w)
 	localFileWatcher := watcher.NewFileWatcher()
-	localCodeActionService := codeaction.NewService(engine, w, localFileWatcher, localNotifier, localFeatureFlagService, localConfigResolver)
+	localCodeActionService := codeaction.NewService(engine, w, localFileWatcher, localNotifier, localFeatureFlagService, localConfigResolver, nil)
 
 	var localInlineValueProvider snyk.InlineValueProvider
 	if ivp, ok := localScanner.(snyk.InlineValueProvider); ok {

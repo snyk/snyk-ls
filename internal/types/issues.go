@@ -17,6 +17,7 @@
 package types
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -75,10 +76,11 @@ type CodeAction interface {
 	GetOriginalTitle() string
 	GetIsPreferred() *bool
 	GetEdit() *WorkspaceEdit
-	GetDeferredEdit() *func() *WorkspaceEdit
+	GetDeferredEdit() *func(context.Context) *WorkspaceEdit
 	GetCommand() *CommandData
 	GetDeferredCommand() *func() *CommandData
 	GetUuid() *uuid.UUID
+	GetKind() CodeActionKind
 	SetTitle(title string)
 	SetEdit(edit *WorkspaceEdit)
 }

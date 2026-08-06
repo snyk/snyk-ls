@@ -19,6 +19,7 @@ package workspace
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -39,15 +40,27 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-// Workspace represents the highest entity in an IDE that contains code. A workspace may contain multiple folders
+// Workspace represents the highest entity in an IDE that contains code. A workspace may contain multiple folders.
+//
+// Mutex ordering (must always be acquired in this order to prevent deadlocks):
+//
+//  1. mutex — protects w.folders; acquired via Lock() for writes and RLock()
+//     for reads. Never acquire trustStateMutex while holding mutex.
+//  2. trustStateMutex — protects trust-specific state (see below). Always
+//     acquired AFTER mutex is released, never while mutex is held.
 type Workspace struct {
-	mutex               sync.RWMutex
-	folders             map[types.FilePath]types.Folder
-	instrumentor        performance.Instrumentor
-	scanner             scanner.Scanner
-	hoverService        hover.Service
-	scanNotifier        scanner.ScanNotifier
-	trustMutex          sync.Mutex
+	mutex        sync.RWMutex
+	folders      map[types.FilePath]types.Folder
+	instrumentor performance.Instrumentor
+	scanner      scanner.Scanner
+	hoverService hover.Service
+	scanNotifier scanner.ScanNotifier
+	// trustStateMutex guards two trust-related invariants:
+	//   1. trustRequestOngoing — debounce flag for the UI trust dialog
+	//   2. the addTrustedFolders read-modify-write on SettingTrustedFolders
+	// Both are serialized by the same lock so there is a single mutex ordering
+	// between all trust state mutations. (IDE-1882)
+	trustStateMutex     sync.Mutex
 	trustRequestOngoing bool // for debouncing
 	notifier            noti.Notifier
 	conf                configuration.Configuration
@@ -60,6 +73,10 @@ type Workspace struct {
 }
 
 func (w *Workspace) Issues() snyk.IssuesByFile {
+	// Hold the read lock while iterating w.folders to prevent a data race with
+	// concurrent AddFolder / RemoveFolder (which write the map under Lock()).
+	w.mutex.RLock()
+	defer w.mutex.RUnlock()
 	issues := make(map[types.FilePath][]types.Issue)
 	for _, folder := range w.folders {
 		if issueProvider, ok := folder.(snyk.IssueProvider); ok {
@@ -72,6 +89,10 @@ func (w *Workspace) Issues() snyk.IssuesByFile {
 }
 
 func (w *Workspace) Issue(key string) types.Issue {
+	// Hold the read lock while iterating w.folders to prevent a data race with
+	// concurrent AddFolder / RemoveFolder (which write the map under Lock()).
+	w.mutex.RLock()
+	defer w.mutex.RUnlock()
 	for _, folder := range w.folders {
 		if issueProvider, ok := folder.(snyk.IssueProvider); ok {
 			issue := issueProvider.Issue(key)
@@ -193,6 +214,13 @@ func (w *Workspace) IssuesForRange(path types.FilePath, r types.Range) []types.I
 	return nil
 }
 
+// GetFolderContaining returns the first folder that contains the given path, or
+// nil if none does.
+//
+// CONCURRENCY: callers must NOT hold w.mutex when calling this function — it reads
+// w.folders bare (no lock). RemoveFolder and DeleteFile already call it while
+// holding w.mutex.Lock(); adding a lock here would deadlock those callers.
+// A follow-up is needed to audit and protect all w.folders iterators uniformly.
 func (w *Workspace) GetFolderContaining(path types.FilePath) types.Folder {
 	for _, folder := range w.folders {
 		if folder.Contains(path) {
@@ -202,14 +230,19 @@ func (w *Workspace) GetFolderContaining(path types.FilePath) types.Folder {
 	return nil
 }
 
-func (w *Workspace) Folders() (folder []types.Folder) {
-	w.mutex.RLock()
-	defer w.mutex.RUnlock()
-	folders := make([]types.Folder, 0, len(w.folders))
-	for _, folder := range w.folders {
-		folders = append(folders, folder)
-	}
-
+func (w *Workspace) Folders() []types.Folder {
+	folders := func() []types.Folder {
+		w.mutex.RLock()
+		defer w.mutex.RUnlock()
+		result := make([]types.Folder, 0, len(w.folders))
+		for _, folder := range w.folders {
+			result = append(result, folder)
+		}
+		return result
+	}()
+	sort.Slice(folders, func(i, j int) bool {
+		return folders[i].Path() < folders[j].Path()
+	})
 	return folders
 }
 
@@ -239,7 +272,23 @@ func (w *Workspace) ChangeWorkspaceFolders(params types.DidChangeWorkspaceFolder
 }
 
 func (w *Workspace) Clear() {
+	// Snapshot the folder list under the read lock so that concurrent
+	// AddFolder / RemoveFolder calls do not race with the map iteration.
+	// The lock is released before calling per-folder Clear() for two reasons:
+	//   1. Avoid holding w.mutex during potentially slow I/O in folder.Clear().
+	//   2. Folder.Clear() is concurrency-safe by its own internal mutex and
+	//      xsync.MapOf fields — concurrent invocations (e.g. from a concurrent
+	//      RemoveFolder) are safe and idempotent.
+	// A folder added after the snapshot is taken will not be cleared by this
+	// call; that is intentional point-in-time semantics.
+	w.mutex.RLock()
+	folders := make([]types.Folder, 0, len(w.folders))
 	for _, folder := range w.folders {
+		folders = append(folders, folder)
+	}
+	w.mutex.RUnlock()
+
+	for _, folder := range folders {
 		if cacheProvider, ok := folder.(snyk.CacheProvider); ok {
 			cacheProvider.Clear()
 		}
@@ -249,12 +298,19 @@ func (w *Workspace) Clear() {
 	w.hoverService.ClearAllHovers()
 }
 
-func AddTrustedFolders(conf configuration.Configuration, configResolver types.ConfigResolverInterface, logger *zerolog.Logger, engine workflow.Engine, foldersToSet []types.Folder) {
+// addTrustedFolders appends foldersToSet to the SettingTrustedFolders config
+// key and returns the resulting full slice so callers do not need to re-read
+// config to build notification payloads.
+//
+// CONCURRENCY: callers that may run concurrently must hold Workspace.trustStateMutex
+// for the duration of this call. The function is package-level (no receiver) and
+// cannot acquire the lock itself.
+func addTrustedFolders(conf configuration.Configuration, configResolver types.ConfigResolverInterface, logger *zerolog.Logger, engine workflow.Engine, foldersToSet []types.Folder) []types.FilePath {
 	oldTrustedFolderPaths := types.GetGlobalSliceFilePath(conf, types.SettingTrustedFolders)
 
 	trustedFolderPaths := append([]types.FilePath(nil), oldTrustedFolderPaths...)
 	for _, folder := range foldersToSet {
-		logger.Debug().Str("method", "AddTrustedFolders").Msgf("adding trusted folder %s", folder.Path())
+		logger.Debug().Str("method", "addTrustedFolders").Msgf("adding trusted folder %s", folder.Path())
 		trustedFolderPaths = append(trustedFolderPaths, folder.Path())
 	}
 
@@ -265,27 +321,45 @@ func AddTrustedFolders(conf configuration.Configuration, configResolver types.Co
 		newFoldersJSON, _ := json.Marshal(trustedFolderPaths)
 		go analytics.SendConfigChangedAnalyticsEvent(conf, engine, logger, "trustedFolders", string(oldFoldersJSON), string(newFoldersJSON), types.FilePath(""), analytics.TriggerSourceIDE, configResolver)
 	}
+	return trustedFolderPaths
 }
 
 func (w *Workspace) TrustFoldersAndScan(ctx context.Context, foldersToBeTrusted []types.Folder) {
-	// Add trusted folders to config and send analytics
-	AddTrustedFolders(w.conf, w.configResolver, w.logger, w.engine, foldersToBeTrusted)
-	val, _ := w.configResolver.GetValue(types.SettingTrustedFolders, nil)
-	trustedVal, _ := val.([]types.FilePath)
-	w.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: trustedVal})
+	// Guard the read-modify-write in addTrustedFolders: two concurrent calls
+	// (e.g. user clicking "Trust" on two banner buttons simultaneously) would
+	// both read the same old trusted-folder list, append their folder, and the
+	// last writer would drop the other's folder. trustStateMutex serializes the
+	// Get+Set pair so neither call loses its update. (IDE-1882)
+	//
+	// addTrustedFolders returns the full post-write slice so we avoid a
+	// second config read (which could observe a different writer's update).
+	// The closure scopes the defer-unlock so the mutex is released before
+	// notifier.Send and the goroutine launches below.
+	trustedFolderPaths := func() []types.FilePath {
+		w.trustStateMutex.Lock()
+		defer w.trustStateMutex.Unlock()
+		return addTrustedFolders(w.conf, w.configResolver, w.logger, w.engine, foldersToBeTrusted)
+	}()
+	w.notifier.Send(types.SnykTrustedFoldersParams{TrustedFolders: trustedFolderPaths})
 	for _, f := range foldersToBeTrusted {
 		go f.ScanFolder(ctx)
 	}
 }
 
 func (w *Workspace) GetFolderTrust() (trusted []types.Folder, untrusted []types.Folder) {
+	// Hold the read lock while iterating w.folders to prevent a data race with
+	// concurrent AddFolder / RemoveFolder calls. GetFolderTrust is called from
+	// the tree-render path (tree_builder.go) which runs concurrently with folder
+	// mutations. Mirror the pattern used by Folders(). (IDE-1882)
+	w.mutex.RLock()
+	defer w.mutex.RUnlock()
 	for _, folder := range w.folders {
 		if folder.IsTrusted() {
 			trusted = append(trusted, folder)
-			w.logger.Info().Str("folder", string(folder.Path())).Msg("Trusted folder")
+			w.logger.Debug().Str("folder", string(folder.Path())).Msg("Trusted folder")
 		} else {
 			untrusted = append(untrusted, folder)
-			w.logger.Info().Str("folder", string(folder.Path())).Msg("Untrusted folder")
+			w.logger.Debug().Str("folder", string(folder.Path())).Msg("Untrusted folder")
 		}
 	}
 	return trusted, untrusted

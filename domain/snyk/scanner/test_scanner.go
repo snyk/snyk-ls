@@ -48,6 +48,10 @@ func NewTestScanner() *TestScanner {
 
 func (s *TestScanner) Init(_ context.Context) error { return nil }
 
+// RegisterCancelCallback is a no-op for TestScanner; tests that exercise
+// the cancel-drain cycle should use DelegatingConcurrentScanner instead.
+func (s *TestScanner) RegisterCancelCallback(_ types.FilePath, _ func()) {}
+
 func (s *TestScanner) IsEnabled() bool {
 	return true
 }
