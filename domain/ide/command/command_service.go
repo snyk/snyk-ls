@@ -37,8 +37,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var instance types.CommandService //nolint:gochecknoglobals // legacy process-global state
-
 type serviceImpl struct {
 	authService        authentication.AuthenticationService
 	featureFlagService featureflag.Service
@@ -78,16 +76,6 @@ func NewService(engine workflow.Engine, logger *zerolog.Logger, authService auth
 		logger:             logger,
 		scanCtx:            scanCtx,
 	}
-}
-
-// SetService sets the singleton instance of the command service.
-func SetService(service types.CommandService) {
-	instance = service
-}
-
-// Service returns the singleton instance of the command service.
-func Service() types.CommandService {
-	return instance
 }
 
 func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.CommandData, server types.Server) (any, error) {
