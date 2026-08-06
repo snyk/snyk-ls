@@ -155,9 +155,6 @@ func (w *folderCommandCapturingWorkspace) capturedTrustCtx() context.Context {
 // TestWorkspaceScanCommandCtxCanceledOnShutdown verifies that the ctx passed
 // to ScanWorkspace by workspaceScanCommand.Execute is the server-lifetime
 // scanCtx (canceled on shutdown), NOT context.Background() which never cancels.
-//
-// RED on current tree: workspace_scan.go:47 uses context.Background().
-// GREEN after fix: workspaceScanCommand uses cmd.scanCtx.
 // ---------------------------------------------------------------------------
 func TestWorkspaceScanCommandCtxCanceledOnShutdown(t *testing.T) {
 	// Not parallel: injects a workspace into the configuration (engine-global state).
@@ -215,18 +212,15 @@ func TestWorkspaceScanCommandCtxCanceledOnShutdown(t *testing.T) {
 // HandleUntrustedFolders called by workspaceFolderScanCommand.Execute receives
 // the server-lifetime scanCtx (not context.Background()) so that trust-scan
 // goroutines are canceled on shutdown.
-//
-// RED on current tree: workspace_folder_scan.go:68 calls
-// HandleUntrustedFolders(context.Background(), ...).
-// GREEN after fix: uses cmd.scanCtx.
 // ---------------------------------------------------------------------------
 func TestWorkspaceFolderScanCommandUntrustedCtxCanceledOnShutdown(t *testing.T) {
 	// Not parallel: modifies engine-global workspace.
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 
-	// Trust-checking must be enabled so HandleUntrustedFolders triggers the dialog.
-	conf.Set("snyk.trustedFolders", true)
+	// No trust setting is needed: folderCommandCapturingWorkspace.GetFolderTrust
+	// below unconditionally reports the folder as untrusted, which is what
+	// HandleUntrustedFolders actually reads.
 
 	// Callback responds "DoTrust" so TrustFoldersAndScan is called.
 	loc, _, _ := setupServer(t, engine, tokenService,
@@ -290,9 +284,6 @@ func TestWorkspaceFolderScanCommandUntrustedCtxCanceledOnShutdown(t *testing.T) 
 // passed to folder.ScanFolder by ClearCacheCommand.purgeInMemoryCache is the
 // server-lifetime scanCtx (not context.Background()) so that the goroutine is
 // canceled on shutdown.
-//
-// RED on current tree: clear_cache.go:95 uses context.Background().
-// GREEN after fix: uses cmd.scanCtx.
 // ---------------------------------------------------------------------------
 func TestClearCacheCommandScanFolderCtxCanceledOnShutdown(t *testing.T) {
 	// Not parallel: modifies engine-global workspace.

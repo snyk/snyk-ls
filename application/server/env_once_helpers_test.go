@@ -60,6 +60,11 @@ func TestWithAPIEndpoint_IsolatesPerEngine(t *testing.T) {
 	assert.Equal(t, endpointB, gotB,
 		"engine B must have endpoint B regardless of the order in which A and B are set up; "+
 			"if this fails, the endpoint is leaking through a process-global mechanism (os.Setenv/sync.Once)")
+
+	// Setting up B must not have retroactively changed A — this is the half that
+	// actually catches a shared/global endpoint.
+	assert.Equal(t, endpointA, types.GetGlobalString(engineA.GetConfiguration(), types.SettingApiEndpoint),
+		"engine A must still have endpoint A after engine B was set up with a different endpoint")
 }
 
 // TestWithAPIEndpoint_EmptyIsNoOp verifies that passing an empty string to

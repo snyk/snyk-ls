@@ -2660,7 +2660,7 @@ func Test_validateLockedMachineFields_EarlyReturns(t *testing.T) {
 
 func Test_UpdateSettings_LockedFields_EmitsExactlyOneNotification(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	testDeps2746 := di.TestInit(t, engine, tokenService, nil)
+	testDeps := di.TestInit(t, engine, tokenService, nil)
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 
@@ -2731,9 +2731,9 @@ func Test_UpdateSettings_LockedFields_EmitsExactlyOneNotification(t *testing.T) 
 
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
 		ctx2.DepNotifier:           localNotifier,
-		ctx2.DepAuthService:        testDeps2746.AuthenticationService,
+		ctx2.DepAuthService:        testDeps.AuthenticationService,
 		ctx2.DepConfigResolver:     resolver,
-		ctx2.DepFeatureFlagService: testDeps2746.FeatureFlagService,
+		ctx2.DepFeatureFlagService: testDeps.FeatureFlagService,
 	})
 	UpdateSettings(ctx, conf, engine, logger, machineSettings, folderConfigs, analytics.TriggerSourceTest, resolver)
 

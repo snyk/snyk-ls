@@ -469,27 +469,30 @@ func Test_parseIacResult_failOnInvalidPath(t *testing.T) {
 // progress.ToServerProgressChannel. This is the unit-level guard for IDE-2036 isolation.
 func Test_New_ProgressChannelIsolation(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	// Use a dedicated channel that is distinct from the global one.
-	progressCh := make(chan types.ProgressParams, 100)
-	scanner := New(engine.GetConfiguration(), engine.GetLogger(),
-		performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine),
-		cli.NewTestExecutor(engine), defaultResolver(engine), progressCh)
-	folderConfig := &types.FolderConfig{FolderPath: "."}
-	ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
+
+	newScanner := func(progressCh chan types.ProgressParams) *Scanner {
+		return New(engine.GetConfiguration(), engine.GetLogger(),
+			performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine),
+			cli.NewTestExecutor(engine), defaultResolver(engine), progressCh)
+	}
+
+	// Both scanners and both channels exist before any scan runs, so an empty
+	// siblingCh afterwards is an observation rather than a tautology.
+	scannerCh := make(chan types.ProgressParams, 100)
+	siblingCh := make(chan types.ProgressParams, 100)
+	scanner := newScanner(scannerCh)
+	_ = newScanner(siblingCh)
+
+	ctx := ctx2.NewContextWithFolderConfig(t.Context(), &types.FolderConfig{FolderPath: "."})
 
 	// Scan a yaml file so the tracker fires. It will fail (no real CLI) but the
 	// progress Begin event should still have been sent before the CLI is called.
 	_, _ = scanner.Scan(ctx, "fake.yml")
 
-	// The progress event must have gone to our dedicated channel.
-	assert.Greater(t, len(progressCh), 0,
-		"progress events should be routed to the channel passed to New()")
-
-	// A sibling channel (a different owner's channel) must stay empty —
-	// no progress events may leak to unrelated channels.
-	siblingCh := make(chan types.ProgressParams, 100)
-	assert.Equal(t, 0, len(siblingCh),
-		"sibling progress channel must not receive events from a scanner with a different channel")
+	assert.NotEmpty(t, scannerCh,
+		"progress events must be routed to the channel passed to New()")
+	assert.Empty(t, siblingCh,
+		"another scanner's channel must not receive events from this scanner")
 }
 
 func sampleIssue() iacIssue {

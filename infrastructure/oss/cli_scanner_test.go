@@ -38,6 +38,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
@@ -552,9 +553,9 @@ func Test_shouldUseLegacyScan(t *testing.T) {
 	})
 }
 
-// Test_NewCLIScanner_ProgressChannelIsolation verifies that NewCLIScanner() accepts a
-// progressCh parameter and that the tracker created during scanInternal writes to that
-// channel instead of the global progress.ToServerProgressChannel (IDE-2036).
+// Test_NewCLIScanner_ProgressChannelIsolation verifies that the tracker created
+// during scanInternal writes to the channel passed to NewCLIScanner() and to no
+// other scanner's channel (IDE-2036).
 func Test_NewCLIScanner_ProgressChannelIsolation(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	ctrl := gomock.NewController(t)
@@ -565,24 +566,27 @@ func Test_NewCLIScanner_ProgressChannelIsolation(t *testing.T) {
 	learnMock.EXPECT().GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(&learn.Lesson{}, nil).AnyTimes()
 
-	notifier := notification.NewMockNotifier()
-	instrumentor := performance.NewInstrumentor()
-	er := error_reporting.NewTestErrorReporter(engine)
-	cliExecutor := cli.NewTestExecutor(engine)
+	newScanner := func(progressCh chan types.ProgressParams) types.ProductScanner {
+		return NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine),
+			cli.NewTestExecutor(engine), learnMock, notification.NewMockNotifier(),
+			defaultResolver(t, engine), progressCh)
+	}
 
-	// Use a dedicated channel distinct from the global one.
-	progressCh := make(chan types.ProgressParams, 100)
-	scanner := NewCLIScanner(engine, instrumentor, er, cliExecutor, learnMock, notifier, defaultResolver(t, engine), progressCh)
-
-	// The returned scanner must have stored the channel internally.
-	cliSc, ok := scanner.(*CLIScanner)
-	require.True(t, ok, "NewCLIScanner must return a *CLIScanner")
-	assert.Equal(t, progressCh, cliSc.progressCh,
-		"progressCh field must be set to the channel passed to NewCLIScanner()")
-
-	// Verify that a sibling channel (a different owner's channel) stays empty —
-	// no progress events must be routed to it when the scanner has its own channel.
+	// Both scanners and both channels exist before any scan runs, so an empty
+	// siblingCh afterwards is an observation rather than a tautology.
+	scannerCh := make(chan types.ProgressParams, 100)
 	siblingCh := make(chan types.ProgressParams, 100)
-	assert.Equal(t, 0, len(siblingCh),
-		"sibling progress channel must not receive events from a scanner with a different channel")
+	scanner := newScanner(scannerCh)
+	_ = newScanner(siblingCh)
+
+	ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfigWithFlags(nil))
+
+	// package.json is a supported manifest, so the scan reaches scanInternal and
+	// fires the progress tracker. The scan itself may fail (fake CLI) — irrelevant.
+	_, _ = scanner.Scan(ctx, "package.json")
+
+	assert.NotEmpty(t, scannerCh,
+		"progress events must be routed to the channel passed to NewCLIScanner()")
+	assert.Empty(t, siblingCh,
+		"another scanner's channel must not receive events from this scanner")
 }

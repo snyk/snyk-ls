@@ -153,14 +153,10 @@ func buildTestDependencies(t *testing.T, engine workflow.Engine, tokenService ty
 		localFeatureFlagService = featureflag.New(gafConfiguration, logger, engine, localConfigResolver)
 	}
 
-	// Resolve the per-test progress tracker.
-	// Priority: overrideDeps.ProgressTracker > default fresh tracker.
 	var localProgressOwner *progress.Tracker
 	if overrideDeps != nil && overrideDeps.ProgressTracker != nil {
 		localProgressOwner = overrideDeps.ProgressTracker
 	} else {
-		// Default: create a fresh per-test tracker. The process-global
-		// progress channel has been removed [IDE-2036].
 		localProgressOwner = progress.NewTracker(logger)
 	}
 	localProgressChannel := localProgressOwner.Channel()
@@ -203,7 +199,7 @@ func buildTestDependencies(t *testing.T, engine workflow.Engine, tokenService ty
 
 	// Per-test server-lifetime scan context: canceled when the test calls shutdown
 	// (via the shutdown handler) or on t.Cleanup, whichever comes first [IDE-2036].
-	localScanCtx, localScanCancel := context.WithCancel(context.Background())
+	localScanCtx, localScanCancel := context.WithCancel(t.Context())
 	t.Cleanup(localScanCancel)
 
 	return Dependencies{
