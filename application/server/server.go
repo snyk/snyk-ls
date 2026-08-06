@@ -686,7 +686,7 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 
 		result := types.InitializeResult{
 			ServerInfo: types.ServerInfo{
-				Name:    "snyk-ls",
+				Name:    config.LsServerName,
 				Version: config.LsProtocolVersion,
 			},
 			Capabilities: types.ServerCapabilities{

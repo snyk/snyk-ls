@@ -163,8 +163,8 @@ func (s *bddSteps) theEditorSendsTheInitializeRequest(ctx context.Context) error
 }
 
 func (s *bddSteps) theServerRespondsWithItsCapabilities() error {
-	if s.initResult.ServerInfo.Name != "snyk-ls" {
-		return fmt.Errorf("expected server info name %q, got %q", "snyk-ls", s.initResult.ServerInfo.Name)
+	if s.initResult.ServerInfo.Name != config.LsServerName {
+		return fmt.Errorf("expected server info name %q, got %q", config.LsServerName, s.initResult.ServerInfo.Name)
 	}
 	if s.initResult.ServerInfo.Version != config.LsProtocolVersion {
 		return fmt.Errorf("expected protocol version %q, got %q", config.LsProtocolVersion, s.initResult.ServerInfo.Version)
