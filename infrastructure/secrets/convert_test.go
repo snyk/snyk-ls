@@ -18,6 +18,7 @@ package secrets
 
 import (
 	"bytes"
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -29,6 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	ideconverter "github.com/snyk/snyk-ls/domain/ide/converter"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -612,6 +614,55 @@ func TestToIssues_FindingId_FallsBackToAttrKeyWhenNoRuleIdentity(t *testing.T) {
 	assert.Equal(t, "my-key", issues[0].GetFingerprint())
 	assert.Contains(t, buf.String(), "no rule identity",
 		"the unstable per-scan fallback must be diagnosable via a warning log")
+}
+
+func TestToIssues_SetsIssueDescriptionURL(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
+	converter := NewFindingsConverter(logger)
+
+	locations := []testapi.FindingLocation{
+		newSourceLocation("src/config.yml", 10, nil, nil, nil),
+		newSourceLocation("src/other.yml", 3, nil, nil, nil),
+	}
+	rule := newSecretsRuleProblem("generic-secret", "Generic Secret", []string{"Security"})
+	finding := newFinding("test-key", "Secret", "desc", testapi.SeverityHigh, locations, []testapi.Problem{rule}, nil)
+
+	issues := converter.ToIssues([]testapi.FindingData{finding}, "", "/folder/path")
+
+	require.Len(t, issues, 2)
+	for _, issue := range issues {
+		descriptionURL := issue.GetIssueDescriptionURL()
+		require.NotNil(t, descriptionURL)
+		assert.True(t, descriptionURL.IsAbs(),
+			"a relative link is resolved against the workspace and opens a non-existent file")
+		assert.Equal(t, secretsDocsURL, descriptionURL.String())
+	}
+}
+
+// The rule id is the clickable text in the Problems hover, and its link target is
+// the diagnostic's codeDescription. Assert on the wire payload the client sees.
+func TestToIssues_RuleIDLinksToDocsInDiagnostic(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
+	converter := NewFindingsConverter(logger)
+
+	loc := newSourceLocation("src/config.yml", 10, nil, nil, nil)
+	rule := newSecretsRuleProblem("generic-secret", "Generic Secret", nil)
+	finding := newFinding("test-key", "Secret", "desc", testapi.SeverityHigh, []testapi.FindingLocation{loc}, []testapi.Problem{rule}, nil)
+
+	diagnostics := ideconverter.ToDiagnostics(converter.ToIssues([]testapi.FindingData{finding}, "", "/folder/path"))
+
+	require.Len(t, diagnostics, 1)
+	payload, err := json.Marshal(diagnostics[0])
+	require.NoError(t, err)
+
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(payload, &decoded))
+	assert.Equal(t, "generic-secret", decoded["code"])
+	codeDescription, ok := decoded["codeDescription"].(map[string]any)
+	require.True(t, ok, "diagnostic must carry a codeDescription: %s", payload)
+	assert.Equal(t, secretsDocsURL, codeDescription["href"])
 }
 
 func TestToIssues_NilFindingId(t *testing.T) {
