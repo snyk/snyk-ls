@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"runtime"
 	"runtime/debug"
 	"testing"
@@ -100,10 +102,20 @@ func (s *bddSteps) afterScenario(ctx context.Context, sc *godog.Scenario, err er
 // s.stepResult is guaranteed on every path - return, Goexit, or panic -
 // and a panicking step fails just that one scenario instead of crashing the
 // whole TestBDD process.
+//
+// runStep also calls s.scenarioT.Fail() itself on a step error or panic:
+// only godog's own goroutine (via TestBDD's t.Fatal) otherwise learns of a
+// step failure, so the per-scenario subtest would report a false PASS in
+// isolation (e.g. `go test -run 'TestBDD/scenario_name'`) without it. Fail
+// (not FailNow/Fatal) is safe here - it doesn't call runtime.Goexit, so it
+// can't disrupt this loop or the panic-recovery/Goexit-survival logic above.
 func (s *bddSteps) runStep(fn func() error) {
 	reported := false
 	defer func() {
 		if r := recover(); r != nil {
+			if s.scenarioT != nil {
+				s.scenarioT.Fail()
+			}
 			s.stepResult <- fmt.Errorf("step panicked: %v\n%s", r, debug.Stack())
 			return
 		}
@@ -113,6 +125,9 @@ func (s *bddSteps) runStep(fn func() error) {
 	}()
 	err := fn()
 	reported = true
+	if err != nil && s.scenarioT != nil {
+		s.scenarioT.Fail()
+	}
 	s.stepResult <- err
 }
 
@@ -188,6 +203,46 @@ func Test_BDDSteps_PerScenarioCleanup(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.True(t, secondClient.IsStopped(), "expected scenario two's server to be torn down by its own After hook")
+}
+
+// Test_BDDSteps_ScenarioSubtestFailsOnStepErrorHelper is not a real test: it
+// exists only so Test_BDDSteps_ScenarioSubtest_FailsOnStepError can run it in
+// a subprocess and inspect its exit code/output. A real scenario subtest
+// failure propagates to the Go test that spawned it (that's the whole point
+// being verified), so it must happen in an isolated process rather than
+// failing this package's own test run.
+func Test_BDDSteps_ScenarioSubtestFailsOnStepErrorHelper(t *testing.T) {
+	if os.Getenv("BDD_STEPS_HELPER_PROCESS") != "1" {
+		t.Skip("only runs as a subprocess of Test_BDDSteps_ScenarioSubtest_FailsOnStepError")
+	}
+	s := newBDDSteps(t)
+	ctx := context.Background()
+
+	ctx, err := s.beforeScenario(ctx, &godog.Scenario{Name: "scenario with a failing step"})
+	require.NoError(t, err)
+
+	stepErr := s.runOnScenarioGoroutine(func() error { return fmt.Errorf("boom") })
+	require.Error(t, stepErr)
+
+	// afterScenario passes the step error through unchanged (godog's own
+	// convention for reporting it to the suite) - that's not what's under
+	// test here, so it's deliberately ignored.
+	_, _ = s.afterScenario(ctx, &godog.Scenario{Name: "scenario with a failing step"}, stepErr)
+}
+
+// Test_BDDSteps_ScenarioSubtest_FailsOnStepError guards against the
+// per-scenario subtest (s.scenarioT, spawned by beforeScenario) reporting
+// PASS even though one of its steps returned an error. Only the outer
+// TestBDD currently learns of a step failure (via godog's own bookkeeping,
+// surfaced through t.Fatal in TestBDD), so running just this one subtest in
+// isolation, or viewing it in an IDE test explorer, would show a false PASS.
+func Test_BDDSteps_ScenarioSubtest_FailsOnStepError(t *testing.T) {
+	cmd := exec.Command(os.Args[0], "-test.run=^Test_BDDSteps_ScenarioSubtestFailsOnStepErrorHelper$", "-test.v")
+	cmd.Env = append(os.Environ(), "BDD_STEPS_HELPER_PROCESS=1")
+	out, err := cmd.CombinedOutput()
+
+	assert.Error(t, err, "expected the helper process to exit non-zero because its scenario subtest failed:\n%s", out)
+	assert.Contains(t, string(out), "--- FAIL: Test_BDDSteps_ScenarioSubtestFailsOnStepErrorHelper/scenario_with_a_failing_step")
 }
 
 // Test_BDDSteps_RunOnScenarioGoroutine_SurvivesGoexit guards the Goexit case
