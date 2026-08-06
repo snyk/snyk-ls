@@ -35,8 +35,6 @@ import (
 	"github.com/snyk/snyk-ls/application/server"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
-	"github.com/snyk/snyk-ls/internal/progress"
-	"github.com/snyk/snyk-ls/internal/user_interface"
 )
 
 var WORKFLOWID_LS = workflow.NewWorkflowIdentifier("language-server") //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
@@ -104,10 +102,6 @@ func lsWorkflow(
 	config.SetLogLevel(extensionConfig.GetString("logLevelFlag"))
 	types.SetGlobalSystemDefault(conf, types.SettingLogPath, extensionConfig.GetString("logPathFlag"))
 	types.SetGlobalSystemDefault(conf, types.SettingFormat, extensionConfig.GetString("formatFlag"))
-
-	engine.SetUserInterface(user_interface.NewLsUserInterface(
-		user_interface.WithLogger(engine.GetLogger()),
-		user_interface.WithProgressBar(progress.NewTracker(engine.GetLogger()).New(true))))
 
 	if extensionConfig.GetBool("v") {
 		fmt.Println(config.Version)

@@ -27,13 +27,16 @@ var _ ui.UserInterface = (*LsUserInterface)(nil)
 type LsUserInterfaceOption func(*LsUserInterface)
 
 type LsUserInterface struct {
-	logger      *zerolog.Logger
-	progressBar ui.ProgressBar
+	logger         *zerolog.Logger
+	newProgressBar func() ui.ProgressBar
 }
 
-func WithProgressBar(progressBar ui.ProgressBar) LsUserInterfaceOption {
+// WithProgressBarFactory installs a factory rather than a single bar: a bar is
+// spent once cleared, so a shared one would leave every progress operation
+// after the first invisible.
+func WithProgressBarFactory(factory func() ui.ProgressBar) LsUserInterfaceOption {
 	return func(l *LsUserInterface) {
-		l.progressBar = progressBar
+		l.newProgressBar = factory
 	}
 }
 
@@ -78,7 +81,10 @@ func (l LsUserInterface) OutputError(err error, _ ...ui.Opts) error {
 }
 
 func (l LsUserInterface) NewProgressBar() ui.ProgressBar {
-	return l.progressBar
+	if l.newProgressBar == nil {
+		return nil
+	}
+	return l.newProgressBar()
 }
 
 func (l LsUserInterface) Input(_ string) (string, error) {
