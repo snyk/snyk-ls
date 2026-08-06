@@ -1060,6 +1060,17 @@ func TestConfigHtml_UnsetFolderAutonomyShowsNoOverrideIndicator(t *testing.T) {
 	assert.NotContains(t, block, "source-indicator", "an untouched folder must show no source indicator at all")
 }
 
+func TestConfigHtml_UnsetFolderAutonomyDoesNotSelectAutonomousFixes(t *testing.T) {
+	html := renderFolderPaneWithEffectiveConfig(t, map[string]types.EffectiveValue{})
+
+	re := regexp.MustCompile(`(?s)<select id="folder_0_ambient_canary_autonomy".*?</select>`)
+	match := re.FindString(html)
+	require.NotEmpty(t, match)
+
+	autonomousOpt := regexp.MustCompile(`<option value="autonomous_fixes"[^>]*>`).FindString(match)
+	assert.NotContains(t, autonomousOpt, "selected", "an unset folder must not render an explicit choice; the registry default is empty, not autonomous_fixes")
+}
+
 func TestConfigHtml_LockedFolderAutonomyIsDisabled(t *testing.T) {
 	html := renderFolderPaneWithEffectiveConfig(t, map[string]types.EffectiveValue{
 		"ambient_canary_autonomy": {Value: "notify_only", Source: "ldx-sync-locked"},

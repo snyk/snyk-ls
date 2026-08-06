@@ -471,7 +471,7 @@
                                     {{$aca := getEffectiveValue $folder.EffectiveConfig "ambient_canary_autonomy"}}
                                     <select id="folder_{{$index}}_ambient_canary_autonomy" name="folder_{{$index}}_ambient_canary_autonomy" data-setting="ambient_canary_autonomy" {{if isLocked $folder.EffectiveConfig "ambient_canary_autonomy"}}disabled{{end}}>
                                         <option value="notify_only" {{if and $aca (eq $aca.Value "notify_only")}}selected{{end}}>Notify only</option>
-                                        <option value="autonomous_fixes" {{if or (not $aca) (ne $aca.Value "notify_only")}}selected{{end}}>Allow autonomous fixes</option>
+                                        <option value="autonomous_fixes" {{if and $aca (eq $aca.Value "autonomous_fixes")}}selected{{end}}>Allow autonomous fixes</option>
                                     </select>
                                 </div>
                             </div>

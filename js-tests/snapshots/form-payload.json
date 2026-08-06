@@ -11,7 +11,7 @@
     {
       "additional_environment": "",
       "additional_parameters": [],
-      "ambient_canary_autonomy": "autonomous_fixes",
+      "ambient_canary_autonomy": "notify_only",
       "folderPath": "/Users/username/workspace/defaults-project",
       "issue_view_ignored_issues": false,
       "issue_view_open_issues": true,
@@ -50,7 +50,7 @@
     {
       "additional_environment": "",
       "additional_parameters": [],
-      "ambient_canary_autonomy": "autonomous_fixes",
+      "ambient_canary_autonomy": "notify_only",
       "folderPath": "/Users/username/workspace/org-set-project",
       "issue_view_ignored_issues": true,
       "issue_view_open_issues": false,
@@ -89,7 +89,7 @@
     {
       "additional_environment": "",
       "additional_parameters": [],
-      "ambient_canary_autonomy": "autonomous_fixes",
+      "ambient_canary_autonomy": "notify_only",
       "folderPath": "/Users/username/workspace/org-locked-project",
       "issue_view_ignored_issues": false,
       "issue_view_open_issues": true,
@@ -128,7 +128,7 @@
     {
       "additional_environment": "",
       "additional_parameters": [],
-      "ambient_canary_autonomy": "autonomous_fixes",
+      "ambient_canary_autonomy": "notify_only",
       "folderPath": "/Users/username/workspace/user-override-project",
       "issue_view_ignored_issues": false,
       "issue_view_open_issues": true,
