@@ -103,9 +103,13 @@ type Diagnostic struct {
 	/**
 	* An optional property to describe the error code.
 	*
+	* Set it only when there is documentation to link to, and only with an
+	* absolute Href: clients treat a present codeDescription as a link target
+	* and resolve a relative or empty href against the workspace.
+	*
 	* @since 3.16.0
 	 */
-	CodeDescription CodeDescription `json:"codeDescription,omitempty"`
+	CodeDescription *CodeDescription `json:"codeDescription,omitempty"`
 
 	/**
 	* Additional metadata about the diagnostic.

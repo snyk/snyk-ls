@@ -17,9 +17,13 @@
 package converter
 
 import (
+	"bytes"
+	"encoding/json"
+	"net/url"
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/rs/zerolog"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -68,6 +72,118 @@ func TestToDiagnostics_OssIssue_RiskScore(t *testing.T) {
 	ossData, ok := scanIssue.AdditionalData.(types.OssIssueData)
 	require.True(t, ok, "additional data should be OssIssueData")
 	assert.Equal(t, expectedRiskScore, ossData.RiskScore, "RiskScore should be propagated to LSP layer")
+}
+
+// The diagnostic's code is the rule id, and codeDescription is the link behind
+// it. Clients treat a present codeDescription as a link target and resolve a
+// relative or empty href against the workspace, opening a file that does not
+// exist — so the field has to be absent unless there is real documentation.
+// Assertions run against the marshaled payload: an absent Go field is only the
+// fix if it is also absent on the wire.
+func TestToDiagnostics_CodeDescription(t *testing.T) {
+	testutil.UnitTest(t)
+
+	mustParse := func(rawURL string) *url.URL {
+		parsed, err := url.Parse(rawURL)
+		require.NoError(t, err)
+		return parsed
+	}
+	docsURL := "https://docs.snyk.io/scan-fix-and-prevent/scan-with-snyk/snyk-secrets"
+
+	tests := []struct {
+		name           string
+		issueProduct   product.Product
+		descriptionURL *url.URL
+		wantHref       string // empty means no codeDescription may reach the client
+	}{
+		// One row per shipping product, at the URL its converter actually produces,
+		// so a future tightening of the guard cannot drop a product's links silently.
+		{name: "secrets", issueProduct: product.ProductSecrets, descriptionURL: mustParse(docsURL), wantHref: docsURL},
+		{name: "open source", issueProduct: product.ProductOpenSource, descriptionURL: mustParse("https://snyk.io/vuln/SNYK-JS-LODASH-567746"), wantHref: "https://snyk.io/vuln/SNYK-JS-LODASH-567746"},
+		{name: "code", issueProduct: product.ProductCode, descriptionURL: mustParse("https://docs.snyk.io/scan-using-snyk/snyk-code/snyk-code-security-rules"), wantHref: "https://docs.snyk.io/scan-using-snyk/snyk-code/snyk-code-security-rules"},
+		{name: "infrastructure as code", issueProduct: product.ProductInfrastructureAsCode, descriptionURL: mustParse("https://security.snyk.io/rules/cloud/SNYK-CC-TF-1"), wantHref: "https://security.snyk.io/rules/cloud/SNYK-CC-TF-1"},
+		{name: "http url is sent as the link target", descriptionURL: mustParse("http://docs.snyk.io/secrets"), wantHref: "http://docs.snyk.io/secrets"},
+
+		{name: "no url", descriptionURL: nil},
+		{name: "relative url resolves against the workspace", descriptionURL: mustParse("generic-secret")},
+		{name: "empty url", descriptionURL: mustParse("")},
+		// Defensive — no producer emits these today. IssueDescriptionURL is an
+		// exported field, and ToDiagnostics is the boundary where whatever a
+		// future scanner puts there reaches the client.
+		{name: "file url", descriptionURL: mustParse("file:///etc/passwd")},
+		{name: "javascript url", descriptionURL: mustParse("javascript:alert(1)")},
+		{name: "data url", descriptionURL: mustParse("data:text/html,<script>alert(1)</script>")},
+		{name: "opaque url has a scheme but no host", descriptionURL: mustParse("https:docs.snyk.io")},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			issueProduct := tc.issueProduct
+			if issueProduct == "" {
+				issueProduct = product.ProductSecrets
+			}
+			testIssue := &snyk.Issue{
+				ID:                  "generic-secret",
+				Severity:            types.High,
+				Product:             issueProduct,
+				IssueDescriptionURL: tc.descriptionURL,
+			}
+
+			// ToDiagnostics passes a nil logger, so this also covers the
+			// pull-diagnostics path where the drop cannot be logged.
+			diagnostics := ToDiagnostics([]types.Issue{testIssue})
+			require.Len(t, diagnostics, 1)
+
+			payload, err := json.Marshal(diagnostics[0])
+			require.NoError(t, err)
+			var decoded map[string]any
+			require.NoError(t, json.Unmarshal(payload, &decoded))
+
+			assert.Equal(t, "generic-secret", decoded["code"], "the rule id is still reported, only its link is dropped")
+
+			if tc.wantHref == "" {
+				assert.Nil(t, diagnostics[0].CodeDescription)
+				assert.NotContains(t, decoded, "codeDescription", "payload: %s", payload)
+				return
+			}
+
+			require.NotNil(t, diagnostics[0].CodeDescription)
+			assert.Equal(t, types.Uri(tc.wantHref), diagnostics[0].CodeDescription.Href)
+			codeDescription, ok := decoded["codeDescription"].(map[string]any)
+			require.True(t, ok, "codeDescription must reach the client: %s", payload)
+			assert.Equal(t, tc.wantHref, codeDescription["href"])
+		})
+	}
+}
+
+func TestToDiagnosticsForFolder_LogsDroppedCodeDescription(t *testing.T) {
+	testutil.UnitTest(t)
+
+	// The rule id and the URL are deliberately different, so an implementation
+	// logging the wrong one cannot satisfy the assertions below.
+	relative, err := url.Parse("relative/path")
+	require.NoError(t, err)
+	testIssue := &snyk.Issue{
+		ID:                  "some-rule",
+		Product:             product.ProductSecrets,
+		IssueDescriptionURL: relative,
+	}
+
+	var buf bytes.Buffer
+	logger := zerolog.New(&buf).Level(zerolog.DebugLevel)
+
+	diagnostics := ToDiagnosticsForFolder([]types.Issue{testIssue}, "", &logger)
+
+	require.Len(t, diagnostics, 1)
+	require.Nil(t, diagnostics[0].CodeDescription)
+
+	// Decode the first line only; other code in this path may log as well.
+	var logged map[string]any
+	firstLine, _, _ := bytes.Cut(buf.Bytes(), []byte("\n"))
+	require.NoError(t, json.Unmarshal(firstLine, &logged),
+		"a silently dropped link must be diagnosable from the logs")
+	assert.Equal(t, "relative/path", logged["url"])
+	assert.Equal(t, string(product.ProductSecrets), logged["product"])
 }
 
 func TestToDiagnostics_SecretIssue(t *testing.T) {
