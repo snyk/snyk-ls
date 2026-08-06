@@ -47,7 +47,7 @@ import (
 // via extractAudHost.
 
 // oauthEndpointNotifications is a thread-safe collector for notifications
-// emitted on di.Notifier() during an Authenticate call.
+// emitted on the notifier during an Authenticate call.
 type oauthEndpointNotifications struct {
 	mu                   sync.Mutex
 	authParams           []types.AuthenticationParams

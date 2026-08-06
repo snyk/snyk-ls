@@ -209,6 +209,14 @@ func TestTreeScanStateEmitter_Dispose_StopsRenderLoop(t *testing.T) {
 	emitter.Emit(scanstates.StateSnapshot{AnyScanInProgressWorkingDirectory: true})
 }
 
+// TestTreeScanStateEmitter_Dispose_NilReceiver covers the production case where
+// NewTreeScanStateEmitter failed: callers hold a nil emitter and still have to
+// dispose it on shutdown.
+func TestTreeScanStateEmitter_Dispose_NilReceiver(t *testing.T) {
+	var emitter *TreeScanStateEmitter
+	emitter.Dispose()
+}
+
 // TestTreeScanStateEmitter_FolderLevelIssueViewOptions verifies that the info-node message
 // reflects folder-level IssueViewOptions overrides rather than the global setting.
 // Regression for: global open+ignored disabled, folder-level open+ignored enabled →
