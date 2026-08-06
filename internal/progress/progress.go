@@ -50,6 +50,12 @@ func NewTestTask(channel chan types.ProgressParams, cancelChannel chan bool, log
 // Tracker. Use it when you already hold a channel reference (e.g. from
 // Tracker.Channel()) and need a Task with a specific cancellable setting but
 // no owner-managed registry entry.
+//
+// WARNING: the returned Task has no owner, so Task.IsCanceled() always reports
+// false and no Tracker can cancel it — a $/cancelRequest for its token will be
+// dropped. Only the holder of the Task can signal it, by writing to
+// Task.GetCancelChannel() directly. If the caller needs registry-driven
+// cancellation, use Tracker.New() instead.
 func NewTaskWithChannel(channel chan types.ProgressParams, cancellable bool, logger *zerolog.Logger) *Task {
 	return &Task{
 		owner:         nil,
