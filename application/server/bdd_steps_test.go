@@ -353,25 +353,39 @@ func (s *bddSteps) aWorkspaceFolderIsOpen() error {
 	return nil
 }
 
-// latestFolderConfigNotification polls $/snyk.configuration notifications
-// (didChangeConfiguration processing runs in the background) for the one
-// carrying this scenario's folder.
-func (s *bddSteps) latestFolderConfigNotification() (types.LspFolderConfig, error) {
+// waitForFolderConfigNotification polls $/snyk.configuration notifications
+// (didChangeConfiguration processing runs in the background) until one
+// carrying this scenario's folder satisfies match. Notifications are
+// delivered to the test's jrpc2 client on a goroutine per received message,
+// so two notifications sent moments apart are not guaranteed to be recorded
+// in send order; scanning for a match rather than trusting the recorder's
+// last entry keeps the wait correct regardless of that delivery order.
+func (s *bddSteps) waitForFolderConfigNotification(match func(types.LspFolderConfig) bool) (types.LspFolderConfig, error) {
 	deadline := time.Now().Add(5 * time.Second)
+	var lastSeen types.LspFolderConfig
+	sawFolder := false
 	for {
 		notifications := s.jsonRPCRecorder.FindNotificationsByMethod("$/snyk.configuration")
-		for i := len(notifications) - 1; i >= 0; i-- {
+		for _, notification := range notifications {
 			var param types.LspConfigurationParam
-			if err := notifications[i].UnmarshalParams(&param); err != nil {
+			if err := notification.UnmarshalParams(&param); err != nil {
 				continue
 			}
 			for _, fc := range param.FolderConfigs {
-				if folderConfigPathsMatch(fc.FolderPath, s.folderPath) {
+				if !folderConfigPathsMatch(fc.FolderPath, s.folderPath) {
+					continue
+				}
+				lastSeen = fc
+				sawFolder = true
+				if match(fc) {
 					return fc, nil
 				}
 			}
 		}
 		if time.Now().After(deadline) {
+			if sawFolder {
+				return lastSeen, fmt.Errorf("no matching $/snyk.configuration notification found for folder %s within timeout", s.folderPath)
+			}
 			return types.LspFolderConfig{}, fmt.Errorf("no $/snyk.configuration notification found for folder %s", s.folderPath)
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -379,7 +393,9 @@ func (s *bddSteps) latestFolderConfigNotification() (types.LspFolderConfig, erro
 }
 
 func (s *bddSteps) theFolderHasNoAmbientCanaryAutonomyOverride() error {
-	fc, err := s.latestFolderConfigNotification()
+	fc, err := s.waitForFolderConfigNotification(func(fc types.LspFolderConfig) bool {
+		return fc.Settings[types.SettingAmbientCanaryAutonomy] == nil
+	})
 	if err != nil {
 		return err
 	}
@@ -410,7 +426,10 @@ func (s *bddSteps) theEditorSetsTheFoldersAmbientCanaryAutonomyTo(ctx context.Co
 }
 
 func (s *bddSteps) theFoldersEffectiveAmbientCanaryAutonomyIs(autonomy string) error {
-	fc, err := s.latestFolderConfigNotification()
+	fc, err := s.waitForFolderConfigNotification(func(fc types.LspFolderConfig) bool {
+		setting := fc.Settings[types.SettingAmbientCanaryAutonomy]
+		return setting != nil && setting.Value == autonomy
+	})
 	if err != nil {
 		return err
 	}
