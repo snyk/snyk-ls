@@ -130,6 +130,18 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"Automatic Authentication"},
 		configresolver.AnnotationDescription: {"Enable automatic authentication"},
 	})
+	// D1/D2 (IDE-2274): machine-scope, no LDX-Sync remote key - this is a local,
+	// non-synced choice of which LLM backend the Snyk Remediation Agent uses.
+	registerFlag(fs, SettingLlmProvider, "", "LLM provider used by autonomous remediation", map[string][]string{
+		configresolver.AnnotationScope:       {machineScope},
+		configresolver.AnnotationDisplayName: {"LLM Provider"},
+		configresolver.AnnotationDescription: {"Which LLM backend the Snyk Remediation Agent uses to generate fixes"},
+	})
+	registerFlag(fs, SettingLlmBaseUrl, "", "Custom API endpoint for the selected LLM provider", map[string][]string{
+		configresolver.AnnotationScope:       {machineScope},
+		configresolver.AnnotationDisplayName: {"Custom API Endpoint"},
+		configresolver.AnnotationDescription: {"Point the selected LLM provider at a self-hosted or gateway endpoint"},
+	})
 	registerFlag(fs, SettingFormat, "md", "Output format", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationDisplayName: {"Output Format"},
