@@ -96,19 +96,15 @@ func (s *bddSteps) afterScenario(ctx context.Context, sc *godog.Scenario, err er
 	return ctx, err
 }
 
-// reported stops the deferred send from double-reporting when fn returns
-// normally instead of exiting via Goexit. The same deferred func also
-// recovers a genuine panic from fn (or something it calls), so the send on
-// s.stepResult is guaranteed on every path - return, Goexit, or panic -
-// and a panicking step fails just that one scenario instead of crashing the
-// whole TestBDD process.
+// reported stops a double-send when fn returns normally instead of exiting
+// via Goexit; the same defer also recovers a panic from fn, so every path -
+// return, Goexit, panic - sends exactly once, and a panicking step fails
+// only its own scenario instead of crashing TestBDD.
 //
-// runStep also calls s.scenarioT.Fail() itself on a step error or panic:
-// only godog's own goroutine (via TestBDD's t.Fatal) otherwise learns of a
-// step failure, so the per-scenario subtest would report a false PASS in
-// isolation (e.g. `go test -run 'TestBDD/scenario_name'`) without it. Fail
-// (not FailNow/Fatal) is safe here - it doesn't call runtime.Goexit, so it
-// can't disrupt this loop or the panic-recovery/Goexit-survival logic above.
+// runStep also calls s.scenarioT.Fail() on a step error or panic: without
+// it, only godog's own goroutine learns of the failure, so the
+// per-scenario subtest would report a false PASS in isolation. Fail (not
+// FailNow) is safe here since it doesn't call runtime.Goexit.
 func (s *bddSteps) runStep(fn func() error) {
 	reported := false
 	defer func() {
@@ -230,12 +226,8 @@ func Test_BDDSteps_ScenarioSubtestFailsOnStepErrorHelper(t *testing.T) {
 	_, _ = s.afterScenario(ctx, &godog.Scenario{Name: "scenario with a failing step"}, stepErr)
 }
 
-// Test_BDDSteps_ScenarioSubtest_FailsOnStepError guards against the
-// per-scenario subtest (s.scenarioT, spawned by beforeScenario) reporting
-// PASS even though one of its steps returned an error. Only the outer
-// TestBDD currently learns of a step failure (via godog's own bookkeeping,
-// surfaced through t.Fatal in TestBDD), so running just this one subtest in
-// isolation, or viewing it in an IDE test explorer, would show a false PASS.
+// Test_BDDSteps_ScenarioSubtest_FailsOnStepError guards the false-PASS case
+// described on runStep's comment.
 func Test_BDDSteps_ScenarioSubtest_FailsOnStepError(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=^Test_BDDSteps_ScenarioSubtestFailsOnStepErrorHelper$", "-test.v")
 	cmd.Env = append(os.Environ(), "BDD_STEPS_HELPER_PROCESS=1")
