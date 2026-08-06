@@ -67,7 +67,11 @@ const (
 type OpenBrowserFunc func(url string)
 
 var (
-	DefaultOpenBrowserFunc OpenBrowserFunc = func(url string) { //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
+	// A variable rather than a constant because test packages reassign it during
+	// init so no test ever launches a real browser (see the browser_noop_test.go
+	// files). Injecting it through the five production call sites instead was
+	// considered and declined as out of scope.
+	DefaultOpenBrowserFunc OpenBrowserFunc = func(url string) { //nolint:gochecknoglobals // reassigned by tests to avoid launching a real browser
 		browser.Stdout = log.Logger
 		_ = browser.OpenURL(url)
 	}

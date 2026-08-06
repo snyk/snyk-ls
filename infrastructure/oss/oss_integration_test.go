@@ -45,7 +45,6 @@ import (
 // it uses real CLI output for verification of functionality
 func Test_Scan(t *testing.T) {
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
-	testutil.CreateDummyProgressListener(t)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingFormat), config.FormatHtml)
 	ctx := t.Context()
 	deps := di.Init(engine, tokenService)

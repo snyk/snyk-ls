@@ -16,7 +16,7 @@
 
 package server
 
-// INTEG-110 (IDE-2036): Two-server per-server cancel isolation via progress.Tracker.
+// IDE-2036-INTEG-110: Two-server per-server cancel isolation via progress.Tracker.
 // Canceling a progress token on server A must not affect server B's tasks.
 
 import (
