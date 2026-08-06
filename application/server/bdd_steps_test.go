@@ -70,6 +70,12 @@ type bddSteps struct {
 	deltaOssFilePath types.FilePath
 	lastDiagnostics  []types.Diagnostic
 	lastTreeViewHTML string
+
+	savedLlmProvider    string
+	savedLlmModel       string
+	fixCapturedProvider string
+	fixCapturedModel    string
+	fixCommandErr       error
 }
 
 func newBDDSteps(t *testing.T) *bddSteps {
@@ -174,6 +180,12 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	})
 	sc.Then(`^the configuration dialog contains no field for an LLM API key$`, func() error {
 		return s.runOnScenarioGoroutine(s.theDialogContainsNoLlmApiKeyField)
+	})
+	sc.When(`^the developer asks Snyk to autonomously fix a folder$`, func(ctx context.Context) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperAsksSnykToFixAFolder(ctx) })
+	})
+	sc.Then(`^the fix runs with the developer's chosen LLM provider and model$`, func() error {
+		return s.runOnScenarioGoroutine(s.theFixRunsWithTheChosenProviderAndModel)
 	})
 }
 
@@ -410,6 +422,8 @@ func (s *bddSteps) aDeveloperSavesTheLlmProviderAndModel(ctx context.Context, pr
 	if _, err := s.loc.Client.Call(ctx, "workspace/didChangeConfiguration", params); err != nil {
 		return fmt.Errorf("workspace/didChangeConfiguration call failed: %w", err)
 	}
+	s.savedLlmProvider = provider
+	s.savedLlmModel = model
 	return nil
 }
 
@@ -496,6 +510,7 @@ func (s *bddSteps) theDialogContainsNoLlmApiKeyField() error {
 	return nil
 }
 
+<<<<<<< HEAD
 func (s *bddSteps) aWorkspaceFolderIsOpen() error {
 	folderPath := types.FilePath(s.scenarioT.TempDir())
 	initParams := types.InitializeParams{
@@ -956,8 +971,105 @@ func (s *bddSteps) editorNotifiedOfNewAndUnbaselinedIssues() error {
 	return nil
 }
 
-// Test_BDDSteps_PerScenarioCleanup guards against setupServer's t.Cleanup
-// firing once for the whole TestBDD run instead of once per scenario.
+// theDeveloperAsksSnykToFixAFolder drives the real snyk.remediationAgent.fixFolder
+// command end to end: real LSP request -> real command dispatch -> real
+// remyProvider.FixFolder -> real gafRunner -> real buildRemyFixConfig -> a real
+// workflow.Engine invocation. Only the "fix" workflow itself is substituted
+// (IDE-2448: it is an externally-downloaded CLI extension, not a compiled
+// dependency of snyk-ls) - it captures the exact provider/model config keys it
+// receives instead of running an LLM, so this proves CP-2's wiring rather than
+// stubbing out buildRemyFixConfig/gafRunner themselves.
+func (s *bddSteps) theDeveloperAsksSnykToFixAFolder(ctx context.Context) error {
+	if err := s.ensureLspInitialized(ctx); err != nil {
+		return err
+	}
+
+	repoDir, err := createGitRepoForFix(s.scenarioT)
+	if err != nil {
+		return fmt.Errorf("failed to create git repo for fix: %w", err)
+	}
+
+	fixWorkflowID := workflow.NewWorkflowIdentifier("fix")
+	if _, ok := s.engine.GetWorkflow(fixWorkflowID); !ok {
+		flagset := workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError))
+		callback := func(invocation workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
+			s.fixCapturedProvider = invocation.GetConfiguration().GetString("provider")
+			s.fixCapturedModel = invocation.GetConfiguration().GetString("model")
+			return nil, nil
+		}
+		if _, err := s.engine.Register(fixWorkflowID, flagset, callback); err != nil {
+			return fmt.Errorf("failed to register test fix workflow: %w", err)
+		}
+	}
+
+	folderURI := string(uri.PathToUri(types.FilePath(repoDir)))
+	_, callErr := s.loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		Command:   types.RemediationAgentFixFolderCommand,
+		Arguments: []any{folderURI},
+	})
+	s.fixCommandErr = callErr
+	return nil
+}
+
+func (s *bddSteps) theFixRunsWithTheChosenProviderAndModel() error {
+	if s.fixCommandErr != nil {
+		return fmt.Errorf("snyk.remediationAgent.fixFolder call failed: %w", s.fixCommandErr)
+	}
+	if s.fixCapturedProvider != s.savedLlmProvider {
+		return fmt.Errorf("expected the fix workflow to receive provider %q, got %q", s.savedLlmProvider, s.fixCapturedProvider)
+	}
+	if s.fixCapturedModel != s.savedLlmModel {
+		return fmt.Errorf("expected the fix workflow to receive model %q, got %q", s.savedLlmModel, s.fixCapturedModel)
+	}
+	return nil
+}
+
+// createGitRepoForFix creates a minimal git repo in a temp dir so
+// snyk.remediationAgent.fixFolder's git-repo-root and clean-worktree guards
+// are satisfied. Returns the CANONICAL path (symlinks resolved) so it agrees
+// with what git and the production code resolve.
+func createGitRepoForFix(t *testing.T) (string, error) {
+	t.Helper()
+	dir := t.TempDir()
+	if canonical, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = canonical
+	}
+	run := func(args ...string) error {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("git %v: %w (%s)", args, err, out)
+		}
+		return nil
+	}
+	for _, args := range [][]string{
+		{"init"},
+		{"config", "user.email", "test@example.com"},
+		{"config", "user.name", "Test"},
+		{"config", "core.checkStat", "minimal"},
+	} {
+		if err := run(args...); err != nil {
+			return "", err
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0o600); err != nil {
+		return "", err
+	}
+	if err := run("add", "."); err != nil {
+		return "", err
+	}
+	if err := run("commit", "-m", "init"); err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
+// Test_BDDSteps_PerScenarioCleanup proves setupServer's t.Cleanup fires once
+// per scenario (via the sc.Before/sc.After t.Run bridge in beforeScenario/
+// afterScenario), not once for the whole TestBDD run. It drives two
+// scenarios' lifecycles directly against the real bddSteps/setupServer code
+// path and asserts the first scenario's server connection is already closed
+// before the second scenario starts.
 func Test_BDDSteps_PerScenarioCleanup(t *testing.T) {
 	s := newBDDSteps(t)
 	ctx := context.Background()

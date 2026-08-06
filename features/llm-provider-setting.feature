@@ -1,9 +1,8 @@
 Feature: Choose the LLM provider used by autonomous remediation
   A developer can tell the Snyk Remediation Agent which LLM backend to use,
   and optionally point it at a self-hosted endpoint, from the existing Snyk
-  configuration dialog. This feature file covers CP-1 only: the setting
-  exists, persists, and is reflected back in the dialog. It does not cover
-  whether autonomous remediation actually uses the choice (CP-2).
+  configuration dialog. The setting exists, persists, is reflected back in
+  the dialog, and is actually used by autonomous remediation when it runs.
 
   # maps: IDE-2274-M1, IDE-2274-M2
   Scenario: The chosen provider and endpoint survive reopening the dialog
@@ -31,3 +30,10 @@ Feature: Choose the LLM provider used by autonomous remediation
     When a developer saves "ollama" as the LLM provider with model "llama3.1"
     And the developer reopens the Snyk configuration dialog
     Then the configuration dialog shows "llama3.1" as the selected LLM model
+
+  # maps: IDE-2274-CP-2
+  Scenario: An autonomous fix run uses the developer's chosen LLM provider and model
+    Given a running language server
+    When a developer saves "ollama" as the LLM provider with model "llama3.1"
+    And the developer asks Snyk to autonomously fix a folder
+    Then the fix runs with the developer's chosen LLM provider and model
