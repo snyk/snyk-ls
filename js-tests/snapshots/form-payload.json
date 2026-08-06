@@ -1,4 +1,6 @@
 {
+  "additional_environment": "",
+  "additional_parameters": "",
   "api_endpoint": "https://api.snyk.io",
   "authentication_method": "oauth",
   "automatic_download": false,

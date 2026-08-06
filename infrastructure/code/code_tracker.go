@@ -37,7 +37,9 @@ func NewCodeTrackerFactory(progressOwner *progress.Tracker) codeClientScan.Track
 
 // GenerateTracker takes the owner's channel rather than a registered task: this
 // tracker mints its own token and code-client-go exposes no cancel hook for the
-// upload phase, so a registry entry would never be resolved nor released.
+// upload phase, so a registry entry would never be resolved nor released. That
+// also keeps the token out of the scan-token registry, which is what we want —
+// it reports Cancellable: false and has no folder to reset.
 func (t trackerFactory) GenerateTracker() codeClientScan.Tracker {
 	return newCodeTracker(t.progressOwner.Channel())
 }

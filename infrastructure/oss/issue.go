@@ -198,7 +198,7 @@ func convertScanResultToIssues(engine workflow.Engine, configResolver types.Conf
 		if duplicateCheckMap[duplicateKey] {
 			continue
 		}
-		node := getDependencyNode(&logger, targetFilePath, ossLegacyIssue.PackageManager, ossLegacyIssue.From, fileContent)
+		node := getDependencyNode(&logger, targetFilePath, ossLegacyIssue.PackageManager, ossLegacyIssue.From, fileContent, workDir)
 		sameID := byID[ossLegacyIssue.Id]
 		snykIssue := toIssue(engine, configResolver, workDir, targetFilePath, ossLegacyIssue, res, sameID, node, learnService, ep, format, folderConfig)
 		packageIssueCacheMutex.Lock()

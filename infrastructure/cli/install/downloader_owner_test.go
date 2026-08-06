@@ -34,7 +34,7 @@ func TestNewDownloader_RoutesToInjectedOwnerChannel(t *testing.T) {
 
 	owner := progress.NewTracker(&logger)
 
-	d := NewDownloader(engine, nil, nil, testutil.DefaultConfigResolver(engine), owner)
+	d := NewDownloader(engine, nil, nil, owner)
 
 	require.NotNil(t, d.progressTask, "progressTask must be set")
 	assert.Equal(t, owner.Channel(), d.progressTask.GetChannel(),

@@ -37,11 +37,21 @@ import (
 // It implements ui.ProgressBar (verified by the compile-time assertion in
 // tracker.go).
 type Task struct {
-	owner                *Tracker
-	channel              chan types.ProgressParams
-	cancelChannel        chan bool
-	token                types.ProgressToken
-	cancellable          bool
+	owner         *Tracker
+	channel       chan types.ProgressParams
+	cancelChannel chan bool
+	token         types.ProgressToken
+	cancellable   bool
+	// isScan distinguishes scan-operation tasks (Tracker.NewScan) from generic
+	// progress tasks so window/workDoneProgress/cancel can scope the
+	// summary-panel reset to scan cancellations only (IDE-1035).
+	// Written under the owner's mutex when the task is registered; only ever
+	// read via Tracker.IsScanToken under the same lock.
+	isScan bool
+	// folderPath is the workspace folder this scan task belongs to, set only
+	// for isScan tasks. Lets the cancel handler scope a reset to the canceled
+	// folder instead of every open folder.
+	folderPath           types.FilePath
 	lastReport           time.Time
 	lastReportPercentage int
 	finished             bool

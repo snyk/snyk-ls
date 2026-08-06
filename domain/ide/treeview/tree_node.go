@@ -45,28 +45,44 @@ type SeverityCounts struct {
 
 // TreeNode represents a single node in the tree view hierarchy.
 type TreeNode struct {
-	ID                  string          `json:"id"`
-	Type                NodeType        `json:"type"`
-	Label               string          `json:"label"`
-	Description         string          `json:"description,omitempty"`
-	Severity            types.Severity  `json:"severity,omitempty"`
-	Product             product.Product `json:"product,omitempty"`
-	FilePath            types.FilePath  `json:"filePath,omitempty"`
-	IssueRange          types.Range     `json:"issueRange,omitempty"`
-	IssueID             string          `json:"issueId,omitempty"`
-	IsIgnored           bool            `json:"isIgnored,omitempty"`
-	IsNew               bool            `json:"isNew,omitempty"`
-	IsFixable           bool            `json:"isFixable,omitempty"`
-	SeverityCounts      *SeverityCounts `json:"severityCounts,omitempty"`
-	FixableCount        int             `json:"fixableCount,omitempty"`
-	IssueCount          int             `json:"issueCount,omitempty"`
-	Expanded            bool            `json:"expanded,omitempty"`
-	Enabled             *bool           `json:"enabled,omitempty"`
-	ErrorMessage        string          `json:"errorMessage,omitempty"`
-	DeltaEnabled        bool            `json:"deltaEnabled,omitempty"`
-	BaseBranch          string          `json:"baseBranch,omitempty"`
-	LocalBranches       []string        `json:"localBranches,omitempty"`
-	ReferenceFolderPath string          `json:"referenceFolderPath,omitempty"`
+	ID             string          `json:"id"`
+	Type           NodeType        `json:"type"`
+	Label          string          `json:"label"`
+	Description    string          `json:"description,omitempty"`
+	Severity       types.Severity  `json:"severity,omitempty"`
+	Product        product.Product `json:"product,omitempty"`
+	FilePath       types.FilePath  `json:"filePath,omitempty"`
+	IssueRange     types.Range     `json:"issueRange,omitempty"`
+	IssueID        string          `json:"issueId,omitempty"`
+	IsIgnored      bool            `json:"isIgnored,omitempty"`
+	IsNew          bool            `json:"isNew,omitempty"`
+	IsFixable      bool            `json:"isFixable,omitempty"`
+	SeverityCounts *SeverityCounts `json:"severityCounts,omitempty"`
+	FixableCount   int             `json:"fixableCount,omitempty"`
+	IssueCount     int             `json:"issueCount,omitempty"`
+	Expanded       bool            `json:"expanded,omitempty"`
+	Enabled        *bool           `json:"enabled,omitempty"`
+	ErrorMessage   string          `json:"errorMessage,omitempty"`
+	// Tooltip is a hover hint rendered as the `title` attribute on a node row.
+	// Used for disabled scanners (to explain why they're off) and errored
+	// scanners (to hint that the row is clickable for details).
+	Tooltip string `json:"tooltip,omitempty"`
+	// InfoVariant selects an alternate rendering for info nodes. "" is the plain
+	// inline info row; "filter-empty" is hidden until the client reveals it when
+	// severity filters hide every issue; "untrusted-folder" is the
+	// workspace-trust banner with a folder list + Trust button.
+	InfoVariant string `json:"infoVariant,omitempty"`
+	// FolderPaths lists the untrusted folder paths shown in the "untrusted-folder"
+	// info banner.
+	FolderPaths []string `json:"folderPaths,omitempty"`
+	// Untrusted marks a folder node as not-yet-trusted: it renders dimmed and,
+	// having no children, without a chevron (not expandable). It lets the user see
+	// every open project while the trust banner drives the actual trust action.
+	Untrusted           bool     `json:"untrusted,omitempty"`
+	DeltaEnabled        bool     `json:"deltaEnabled,omitempty"`
+	BaseBranch          string   `json:"baseBranch,omitempty"`
+	LocalBranches       []string `json:"localBranches,omitempty"`
+	ReferenceFolderPath string   `json:"referenceFolderPath,omitempty"`
 	// FileIconHTML holds a pre-rendered HTML fragment (inline SVG or <img> tag)
 	// for the file icon shown on file-type nodes. Empty string falls back to the
 	// generic icon defined in the template.
@@ -74,10 +90,47 @@ type TreeNode struct {
 	Children     []TreeNode `json:"children,omitempty"`
 }
 
+// MixedSeverity marks, per severity, whether the open folders disagree on that
+// severity's filter (some show it, some hide it). The tree shows all open
+// folders under one workspace-wide toolbar, so when folders disagree the toolbar
+// button is rendered in a "mixed" (translucent) state rather than on/off.
+type MixedSeverity struct {
+	Critical bool `json:"critical,omitempty"`
+	High     bool `json:"high,omitempty"`
+	Medium   bool `json:"medium,omitempty"`
+	Low      bool `json:"low,omitempty"`
+}
+
+// MixedIssueViewOptions marks, per issue-view option, whether the open folders
+// disagree on that option. Analogous to MixedSeverity: when folders disagree the
+// corresponding popover toggle renders as indeterminate rather than on/off.
+type MixedIssueViewOptions struct {
+	OpenIssues    bool `json:"openIssues,omitempty"`
+	IgnoredIssues bool `json:"ignoredIssues,omitempty"`
+}
+
 // TreeViewFilterState captures the current filter settings for the tree view.
 type TreeViewFilterState struct {
 	SeverityFilter   types.SeverityFilter   `json:"severityFilter"`
+	MixedSeverity    MixedSeverity          `json:"mixedSeverity,omitempty"`
 	IssueViewOptions types.IssueViewOptions `json:"issueViewOptions"`
+	// RiskScoreThreshold is the aggregated minimum-risk-score threshold across
+	// open folders (0 = "All"). When folders disagree, RiskScoreMixed is set and
+	// this carries the highest folder's threshold, so the "Mixed" slider sits at a
+	// defined position and the label can show the value.
+	RiskScoreThreshold    int                   `json:"riskScoreThreshold,omitempty"`
+	RiskScoreMixed        bool                  `json:"riskScoreMixed,omitempty"`
+	MixedIssueViewOptions MixedIssueViewOptions `json:"mixedIssueViewOptions,omitempty"`
+	// RiskScoreEnabled / IssueViewOptionsEnabled gate the two popover sections to
+	// match the server-side filter's feature flags (UseOsTestWorkflow and
+	// SnykCodeConsistentIgnores respectively). They are true when the flag is on
+	// for at least one open folder, so the UI never offers a control that filters
+	// nothing.
+	RiskScoreEnabled        bool `json:"riskScoreEnabled,omitempty"`
+	IssueViewOptionsEnabled bool `json:"issueViewOptionsEnabled,omitempty"`
+	// ShowFilterPopover gates the whole funnel button: there is no popover to open
+	// when neither section is enabled.
+	ShowFilterPopover bool `json:"showFilterPopover,omitempty"`
 }
 
 // DefaultTreeViewFilterState returns filter state with all filters enabled.
@@ -94,6 +147,13 @@ type TreeViewData struct {
 	FilterState TreeViewFilterState `json:"filterState"`
 	TotalIssues int                 `json:"totalIssues"`
 	MultiRoot   bool                `json:"multiRoot"`
+	// FeedbackBannerDismissed suppresses the feedback banner. When true the
+	// renderer omits the banner element entirely.
+	FeedbackBannerDismissed bool `json:"feedbackBannerDismissed"`
+	// FeedbackBannerInteracted controls the banner's initial visibility. When
+	// true the banner renders visible; when false it renders hidden and is
+	// revealed client-side after the user's first interaction with the tree.
+	FeedbackBannerInteracted bool `json:"feedbackBannerInteracted"`
 }
 
 // TreeNodeOption is a functional option for configuring a TreeNode.
@@ -175,6 +235,22 @@ func WithEnabled(enabled *bool) TreeNodeOption {
 
 func WithErrorMessage(msg string) TreeNodeOption {
 	return func(n *TreeNode) { n.ErrorMessage = msg }
+}
+
+func WithTooltip(tooltip string) TreeNodeOption {
+	return func(n *TreeNode) { n.Tooltip = tooltip }
+}
+
+func WithInfoVariant(variant string) TreeNodeOption {
+	return func(n *TreeNode) { n.InfoVariant = variant }
+}
+
+func WithFolderPaths(paths []string) TreeNodeOption {
+	return func(n *TreeNode) { n.FolderPaths = paths }
+}
+
+func WithUntrusted(untrusted bool) TreeNodeOption {
+	return func(n *TreeNode) { n.Untrusted = untrusted }
 }
 
 func WithDeltaEnabled(enabled bool) TreeNodeOption {

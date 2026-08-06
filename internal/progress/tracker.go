@@ -96,6 +96,46 @@ func (o *Tracker) New(cancellable bool) *Task {
 	return task
 }
 
+// NewScan creates and registers a Task tagged as a scan token, so IsScanToken
+// returns true for it. Use this for scan operations (OSS, Code, IaC) instead of
+// New. Download/install operations must continue to use New so their cancel
+// events do not reset the summary panel. folderPath is the workspace folder
+// this scan belongs to; FolderForScanToken hands it back so a cancel handler
+// can scope a reset to this folder alone.
+func (o *Tracker) NewScan(cancellable bool, folderPath types.FilePath) *Task {
+	task := o.New(cancellable)
+	o.mu.Lock()
+	task.isScan = true
+	task.folderPath = folderPath
+	o.mu.Unlock()
+	return task
+}
+
+// IsScanToken reports whether token belongs to an active scan task created via
+// NewScan. Returns false once the task is removed (e.g. after Cancel or
+// delete), giving the cancel handler a single source of truth without a
+// parallel registry.
+func (o *Tracker) IsScanToken(token types.ProgressToken) bool {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	task, ok := o.tasks[token]
+	return ok && task.isScan
+}
+
+// FolderForScanToken reports the workspace folder token belongs to, for tokens
+// registered via NewScan. The second return value is false if the token is
+// unknown, already consumed (e.g. by Cancel), or belongs to a non-scan task —
+// callers must not fall back to resetting every folder in that case.
+func (o *Tracker) FolderForScanToken(token types.ProgressToken) (types.FilePath, bool) {
+	o.mu.RLock()
+	defer o.mu.RUnlock()
+	task, ok := o.tasks[token]
+	if !ok || !task.isScan {
+		return "", false
+	}
+	return task.folderPath, true
+}
+
 // Cancel signals cancellation for the task identified by token, then removes
 // it from the registry. Idempotent: canceling an already-canceled token is a
 // no-op.

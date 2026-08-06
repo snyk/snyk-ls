@@ -30,11 +30,7 @@ import (
 
 type workspaceFolderScanCommand struct {
 	command types.CommandData
-	srv     types.Server
 	engine  workflow.Engine
-	// scanCtx is the server-lifetime context. HandleUntrustedFolders spawns un-awaited
-	// goroutines; using scanCtx ensures they are canceled on shutdown [IDE-2036].
-	scanCtx context.Context
 }
 
 func (cmd *workspaceFolderScanCommand) Command() types.CommandData {
@@ -66,9 +62,5 @@ func (cmd *workspaceFolderScanCommand) Execute(ctx context.Context) (any, error)
 	}
 	f.Clear()
 	f.ScanFolder(ctx)
-	// HandleUntrustedFolders spawns un-awaited goroutines that outlive this command's execution.
-	// They cannot reuse the per-request ctx (canceled when the command returns); use the server-lifetime
-	// scanCtx so they are canceled on shutdown rather than running forever [IDE-2036].
-	HandleUntrustedFolders(cmd.scanCtx, conf, logger, cmd.srv)
 	return nil, nil
 }

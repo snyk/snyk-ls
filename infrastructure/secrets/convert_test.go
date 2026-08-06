@@ -17,12 +17,14 @@
 package secrets
 
 import (
+	"bytes"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -218,6 +220,63 @@ func TestToIssues_RuleIDFallsBackToKey(t *testing.T) {
 
 	require.Len(t, issues, 1)
 	assert.Equal(t, "fallback-key", issues[0].GetID())
+}
+
+// UNIT-004: the finding-id grouping key must be the stable rule identity, not the
+// per-scan UUID (attrs.Key). attrs.Key is minted fresh every scan, so folding it
+// into FindingId made the same finding change identity each scan. The converter
+// already extracts the rule id via extractProblems; FindingId must use it.
+func TestSecrets_GroupingKey_IgnoresUUID(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
+	converter := NewFindingsConverter(logger)
+
+	loc := newSourceLocation("src/config.yml", 10, intPtr(1), intPtr(10), intPtr(20))
+	rule := newSecretsRuleProblem("aws-access-key", "AWS Access Key", []string{"Security"})
+	finding := newFinding("per-scan-uuid-123", "Secret", "desc", testapi.SeverityHigh,
+		[]testapi.FindingLocation{loc}, []testapi.Problem{rule}, nil)
+
+	issues := converter.ToIssues([]testapi.FindingData{finding}, "", "/folder")
+
+	require.Len(t, issues, 1)
+	assert.Equal(t, "aws-access-key", issues[0].GetFindingId(),
+		"FindingId grouping key must be the stable rule id, not the per-scan UUID")
+	assert.NotEqual(t, "per-scan-uuid-123", issues[0].GetFindingId(),
+		"the per-scan UUID (attrs.Key) must not be used as the finding-id grouping key")
+	// Fingerprint is a separate concern (delta matching) and stays the per-scan UUID.
+	assert.Equal(t, "per-scan-uuid-123", issues[0].GetFingerprint())
+}
+
+// UNIT-004b: the same rule seen in two scans with DIFFERENT per-scan UUIDs must
+// produce the SAME grouping key (issue.FindingId), and two different rules must
+// produce different grouping keys.
+func TestSecrets_GroupingKey_StableAcrossScans_UniquePerRule(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	logger := engine.GetLogger()
+	converter := NewFindingsConverter(logger)
+
+	loc := newSourceLocation("src/config.yml", 10, intPtr(1), intPtr(10), intPtr(20))
+	rule := newSecretsRuleProblem("aws-access-key", "AWS Access Key", nil)
+
+	scan1 := converter.ToIssues([]testapi.FindingData{
+		newFinding("uuid-1", "Secret", "d", testapi.SeverityHigh, []testapi.FindingLocation{loc}, []testapi.Problem{rule}, nil),
+	}, "", "/folder")
+	scan2 := converter.ToIssues([]testapi.FindingData{
+		newFinding("uuid-2-different", "Secret", "d", testapi.SeverityHigh, []testapi.FindingLocation{loc}, []testapi.Problem{rule}, nil),
+	}, "", "/folder")
+	otherRule := converter.ToIssues([]testapi.FindingData{
+		newFinding("uuid-3", "Secret", "d", testapi.SeverityHigh, []testapi.FindingLocation{loc},
+			[]testapi.Problem{newSecretsRuleProblem("github-token", "GitHub Token", nil)}, nil),
+	}, "", "/folder")
+
+	require.Len(t, scan1, 1)
+	require.Len(t, scan2, 1)
+	require.Len(t, otherRule, 1)
+
+	assert.Equal(t, scan1[0].GetFindingId(), scan2[0].GetFindingId(),
+		"same rule across scans must keep the same grouping key despite the UUID changing")
+	assert.NotEqual(t, scan1[0].GetFindingId(), otherRule[0].GetFindingId(),
+		"different rules must have different grouping keys")
 }
 
 func TestToRange_FullCoordinates(t *testing.T) {
@@ -531,19 +590,28 @@ func TestToIssues_IgnoredFinding(t *testing.T) {
 	assert.Equal(t, "False positive", issues[0].GetIgnoreDetails().Reason)
 }
 
-func TestToIssues_FindingIdFromUUID(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	logger := engine.GetLogger()
-	converter := NewFindingsConverter(logger)
+// TestToIssues_FindingId_FallsBackToAttrKeyWhenNoRuleIdentity pins the fallback
+// behavior when a finding carries no rule identity (ruleID and ruleName both
+// empty): FindingId falls back to the per-scan attrs.Key, which is NOT stable
+// across scans. That fallback must be diagnosable, so a warning is logged.
+func TestToIssues_FindingId_FallsBackToAttrKeyWhenNoRuleIdentity(t *testing.T) {
+	testutil.UnitTest(t)
+	var buf bytes.Buffer
+	logger := zerolog.New(&buf)
+	converter := NewFindingsConverter(&logger)
 
 	loc := newSourceLocation("file.yml", 1, nil, nil, nil)
+	// No secrets rule problem, so both ruleID and ruleName are empty.
 	finding := newFinding("my-key", "title", "desc", testapi.SeverityLow, []testapi.FindingLocation{loc}, nil, nil)
 
 	issues := converter.ToIssues([]testapi.FindingData{finding}, "/scan", "/folder")
 
 	require.Len(t, issues, 1)
-	assert.NotEmpty(t, issues[0].GetFindingId())
+	assert.Equal(t, "my-key", issues[0].GetFindingId(),
+		"with no rule identity the grouping key falls back to the per-scan attrs.Key")
 	assert.Equal(t, "my-key", issues[0].GetFingerprint())
+	assert.Contains(t, buf.String(), "no rule identity",
+		"the unstable per-scan fallback must be diagnosable via a warning log")
 }
 
 func TestToIssues_NilFindingId(t *testing.T) {

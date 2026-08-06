@@ -23,14 +23,17 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/erni27/imcache"
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -44,6 +47,7 @@ import (
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 const ExpirationMsg = "Your authentication failed due to token expiration. Please re-authenticate to continue using Snyk."
@@ -67,7 +71,10 @@ type AuthenticationServiceImpl struct {
 	// key = token, value = isAuthenticated
 	authCache *imcache.Cache[string, bool]
 	// Last token that was successfully used for authentication. It might have expired (so not be present in authCache).
+	// Uses its own mutex (not m) because doAuthCheck runs under m.RLock, which allows
+	// concurrent writers here.
 	lastUsedToken               string
+	lastUsedTokenMu             sync.Mutex
 	m                           sync.RWMutex
 	previousAuthCtxCancelFunc   context.CancelFunc
 	previousAuthCtxCancelFuncMu sync.Mutex
@@ -90,6 +97,20 @@ type AuthenticationServiceImpl struct {
 	credentialUpdateChan chan credentialUpdate
 	// credentialUpdateCancel cancels the credential update worker on shutdown.
 	credentialUpdateCancel context.CancelFunc
+	// writingToken holds a pointer to the token string that the credentialUpdateWorker
+	// is currently writing to conf via updateCredentials → tokenService.SetToken →
+	// WriteTokenToConfig → conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, …).  When the conf key
+	// is persisted, that conf.Set call flows back through the storage's Set method, which
+	// fires the registered OAuth storage-bridge callback, which calls QueueCredentialUpdate
+	// again — re-enqueueing the same token the worker is already applying.  The re-enqueued
+	// copy lands after newer tokens in the channel and, on Windows where time.Now() has
+	// 15 ms resolution and all three rapid-rotation tokens share the same expiry, the
+	// shouldUpdateToken expiry check allows the stale copy to overwrite the final token.
+	//
+	// QueueCredentialUpdate skips the enqueue when the value matches writingToken, breaking
+	// the re-entrancy cycle.  External updates (from GAF refreshing the OAuth token) always
+	// carry a different token string and are never silently dropped by this guard.
+	writingToken atomic.Pointer[string]
 }
 
 func NewAuthenticationService(engine workflow.Engine, tokenService types.TokenService, authProviders AuthenticationProvider, errorReporter error_reporting.ErrorReporter, notifier noti.Notifier, configResolver types.ConfigResolverInterface) AuthenticationService {
@@ -128,14 +149,42 @@ func (a *AuthenticationServiceImpl) credentialUpdateWorker(ctx context.Context) 
 		case <-ctx.Done():
 			return
 		case update := <-a.credentialUpdateChan:
-			a.updateCredentials(update.token, update.sendNotification, update.updateApiUrl)
+			// Advertise which token we are about to write so QueueCredentialUpdate can
+			// recognize and drop the re-entrant callback that fires when
+			// WriteTokenToConfig calls conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, …) and
+			// the key is persisted in storage (which triggers the bridge callback again).
+			// The clear is deferred so it always runs even if updateCredentials panics,
+			// preventing the guard from staying permanently armed for that token string.
+			func() {
+				a.writingToken.Store(&update.token)
+				defer a.writingToken.Store(nil)
+				a.updateCredentials(update.token, update.sendNotification, update.updateApiUrl)
+			}()
 		}
 	}
 }
 
 // QueueCredentialUpdate queues a credential update for sequential processing.
 // This is used by the OAuth storage bridge callback to serialize updates.
+//
+// Re-entrancy guard: when WriteTokenToConfig calls conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, …)
+// and the key is persisted in storage, the storage fires the bridge callback again with the
+// exact same token the worker is currently applying.  Enqueueing that copy would let a stale
+// token overwrite a newer one after the main sequence has already finished (observable on
+// Windows where time.Now() has 15 ms resolution and rapid-rotation tokens share the same
+// expiry, making shouldUpdateToken return true for the stale copy).  We drop the re-entrant
+// call by comparing the incoming token against writingToken; external updates from GAF always
+// carry a different token string and are never silently dropped by this guard.
 func (a *AuthenticationServiceImpl) QueueCredentialUpdate(token string, sendNotification bool, updateApiUrl bool) {
+	if w := a.writingToken.Load(); w != nil && *w == token {
+		// Re-entrant call: the worker is already applying this exact token via
+		// conf.Set → storage.Set → callback.  Drop it to prevent the stale copy
+		// from landing behind newer tokens in the channel.
+		a.engine.GetLogger().Debug().
+			Str("method", "AuthenticationService.QueueCredentialUpdate").
+			Msg("dropping duplicate credential update for token already being written")
+		return
+	}
 	select {
 	case a.credentialUpdateChan <- credentialUpdate{
 		token:            token,
@@ -169,29 +218,75 @@ func (a *AuthenticationServiceImpl) provider() AuthenticationProvider {
 func (a *AuthenticationServiceImpl) Authenticate(ctx context.Context) (token string, err error) {
 	a.CancelOngoingAuth()
 
-	a.m.Lock()
-	defer a.m.Unlock()
-
+	// Capture our own cancel func in a local: a.previousAuthCtxCancelFunc is written under its mutex by
+	// concurrent Authenticate calls, so deferring the field directly would both data-race and risk
+	// canceling a newer login. The local always refers to this call's own cancel func.
+	//
+	// Concurrent Authenticate calls are not strictly single-flight: if two race past CancelOngoingAuth
+	// before either registers its cancel func, neither cancels the other and both proceed — they then
+	// resolve last-writer-wins in finishAuthenticate under a.m, which is acceptable (both apply
+	// legitimate credentials).
 	a.previousAuthCtxCancelFuncMu.Lock()
-	ctx, a.previousAuthCtxCancelFunc = context.WithCancel(ctx)
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithCancel(ctx)
+	a.previousAuthCtxCancelFunc = cancel
 	a.previousAuthCtxCancelFuncMu.Unlock()
+	defer cancel() // safe to double-call; cleans up if we weren't interrupted
 
-	defer a.previousAuthCtxCancelFunc() // need to clean up resources if we weren't interrupted, impl should ensure its safe to double call
-	return a.authenticate(ctx)
-}
-
-func (a *AuthenticationServiceImpl) authenticate(ctx context.Context) (token string, err error) {
-	if a.authProvider == nil {
+	// Snapshot the provider under the auth mutex, then release it for the interactive
+	// provider.Authenticate call, which can block for up to ~2 minutes waiting for the browser.
+	// Holding a.m across that wait blocks ConfigureProviders and every other a.m user — including a
+	// didChangeConfiguration notification handler, which would then stall the whole LSP request
+	// pipeline (jrpc2 serializes request dispatch behind an outstanding notification) and stop a
+	// subsequent login from canceling this one.
+	//
+	// Supersession invariant: a caller that supersedes an in-flight login by clearing or reconfiguring
+	// provider state cancels the auth context first (via CancelOngoingAuth), so the ctx.Err() guard
+	// below discards this login's now-stale result. Logout does this directly; ConfigureProviders
+	// relies on its caller ApplyAuthMethodChange to cancel before reconfiguring. This is about
+	// correctness, not deadlock avoidance — releasing a.m above means nothing ever waits on the
+	// interactive provider call while holding a.m.
+	a.m.Lock()
+	provider := a.authProvider
+	if provider == nil {
 		err = errors.New("authentication provider is not configured")
 		a.engine.GetLogger().Warn().Err(err).Msg("Failed to authenticate: auth provider is nil")
 		a.authCache.RemoveAll()
+		a.m.Unlock()
 		return "", err
 	}
+	a.m.Unlock()
 
-	token, err = a.authProvider.Authenticate(ctx)
+	token, err = provider.Authenticate(ctx)
 
+	a.m.Lock()
+	defer a.m.Unlock()
+
+	// While we waited without the lock, a concurrent Logout or a newer Authenticate may have run its
+	// own a.m critical section, canceling our context. If so, this login has been superseded — do not
+	// apply its result, or we would re-establish credentials a Logout just cleared (or clobber a newer
+	// login). This deliberately discards even a token the provider had just successfully returned when
+	// a cancel coincides; that is the accepted trade-off. The cancellation propagates upward and is
+	// treated as expected by util.IsCancellation.
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		a.engine.GetLogger().Debug().Str("method", "Authenticate").Msg("authentication superseded before applying result; discarding")
+		return "", ctxErr
+	}
+
+	return a.finishAuthenticate(provider, token, err)
+}
+
+// finishAuthenticate applies the result of the provider's Authenticate call — caching, endpoint
+// discovery, credential update and provider reconfiguration. The caller must hold a.m.
+func (a *AuthenticationServiceImpl) finishAuthenticate(provider AuthenticationProvider, token string, err error) (string, error) {
 	if token == "" || err != nil {
-		a.engine.GetLogger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(a.authProvider))
+		// A canceled authentication (e.g. the IDE canceled the login via $/cancelRequest) is expected,
+		// not a failure: log at debug rather than warning.
+		if util.IsCancellation(err) {
+			a.engine.GetLogger().Debug().Str("method", "finishAuthenticate").Msg("authentication canceled")
+		} else {
+			a.engine.GetLogger().Warn().Err(err).Msgf("Failed to authenticate using auth provider %v", reflect.TypeOf(provider))
+		}
 		a.authCache.RemoveAll()
 		return token, err
 	}
@@ -314,10 +409,10 @@ func getPrioritizedApiUrl(customUrl string, engineUrl string) string {
 
 // extractAudHost decodes the JWT `aud` claim of the access token and returns
 // the canonical lowercase host (e.g. "api.snyk.io") when the host is a valid
-// Snyk auth host (per CONFIG_KEY_ALLOWED_HOST_REGEXP). Returns "" for opaque
-// tokens, missing/empty/null claims, parse failures, an unset or
-// invalid-regex CONFIG_KEY_ALLOWED_HOST_REGEXP (fail-closed), or hosts that
-// fail the allowed-host regex check.
+// Snyk auth host (per CONFIG_KEY_ALLOWED_HOSTS, checked via
+// auth.IsValidSnykHost). Returns "" for opaque tokens, missing/empty/null
+// claims, parse failures, an unset/empty CONFIG_KEY_ALLOWED_HOSTS
+// (fail-closed), or hosts that fail the allowed-host check.
 //
 // RFC 7519 says `aud` MAY be a single string OR an array of strings, and
 // when an array there is no guaranteed ordering. Snyk OAuth tokens can
@@ -339,16 +434,20 @@ func extractAudHost(token string, conf configuration.Configuration, logger *zero
 		logger.Debug().Err(err).Msg("cannot decode oauth token aud claim; skipping API URL discovery")
 		return ""
 	}
-	// Read the regex once up front so the per-entry hot loop doesn't
-	// repeat the conf.GetString lookup, and so the fail-closed branch
-	// triggers regardless of how many audiences are present.
-	regex := conf.GetString(auth.CONFIG_KEY_ALLOWED_HOST_REGEXP)
-	if regex == "" {
-		logger.Debug().Msg("CONFIG_KEY_ALLOWED_HOST_REGEXP unset; skipping API URL discovery")
+	// This is a deliberate duplicate of the fail-closed check IsValidSnykHost
+	// already does internally (auth.IsValidSnykHost re-reads the allowlist
+	// per claim, so this isn't caching that lookup). It exists because an
+	// unset allowlist is this language server's trust boundary: discovery
+	// must be skipped regardless of how the framework validator behaves
+	// internally, and this distinct log line is the only way to tell "no
+	// allowlist configured" apart from the per-claim "host rejected"
+	// messages logged below.
+	if len(conf.GetStringSlice(auth.CONFIG_KEY_ALLOWED_HOSTS)) == 0 {
+		logger.Debug().Msg("CONFIG_KEY_ALLOWED_HOSTS unset; skipping API URL discovery")
 		return ""
 	}
 	for _, raw := range audiences {
-		if host := audHostFromClaim(raw, regex, logger); host != "" {
+		if host := audHostFromClaim(raw, conf, logger); host != "" {
 			return host
 		}
 	}
@@ -357,12 +456,13 @@ func extractAudHost(token string, conf configuration.Configuration, logger *zero
 
 // audHostFromClaim parses a single aud claim entry and returns its
 // canonical lowercase host iff it passes the scheme allowlist and the
-// CONFIG_KEY_ALLOWED_HOST_REGEXP check. Returns "" on any rejection so the
-// caller can move on to the next array entry. Per-entry rejections are
-// logged at Debug (not Warn) because most array-form aud claims contain
-// non-host entries (e.g. a client ID) that legitimately fail this check;
-// promoting them to Warn would flood production logs on every authenticate.
-func audHostFromClaim(raw, regex string, logger *zerolog.Logger) string {
+// auth.IsValidSnykHost check (CONFIG_KEY_ALLOWED_HOSTS). Returns "" on any
+// rejection so the caller can move on to the next array entry. Per-entry
+// rejections are logged at Debug (not Warn) because most array-form aud
+// claims contain non-host entries (e.g. a client ID) that legitimately fail
+// this check; promoting them to Warn would flood production logs on every
+// authenticate.
+func audHostFromClaim(raw string, conf configuration.Configuration, logger *zerolog.Logger) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return ""
@@ -391,16 +491,16 @@ func audHostFromClaim(raw, regex string, logger *zerolog.Logger) string {
 	if host == "" {
 		// Path fallback for inputs parseCustomUrl couldn't recover into
 		// a Host (e.g. "/path-only"). The result is still validated
-		// below by IsValidAuthHost, which enforces domain-suffix
-		// membership against CONFIG_KEY_ALLOWED_HOST_REGEXP (not
-		// generic host syntax).
+		// below by IsValidSnykHost, which enforces the "api." prefix
+		// and domain-suffix membership against CONFIG_KEY_ALLOWED_HOSTS
+		// (not generic host syntax).
 		host = parsed.Path
 	}
 	if host == "" {
 		return ""
 	}
 	host = strings.ToLower(host)
-	valid, verr := auth.IsValidAuthHost(host, regex)
+	valid, verr := auth.IsValidSnykHost(conf, host)
 	if verr != nil || !valid {
 		logger.Debug().Str("host", host).Str("aud_claim", raw).Msg("aud claim entry failed allowed-host check; trying next")
 		return ""
@@ -623,6 +723,10 @@ func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 	}
 	a.updateCredentials("", true, false)
 	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())
+
+	a.lastUsedTokenMu.Lock()
+	a.lastUsedToken = ""
+	a.lastUsedTokenMu.Unlock()
 }
 
 // IsAuthenticated returns true if the token is verified
@@ -700,7 +804,7 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 			return false
 		}
 
-		invalidOAuth2Token, isLegacyTokenErr := config.ParseOAuthToken(config.GetToken(conf), a.engine.GetLogger())
+		invalidOAuth2Token, isLegacyTokenErr := config.ParseOAuthToken(token, a.engine.GetLogger())
 		isLegacyToken := isLegacyTokenErr != nil
 
 		a.handleEmptyUser(logger, isLegacyToken, invalidOAuth2Token)
@@ -708,17 +812,26 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 	}
 	// We cache the API auth ok for up to 1 minute after last access. If more than a minute has passed, a new check is
 	// performed.
-	a.authCache.Set(config.GetToken(conf), true, imcache.WithSlidingExpiration(time.Minute))
+	//
+	// Cache/track the token that was actually verified above (captured once at function
+	// entry), not a fresh config.GetToken(conf) read: a concurrent credentialUpdateWorker
+	// write (which bypasses a.m entirely, see lastUsedToken field doc) can rotate the config
+	// token between the API call and here, which would otherwise mark an unverified token as
+	// authenticated (cache poisoning) or, on the error path above, misjudge a freshly rotated
+	// valid token as the failed one and log out a valid session.
+	a.authCache.Set(token, true, imcache.WithSlidingExpiration(time.Minute))
 
 	// For API Token and PAT authentication, the user may not have authenticated as part of the authenticate flow; e.g.,
 	// they could have pasted the token or PAT in to the IDE. In those cases, this will be the first time they have
 	// authenticated using that token or PAT
-	if a.lastUsedToken != config.GetToken(conf) {
-		a.lastUsedToken = config.GetToken(conf)
-
-		if config.GetAuthenticationMethodFromConfig(a.engine.GetConfiguration()) != types.OAuthAuthentication {
-			a.sendAuthenticationAnalytics()
-		}
+	a.lastUsedTokenMu.Lock()
+	isNewToken := a.lastUsedToken != token
+	if isNewToken {
+		a.lastUsedToken = token
+	}
+	a.lastUsedTokenMu.Unlock()
+	if isNewToken && config.GetAuthenticationMethodFromConfig(a.engine.GetConfiguration()) != types.OAuthAuthentication {
+		a.sendAuthenticationAnalytics()
 	}
 	logger.Debug().Str("userId", user).Msg("Authenticated, adding to cache.")
 	return true
@@ -781,6 +894,14 @@ func shouldCauseLogout(err error, logger *zerolog.Logger) bool {
 	errMsg := strings.ToLower(err.Error())
 
 	if isPermanentOAuthRefreshError(errMsg) {
+		return true
+	}
+
+	// A structured Snyk API error with a definitive auth status code is a permanent failure,
+	// even though http.Client.Do always wraps it in a *url.Error (which isTransientNetworkError
+	// would otherwise treat as transient network noise).
+	var snykErr snyk_errors.Error
+	if errors.As(err, &snykErr) && (snykErr.StatusCode == http.StatusUnauthorized || snykErr.StatusCode == http.StatusBadRequest) {
 		return true
 	}
 

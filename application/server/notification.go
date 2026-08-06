@@ -22,8 +22,10 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -67,7 +69,7 @@ func notifyProgress(server types.Server, p types.ProgressParams) {
 }
 
 //nolint:gocyclo // this is ok, as it's so high because of forwarding the calls
-func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, srv types.Server, n noti.Notifier, commandService types.CommandService) {
+func registerNotifier(conf configuration.Configuration, engine workflow.Engine, configResolver types.ConfigResolverInterface, logger *zerolog.Logger, srv types.Server, n noti.Notifier, commandService types.CommandService) {
 	if n == nil {
 		panic("registerNotifier: Notifier must not be nil — check server startup wiring")
 	}
@@ -88,6 +90,9 @@ func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, 
 		case types.AuthenticationParams:
 			notifyClient(logger, srv, "$/snyk.hasAuthenticated", params)
 			l.Debug().Msg("sending token")
+			lspConfig := command.BuildLspConfiguration(conf, engine, logger, configResolver)
+			notifyClient(logger, srv, "$/snyk.configuration", lspConfig)
+			l.Debug().Msg("sending configuration after authentication")
 		case types.SnykIsAvailableCli:
 			notifyClient(logger, srv, "$/snyk.isAvailableCli", params)
 			l.Debug().Msg("sending cli path")
@@ -128,8 +133,6 @@ func registerNotifier(conf configuration.Configuration, logger *zerolog.Logger, 
 			l.Debug().Msg("sending tree view to client")
 		case types.ApplyWorkspaceEditParams:
 			handleApplyWorkspaceEdit(conf, srv, params, &l)
-			l.Debug().
-				Msg("sending apply workspace edit request to client")
 		case types.CodeLensRefresh:
 			handleCodelensRefresh(conf, srv, &l)
 			l.Debug().
@@ -222,6 +225,9 @@ func handleApplyWorkspaceEdit(conf configuration.Configuration, srv types.Server
 		logger.Debug().Str("method", method).Msg("workspace/applyEdit not supported by client, not sending request")
 		return
 	}
+	// Log only when we are about to send — after the capability guard — so that
+	// "sending apply workspace edit request" is always a truthful statement.
+	logger.Debug().Str("method", method).Msg("sending apply workspace edit request to client")
 	callback, err := srv.Callback(context.Background(), "workspace/applyEdit", params)
 	if err != nil {
 		logger.Err(err).Str("method", method).Msg("error while sending workspace/applyEdit request")

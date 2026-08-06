@@ -124,17 +124,24 @@ const (
 	SettingSastSettings           = "sast_settings"
 
 	// Internal settings (not registered as pflag, but stored in GAF configuration)
-	SettingSnykCodeAnalysisTimeout    = "snyk_code_analysis_timeout"
-	SettingBinarySearchPaths          = "binary_search_paths"
-	SettingConfigFile                 = "config_file"
-	SettingFormat                     = "format"
-	SettingHoverVerbosity             = "hover_verbosity"
-	SettingDeviceId                   = "device_id"
-	SettingLogPath                    = "log_path"
-	SettingLastSetOrganization        = "last_set_organization"
-	SettingCachedOriginalPath         = "cached_original_path"
-	SettingUserSettingsPath           = "user_settings_path"
-	SettingIsLspInitialized           = "is_lsp_initialized"
+	SettingSnykCodeAnalysisTimeout = "snyk_code_analysis_timeout"
+	SettingBinarySearchPaths       = "binary_search_paths"
+	SettingConfigFile              = "config_file"
+	SettingFormat                  = "format"
+	SettingHoverVerbosity          = "hover_verbosity"
+	SettingDeviceId                = "device_id"
+	SettingLogPath                 = "log_path"
+	SettingLastSetOrganization     = "last_set_organization"
+	SettingCachedOriginalPath      = "cached_original_path"
+	SettingUserSettingsPath        = "user_settings_path"
+	SettingIsLspInitialized        = "is_lsp_initialized"
+	// SettingIsLspHandshakeAcknowledged is set synchronously at the end of the
+	// initialized handler, BEFORE the background scanner init runs. It marks that the
+	// LSP initialize/initialized handshake has been acknowledged, so a subsequent
+	// config change is a real client action rather than part of startup. This is
+	// distinct from SettingIsLspInitialized, which flips only once background scanner
+	// init completes (scanner readiness). See IsLspHandshakeAcknowledged.
+	SettingIsLspHandshakeAcknowledged = "is_lsp_handshake_acknowledged"
 	SettingClientCapabilities         = "client_capabilities"
 	SettingClientProtocolVersion      = "client_protocol_version"
 	SettingOsPlatform                 = "os_platform"
@@ -149,4 +156,11 @@ const (
 	// SettingConfigFileLegacy is the GAF-internal key for the config file path.
 	// GAF reads this key natively; we also write to UserGlobalKey(SettingConfigFile) for precedence.
 	SettingConfigFileLegacy = "configfile"
+	// SettingFeedbackBannerDismissed records that the user dismissed the tree view
+	// feedback banner. Persisted to storage so the dismissal survives restarts.
+	SettingFeedbackBannerDismissed = "internal.feedback.treeViewBanner.dismissed"
+	// SettingFeedbackBannerInteracted records that the user has interacted with the
+	// tree view this session. Not persisted: it keeps the feedback banner visible
+	// across re-renders once shown, and resets on restart.
+	SettingFeedbackBannerInteracted = "internal.feedback.treeViewBanner.interacted"
 )

@@ -43,6 +43,7 @@ func getDependencyNode(
 	packageManager string,
 	dependencyPath []string,
 	fileContent []byte,
+	rootPath types.FilePath,
 ) *ast.Node {
 	var finder RangeFinder
 
@@ -56,7 +57,7 @@ func getDependencyNode(
 		finder = &NpmRangeFinder{uri: path, fileContent: fileContent}
 	case "maven":
 		if strings.HasSuffix(pathAsString, "pom.xml") {
-			finder = &mavenRangeFinder{path: path, fileContent: fileContent, logger: logger}
+			finder = &mavenRangeFinder{path: path, fileContent: fileContent, logger: logger, root: rootPath}
 		} else {
 			finder = &DefaultFinder{path: path, fileContent: fileContent, logger: logger}
 		}
@@ -72,13 +73,13 @@ func getDependencyNode(
 	// we go recurse to the parent of it
 	if currentDep == nil && parsedTree != nil && parsedTree.ParentTree != nil {
 		tree := parsedTree.ParentTree
-		currentDep = getDependencyNode(logger, types.FilePath(tree.Document), packageManager, dependencyPath, []byte(tree.Root.Value))
+		currentDep = getDependencyNode(logger, types.FilePath(tree.Document), packageManager, dependencyPath, []byte(tree.Root.Value), rootPath)
 	}
 
 	// recurse until a dependency with version was found
 	if currentDep != nil && currentDep.Value == "" && currentDep.Tree != nil && currentDep.Tree.ParentTree != nil {
 		tree := currentDep.Tree.ParentTree
-		currentDep.LinkedParentDependencyNode = getDependencyNode(logger, types.FilePath(tree.Document), packageManager, dependencyPath, []byte(tree.Root.Value))
+		currentDep.LinkedParentDependencyNode = getDependencyNode(logger, types.FilePath(tree.Document), packageManager, dependencyPath, []byte(tree.Root.Value), rootPath)
 	}
 
 	return currentDep

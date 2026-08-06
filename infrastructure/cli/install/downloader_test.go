@@ -17,7 +17,12 @@
 package install
 
 import (
+	"crypto/sha256"
+	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -26,9 +31,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
-
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -40,16 +44,15 @@ func TestDownloader_Download(t *testing.T) {
 	r := getTestAsset()
 	progressCh := make(chan types.ProgressParams, 100000)
 	owner := progress.NewTrackerWithChannel(progressCh, engine.GetLogger())
-	d := NewDownloader(engine, nil, func() *http.Client { return http.DefaultClient }, testutil.DefaultConfigResolver(engine), owner)
+	d := NewDownloader(engine, nil, func() *http.Client { return http.DefaultClient }, owner)
 	exec := (&Discovery{}).ExecutableName(false)
 	destination := filepath.Join(t.TempDir(), exec)
-	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), destination)
 	lockFileName, err := d.lockFileName()
 	require.NoError(t, err)
 	// remove any existing lockfile
 	_ = os.RemoveAll(lockFileName)
 
-	err = d.Download(r, false)
+	_, err = d.Download(r, destination, false)
 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, progressCh)
@@ -67,9 +70,10 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	engine := testutil.IntegTest(t)
 	progressCh := make(chan types.ProgressParams, 100000)
 	owner := progress.NewTrackerWithChannel(progressCh, engine.GetLogger())
-	d := NewDownloader(engine, nil, func() *http.Client { return http.DefaultClient }, testutil.DefaultConfigResolver(engine), owner)
+	d := NewDownloader(engine, nil, func() *http.Client { return http.DefaultClient }, owner)
 
 	r := getTestAsset()
+	cliPath := filepath.Join(t.TempDir(), (&Discovery{}).ExecutableName(false))
 
 	// simulate cancellation when some progress received: cancel the task via the owner
 	go func() {
@@ -77,7 +81,7 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 		owner.Cancel(p.Token)
 	}()
 
-	err := d.Download(r, false)
+	_, err := d.Download(r, cliPath, false)
 	require.Error(t, err)
 
 	lockFileName, err := config.CLIDownloadLockFileName(engine.GetConfiguration())
@@ -87,6 +91,335 @@ func Test_DoNotDownloadIfCancelled(t *testing.T) {
 		_, err := os.Stat(lockFileName)
 		return err != nil
 	}, time.Second*2, time.Millisecond, "lock file should not exist")
+}
+
+func TestDownloaderDownload_ReturnsErrorWhenCliPathIsEmpty(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	t.Chdir(t.TempDir())
+	requested := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requested = true
+	}))
+	t.Cleanup(server.Close)
+
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), func() *http.Client { return server.Client() }, testutil.NewTestProgressTracker(t))
+	exec := (&Discovery{}).ExecutableName(false)
+
+	got, err := downloader.Download(testRelease(server.URL, "deadbeef  "+exec), "", false)
+
+	require.Error(t, err)
+	assert.Empty(t, got)
+	assert.False(t, requested, "Download should not hit the network when cliPath is empty")
+}
+
+// closeSignalingBody wraps a response body and signals on closed when Close is called,
+// so a test can detect whether Download closed the body without blocking forever.
+type closeSignalingBody struct {
+	io.ReadCloser
+	closed chan struct{}
+}
+
+func (b *closeSignalingBody) Close() error {
+	err := b.ReadCloser.Close()
+	select {
+	case b.closed <- struct{}{}:
+	default:
+	}
+	return err
+}
+
+type closeTrackingTransport struct {
+	closed chan struct{}
+}
+
+func (rt *closeTrackingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := http.DefaultTransport.RoundTrip(req)
+	if err != nil {
+		return resp, err
+	}
+	resp.Body = &closeSignalingBody{ReadCloser: resp.Body, closed: rt.closed}
+	return resp, nil
+}
+
+func TestDownloaderDownload_ClosesResponseBodyOnNon200Status(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	t.Chdir(t.TempDir())
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(server.Close)
+
+	closed := make(chan struct{}, 1)
+	client := &http.Client{Transport: &closeTrackingTransport{closed: closed}}
+	progressCh := make(chan types.ProgressParams, 100)
+	cancelProgressCh := make(chan bool, 1)
+	d := &Downloader{
+		progressTask:  progress.NewTestTask(progressCh, cancelProgressCh, engine.GetLogger()),
+		httpClient:    func() *http.Client { return client },
+		engine:        engine,
+		errorReporter: error_reporting.NewTestErrorReporter(engine),
+	}
+	exec := (&Discovery{}).ExecutableName(false)
+	cliPath := filepath.Join(t.TempDir(), exec)
+
+	_, err := d.Download(testRelease(server.URL, "deadbeef  "+exec), cliPath, false)
+
+	require.Error(t, err)
+	select {
+	case <-closed:
+		// response body was closed as expected
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected response body to be closed after a non-200 status, but it leaked")
+	}
+	assertProgressEndedWithFailure(t, progressCh)
+}
+
+// erroringTransport fails every request at the transport level, simulating a
+// network failure (e.g. DNS failure, connection refused) from d.httpClient().Get.
+type erroringTransport struct{}
+
+func (rt *erroringTransport) RoundTrip(_ *http.Request) (*http.Response, error) {
+	return nil, errors.New("simulated network failure")
+}
+
+func TestDownloaderDownload_ReportsFailureEndWhenHttpGetFails(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	t.Chdir(t.TempDir())
+	exec := (&Discovery{}).ExecutableName(false)
+	progressCh := make(chan types.ProgressParams, 100)
+	cancelProgressCh := make(chan bool, 1)
+	client := &http.Client{Transport: &erroringTransport{}}
+	d := &Downloader{
+		progressTask: progress.NewTestTask(progressCh, cancelProgressCh, engine.GetLogger()),
+		httpClient:   func() *http.Client { return client },
+		engine:       engine,
+	}
+	cliPath := filepath.Join(t.TempDir(), exec)
+
+	_, err := d.Download(testRelease("http://127.0.0.1:0/asset", "deadbeef  "+exec), cliPath, false)
+
+	require.Error(t, err)
+	assertProgressEndedWithFailure(t, progressCh)
+}
+
+func TestDownloaderDownload_ReportsFailureEndWhenMkdirAllFails(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	t.Chdir(t.TempDir())
+	binary := []byte("snyk-cli")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(binary)
+	}))
+	t.Cleanup(server.Close)
+
+	exec := (&Discovery{}).ExecutableName(false)
+	progressCh := make(chan types.ProgressParams, 100)
+	cancelProgressCh := make(chan bool, 1)
+	d := &Downloader{
+		progressTask: progress.NewTestTask(progressCh, cancelProgressCh, engine.GetLogger()),
+		httpClient:   func() *http.Client { return server.Client() },
+		engine:       engine,
+	}
+
+	// A regular file where Download needs a directory forces os.MkdirAll to
+	// fail with ENOTDIR.
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0o644))
+	cliPath := filepath.Join(blocker, "sub", exec)
+
+	_, err := d.Download(testRelease(server.URL, fmt.Sprintf("%x  %s", sha256.Sum256(binary), exec)), cliPath, false)
+
+	require.Error(t, err)
+	assertProgressEndedWithFailure(t, progressCh)
+}
+
+func TestDownloaderDownload_ReportsFailureEndWhenMkdirTempFails(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	t.Chdir(t.TempDir())
+	binary := []byte("snyk-cli")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(binary)
+	}))
+	t.Cleanup(server.Close)
+
+	exec := (&Discovery{}).ExecutableName(false)
+	progressCh := make(chan types.ProgressParams, 100)
+	cancelProgressCh := make(chan bool, 1)
+	d := &Downloader{
+		progressTask: progress.NewTestTask(progressCh, cancelProgressCh, engine.GetLogger()),
+		httpClient:   func() *http.Client { return server.Client() },
+		engine:       engine,
+		mkdirTemp: func(string, string) (string, error) {
+			return "", errors.New("simulated mkdir temp failure")
+		},
+	}
+
+	cliDirectory := filepath.Join(t.TempDir(), "clidir")
+	cliPath := filepath.Join(cliDirectory, exec)
+
+	_, err := d.Download(testRelease(server.URL, fmt.Sprintf("%x  %s", sha256.Sum256(binary), exec)), cliPath, false)
+
+	require.Error(t, err)
+	assertProgressEndedWithFailure(t, progressCh)
+}
+
+// alwaysErrorReader always fails on Read, used to force io.Copy to fail while
+// keeping a real, successful HTTP request/response.
+type alwaysErrorReader struct{}
+
+func (alwaysErrorReader) Read(_ []byte) (int, error) {
+	return 0, errors.New("simulated read failure")
+}
+
+type bodyReadErrorTransport struct{}
+
+func (rt *bodyReadErrorTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := http.DefaultTransport.RoundTrip(req)
+	if err != nil {
+		return resp, err
+	}
+	_ = resp.Body.Close()
+	resp.Body = io.NopCloser(alwaysErrorReader{})
+	return resp, nil
+}
+
+func TestDownloaderDownload_ReportsFailureEndWhenIOCopyFails(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	t.Chdir(t.TempDir())
+	binary := []byte("snyk-cli")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(binary)
+	}))
+	t.Cleanup(server.Close)
+
+	exec := (&Discovery{}).ExecutableName(false)
+	progressCh := make(chan types.ProgressParams, 100)
+	cancelProgressCh := make(chan bool, 1)
+	client := &http.Client{Transport: &bodyReadErrorTransport{}}
+	d := &Downloader{
+		progressTask: progress.NewTestTask(progressCh, cancelProgressCh, engine.GetLogger()),
+		httpClient:   func() *http.Client { return client },
+		engine:       engine,
+	}
+	cliPath := filepath.Join(t.TempDir(), exec)
+
+	_, err := d.Download(testRelease(server.URL, fmt.Sprintf("%x  %s", sha256.Sum256(binary), exec)), cliPath, false)
+
+	require.Error(t, err)
+	assertProgressEndedWithFailure(t, progressCh)
+}
+
+func TestDownloaderDownload_ReportsFailureEndWhenChecksumInfoIsMalformed(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	t.Chdir(t.TempDir())
+	binary := []byte("snyk-cli")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(binary)
+	}))
+	t.Cleanup(server.Close)
+
+	exec := (&Discovery{}).ExecutableName(false)
+	progressCh := make(chan types.ProgressParams, 100)
+	cancelProgressCh := make(chan bool, 1)
+	d := &Downloader{
+		progressTask: progress.NewTestTask(progressCh, cancelProgressCh, engine.GetLogger()),
+		httpClient:   func() *http.Client { return server.Client() },
+		engine:       engine,
+	}
+	cliPath := filepath.Join(t.TempDir(), exec)
+
+	// A checksum line with only one field fails expectedChecksum's format check.
+	_, err := d.Download(testRelease(server.URL, "onlyonefield"), cliPath, false)
+
+	require.Error(t, err)
+	assertProgressEndedWithFailure(t, progressCh)
+}
+
+func TestDownloaderDownload_ReportsFailureEndWhenChecksumMismatch(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	t.Chdir(t.TempDir())
+	binary := []byte("snyk-cli")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(binary)
+	}))
+	t.Cleanup(server.Close)
+
+	exec := (&Discovery{}).ExecutableName(false)
+	progressCh := make(chan types.ProgressParams, 100)
+	cancelProgressCh := make(chan bool, 1)
+	d := &Downloader{
+		progressTask: progress.NewTestTask(progressCh, cancelProgressCh, engine.GetLogger()),
+		httpClient:   func() *http.Client { return server.Client() },
+		engine:       engine,
+	}
+	cliPath := filepath.Join(t.TempDir(), exec)
+
+	// Well-formed checksum line, but it does not match the downloaded bytes.
+	wrongChecksum := sha256.Sum256([]byte("not-the-downloaded-bytes"))
+	_, err := d.Download(testRelease(server.URL, fmt.Sprintf("%x  %s", wrongChecksum, exec)), cliPath, false)
+
+	require.Error(t, err)
+	assertProgressEndedWithFailure(t, progressCh)
+}
+
+// assertProgressEndedWithFailure drains progressCh (closing it first) and
+// asserts a WorkDoneProgressEnd event was sent carrying a failure message, not
+// a success one — i.e. the client's progress indicator was not left stuck.
+func assertProgressEndedWithFailure(t *testing.T, progressCh chan types.ProgressParams) {
+	t.Helper()
+	close(progressCh)
+	sawEnd := false
+	for p := range progressCh {
+		end, ok := p.Value.(types.WorkDoneProgressEnd)
+		if !ok {
+			continue
+		}
+		sawEnd = true
+		assert.NotContains(t, end.Message, "has been downloaded")
+		assert.NotContains(t, end.Message, "has been updated")
+	}
+	assert.True(t, sawEnd, "expected a WorkDoneProgressEnd event, so the client's progress indicator is not left stuck")
+}
+
+func TestDownloaderDownload_DoesNotReportSuccessWhenMoveToDestinationFails(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	t.Chdir(t.TempDir())
+
+	binary := []byte("snyk-cli")
+	checksum := sha256.Sum256(binary)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(binary)
+	}))
+	t.Cleanup(server.Close)
+
+	exec := (&Discovery{}).ExecutableName(false)
+	progressCh := make(chan types.ProgressParams, 100)
+	cancelProgressCh := make(chan bool, 1)
+	d := &Downloader{
+		progressTask: progress.NewTestTask(progressCh, cancelProgressCh, engine.GetLogger()),
+		httpClient:   func() *http.Client { return server.Client() },
+		engine:       engine,
+		removeFile:   os.Remove,
+		renameFile: func(string, string) error {
+			return errors.New("simulated rename failure")
+		},
+	}
+	cliPath := filepath.Join(t.TempDir(), exec)
+
+	_, err := d.Download(testRelease(server.URL, fmt.Sprintf("%x  %s", checksum, exec)), cliPath, false)
+
+	require.Error(t, err)
+	close(progressCh)
+	sawEnd := false
+	for p := range progressCh {
+		end, ok := p.Value.(types.WorkDoneProgressEnd)
+		if !ok {
+			continue
+		}
+		sawEnd = true
+		assert.NotContains(t, end.Message, "has been downloaded")
+		assert.NotContains(t, end.Message, "has been updated")
+	}
+	assert.True(t, sawEnd, "expected a WorkDoneProgressEnd event even when moveToDestination fails, so the client's progress indicator is not left stuck")
 }
 
 func getTestAsset() *Release {

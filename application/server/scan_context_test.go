@@ -31,14 +31,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/creachadair/jrpc2"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -286,133 +284,6 @@ func TestTextDocumentDidSaveHandlerUsesScanCtx(t *testing.T) {
 		return scanCtx.Err() != nil
 	}, 3*time.Second, time.Millisecond,
 		"scan context must be canceled after shutdown — textDocumentDidSaveHandler still uses context.Background() [IDE-2036]")
-}
-
-// namedCapturingFolder extends contextCapturingFolder with a fixed path so that
-// GetTrustMessage (which calls folder.Path()) does not panic.
-type namedCapturingFolder struct {
-	*contextCapturingFolder
-	path types.FilePath
-}
-
-func newNamedCapturingFolder(path types.FilePath) *namedCapturingFolder {
-	return &namedCapturingFolder{
-		contextCapturingFolder: newContextCapturingFolder(),
-		path:                   path,
-	}
-}
-
-func (f *namedCapturingFolder) Path() types.FilePath { return f.path }
-
-// trustCapturingWorkspace wraps a real types.Workspace and, when
-// TrustFoldersAndScan is called, captures the context and unblocks a channel.
-// GetFolderTrust always returns the real workspace's trusted folders as untrusted
-// so that HandleUntrustedFolders triggers the trust dialog and ultimately calls
-// TrustFoldersAndScan with the context HandleFolders was given.
-type trustCapturingWorkspace struct {
-	types.Workspace
-
-	mu      sync.Mutex
-	scanCtx context.Context
-	called  chan struct{}
-
-	// fakeTrusted is the folder we pretend is untrusted so the trust dialog fires.
-	fakeTrusted types.Folder
-}
-
-func newTrustCapturingWorkspace(delegate types.Workspace, fakeFolder types.Folder) *trustCapturingWorkspace {
-	return &trustCapturingWorkspace{
-		Workspace:   delegate,
-		called:      make(chan struct{}, 1),
-		fakeTrusted: fakeFolder,
-	}
-}
-
-// GetFolderTrust returns the fake folder as untrusted so HandleUntrustedFolders
-// triggers the trust dialog (and ultimately calls TrustFoldersAndScan).
-func (w *trustCapturingWorkspace) GetFolderTrust() ([]types.Folder, []types.Folder) {
-	return nil, []types.Folder{w.fakeTrusted}
-}
-
-func (w *trustCapturingWorkspace) TrustFoldersAndScan(ctx context.Context, _ []types.Folder) {
-	w.mu.Lock()
-	w.scanCtx = ctx
-	w.mu.Unlock()
-	select {
-	case w.called <- struct{}{}:
-	default:
-	}
-	// Do not call the real workspace — we don't want real scans.
-}
-
-func (w *trustCapturingWorkspace) capturedCtx() context.Context {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return w.scanCtx
-}
-
-// TestHandleFoldersScanCtxCanceledOnShutdown (IDE-2036-INTEG-101) verifies that
-// the context passed to HandleFolders by initializedHandler is the server-lifetime
-// scanCtx (canceled on shutdown), NOT context.Background() which never cancels.
-//
-// Run with:
-//
-//	go test ./application/server/... -run TestHandleFoldersScanCtxCanceledOnShutdown -v -count=1
-func TestHandleFoldersScanCtxCanceledOnShutdown(t *testing.T) {
-	t.Parallel()
-
-	engine, tokenService := testutil.UnitTestWithEngine(t)
-	conf := engine.GetConfiguration()
-
-	// Trust-checking must be enabled so HandleUntrustedFolders runs.
-	conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
-
-	// The test callback responds "DoTrust" to the window/showMessageRequest so
-	// that TrustFoldersAndScan is called (which is where we capture the ctx).
-	loc, _, _ := setupServer(t, engine, tokenService, WithCallback(func(_ context.Context, _ *jrpc2.Request) (any, error) {
-		return types.MessageActionItem{Title: command.DoTrust}, nil
-	}))
-
-	// Build a minimal capturing folder with a valid path so that GetTrustMessage
-	// (called by showTrustDialog) does not panic when iterating untrusted folders.
-	capturingFolder := newNamedCapturingFolder(types.FilePath(t.TempDir() + "/fake-untrusted"))
-	realWs := config.GetWorkspace(conf)
-	require.NotNil(t, realWs)
-
-	// Wrap the workspace so GetFolderTrust returns our folder as untrusted, and
-	// TrustFoldersAndScan captures the context passed by HandleFolders.
-	trustWs := newTrustCapturingWorkspace(realWs, capturingFolder)
-	config.SetWorkspace(conf, trustWs)
-
-	// Trigger the LSP lifecycle: initialize → initialized.
-	_, err := loc.Client.Call(t.Context(), "initialize", nil)
-	require.NoError(t, err)
-
-	_, err = loc.Client.Call(t.Context(), "initialized", nil)
-	require.NoError(t, err)
-
-	// Wait for TrustFoldersAndScan to be called.
-	select {
-	case <-trustWs.called:
-		// good
-	case <-time.After(10 * time.Second):
-		t.Fatal("TrustFoldersAndScan was not called within 10s after initialized")
-	}
-
-	scanCtx := trustWs.capturedCtx()
-	require.NotNil(t, scanCtx)
-
-	// Before shutdown: the scan context must be live.
-	assert.NoError(t, scanCtx.Err(), "scan context must be live before shutdown")
-
-	// Shutdown must cancel the context so in-flight untrusted-folder scan goroutines exit.
-	_, err = loc.Client.Call(t.Context(), "shutdown", nil)
-	require.NoError(t, err)
-
-	assert.Eventually(t, func() bool {
-		return scanCtx.Err() != nil
-	}, 3*time.Second, time.Millisecond,
-		"scan context must be canceled after shutdown — HandleFolders still uses context.Background() [IDE-2036-INTEG-101]")
 }
 
 // TestWorkspaceDidChangeFoldersHandlerUsesScanCtx (IDE-2036-INTEG-006) verifies

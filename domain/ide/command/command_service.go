@@ -28,6 +28,7 @@ import (
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -35,21 +36,23 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/util"
 )
 
 type serviceImpl struct {
-	authService        authentication.AuthenticationService
-	featureFlagService featureflag.Service
-	notifier           noti.Notifier
-	learnService       learn.Service
-	issueProvider      snyk.IssueProvider
-	codeScanner        *code.Scanner
-	cli                cli.Executor
-	ldxSyncService     LdxSyncService
-	configResolver     types.ConfigResolverInterface
-	scanStateFunc      func() scanstates.StateSnapshot
-	engine             workflow.Engine
-	logger             *zerolog.Logger
+	authService         authentication.AuthenticationService
+	featureFlagService  featureflag.Service
+	notifier            noti.Notifier
+	learnService        learn.Service
+	issueProvider       snyk.IssueProvider
+	codeScanner         *code.Scanner
+	cli                 cli.Executor
+	ldxSyncService      LdxSyncService
+	configResolver      types.ConfigResolverInterface
+	scanStateFunc       func() scanstates.StateSnapshot
+	engine              workflow.Engine
+	logger              *zerolog.Logger
+	remediationProvider remediation.FolderRemediator
 	// scanCtx is the server-lifetime context injected at construction. Scan commands
 	// that spawn un-awaited goroutines use this context so they are canceled on
 	// server shutdown rather than living forever on context.Background() [IDE-2036].
@@ -60,21 +63,22 @@ type serviceImpl struct {
 // context (sourced from di.Dependencies.ScanCtx) so that background scan goroutines
 // spawned by WorkspaceScanCommand, WorkspaceFolderScanCommand, and ClearCacheCommand
 // are canceled on shutdown [IDE-2036].
-func NewService(engine workflow.Engine, logger *zerolog.Logger, authService authentication.AuthenticationService, featureFlagService featureflag.Service, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor, ldxSyncService LdxSyncService, configResolver types.ConfigResolverInterface, scanStateFunc func() scanstates.StateSnapshot, scanCtx context.Context) types.CommandService { //nolint:revive // context.Context as non-first param: scanCtx is a stored dependency, not a call-scoped context
+func NewService(engine workflow.Engine, logger *zerolog.Logger, authService authentication.AuthenticationService, featureFlagService featureflag.Service, notifier noti.Notifier, learnService learn.Service, issueProvider snyk.IssueProvider, codeScanner *code.Scanner, cli cli.Executor, ldxSyncService LdxSyncService, configResolver types.ConfigResolverInterface, scanStateFunc func() scanstates.StateSnapshot, remediationProvider remediation.FolderRemediator, scanCtx context.Context) types.CommandService { //nolint:revive // context.Context as non-first param: scanCtx is a stored dependency, not a call-scoped context
 	return &serviceImpl{
-		authService:        authService,
-		featureFlagService: featureFlagService,
-		notifier:           notifier,
-		learnService:       learnService,
-		issueProvider:      issueProvider,
-		codeScanner:        codeScanner,
-		cli:                cli,
-		ldxSyncService:     ldxSyncService,
-		configResolver:     configResolver,
-		scanStateFunc:      scanStateFunc,
-		engine:             engine,
-		logger:             logger,
-		scanCtx:            scanCtx,
+		authService:         authService,
+		featureFlagService:  featureFlagService,
+		notifier:            notifier,
+		learnService:        learnService,
+		issueProvider:       issueProvider,
+		codeScanner:         codeScanner,
+		cli:                 cli,
+		ldxSyncService:      ldxSyncService,
+		configResolver:      configResolver,
+		scanStateFunc:       scanStateFunc,
+		engine:              engine,
+		logger:              logger,
+		remediationProvider: remediationProvider,
+		scanCtx:             scanCtx,
 	}
 }
 
@@ -87,7 +91,7 @@ func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.
 
 	logger.Debug().Msgf("executing command %s", commandData.CommandId)
 	// TODO: move to DI
-	command, err := CreateFromCommandData(ctx, s.engine, commandData, server, s.authService, s.featureFlagService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli, s.ldxSyncService, s.configResolver, s.scanStateFunc, s.scanCtx)
+	command, err := CreateFromCommandData(ctx, s.engine, commandData, server, s.authService, s.featureFlagService, s.learnService, s.notifier, s.issueProvider, s.codeScanner, s.cli, s.ldxSyncService, s.configResolver, s.scanStateFunc, s.remediationProvider, s.scanCtx)
 	if err != nil {
 		logger.Err(err).Msg("failed to create command")
 		return nil, err
@@ -96,9 +100,14 @@ func (s *serviceImpl) ExecuteCommandData(ctx context.Context, commandData types.
 	result, err := command.Execute(ctx)
 	if err != nil {
 		var snykErr snyk_errors.Error
-		if errors.As(err, &snykErr) {
+		switch {
+		case util.IsCancellation(err):
+			// A canceled command (e.g. a login the IDE canceled via $/cancelRequest) is expected,
+			// not a failure: log at debug so it isn't reported as an error downstream.
+			logger.Debug().Msgf("command %s canceled", commandData.CommandId)
+		case errors.As(err, &snykErr):
 			logger.Err(err).Str("detail", snykErr.Detail).Msg("failed to execute command")
-		} else {
+		default:
 			logger.Err(err).Msg("failed to execute command")
 		}
 	}

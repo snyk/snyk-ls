@@ -668,7 +668,10 @@ func setupScanPrecedenceTest(t *testing.T, codeEnabled, ossEnabled, iacEnabled b
 	folder := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, engine, tokenService, deps)
 
 	requireLspConfigurationNotification(t, jsonRpcRecorder, nil, false)
-	jsonRpcRecorder.ClearNotifications()
+	// Background init (IDE-2181) finishes workspace scans before WaitForLspInitialized
+	// returns; clearing all notifications would discard the $/snyk.scan success payloads
+	// that scan-level precedence tests assert on immediately after setup.
+	jsonRpcRecorder.ClearNotificationsByMethod("$/snyk.configuration")
 
 	return engine, tokenService, loc, jsonRpcRecorder, folder, deps
 }
@@ -708,7 +711,7 @@ func waitForScanCompletion(t *testing.T, agg scanstates.Aggregator) {
 	t.Helper()
 	require.Eventually(t, func() bool {
 		return agg.StateSnapshot().AllScansFinishedWorkingDirectory
-	}, 120*time.Second, time.Millisecond, "scans did not complete in time")
+	}, maxIntegTestDuration, time.Millisecond, "scans did not complete in time")
 }
 
 // Test_SmokeScanPrecedence_OSSEnabled_CodeDisabled verifies that when OSS is enabled

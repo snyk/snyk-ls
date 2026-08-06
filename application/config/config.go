@@ -131,6 +131,29 @@ func GetIssueViewOptions(conf configuration.Configuration) types.IssueViewOption
 	return types.GetIssueViewOptionsFromConfig(conf)
 }
 
+// GetFeedbackBannerDismissed reports whether the user has dismissed the tree view feedback banner.
+func GetFeedbackBannerDismissed(conf configuration.Configuration) bool {
+	return conf.GetBool(types.SettingFeedbackBannerDismissed)
+}
+
+// SetFeedbackBannerDismissed persists the dismissal of the tree view feedback banner so it survives
+// restarts. The key is registered for storage in SetupStorage, so a plain Set writes through to disk.
+func SetFeedbackBannerDismissed(conf configuration.Configuration) {
+	conf.Set(types.SettingFeedbackBannerDismissed, true)
+}
+
+// GetFeedbackBannerInteracted reports whether the user has interacted with the tree view this session.
+func GetFeedbackBannerInteracted(conf configuration.Configuration) bool {
+	return conf.GetBool(types.SettingFeedbackBannerInteracted)
+}
+
+// SetFeedbackBannerInteracted records, for this session only, that the user has interacted with the
+// tree view. It is intentionally not persisted, so the feedback banner stays visible across re-renders
+// once shown but reappears in a later session until dismissed.
+func SetFeedbackBannerInteracted(conf configuration.Configuration) {
+	conf.Set(types.SettingFeedbackBannerInteracted, true)
+}
+
 // SetIssueViewOptionsOnConfig sets the issue view options on the given configuration. Returns true if options were modified.
 func SetIssueViewOptionsOnConfig(conf configuration.Configuration, opts *types.IssueViewOptions, logger *zerolog.Logger) bool {
 	return types.SetIssueViewOptionsOnConfig(conf, opts, logger)
@@ -657,6 +680,22 @@ func SetOrganization(conf configuration.Configuration, organization string) {
 	types.SetGlobalUser(conf, types.SettingLastSetOrganization, organization)
 }
 
+// ResetOrganization clears a user-set global organization so the effective org
+// reverts to GAF's resolution chain (the web-account preferred org via
+// /rest/self). It is the organization-specific arm of the global "Reset to
+// defaults" flow: organization is not stored at UserGlobalKey(SettingOrganization)
+// like the other org-scope settings, so it cannot be reset with
+// types.UnsetGlobalUser and needs this dedicated path.
+//
+// Unsetting SettingLastSetOrganization is required so SetOrganization's no-op
+// guard does not block a later re-set, and so folder_config.go's
+// globalOrgSetByUser check (GetGlobalString(SettingLastSetOrganization) != "")
+// correctly reads "not set by user" again.
+func ResetOrganization(conf configuration.Configuration) {
+	conf.Unset(configuration.ORGANIZATION)
+	types.UnsetGlobalUser(conf, types.SettingLastSetOrganization)
+}
+
 // AuthenticationMethodMatchesCredentials returns true if the token matches the configured authentication method.
 func AuthenticationMethodMatchesCredentials(token string, method types.AuthenticationMethod, logger *zerolog.Logger) bool {
 	if method == types.FakeAuthentication {
@@ -712,6 +751,7 @@ func SetupStorage(conf configuration.Configuration, s storage.StorageWithCallbac
 	conf.PersistInStorage(folderconfig.ConfigMainKey)
 	conf.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
 	conf.PersistInStorage(configuration.AUTHENTICATION_TOKEN)
+	conf.PersistInStorage(types.SettingFeedbackBannerDismissed)
 
 	if preInitOAuthToken != "" {
 		if err := s.Set(auth.CONFIG_KEY_OAUTH_TOKEN, preInitOAuthToken); err != nil {

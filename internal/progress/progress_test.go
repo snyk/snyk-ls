@@ -86,6 +86,60 @@ func TestEndProgress(t *testing.T) {
 	assert.Equal(t, output, <-channel)
 }
 
+// IDE-1035 (D): Tracker.NewScan must register the token so IsScanToken returns
+// true; a plain Tracker.New must NOT be classified as a scan token.
+func TestIsScanToken_ScanTask_ReturnsTrue(t *testing.T) {
+	logger := zerolog.Nop()
+	tracker := NewTracker(&logger)
+	task := tracker.NewScan(true, "folderA")
+	assert.True(t, tracker.IsScanToken(task.GetToken()), "NewScan token must be recognized as a scan token")
+}
+
+func TestIsScanToken_PlainTask_ReturnsFalse(t *testing.T) {
+	logger := zerolog.Nop()
+	tracker := NewTracker(&logger)
+	task := tracker.New(true)
+	assert.False(t, tracker.IsScanToken(task.GetToken()), "New token must NOT be recognized as a scan token")
+}
+
+func TestIsScanToken_UnknownToken_ReturnsFalse(t *testing.T) {
+	logger := zerolog.Nop()
+	tracker := NewTracker(&logger)
+	assert.False(t, tracker.IsScanToken("unknown-token"), "unknown token must NOT be recognized as a scan token")
+}
+
+func TestIsScanToken_AfterCancel_ReturnsFalse(t *testing.T) {
+	logger := zerolog.Nop()
+	tracker := NewTracker(&logger)
+	token := tracker.NewScan(true, "folderA").GetToken()
+	tracker.Cancel(token)
+	assert.False(t, tracker.IsScanToken(token), "canceled scan token must no longer be recognized as a scan token")
+}
+
+// FolderForScanToken must resolve a known scan token to its folder, and
+// report not-found for unknown or non-scan tokens.
+func TestFolderForScanToken_ScanTask_ReturnsFolder(t *testing.T) {
+	logger := zerolog.Nop()
+	tracker := NewTracker(&logger)
+	folder, ok := tracker.FolderForScanToken(tracker.NewScan(true, "folderA").GetToken())
+	assert.True(t, ok, "known scan token must resolve")
+	assert.Equal(t, types.FilePath("folderA"), folder)
+}
+
+func TestFolderForScanToken_PlainTask_ReturnsNotFound(t *testing.T) {
+	logger := zerolog.Nop()
+	tracker := NewTracker(&logger)
+	_, ok := tracker.FolderForScanToken(tracker.New(true).GetToken())
+	assert.False(t, ok, "non-scan token must not resolve to a folder")
+}
+
+func TestFolderForScanToken_UnknownToken_ReturnsNotFound(t *testing.T) {
+	logger := zerolog.Nop()
+	tracker := NewTracker(&logger)
+	_, ok := tracker.FolderForScanToken("unknown-token")
+	assert.False(t, ok, "unknown token must not resolve to a folder")
+}
+
 func TestEndProgressTwice(t *testing.T) {
 	output := types.ProgressParams{
 		Value: types.WorkDoneProgressEnd{

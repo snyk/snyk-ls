@@ -156,7 +156,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 		logger.Debug().Msg("IaC scan skipped: path is not a supported IaC file or directory")
 		return []types.Issue{}, nil
 	}
-	p := iac.progressOwner.New(true)
+	p := iac.progressOwner.NewScan(true, workspaceFolder)
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
 	p.BeginUnquantifiableLength("Scanning for Snyk IaC issues", string(pathToScan))
 	defer p.EndWithMessage("Snyk Iac Scan completed.")
@@ -167,6 +167,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 		previousScan.CancelScan()
 	}
 	newScan := scans.NewScanProgressWithLogger(iac.logger)
+	newScan.SetCancelFunc(cancel)
 	go newScan.Listen(ctx, cancel, i)
 	defer func() {
 		iac.mutex.Lock()
@@ -196,6 +197,10 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 	issues, err = iac.retrieveIssues(scanResults, issues, workspaceFolder, workspaceFolderConfig)
 	if err != nil {
 		return nil, pkgerrors.Wrap(err, "unable to retrieve IaC issues")
+	}
+
+	if issues == nil {
+		issues = []types.Issue{}
 	}
 
 	return issues, nil
@@ -269,6 +274,13 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, w
 			iac.logger.Err(err).Str("method", method).Msg("Error while calling Snyk CLI")
 			return nil, err
 		}
+	}
+
+	if err == nil && len(res) == 0 {
+		// CLI exited 0 with no output (most commonly: no IaC files in the directory).
+		// Return empty results rather than a misleading unmarshal error.
+		iac.logger.Debug().Str("method", method).Msg("CLI exited 0 with empty stdout; returning empty results")
+		return []iacScanResult{}, nil
 	}
 
 	return iac.unmarshal(res)

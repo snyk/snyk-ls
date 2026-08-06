@@ -25,18 +25,14 @@ package server
 // in the respective command structs) and must go GREEN after the production fix.
 
 import (
-	"context"
-	"sync"
 	"testing"
 	"time"
 
-	"github.com/creachadair/jrpc2"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -84,69 +80,6 @@ type trustedWorkspace struct {
 
 func (w *trustedWorkspace) GetFolderTrust() (trusted []types.Folder, untrusted []types.Folder) {
 	return []types.Folder{w.trustedFolder}, nil
-}
-
-// ---------------------------------------------------------------------------
-// folderCommandCapturingWorkspace: wraps a real Workspace and is used by
-// INTEG-103 to intercept both GetFolderContaining (so WorkspaceFolderScanCommand
-// can find the folder) and GetFolderTrust/TrustFoldersAndScan (so the trust
-// flow captures the context from HandleUntrustedFolders).
-// ---------------------------------------------------------------------------
-
-type folderCommandCapturingWorkspace struct {
-	types.Workspace
-
-	interceptPath types.FilePath
-	scanFolder    *trustedCapturingFolder // returned by GetFolderContaining
-
-	mu       sync.Mutex
-	trustCtx context.Context
-	called   chan struct{}
-
-	fakeTrusted types.Folder // folder returned as "untrusted" by GetFolderTrust
-}
-
-func newFolderCommandCapturingWorkspace(delegate types.Workspace, interceptPath types.FilePath) *folderCommandCapturingWorkspace {
-	fakePath := interceptPath
-	scanFolder := newTrustedCapturingFolder(fakePath)
-	return &folderCommandCapturingWorkspace{
-		Workspace:     delegate,
-		interceptPath: interceptPath,
-		scanFolder:    scanFolder,
-		called:        make(chan struct{}, 1),
-		fakeTrusted:   newNamedCapturingFolder(fakePath),
-	}
-}
-
-// GetFolderContaining: return our capturing folder for the intercepted path.
-func (w *folderCommandCapturingWorkspace) GetFolderContaining(path types.FilePath) types.Folder {
-	if path == w.interceptPath {
-		return w.scanFolder
-	}
-	return w.Workspace.GetFolderContaining(path)
-}
-
-// GetFolderTrust: always return the fake folder as untrusted so the trust
-// dialog fires when HandleUntrustedFolders is called.
-func (w *folderCommandCapturingWorkspace) GetFolderTrust() ([]types.Folder, []types.Folder) {
-	return nil, []types.Folder{w.fakeTrusted}
-}
-
-// TrustFoldersAndScan: capture the context passed by HandleUntrustedFolders.
-func (w *folderCommandCapturingWorkspace) TrustFoldersAndScan(ctx context.Context, _ []types.Folder) {
-	w.mu.Lock()
-	w.trustCtx = ctx
-	w.mu.Unlock()
-	select {
-	case w.called <- struct{}{}:
-	default:
-	}
-}
-
-func (w *folderCommandCapturingWorkspace) capturedTrustCtx() context.Context {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return w.trustCtx
 }
 
 // ---------------------------------------------------------------------------
@@ -204,79 +137,6 @@ func TestWorkspaceScanCommandCtxCanceledOnShutdown(t *testing.T) {
 		return scanCtx.Err() != nil
 	}, 3*time.Second, time.Millisecond,
 		"scan context must be canceled after shutdown — WorkspaceScanCommand still uses context.Background() [IDE-2036-INTEG-102]")
-}
-
-// ---------------------------------------------------------------------------
-// INTEG-103 — WorkspaceFolderScanCommand HandleUntrustedFolders uses scanCtx
-//
-// TestWorkspaceFolderScanCommandUntrustedCtxCanceledOnShutdown verifies that
-// HandleUntrustedFolders called by workspaceFolderScanCommand.Execute receives
-// the server-lifetime scanCtx (not context.Background()) so that trust-scan
-// goroutines are canceled on shutdown.
-// ---------------------------------------------------------------------------
-func TestWorkspaceFolderScanCommandUntrustedCtxCanceledOnShutdown(t *testing.T) {
-	t.Parallel()
-
-	engine, tokenService := testutil.UnitTestWithEngine(t)
-	conf := engine.GetConfiguration()
-
-	// No trust setting is needed: folderCommandCapturingWorkspace.GetFolderTrust
-	// below unconditionally reports the folder as untrusted, which is what
-	// HandleUntrustedFolders actually reads.
-
-	// Callback responds "DoTrust" so TrustFoldersAndScan is called.
-	loc, _, _ := setupServer(t, engine, tokenService,
-		WithRealDI(),
-		WithCallback(func(_ context.Context, _ *jrpc2.Request) (any, error) {
-			return types.MessageActionItem{Title: command.DoTrust}, nil
-		}),
-	)
-
-	_, err := loc.Client.Call(t.Context(), "initialize", nil)
-	require.NoError(t, err)
-	_, err = loc.Client.Call(t.Context(), "initialized", nil)
-	require.NoError(t, err)
-
-	// Build the capturing workspace. The fake path is both the "folder to scan"
-	// (returned by GetFolderContaining) and the "untrusted folder" (returned by
-	// GetFolderTrust). WorkspaceFolderScanCommand will:
-	//   1. GetFolderContaining(fakePath) → our capturing folder
-	//   2. f.Clear(), f.ScanFolder(requestCtx)
-	//   3. HandleUntrustedFolders(???, ...) ← must use scanCtx, currently uses context.Background()
-	//   4. Trust dialog fires → TrustFoldersAndScan(ctx, ...) captures ctx
-	fakePath := types.FilePath(t.TempDir() + "/fake-wf-folder")
-	realWs := config.GetWorkspace(conf)
-	require.NotNil(t, realWs)
-	capturingWs := newFolderCommandCapturingWorkspace(realWs, fakePath)
-	config.SetWorkspace(conf, capturingWs)
-
-	// Send WorkspaceFolderScanCommand with the fake path.
-	params := sglsp.ExecuteCommandParams{
-		Command:   types.WorkspaceFolderScanCommand,
-		Arguments: []any{string(fakePath)},
-	}
-	_, err = loc.Client.Call(t.Context(), "workspace/executeCommand", params)
-	require.NoError(t, err)
-
-	// Wait for TrustFoldersAndScan to be called (triggered by the "DoTrust" callback).
-	select {
-	case <-capturingWs.called:
-		// good
-	case <-time.After(10 * time.Second):
-		t.Fatal("TrustFoldersAndScan was not called within 10s after WorkspaceFolderScanCommand [IDE-2036-INTEG-103]")
-	}
-
-	trustCtx := capturingWs.capturedTrustCtx()
-	require.NotNil(t, trustCtx)
-	assert.NoError(t, trustCtx.Err(), "trust ctx must be live before shutdown [IDE-2036-INTEG-103]")
-
-	_, err = loc.Client.Call(t.Context(), "shutdown", nil)
-	require.NoError(t, err)
-
-	assert.Eventually(t, func() bool {
-		return trustCtx.Err() != nil
-	}, 3*time.Second, time.Millisecond,
-		"scan context must be canceled after shutdown — WorkspaceFolderScanCommand.HandleUntrustedFolders still uses context.Background() [IDE-2036-INTEG-103]")
 }
 
 // ---------------------------------------------------------------------------

@@ -41,6 +41,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/treeview"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	scanner2 "github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
@@ -75,15 +76,16 @@ type Dependencies struct {
 	// Handler-accessed dependencies. Only what handlers read belongs here, which
 	// is why initialize.Initializer does not: no handler reads it, it is consumed
 	// once during startup by NewDelegatingScanner.
-	Scanner           scanner2.Scanner
-	HoverService      hover.Service
-	ScanNotifier      scanner2.ScanNotifier
-	ScanPersister     persistence.ScanSnapshotPersister
-	FileWatcher       *watcher.FileWatcher
-	ErrorReporter     er.ErrorReporter
-	CodeActionService *codeaction.CodeActionsService
-	Installer         install.Installer
-	CommandService    types.CommandService
+	Scanner             scanner2.Scanner
+	HoverService        hover.Service
+	ScanNotifier        scanner2.ScanNotifier
+	ScanPersister       persistence.ScanSnapshotPersister
+	FileWatcher         *watcher.FileWatcher
+	ErrorReporter       er.ErrorReporter
+	CodeActionService   *codeaction.CodeActionsService
+	RemediationNotifier remediation.FileChangeNotifier
+	Installer           install.Installer
+	CommandService      types.CommandService
 	// ProgressTracker is the per-server Tracker of the progress channel and the
 	// token→task registry [IDE-2036]. Each server instance has its own Tracker so
 	// progress events from one server cannot leak to another server's listener.
@@ -180,8 +182,13 @@ func Init(engine workflow.Engine, tokenService types.TokenService) Dependencies 
 	w := workspace.New(conf, logger, localInstrumentor, localScanner, localHoverService, localScanNotifier, localNotifier, localScanPersister, localScanStateAggregator, localFeatureFlagService, localConfigResolver, engine)
 	config.SetWorkspace(conf, w)
 	localFileWatcher := watcher.NewFileWatcher()
-	localCodeActionService := codeaction.NewService(engine, w, localFileWatcher, localNotifier, localFeatureFlagService, localConfigResolver)
-	localCommandService := command.NewService(engine, logger, localAuthenticationService, localFeatureFlagService, localNotifier, localLearnService, w, localSnykCodeScanner, localSnykCli, localLdxSyncService, localConfigResolver, localScanStateAggregator.StateSnapshot, localScanCtx)
+
+	localRemediationProvider := remediation.NewRemyProvider(engine, nil)
+	localRemediationNotifier, _ := localRemediationProvider.(remediation.FileChangeNotifier)
+	localFolderRemediator, _ := localRemediationProvider.(remediation.FolderRemediator)
+
+	localCodeActionService := codeaction.NewService(engine, w, localFileWatcher, localNotifier, localFeatureFlagService, localConfigResolver, localRemediationProvider)
+	localCommandService := command.NewService(engine, logger, localAuthenticationService, localFeatureFlagService, localNotifier, localLearnService, w, localSnykCodeScanner, localSnykCli, localLdxSyncService, localConfigResolver, localScanStateAggregator.StateSnapshot, localFolderRemediator, localScanCtx)
 
 	var localInlineValueProvider snyk.InlineValueProvider
 	if ivp, ok := localScanner.(snyk.InlineValueProvider); ok {
@@ -205,6 +212,7 @@ func Init(engine workflow.Engine, tokenService types.TokenService) Dependencies 
 		FileWatcher:           localFileWatcher,
 		ErrorReporter:         localErrorReporter,
 		CodeActionService:     localCodeActionService,
+		RemediationNotifier:   localRemediationNotifier,
 		Installer:             localInstaller,
 		CommandService:        localCommandService,
 		ProgressTracker:       progressOwner,
