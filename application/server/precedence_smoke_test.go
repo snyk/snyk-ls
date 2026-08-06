@@ -732,8 +732,14 @@ func Test_SmokeScanPrecedence_OSSEnabled_CodeDisabled(t *testing.T) {
 // Test_SmokeScanPrecedence_CodeEnabled_OSSDisabled verifies that when Code is enabled
 // and OSS is disabled globally, the LSP server runs a Code scan but NOT an OSS scan.
 func Test_SmokeScanPrecedence_CodeEnabled_OSSDisabled(t *testing.T) {
-	// Note: t.Parallel() omitted — concurrent non-Code SHARD_3 tests interfere
-	// with Code scan context initialization under high parallel load.
+	// Note: t.Parallel() omitted — this is a test-timeout-budget workaround, not a
+	// product constraint. Code scans get a 12h analysis budget (config.go:154,:163,
+	// applied at :425; CI does not set SNYK_CODE_TIMEOUT) and internalScan adds no
+	// deadline (code.go:262), so nothing here can time out on a product deadline.
+	// What CPU contention from the other SHARD_3 tests can breach is the test-side
+	// budget — maxIntegTestDuration (server_test.go:70, 15m) and the shard job
+	// timeout (build.yaml:216,:335, go test -timeout=25m) — and since [IDE-2036]
+	// a blown budget cancels scanCtx mid-scan, turning slowness into a failure.
 	acquireCodeAPISlot(t)
 	engine, _, _, jsonRpcRecorder, folder, deps := setupScanPrecedenceTest(t, true, false, false)
 
@@ -767,8 +773,14 @@ func Test_SmokeScanPrecedence_AllDisabled_NoScansRun(t *testing.T) {
 // 4. Trigger workspace scan via executeCommand
 // 5. Verify OSS scan runs
 func Test_SmokeScanPrecedence_UserOverrideEnablesProduct(t *testing.T) {
-	// Note: t.Parallel() omitted — concurrent non-Code SHARD_3 tests interfere
-	// with Code scan context initialization under high parallel load.
+	// Note: t.Parallel() omitted — this is a test-timeout-budget workaround, not a
+	// product constraint. Code scans get a 12h analysis budget (config.go:154,:163,
+	// applied at :425; CI does not set SNYK_CODE_TIMEOUT) and internalScan adds no
+	// deadline (code.go:262), so nothing here can time out on a product deadline.
+	// What CPU contention from the other SHARD_3 tests can breach is the test-side
+	// budget — maxIntegTestDuration (server_test.go:70, 15m) and the shard job
+	// timeout (build.yaml:216,:335, go test -timeout=25m) — and since [IDE-2036]
+	// a blown budget cancels scanCtx mid-scan, turning slowness into a failure.
 	acquireCodeAPISlot(t)
 	engine, _, loc, jsonRpcRecorder, folder, deps := setupScanPrecedenceTest(t, true, false, false)
 
@@ -812,8 +824,14 @@ func Test_SmokeScanPrecedence_UserOverrideEnablesProduct(t *testing.T) {
 // Test_SmokeScanPrecedence_UserOverrideDisablesProduct verifies that when a product
 // is enabled globally but a folder override disables it, no scan runs for that product.
 func Test_SmokeScanPrecedence_UserOverrideDisablesProduct(t *testing.T) {
-	// Note: t.Parallel() omitted — concurrent non-Code SHARD_3 tests interfere
-	// with Code scan context initialization under high parallel load.
+	// Note: t.Parallel() omitted — this is a test-timeout-budget workaround, not a
+	// product constraint. Code scans get a 12h analysis budget (config.go:154,:163,
+	// applied at :425; CI does not set SNYK_CODE_TIMEOUT) and internalScan adds no
+	// deadline (code.go:262), so nothing here can time out on a product deadline.
+	// What CPU contention from the other SHARD_3 tests can breach is the test-side
+	// budget — maxIntegTestDuration (server_test.go:70, 15m) and the shard job
+	// timeout (build.yaml:216,:335, go test -timeout=25m) — and since [IDE-2036]
+	// a blown budget cancels scanCtx mid-scan, turning slowness into a failure.
 	acquireCodeAPISlot(t)
 	engine, _, loc, jsonRpcRecorder, folder, deps := setupScanPrecedenceTest(t, true, false, false)
 
@@ -848,8 +866,14 @@ func Test_SmokeScanPrecedence_UserOverrideDisablesProduct(t *testing.T) {
 // a severity filter (Critical+High only) is configured at initialization, published
 // diagnostics only contain issues matching the allowed severities.
 func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing.T) {
-	// Note: t.Parallel() omitted — concurrent non-Code SHARD_3 tests interfere
-	// with Code scan context initialization under high parallel load.
+	// Note: t.Parallel() omitted — this is a test-timeout-budget workaround, not a
+	// product constraint. Code scans get a 12h analysis budget (config.go:154,:163,
+	// applied at :425; CI does not set SNYK_CODE_TIMEOUT) and internalScan adds no
+	// deadline (code.go:262), so nothing here can time out on a product deadline.
+	// What CPU contention from the other SHARD_3 tests can breach is the test-side
+	// budget — maxIntegTestDuration (server_test.go:70, 15m) and the shard job
+	// timeout (build.yaml:216,:335, go test -timeout=25m) — and since [IDE-2036]
+	// a blown budget cancels scanCtx mid-scan, turning slowness into a failure.
 	acquireCodeAPISlot(t)
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_3")
 
@@ -919,8 +943,14 @@ func Test_SmokeScanPrecedence_SeverityFilter_DiagnosticsRespectFilter(t *testing
 // when Code and OSS are enabled, both scan types execute successfully.
 // IaC is excluded because the test org lacks the infrastructureAsCode entitlement.
 func Test_SmokeScanPrecedence_EnableAllProducts_AllScansRun(t *testing.T) {
-	// Note: t.Parallel() omitted — concurrent non-Code SHARD_3 tests interfere
-	// with Code scan context initialization under high parallel load.
+	// Note: t.Parallel() omitted — this is a test-timeout-budget workaround, not a
+	// product constraint. Code scans get a 12h analysis budget (config.go:154,:163,
+	// applied at :425; CI does not set SNYK_CODE_TIMEOUT) and internalScan adds no
+	// deadline (code.go:262), so nothing here can time out on a product deadline.
+	// What CPU contention from the other SHARD_3 tests can breach is the test-side
+	// budget — maxIntegTestDuration (server_test.go:70, 15m) and the shard job
+	// timeout (build.yaml:216,:335, go test -timeout=25m) — and since [IDE-2036]
+	// a blown budget cancels scanCtx mid-scan, turning slowness into a failure.
 	acquireCodeAPISlot(t)
 	engine, _, _, jsonRpcRecorder, folder, deps := setupScanPrecedenceTest(t, true, true, false)
 
