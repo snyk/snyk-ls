@@ -82,6 +82,9 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	sc.When(`^a developer saves "([^"]*)" as the LLM provider with custom API endpoint "([^"]*)"$`, func(ctx context.Context, provider, endpoint string) error {
 		return s.runOnScenarioGoroutine(func() error { return s.aDeveloperSavesTheLlmProviderAndEndpoint(ctx, provider, endpoint) })
 	})
+	sc.When(`^a developer saves "([^"]*)" as the LLM provider with model "([^"]*)"$`, func(ctx context.Context, provider, model string) error {
+		return s.runOnScenarioGoroutine(func() error { return s.aDeveloperSavesTheLlmProviderAndModel(ctx, provider, model) })
+	})
 	sc.When(`^the developer reopens the Snyk configuration dialog$`, func(ctx context.Context) error {
 		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperReopensTheConfigurationDialog(ctx) })
 	})
@@ -96,6 +99,9 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	})
 	sc.Then(`^the configuration dialog shows "([^"]*)" as the custom API endpoint$`, func(endpoint string) error {
 		return s.runOnScenarioGoroutine(func() error { return s.theDialogShowsTheCustomApiEndpoint(endpoint) })
+	})
+	sc.Then(`^the configuration dialog shows "([^"]*)" as the selected LLM model$`, func(model string) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theDialogShowsTheSelectedLlmModel(model) })
 	})
 	sc.Then(`^the configuration dialog shows no LLM provider selected$`, func() error {
 		return s.runOnScenarioGoroutine(s.theDialogShowsNoLlmProviderSelected)
@@ -266,6 +272,27 @@ func (s *bddSteps) aDeveloperSavesTheLlmProviderAndEndpoint(ctx context.Context,
 	return nil
 }
 
+// aDeveloperSavesTheLlmProviderAndModel drives the real
+// workspace/didChangeConfiguration request for a provider (e.g. ollama,
+// litellm) that remy-cli-extension requires an explicit model for.
+func (s *bddSteps) aDeveloperSavesTheLlmProviderAndModel(ctx context.Context, provider, model string) error {
+	if err := s.ensureLspInitialized(ctx); err != nil {
+		return err
+	}
+	params := types.DidChangeConfigurationParams{
+		Settings: types.LspConfigurationParam{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingLlmProvider: {Value: provider, Changed: true},
+				types.SettingLlmModel:    {Value: model, Changed: true},
+			},
+		},
+	}
+	if _, err := s.loc.Client.Call(ctx, "workspace/didChangeConfiguration", params); err != nil {
+		return fmt.Errorf("workspace/didChangeConfiguration call failed: %w", err)
+	}
+	return nil
+}
+
 // theDeveloperReopensTheConfigurationDialog drives the real
 // workspace/executeCommand request the menubar sends to render the
 // configuration dialog, and stashes the returned HTML for the Then steps.
@@ -314,6 +341,13 @@ func (s *bddSteps) theDialogShowsTheSelectedLlmProvider(provider string) error {
 func (s *bddSteps) theDialogShowsTheCustomApiEndpoint(endpoint string) error {
 	if !strings.Contains(s.dialogHTML, endpoint) {
 		return fmt.Errorf("expected custom API endpoint %q to be shown in the configuration dialog HTML", endpoint)
+	}
+	return nil
+}
+
+func (s *bddSteps) theDialogShowsTheSelectedLlmModel(model string) error {
+	if !strings.Contains(s.dialogHTML, model) {
+		return fmt.Errorf("expected model %q to be shown in the configuration dialog HTML", model)
 	}
 	return nil
 }
