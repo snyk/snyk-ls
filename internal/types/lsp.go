@@ -665,6 +665,21 @@ type ScanSummary struct {
 	ScanSummary string `json:"scanSummary"`
 }
 
+// AiFixResult identifies one computed fix suggestion for a single file.
+type AiFixResult struct {
+	FixId    string `json:"fixId"`
+	FilePath string `json:"filePath"`
+}
+
+// AiFixNotification is the payload for the $/snyk.aiFix notification, sent whenever
+// a single-issue Code AI Fix's diff computation state changes, so clients can obtain
+// structured fixId/filePath data without scraping the window/showDocument HTML payload.
+type AiFixNotification struct {
+	IssueId string        `json:"issueId"`
+	Status  string        `json:"status"`
+	Fixes   []AiFixResult `json:"fixes"`
+}
+
 type ProgressToken string
 
 type ProgressParams struct {

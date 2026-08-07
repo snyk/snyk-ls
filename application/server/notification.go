@@ -159,6 +159,9 @@ func registerNotifier(conf configuration.Configuration, engine workflow.Engine, 
 		case types.SnykRegisterMcpParams:
 			notifyClient(logger, srv, "$/snyk.registerMcp", params)
 			l.Debug().Interface("mcpConfig", params).Msg("sending MCP config to client")
+		case types.AiFixNotification:
+			notifyClient(logger, srv, "$/snyk.aiFix", params)
+			l.Debug().Str("issueId", params.IssueId).Str("status", params.Status).Msg("sending AI fix status to client")
 		default:
 			l.Warn().
 				Interface("params", params).
