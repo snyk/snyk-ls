@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -15,12 +16,25 @@ import (
 	"github.com/creachadair/jrpc2/server"
 	"github.com/cucumber/godog"
 	sglsp "github.com/sourcegraph/go-lsp"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/domain/ide/command"
+	"github.com/snyk/snyk-ls/domain/ide/workspace"
+	"github.com/snyk/snyk-ls/domain/scanstates"
+	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/domain/snyk/scanner"
+	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/infrastructure/code"
+	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -40,14 +54,22 @@ type bddSteps struct {
 	stepFunc     chan func() error
 	stepResult   chan error
 
-	engine          workflow.Engine
-	loc             server.Local
-	jsonRPCRecorder *testsupport.JsonRPCRecorder
+	engine              workflow.Engine
+	loc                 server.Local
+	jsonRPCRecorder     *testsupport.JsonRPCRecorder
+	scanPersister       persistence.ScanSnapshotPersister
+	scanStateAggregator scanstates.Aggregator
 
 	initResult  types.InitializeResult
 	initialized bool
 	dialogHTML  string
 	folderPath  types.FilePath
+
+	deltaFileDir     types.FilePath
+	deltaFilePath    types.FilePath
+	deltaOssFilePath types.FilePath
+	lastDiagnostics  []types.Diagnostic
+	lastTreeViewHTML string
 }
 
 func newBDDSteps(t *testing.T) *bddSteps {
@@ -61,11 +83,55 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	sc.Given(`^a running language server$`, func() error {
 		return s.runOnScenarioGoroutine(s.aRunningLanguageServer)
 	})
-	sc.When(`^the editor sends the initialize request$`, func(ctx context.Context) error {
+	// Step, not When: this step is reused as "And" (inheriting Given) in the
+	// delta-fail-open scenarios, and Given/When/Then in godog match only their
+	// own keyword - "And"/"But" copy the preceding step's keyword.
+	sc.Step(`^the editor sends the initialize request$`, func(ctx context.Context) error {
 		return s.runOnScenarioGoroutine(func() error { return s.theEditorSendsTheInitializeRequest(ctx) })
 	})
 	sc.Then(`^the server responds with its capabilities$`, func() error {
 		return s.runOnScenarioGoroutine(s.theServerRespondsWithItsCapabilities)
+	})
+	sc.Given(`^delta findings are enabled for the workspace$`, func() error {
+		return s.runOnScenarioGoroutine(s.deltaFindingsAreEnabled)
+	})
+	// Step, not Given: used as "When" in one scenario and "And" (inheriting
+	// Given) in others - see the keyword note above.
+	sc.Step(`^(?:the developer has saved|the developer saves) a file with a security issue for the first time$`, func() error {
+		return s.runOnScenarioGoroutine(s.developerSavesFileWithSecurityIssue)
+	})
+	sc.Then(`^the editor is notified of the security issue$`, func() error {
+		return s.runOnScenarioGoroutine(s.editorIsNotifiedOfTheSecurityIssue)
+	})
+	sc.When(`^the editor asks for diagnostics for the whole workspace$`, func(ctx context.Context) error {
+		return s.runOnScenarioGoroutine(func() error { return s.editorAsksForWorkspaceDiagnostics(ctx) })
+	})
+	sc.When(`^the editor asks for diagnostics for that file$`, func(ctx context.Context) error {
+		return s.runOnScenarioGoroutine(func() error { return s.editorAsksForFileDiagnostics(ctx) })
+	})
+	sc.Then(`^the editor is told about the security issue$`, func() error {
+		return s.runOnScenarioGoroutine(s.editorIsToldAboutTheSecurityIssue)
+	})
+	sc.When(`^the editor asks for the issue tree view$`, func(ctx context.Context) error {
+		return s.runOnScenarioGoroutine(func() error { return s.editorAsksForTheIssueTreeView(ctx) })
+	})
+	sc.Then(`^the issue tree view shows the security issue$`, func(ctx context.Context) error {
+		return s.runOnScenarioGoroutine(func() error { return s.issueTreeViewShowsTheSecurityIssue(ctx) })
+	})
+	sc.Given(`^the developer has an established baseline (?:with|for one product with) one known issue$`, func() error {
+		return s.runOnScenarioGoroutine(s.developerHasEstablishedBaseline)
+	})
+	sc.When(`^the developer saves a file that introduces a new issue alongside the known one$`, func() error {
+		return s.runOnScenarioGoroutine(s.developerSavesFileWithNewIssueAlongsideKnown)
+	})
+	sc.Then(`^the editor is notified of only the newly introduced issue$`, func() error {
+		return s.runOnScenarioGoroutine(s.editorNotifiedOfOnlyNewIssue)
+	})
+	sc.When(`^the developer saves a file that produces a new issue in that product and an issue in a product without a baseline$`, func() error {
+		return s.runOnScenarioGoroutine(s.developerSavesFileWithMixedProductIssues)
+	})
+	sc.Then(`^the editor is notified of the newly introduced issue and of the issue from the product without a baseline$`, func() error {
+		return s.runOnScenarioGoroutine(s.editorNotifiedOfNewAndUnbaselinedIssues)
 	})
 	sc.Given(`^a workspace folder is open$`, func() error {
 		return s.runOnScenarioGoroutine(s.aWorkspaceFolderIsOpen)
@@ -199,16 +265,69 @@ func (s *bddSteps) runOnScenarioGoroutine(fn func() error) error {
 
 func (s *bddSteps) aRunningLanguageServer() error {
 	engine, tokenService := testutil.UnitTestWithEngine(s.scenarioT)
-	// WithRealDI is required so workspace/executeCommand dispatches through the
-	// real command service rather than TestInit's mock - otherwise
-	// WorkspaceConfigurationCommand (used by the config-dialog scenarios) returns
-	// no HTML. Same requirement as configuration_smoke_test.go,
-	// background_init_lifecycle_test.go, and dispatch_starvation_test.go.
-	loc, jsonRPCRecorder, _ := setupServer(s.scenarioT, engine, tokenService, WithRealDI())
+	// A real GitPersistenceProvider (rather than the NopScanPersister default) so
+	// baseline-availability scenarios can exercise ErrBaselineDoesntExist and Add()
+	// for real, instead of the no-op persister's trivial always-succeeds behavior.
+	s.scanPersister = persistence.NewGitPersistenceProvider(engine.GetLogger(), engine.GetConfiguration())
+
+	// di.TestInit defaults to a NoopStateAggregator, so the real scan pipeline's
+	// SetScanInProgress/SetScanDone calls (which gate tree-view rendering) go
+	// nowhere. Build a real one - wired with a NoopEmitter so it tracks state
+	// without pushing extra notifications the other scenarios don't expect.
+	resolver, err := s.newConfigResolver(engine)
+	if err != nil {
+		return err
+	}
+	realScanStateAggregator := scanstates.NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), &scanstates.NoopEmitter{}, resolver, engine)
+
+	loc, jsonRPCRecorder, deps := setupServer(s.scenarioT, engine, tokenService, WithDeps(di.Dependencies{
+		ScanPersister:       s.scanPersister,
+		ConfigResolver:      resolver,
+		ScanStateAggregator: realScanStateAggregator,
+	}))
 	s.engine = engine
 	s.loc = loc
 	s.jsonRPCRecorder = jsonRPCRecorder
+	s.scanStateAggregator = realScanStateAggregator
+
+	// di.TestInit unconditionally installs a CommandServiceMock, which returns
+	// (nil, nil) for every command - so workspace/executeCommand(snyk.getTreeView)
+	// never reaches the real getTreeViewCommand. Swap in the real service, now that
+	// deps (and the workspace registered via config.SetWorkspace) are available.
+	issueProvider, ok := config.GetWorkspace(engine.GetConfiguration()).(snyk.IssueProvider)
+	if !ok {
+		return fmt.Errorf("workspace does not implement snyk.IssueProvider")
+	}
+	command.SetService(command.NewService(
+		engine, engine.GetLogger(), deps.AuthenticationService, deps.FeatureFlagService, deps.Notifier,
+		deps.LearnService, issueProvider, nil, nil, deps.LdxSyncService,
+		deps.ConfigResolver, deps.ScanStateAggregator.StateSnapshot, nil,
+	))
+
+	// Scenarios that save a file through the real didSave pipeline (as opposed to
+	// the fake-scanner scenarios, which build a Folder directly) need Snyk Code
+	// scanning enabled and an authenticated user, or the scan never runs.
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
+	di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider).IsAuthenticated = true
 	return nil
+}
+
+// newConfigResolver mirrors di.TestInit's own resolver construction so the
+// ScanStateAggregator built here resolves per-folder settings (e.g. product
+// enablement) the same way production code does - a resolver without a
+// prefixKeyResolver falls back to schema defaults, ignoring global settings
+// set via configresolver.UserGlobalKey.
+func (s *bddSteps) newConfigResolver(engine workflow.Engine) (*types.ConfigResolver, error) {
+	fs := pflag.NewFlagSet("bdd-delta-fail-open-config", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	if err := engine.GetConfiguration().AddFlagSet(fs); err != nil {
+		return nil, fmt.Errorf("adding flag set failed: %w", err)
+	}
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
+	resolver := types.NewConfigResolver(engine.GetLogger())
+	prefixKeyResolver := configresolver.New(engine.GetConfiguration(), fm)
+	resolver.SetPrefixKeyResolver(prefixKeyResolver, engine.GetConfiguration(), fm)
+	return resolver, nil
 }
 
 func (s *bddSteps) theEditorSendsTheInitializeRequest(ctx context.Context) error {
@@ -219,6 +338,7 @@ func (s *bddSteps) theEditorSendsTheInitializeRequest(ctx context.Context) error
 	if err := rsp.UnmarshalResult(&s.initResult); err != nil {
 		return fmt.Errorf("unmarshalling initialize result failed: %w", err)
 	}
+	s.engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
 	return nil
 }
 
@@ -484,6 +604,354 @@ func (s *bddSteps) theFoldersEffectiveAmbientCanaryAutonomyIs(autonomy string) e
 	}
 	if setting.Value != autonomy {
 		return fmt.Errorf("expected ambient_canary_autonomy override %q, got %v", autonomy, setting.Value)
+	}
+	return nil
+}
+
+func (s *bddSteps) deltaFindingsAreEnabled() error {
+	s.engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
+	return nil
+}
+
+func (s *bddSteps) developerSavesFileWithSecurityIssue() error {
+	filePath, fileDir := code.TempWorkdirWithIssues(s.scenarioT)
+	s.deltaFilePath = filePath
+	s.deltaFileDir = fileDir
+	// Nothing in production seeds a folder's scan-state entries (see
+	// ScanStateAggregator.Init); without this, SetScanInProgress/SetScanDone
+	// find no existing key and silently no-op, so the tree view never sees the
+	// folder as scanned. Mirrors the pattern in configuration_test.go.
+	s.scanStateAggregator.Init([]types.FilePath{fileDir})
+	sendFileSavedMessage(s.scenarioT, s.engine, filePath, fileDir, s.loc)
+
+	// The scan triggered by didSave completes asynchronously. Steps reused as
+	// "the developer has saved..." go straight on to a pull/tree-view query with
+	// no assertion of their own to retry, so this step must wait for the scan's
+	// own push notification (proof the scan finished) before returning.
+	if _, found := s.awaitPublishedDiagnostics(filePath); !found {
+		return fmt.Errorf("timed out waiting for the scan of %s to complete", filePath)
+	}
+	return nil
+}
+
+// findPublishedDiagnostics returns the most recently recorded
+// textDocument/publishDiagnostics payload for filePath. A folder's scan can
+// publish more than once (once per product processed), so the latest
+// notification is the one reflecting every product's cached issues.
+func (s *bddSteps) findPublishedDiagnostics(filePath types.FilePath) ([]types.Diagnostic, bool) {
+	notifications := s.jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
+	var diagnostics []types.Diagnostic
+	found := false
+	for _, n := range notifications {
+		var params types.PublishDiagnosticsParams
+		if err := n.UnmarshalParams(&params); err != nil {
+			continue
+		}
+		if params.URI == uri.PathToUri(filePath) {
+			diagnostics = params.Diagnostics
+			found = true
+		}
+	}
+	return diagnostics, found
+}
+
+func (s *bddSteps) editorIsNotifiedOfTheSecurityIssue() error {
+	diagnostics, found := s.awaitPublishedDiagnostics(s.deltaFilePath)
+	if !found {
+		return fmt.Errorf("expected the editor to be notified of the security issue, got no diagnostics published for %s (findings appear to have been filtered out)", s.deltaFilePath)
+	}
+	if len(diagnostics) == 0 {
+		return fmt.Errorf("expected the editor to be notified of the security issue, got an empty diagnostics payload")
+	}
+	return nil
+}
+
+// awaitCondition polls condition until it returns true or 5 seconds elapse.
+// It never calls t.Fatal/FailNow - callers turn a timeout into their own
+// descriptive error, so a failing scenario reports what was actually wrong
+// (e.g. "empty diagnostics payload") instead of a generic aborted-step message.
+func (s *bddSteps) awaitCondition(condition func() bool) bool {
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if condition() {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// awaitPublishedDiagnostics waits for a publishDiagnostics notification for
+// filePath to arrive, without asserting on its content - callers decide what
+// counts as a passing payload (including an empty one, for RED evidence).
+func (s *bddSteps) awaitPublishedDiagnostics(filePath types.FilePath) ([]types.Diagnostic, bool) {
+	var diagnostics []types.Diagnostic
+	found := s.awaitCondition(func() bool {
+		var ok bool
+		diagnostics, ok = s.findPublishedDiagnostics(filePath)
+		return ok
+	})
+	return diagnostics, found
+}
+
+func (s *bddSteps) editorAsksForWorkspaceDiagnostics(ctx context.Context) error {
+	rsp, err := s.loc.Client.Call(ctx, "workspace/diagnostic", types.WorkspaceDiagnosticParams{})
+	if err != nil {
+		return fmt.Errorf("workspace/diagnostic call failed: %w", err)
+	}
+	var report types.WorkspaceDiagnosticReport
+	if err := rsp.UnmarshalResult(&report); err != nil {
+		return fmt.Errorf("unmarshalling workspace/diagnostic result failed: %w", err)
+	}
+	s.lastDiagnostics = nil
+	for _, item := range report.Items {
+		if item.URI == uri.PathToUri(s.deltaFilePath) {
+			s.lastDiagnostics = append(s.lastDiagnostics, item.Items...)
+		}
+	}
+	return nil
+}
+
+func (s *bddSteps) editorAsksForFileDiagnostics(ctx context.Context) error {
+	rsp, err := s.loc.Client.Call(ctx, "textDocument/diagnostic", types.DocumentDiagnosticParams{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(s.deltaFilePath)},
+	})
+	if err != nil {
+		return fmt.Errorf("textDocument/diagnostic call failed: %w", err)
+	}
+	var report types.RelatedFullDocumentDiagnosticReport
+	if err := rsp.UnmarshalResult(&report); err != nil {
+		return fmt.Errorf("unmarshalling textDocument/diagnostic result failed: %w", err)
+	}
+	s.lastDiagnostics = report.Items
+	return nil
+}
+
+func (s *bddSteps) editorIsToldAboutTheSecurityIssue() error {
+	if len(s.lastDiagnostics) == 0 {
+		return fmt.Errorf("expected the editor to be told about the security issue, got an empty diagnostics payload")
+	}
+	return nil
+}
+
+func (s *bddSteps) editorAsksForTheIssueTreeView(ctx context.Context) error {
+	rsp, err := s.loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		Command: types.GetTreeView,
+	})
+	if err != nil {
+		return fmt.Errorf("workspace/executeCommand(%s) call failed: %w", types.GetTreeView, err)
+	}
+	if err := rsp.UnmarshalResult(&s.lastTreeViewHTML); err != nil {
+		return fmt.Errorf("unmarshalling %s result failed: %w", types.GetTreeView, err)
+	}
+	return nil
+}
+
+// issueTreeViewShowsTheSecurityIssue re-fetches the tree view HTML until it
+// contains the issue. The scan goroutine records SetScanDone (which flips the
+// tree's per-product state to "scan complete", the gate for rendering file/issue
+// nodes) just after publishing diagnostics, not before - so a tree view fetched
+// immediately after the diagnostics-published wait in developerSavesFileWithSecurityIssue
+// can still race the aggregator update. Re-fetching tolerates that ordering the
+// same way awaitPublishedDiagnostics tolerates the scan's own async completion.
+func (s *bddSteps) issueTreeViewShowsTheSecurityIssue(ctx context.Context) error {
+	found := s.awaitCondition(func() bool {
+		if err := s.editorAsksForTheIssueTreeView(ctx); err != nil {
+			return false
+		}
+		return strings.Contains(s.lastTreeViewHTML, "tree-node-issue")
+	})
+	if !found {
+		return fmt.Errorf("expected the issue tree view to contain a security issue, it did not")
+	}
+	return nil
+}
+
+// developerHasEstablishedBaseline seeds a persisted baseline for product.ProductCode
+// containing one known issue, using scanPersister.Add() directly. GitPersistenceProvider's
+// commit-hash lookup is a pure in-memory/disk cache populated only by Add() - it never
+// shells out to git - so any non-empty commit hash string is sufficient here.
+func (s *bddSteps) developerHasEstablishedBaseline() error {
+	fileDir := types.FilePath(s.scenarioT.TempDir())
+	filePath := types.FilePath(filepath.Join(string(fileDir), "app.go"))
+	s.deltaFileDir = fileDir
+	s.deltaFilePath = filePath
+
+	// Add() alone never creates the on-disk cache directory - only Init() does,
+	// and this step bypasses the normal folder-registration/trust flow that
+	// would otherwise call it.
+	if err := s.scanPersister.Init([]types.FilePath{fileDir}); err != nil {
+		return err
+	}
+
+	knownIssue := &snyk.Issue{
+		ID:               "known-issue",
+		AffectedFilePath: filePath,
+		Severity:         types.Medium,
+		Product:          product.ProductCode,
+		Message:          "known code issue",
+		AdditionalData:   snyk.CodeIssueData{Key: "key-known"},
+	}
+	return s.scanPersister.Add(fileDir, "baseline-1", []types.Issue{knownIssue}, product.ProductCode)
+}
+
+// bddFakeScanner is a minimal scanner.Scanner used only for the regression and
+// mixed-products BDD scenarios, where the fixed single-issue fake Code API service
+// cannot represent two distinct issues (an existing one plus a newly introduced
+// one) or two products in a single scan. It calls processResults once per entry in
+// scans, exercising the real Folder/persistence/filter chain end to end.
+type bddFakeScanner struct {
+	scans []types.ScanData
+}
+
+func (f *bddFakeScanner) Init(_ context.Context) error { return nil }
+
+func (f *bddFakeScanner) RegisterCancelCallback(types.FilePath, func()) {}
+
+func (f *bddFakeScanner) Scan(ctx context.Context, path types.FilePath, processResults types.ScanResultProcessor, postActionFunc types.PostAction) {
+	for _, scanData := range f.scans {
+		scanData.Path = path
+		scanData.UpdateGlobalCache = true
+		processResults(ctx, scanData)
+	}
+	if postActionFunc != nil {
+		postActionFunc()
+	}
+}
+
+var _ scanner.Scanner = (*bddFakeScanner)(nil)
+
+// runScanWithFakeScanner registers a real Folder backed by sc and triggers a real,
+// synchronous scan of s.deltaFilePath through it.
+func (s *bddSteps) runScanWithFakeScanner(sc *bddFakeScanner) error {
+	conf := s.engine.GetConfiguration()
+	folder := workspace.NewFolder(conf, s.engine.GetLogger(), s.deltaFileDir, "Test", sc,
+		di.HoverService(), di.ScanNotifier(), di.Notifier(), s.scanPersister,
+		di.ScanStateAggregator(), featureflag.NewFakeService(), di.ConfigResolver(), s.engine)
+	config.GetWorkspace(conf).AddFolder(folder)
+
+	folderConfig := config.GetFolderConfigFromEngine(s.engine, testutil.DefaultConfigResolver(s.engine), s.deltaFileDir, s.engine.GetLogger())
+	di.FeatureFlagService().PopulateFolderConfig(folderConfig)
+
+	folder.ScanFile(s.scenarioT.Context(), s.deltaFilePath)
+	return nil
+}
+
+func (s *bddSteps) developerSavesFileWithNewIssueAlongsideKnown() error {
+	newIssue := &snyk.Issue{
+		ID:               "new-issue",
+		AffectedFilePath: s.deltaFilePath,
+		Severity:         types.High,
+		Product:          product.ProductCode,
+		Message:          "newly introduced code issue",
+		AdditionalData:   snyk.CodeIssueData{Key: "key-new"},
+	}
+	knownIssue := &snyk.Issue{
+		ID:               "known-issue",
+		AffectedFilePath: s.deltaFilePath,
+		Severity:         types.Medium,
+		Product:          product.ProductCode,
+		Message:          "known code issue",
+		AdditionalData:   snyk.CodeIssueData{Key: "key-known"},
+	}
+	return s.runScanWithFakeScanner(&bddFakeScanner{scans: []types.ScanData{
+		{Product: product.ProductCode, Issues: []types.Issue{newIssue, knownIssue}},
+	}})
+}
+
+func (s *bddSteps) editorNotifiedOfOnlyNewIssue() error {
+	diagnostics, found := s.awaitPublishedDiagnostics(s.deltaFilePath)
+	if !found {
+		return fmt.Errorf("expected a textDocument/publishDiagnostics notification for %s, got none", s.deltaFilePath)
+	}
+	if len(diagnostics) != 1 {
+		return fmt.Errorf("expected exactly one diagnostic (only the newly introduced issue), got %d: %+v", len(diagnostics), diagnostics)
+	}
+	if diagnostics[0].Code != "new-issue" {
+		return fmt.Errorf("expected the newly introduced issue %q, got %q", "new-issue", diagnostics[0].Code)
+	}
+	return nil
+}
+
+// developerSavesFileWithMixedProductIssues puts the OSS issue on a different
+// file than the code issues. documentDiagnosticCache is keyed by file path only
+// and holds every product's issues for that path together (see
+// updateGlobalCacheAndSeverityCounts), so two products scanning the very same
+// path in sequence would overwrite each other's entries - an unrelated,
+// pre-existing cache bug this scenario must not depend on. Separate files also
+// match reality: OSS findings land on manifest files, Code findings on source.
+func (s *bddSteps) developerSavesFileWithMixedProductIssues() error {
+	s.deltaOssFilePath = types.FilePath(filepath.Join(string(s.deltaFileDir), "package.json"))
+
+	newCodeIssue := &snyk.Issue{
+		ID:               "new-code-issue",
+		AffectedFilePath: s.deltaFilePath,
+		Severity:         types.High,
+		Product:          product.ProductCode,
+		Message:          "newly introduced code issue",
+		AdditionalData:   snyk.CodeIssueData{Key: "key-new-code"},
+	}
+	knownCodeIssue := &snyk.Issue{
+		ID:               "known-issue",
+		AffectedFilePath: s.deltaFilePath,
+		Severity:         types.Medium,
+		Product:          product.ProductCode,
+		Message:          "known code issue",
+		AdditionalData:   snyk.CodeIssueData{Key: "key-known"},
+	}
+	ossIssue := &snyk.Issue{
+		ID:               "oss-issue",
+		AffectedFilePath: s.deltaOssFilePath,
+		Severity:         types.High,
+		Product:          product.ProductOpenSource,
+		Message:          "issue from a product without a baseline",
+		AdditionalData:   snyk.OssIssueData{},
+	}
+	return s.runScanWithFakeScanner(&bddFakeScanner{scans: []types.ScanData{
+		{Product: product.ProductCode, Issues: []types.Issue{newCodeIssue, knownCodeIssue}},
+		{Product: product.ProductOpenSource, Issues: []types.Issue{ossIssue}},
+	}})
+}
+
+func (s *bddSteps) editorNotifiedOfNewAndUnbaselinedIssues() error {
+	var codeDiagnostics []types.Diagnostic
+	found := s.awaitCondition(func() bool {
+		var ok bool
+		codeDiagnostics, ok = s.findPublishedDiagnostics(s.deltaFilePath)
+		return ok && len(codeDiagnostics) >= 1
+	})
+	if !found {
+		return fmt.Errorf("expected a publishDiagnostics notification for %s with the newly introduced issue, got %+v", s.deltaFilePath, codeDiagnostics)
+	}
+
+	// notifierImpl.Send queues onto a buffered channel drained by a single background
+	// listener goroutine (see internal/notification/notifier.go): finding the code
+	// notification only proves that goroutine has reached that point in the queue,
+	// not that it has already drained the oss notification queued right behind it.
+	var ossDiagnostics []types.Diagnostic
+	found = s.awaitCondition(func() bool {
+		var ok bool
+		ossDiagnostics, ok = s.findPublishedDiagnostics(s.deltaOssFilePath)
+		return ok && len(ossDiagnostics) >= 1
+	})
+	if !found {
+		return fmt.Errorf("expected a publishDiagnostics notification for %s with the unbaselined issue, got none", s.deltaOssFilePath)
+	}
+
+	diagnostics := append(append([]types.Diagnostic{}, codeDiagnostics...), ossDiagnostics...)
+	ids := map[string]bool{}
+	for _, d := range diagnostics {
+		ids[fmt.Sprint(d.Code)] = true
+	}
+	for _, want := range []string{"new-code-issue", "oss-issue"} {
+		if !ids[want] {
+			return fmt.Errorf("expected diagnostic %q among %+v", want, diagnostics)
+		}
+	}
+	if ids["known-issue"] {
+		return fmt.Errorf("expected the known baselined issue to be filtered out, but found it among %+v", diagnostics)
 	}
 	return nil
 }

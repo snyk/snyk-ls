@@ -79,18 +79,22 @@ type Folder struct {
 	status                  types.FolderStatus
 	documentDiagnosticCache *xsync.MapOf[types.FilePath, []types.Issue]
 	pendingEmptyDiagnostics *xsync.MapOf[types.FilePath, struct{}]
-	scanner                 scanner.Scanner
-	hoverService            hover.Service
-	mutex                   sync.RWMutex
-	scanNotifier            scanner.ScanNotifier
-	notifier                noti.Notifier
-	conf                    configuration.Configuration
-	logger                  *zerolog.Logger
-	scanPersister           persistence.ScanSnapshotPersister
-	scanStateAggregator     scanstates.Aggregator
-	featureFlagService      featureflag.Service
-	configResolver          types.ConfigResolverInterface
-	engine                  workflow.Engine
+	// baselineAvailable tracks, per product, whether a delta baseline exists. Zero
+	// value (false) fails open: an unscanned or baseline-missing product shows all
+	// findings instead of silently hiding them behind an IsNew filter.
+	baselineAvailable   *xsync.MapOf[product.Product, bool]
+	scanner             scanner.Scanner
+	hoverService        hover.Service
+	mutex               sync.RWMutex
+	scanNotifier        scanner.ScanNotifier
+	notifier            noti.Notifier
+	conf                configuration.Configuration
+	logger              *zerolog.Logger
+	scanPersister       persistence.ScanSnapshotPersister
+	scanStateAggregator scanstates.Aggregator
+	featureFlagService  featureflag.Service
+	configResolver      types.ConfigResolverInterface
+	engine              workflow.Engine
 }
 
 func (f *Folder) ScanResultProcessor() types.ScanResultProcessor {
@@ -290,6 +294,7 @@ func NewFolder(
 	}
 	folder.documentDiagnosticCache = xsync.NewMapOf[types.FilePath, []types.Issue]()
 	folder.pendingEmptyDiagnostics = xsync.NewMapOf[types.FilePath, struct{}]()
+	folder.baselineAvailable = xsync.NewMapOf[product.Product, bool]()
 	if cacheProvider, isCacheProvider := sc.(snyk.CacheProvider); isCacheProvider {
 		cacheProvider.RegisterCacheRemovalHandler(folder.markForEmptyDiagnostic)
 	}
@@ -620,7 +625,29 @@ func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
 // Issues are enriched with IsNew at scan time via enrichCachedIssuesWithDelta
 func (f *Folder) GetDelta(p product.Product) snyk.IssuesByFile {
 	issueByFile := f.IssuesByProduct()[p]
-	return filterByIsNew(issueByFile)
+	return f.filterByIsNew(issueByFile)
+}
+
+// IsBaselineAvailable returns whether a delta baseline has been recorded for the given
+// product. It defaults to false, so a folder that has never been scanned fails open.
+func (f *Folder) IsBaselineAvailable(p product.Product) bool {
+	available, _ := f.baselineAvailable.Load(p)
+	return available
+}
+
+// IsDeltaAppliedForProduct returns whether delta findings are both enabled and actually
+// applied (i.e. a baseline is available) for the given product.
+func (f *Folder) IsDeltaAppliedForProduct(p product.Product) bool {
+	return f.IsDeltaFindingsEnabled() && f.IsBaselineAvailable(p)
+}
+
+// DeltaStatusForProduct reports whether delta findings were requested and whether they
+// could actually be applied for the given product.
+func (f *Folder) DeltaStatusForProduct(p product.Product) types.DeltaStatus {
+	return types.DeltaStatus{
+		Requested: f.IsDeltaFindingsEnabled(),
+		Applied:   f.IsDeltaAppliedForProduct(p),
+	}
 }
 
 // enrichCachedIssuesWithDelta runs the delta computation once and stamps IsNew on cached issue pointers in-place.
@@ -632,20 +659,22 @@ func (f *Folder) enrichCachedIssuesWithDelta(p product.Product) error {
 		Str("product", string(p)).
 		Logger()
 
-	issueByFile := f.IssuesByProduct()[p]
-	if len(issueByFile) == 0 {
-		logger.Debug().Msg("no current issues, skipping enrichment")
-		return nil
-	}
-
 	baseIssueList, err := f.scanPersister.GetPersistedIssueList(f.path, p)
 	if err != nil {
+		f.baselineAvailable.Store(p, false)
 		if errors.Is(err, persistence.ErrBaselineDoesntExist) {
 			logger.Debug().Msg("delta findings unavailable - no baseline exists yet")
 		} else {
 			logger.Warn().Err(err).Msg("failed to get persisted issue list, snapshot may be corrupted")
 		}
 		return err
+	}
+	f.baselineAvailable.Store(p, true)
+
+	issueByFile := f.IssuesByProduct()[p]
+	if len(issueByFile) == 0 {
+		logger.Debug().Msg("no current issues, skipping enrichment")
+		return nil
 	}
 
 	logger.Debug().Msgf("base issues count=%d", len(baseIssueList))
@@ -683,11 +712,17 @@ func getFlatIssueList(issueByFile snyk.IssuesByFile) []types.Issue {
 	return currentFlatIssueList
 }
 
-func filterByIsNew(issues snyk.IssuesByFile) snyk.IssuesByFile {
+// filterByIsNew keeps an issue when it is newly introduced, or when its product has
+// no available baseline yet - a product without a baseline fails open rather than
+// hiding every finding behind an IsNew flag that was never computed.
+func (f *Folder) filterByIsNew(issues snyk.IssuesByFile) snyk.IssuesByFile {
 	filtered := snyk.IssuesByFile{}
 	for path, issueSlice := range issues {
 		for _, issue := range issueSlice {
-			if issue != nil && issue.GetIsNew() {
+			if issue == nil {
+				continue
+			}
+			if issue.GetIsNew() || !f.IsBaselineAvailable(issue.GetProduct()) {
 				filtered[path] = append(filtered[path], issue)
 			}
 		}
@@ -756,7 +791,7 @@ func (f *Folder) filterIssuesWithConfig(
 	filterReasonCounts := make(map[FilterReason]int)
 
 	if f.isDeltaFindingsEnabledForFolder(folderConfig) {
-		issues = filterByIsNew(issues)
+		issues = f.filterByIsNew(issues)
 	}
 
 	fCtx := f.buildFilterContext(folderConfig)

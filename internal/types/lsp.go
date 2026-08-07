@@ -1123,6 +1123,15 @@ type SnykScanParams struct {
 	FolderPath FilePath `json:"folderPath"`
 	// PresentableError structured error object for displaying it to the user
 	PresentableError *PresentableError `json:"presentableError,omitempty"`
+	// Delta reports the requested/applied state of delta (net-new) findings for this scan
+	Delta DeltaStatus `json:"delta,omitempty"`
+}
+
+// DeltaStatus reports whether delta (net-new) findings were requested for a scan
+// and whether they could actually be applied (i.e. a baseline was available).
+type DeltaStatus struct {
+	Requested bool `json:"requested"`
+	Applied   bool `json:"applied"`
 }
 
 type ScanIssue struct { // TODO - convert this to a generic type
