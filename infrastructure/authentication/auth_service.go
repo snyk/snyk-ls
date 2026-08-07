@@ -39,9 +39,14 @@ type AuthenticationService interface {
 	UpdateCredentials(newToken string, sendNotification bool, updateApiUrl bool)
 
 	// updateCredentials stores the token in the configuration, and sends a $/snyk.hasAuthenticated notification to the
-	// client if sendNotification is true
-	// doesn't have a mutex lock
-	updateCredentials(newToken string, sendNotification bool, updateApiUrl bool)
+	// client if sendNotification is true.
+	// Does not acquire a.m itself; the caller must already hold it (write or read lock).
+	// releaseLock must be true iff the caller holds the write lock (a.m.Lock()): true releases
+	// a.m around the post-mutation hook/notification and re-acquires it before returning, so a
+	// hook that calls back into another a.m-locking method does not deadlock; false runs the
+	// hook/notification inline without touching a.m, required when the caller only holds the
+	// read lock (a.m.RLock()), since a read lock cannot be released via a.m.Unlock().
+	updateCredentials(newToken string, sendNotification bool, updateApiUrl bool, releaseLock bool)
 
 	Logout(ctx context.Context)
 
@@ -63,6 +68,15 @@ type AuthenticationService interface {
 	// but before the $/snyk.hasAuthenticated notification is sent to the IDE.
 	// This allows callers to perform setup (e.g. fetching feature flags) while the token
 	// is available but before the IDE reacts to the authentication event.
+	//
+	// Lock-state contract: the hook is invoked WITHOUT a.m held when called from
+	// the credentialUpdateWorker (async path), but WITH a.m held when called from
+	// the synchronous path (UpdateCredentials / Authenticate / Logout via
+	// updateCredentials → runPostMutationEffects). The hook MUST be safe to run
+	// in either state. In particular, the hook must NOT call back into any method
+	// that attempts to acquire a.m (e.g. UpdateCredentials, Logout), because
+	// sync.RWMutex is not reentrant: doing so from the synchronous path will
+	// deadlock.
 	SetPostCredentialUpdateHook(hook func())
 
 	// AuthURL retrieves the authentication URL
