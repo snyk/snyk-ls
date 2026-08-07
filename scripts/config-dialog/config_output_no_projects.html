@@ -1039,6 +1039,11 @@ button.secondary[disabled] {
                             </div>
 
                             <div class="form-group half-width">
+                                <label for="llm_model"><span data-toggle="tooltip" title="Model id. Required for Ollama and LiteLLM; an optional override for the other providers.">Model</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="llm_model"></span></label>
+                                <input type="text" id="llm_model" name="llm_model" value="" placeholder="e.g. llama3.1">
+                            </div>
+
+                            <div class="form-group half-width">
                                 <label for="llm_base_url"><span data-toggle="tooltip" title="Point the selected LLM provider at a self-hosted or gateway endpoint. Note: OpenAI has no custom-endpoint environment variable, so this value is saved and shown here but not applied.">Custom API endpoint</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="llm_base_url"></span></label>
                                 <input type="text" id="llm_base_url" name="llm_base_url" value="" placeholder="https://llm-gateway.internal">
                             </div>
@@ -2579,6 +2584,7 @@ if (window.cssVars) {
 		},
 		autonomousRemediation: {
 			llm_provider: "",
+			llm_model: "",
 			llm_base_url: ""
 		}
 	};
