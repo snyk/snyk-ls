@@ -3893,3 +3893,79 @@ func TestApplyLlmProviderConfig_UnknownProviderPersistsWithoutEnvWrite(t *testin
 	assert.Equal(t, "some-unknown-provider", types.GetGlobalString(conf, types.SettingLlmProvider))
 	assert.Equal(t, "https://example.internal", types.GetGlobalString(conf, types.SettingLlmBaseUrl))
 }
+
+// TestApplyLlmProviderConfig_ConcurrentUpdatesAreSerialized guards against the
+// language server's unbounded jrpc2 concurrency (Concurrency: 0) letting two
+// workspace/didChangeConfiguration requests interleave inside
+// applyLlmProviderConfig's env var read-modify-write. Two goroutines
+// continuously switch the provider back and forth while a third goroutine
+// watches for the telltale torn state: both providers' base-URL env vars set
+// at once, which the unlocked read-old/write-new sequence can produce (e.g.
+// both goroutines racing on the same stale "no provider set yet" read) but a
+// correctly serialized sequence can never produce, since it always unsets the
+// previous provider's env var before setting the new one.
+func TestApplyLlmProviderConfig_ConcurrentUpdatesAreSerialized(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("VERTEX_BASE_URL", "")
+
+	const iterations = 300
+	var writers sync.WaitGroup
+	var bothSetObserved atomic.Bool
+	stop := make(chan struct{})
+	monitorDone := make(chan struct{})
+
+	writers.Add(2)
+	go func() {
+		defer writers.Done()
+		for i := 0; i < iterations; i++ {
+			applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{
+				types.SettingLlmProvider: {Value: "anthropic", Changed: true},
+				types.SettingLlmBaseUrl:  {Value: "https://anthropic.example", Changed: true},
+			})
+		}
+	}()
+	go func() {
+		defer writers.Done()
+		for i := 0; i < iterations; i++ {
+			applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{
+				types.SettingLlmProvider: {Value: "vertex", Changed: true},
+				types.SettingLlmBaseUrl:  {Value: "https://vertex.example", Changed: true},
+			})
+		}
+	}()
+	go func() {
+		defer close(monitorDone)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				if os.Getenv("ANTHROPIC_BASE_URL") != "" && os.Getenv("VERTEX_BASE_URL") != "" {
+					bothSetObserved.Store(true)
+				}
+			}
+		}
+	}()
+
+	writers.Wait()
+	close(stop)
+	<-monitorDone
+
+	assert.False(t, bothSetObserved.Load(),
+		"both providers' base-URL env vars were set at once - the read-old/write-new sequence must run under a lock")
+
+	finalProvider := types.GetGlobalString(conf, types.SettingLlmProvider)
+	finalBaseUrl := types.GetGlobalString(conf, types.SettingLlmBaseUrl)
+	wantEnvVar, otherEnvVar := "ANTHROPIC_BASE_URL", "VERTEX_BASE_URL"
+	if finalProvider == "vertex" {
+		wantEnvVar, otherEnvVar = otherEnvVar, wantEnvVar
+	}
+
+	assert.Equal(t, finalBaseUrl, os.Getenv(wantEnvVar),
+		"the last persisted provider's env var must reflect the last persisted base URL")
+	_, otherPresent := os.LookupEnv(otherEnvVar)
+	assert.False(t, otherPresent, "the previous provider's env var must not survive concurrent updates")
+}
