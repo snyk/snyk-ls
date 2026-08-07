@@ -161,16 +161,21 @@ type summaryCounts struct {
 	ignoredCount int
 }
 
-// deduplicateAndCount deduplicates issues by fingerprint and computes fixable/ignored counts in a single pass.
+// deduplicateAndCount counts issues and their fixable/ignored subsets in a single
+// pass. Issues are collapsed by fingerprint only for products where a shared
+// fingerprint means the same finding (product.CollapsesByFingerprint — currently
+// only Secrets); every other product's issues are counted individually, since
+// their fingerprints are not per-finding identities.
 func deduplicateAndCount(issues []types.Issue) summaryCounts {
 	seen := make(map[string]bool, len(issues))
 	var counts summaryCounts
 	for _, issue := range issues {
 		fp := issue.GetFingerprint()
-		if fp != "" && seen[fp] {
+		collapses := fp != "" && issue.GetProduct().CollapsesByFingerprint()
+		if collapses && seen[fp] {
 			continue
 		}
-		if fp != "" {
+		if collapses {
 			seen[fp] = true
 		}
 		counts.uniqueCount++

@@ -38,6 +38,17 @@ const (
 	FilterableIssueTypeSecrets              FilterableIssueType = "Secrets"
 )
 
+// CollapsesByFingerprint reports whether issues of this product that share a
+// fingerprint represent the same finding and so should be counted (and grouped)
+// as one. Only Secrets: its fingerprint identifies the secret itself, so the
+// same secret at multiple locations in a file is genuinely one issue. For every
+// other product a shared fingerprint does not imply the same finding — Snyk
+// Code's fingerprint in particular is a structural similarity hash that distinct
+// findings can share — so each issue is counted and shown individually.
+func (p Product) CollapsesByFingerprint() bool {
+	return p == ProductSecrets
+}
+
 func (p Product) ToProductCodename() string {
 	switch p {
 	case ProductOpenSource:

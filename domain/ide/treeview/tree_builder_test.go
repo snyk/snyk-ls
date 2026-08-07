@@ -1924,11 +1924,14 @@ func TestBuildTree_SecretsProduct_IsEmittedAsProductNode(t *testing.T) {
 	assert.Equal(t, types.High, issueNodes[0].Severity)
 }
 
-func TestBuildTree_SameFingerprint_GroupsIssuesWithLocationChildren(t *testing.T) {
+func TestBuildTree_CodeSameFingerprint_NotGrouped(t *testing.T) {
 	builder := newBuilderWithCompletedScans()
 
-	filePath := types.FilePath("/project/main.go")
-	fingerprint := "fp-sql-injection-001"
+	filePath := types.FilePath("/project/main.cs")
+	// Two distinct Code findings that happen to share a structural fingerprint
+	// must each render as their own issue node — Code fingerprints are not
+	// per-finding identities, so they must not be grouped like Secrets.
+	fingerprint := testutil.SastFingerprint()
 
 	loc1 := testutil.NewMockIssue("code-sqli-1", filePath)
 	loc1.Product = product.ProductCode
@@ -1963,22 +1966,10 @@ func TestBuildTree_SameFingerprint_GroupsIssuesWithLocationChildren(t *testing.T
 	require.NotNil(t, fileNode)
 
 	issueNodes := filterChildrenByType(fileNode.Children, NodeTypeIssue)
-	require.Equal(t, 1, len(issueNodes), "same-fingerprint issues should be grouped into one issue node")
-
-	issueNode := issueNodes[0]
-	assert.Equal(t, "SQL Injection", issueNode.Label, "label should have no range suffix")
-	assert.Equal(t, "2 locations", issueNode.Description, "description should show location count")
-	assert.Equal(t, fingerprint, issueNode.ID[len("issue:"):], "issue node ID should use fingerprint")
-
-	locNodes := filterChildrenByType(issueNode.Children, NodeTypeLocation)
-	require.Equal(t, 2, len(locNodes), "should have 2 location children")
-	assert.Equal(t, "Line 10, Column 5", locNodes[0].Label)
-	assert.Equal(t, "Line 25, Column 1", locNodes[1].Label)
-	assert.Empty(t, locNodes[0].Description)
-	assert.Equal(t, NodeTypeLocation, locNodes[0].Type)
-	assert.Equal(t, types.High, locNodes[0].Severity)
-	assert.Equal(t, "key-loc1", locNodes[0].IssueID)
-	assert.Equal(t, "key-loc2", locNodes[1].IssueID)
+	require.Equal(t, 2, len(issueNodes), "Code: same-fingerprint findings must each be their own issue node")
+	for _, n := range issueNodes {
+		assert.Empty(t, filterChildrenByType(n.Children, NodeTypeLocation), "Code issue nodes must not have location children")
+	}
 }
 
 func TestBuildTree_DifferentFingerprints_NoGrouping(t *testing.T) {
@@ -1989,14 +1980,14 @@ func TestBuildTree_DifferentFingerprints_NoGrouping(t *testing.T) {
 	issue1 := testutil.NewMockIssue("code-1", filePath)
 	issue1.Product = product.ProductCode
 	issue1.Severity = types.High
-	issue1.Fingerprint = "fp-unique-1"
+	issue1.Fingerprint = testutil.SastFingerprint()
 	issue1.Range = types.Range{Start: types.Position{Line: 9, Character: 4}}
 	issue1.AdditionalData = &snyk.CodeIssueData{Key: "key-1", Title: "XSS"}
 
 	issue2 := testutil.NewMockIssue("code-2", filePath)
 	issue2.Product = product.ProductCode
 	issue2.Severity = types.Medium
-	issue2.Fingerprint = "fp-unique-2"
+	issue2.Fingerprint = testutil.SastFingerprint()
 	issue2.Range = types.Range{Start: types.Position{Line: 20, Character: 0}}
 	issue2.AdditionalData = &snyk.CodeIssueData{Key: "key-2", Title: "SQL Injection"}
 
@@ -2027,7 +2018,7 @@ func TestBuildTree_SecretsMultiLocation_AddsLocationChildren(t *testing.T) {
 	builder := newBuilderWithCompletedScans()
 
 	filePath := types.FilePath("/project/config.yml")
-	fingerprint := "fp-aws-token-001"
+	fingerprint := testutil.Sha256Fingerprint()
 
 	loc1 := testutil.NewMockIssue("aws-access-token", filePath)
 	loc1.Product = product.ProductSecrets
@@ -2085,7 +2076,7 @@ func TestBuildTree_SecretsSingleLocation_NoLocationChildren(t *testing.T) {
 	issue := testutil.NewMockIssue("aws-access-token", filePath)
 	issue.Product = product.ProductSecrets
 	issue.Severity = types.High
-	issue.Fingerprint = "fp-single"
+	issue.Fingerprint = testutil.Sha256Fingerprint()
 	issue.Range = types.Range{Start: types.Position{Line: 4, Character: 0}, End: types.Position{Line: 4, Character: 10}}
 	issue.AdditionalData = snyk.SecretsIssueData{Key: "key-single", Title: "AWS Access Token", LocationsCount: 1}
 
@@ -2277,19 +2268,44 @@ func TestBuildFileNodes_SecretsProduct_FileIconEmpty(t *testing.T) {
 	assert.Empty(t, fileNode.FileIconHTML, "non-OSS file nodes should not have a file icon")
 }
 
-func TestDeduplicateByFingerprint_GroupsByFingerprint(t *testing.T) {
+func TestDeduplicateByFingerprint_Secrets_CollapsesSharedFingerprint(t *testing.T) {
 	testutil.UnitTest(t)
 	filePath := types.FilePath("/project/config.yml")
+	sharedFp := testutil.Sha256Fingerprint()
 
 	issue1 := testutil.NewMockIssue("loc1", filePath)
-	issue1.Fingerprint = "fp-1"
+	issue1.Product = product.ProductSecrets
+	issue1.Fingerprint = sharedFp
 	issue2 := testutil.NewMockIssue("loc2", filePath)
-	issue2.Fingerprint = "fp-1"
+	issue2.Product = product.ProductSecrets
+	issue2.Fingerprint = sharedFp
 	issue3 := testutil.NewMockIssue("loc3", filePath)
-	issue3.Fingerprint = "fp-2"
+	issue3.Product = product.ProductSecrets
+	issue3.Fingerprint = testutil.Sha256Fingerprint()
 
 	result := types.DeduplicateByFingerprint([]types.Issue{issue1, issue2, issue3})
-	assert.Equal(t, 2, len(result), "2 unique fingerprints → 2 representative issues")
+	assert.Equal(t, 2, len(result), "Secrets: 2 unique fingerprints → 2 representative issues")
+}
+
+func TestDeduplicateByFingerprint_NonSecrets_KeepsEachInstance(t *testing.T) {
+	testutil.UnitTest(t)
+	filePath := types.FilePath("/project/main.cs")
+	sharedFp := testutil.SastFingerprint()
+
+	// Two distinct Code findings that happen to share a structural fingerprint
+	// must each remain their own issue.
+	issue1 := testutil.NewMockIssue("loc1", filePath)
+	issue1.Product = product.ProductCode
+	issue1.Fingerprint = sharedFp
+	issue2 := testutil.NewMockIssue("loc2", filePath)
+	issue2.Product = product.ProductCode
+	issue2.Fingerprint = sharedFp
+	issue3 := testutil.NewMockIssue("loc3", filePath)
+	issue3.Product = product.ProductCode
+	issue3.Fingerprint = testutil.SastFingerprint()
+
+	result := types.DeduplicateByFingerprint([]types.Issue{issue1, issue2, issue3})
+	assert.Equal(t, 3, len(result), "Code: shared fingerprint must not collapse distinct findings")
 }
 
 func TestDeduplicateByFingerprint_EmptyFingerprintTreatedAsUnique(t *testing.T) {
@@ -2309,20 +2325,21 @@ func TestComputeIssueStats_SinglePass(t *testing.T) {
 	testutil.UnitTest(t)
 	filePath := types.FilePath("/project/secrets.yaml")
 
+	secretsFp := testutil.Sha256Fingerprint()
 	issue1 := testutil.NewMockIssue("loc1", filePath)
-	issue1.Fingerprint = "fp-1"
+	issue1.Fingerprint = secretsFp
 	issue1.Product = product.ProductSecrets
 	issue1.Severity = types.Critical
 	issue1.IsIgnored = false
 
 	issue2 := testutil.NewMockIssue("loc2", filePath)
-	issue2.Fingerprint = "fp-1"
+	issue2.Fingerprint = secretsFp
 	issue2.Product = product.ProductSecrets
 	issue2.Severity = types.Critical
 	issue2.IsIgnored = true
 
 	issue3 := testutil.NewMockIssue("loc3", filePath)
-	issue3.Fingerprint = "fp-2"
+	issue3.Fingerprint = testutil.SastFingerprint()
 	issue3.Product = product.ProductCode
 	issue3.Severity = types.High
 	issue3.AdditionalData = snyk.CodeIssueData{HasAIFix: true}
@@ -2349,7 +2366,7 @@ func TestBuildTree_SecretsMultiLocation_ProductCountIsUniqueIssues(t *testing.T)
 	builder := newBuilderWithCompletedScans()
 
 	filePath := types.FilePath("/project/config.yml")
-	fingerprint := "fp-aws-token"
+	fingerprint := testutil.Sha256Fingerprint()
 
 	loc1 := testutil.NewMockIssue("aws-token", filePath)
 	loc1.Product = product.ProductSecrets
@@ -2384,7 +2401,7 @@ func TestBuildTree_SecretsMultiLocation_FileCountIsUniqueIssues(t *testing.T) {
 	builder := newBuilderWithCompletedScans()
 
 	filePath := types.FilePath("/project/config.yml")
-	fingerprint := "fp-aws-token"
+	fingerprint := testutil.Sha256Fingerprint()
 
 	loc1 := testutil.NewMockIssue("aws-token", filePath)
 	loc1.Product = product.ProductSecrets
@@ -2420,7 +2437,7 @@ func TestBuildTree_SecretsMultiLocation_GlobalTotalCountsUniqueIssues(t *testing
 	builder := newBuilderWithCompletedScans()
 
 	filePath := types.FilePath("/project/config.yml")
-	fingerprint := "fp-aws-token"
+	fingerprint := testutil.Sha256Fingerprint()
 
 	loc1 := testutil.NewMockIssue("aws-token", filePath)
 	loc1.Product = product.ProductSecrets
@@ -2463,7 +2480,7 @@ func TestBuildTree_SecretsMultiLocation_InfoNodeCountsUniqueIssues(t *testing.T)
 	builder := newBuilderWithCompletedScans()
 
 	filePath := types.FilePath("/project/config.yml")
-	fingerprint := "fp-aws-token"
+	fingerprint := testutil.Sha256Fingerprint()
 
 	loc1 := testutil.NewMockIssue("aws-token", filePath)
 	loc1.Product = product.ProductSecrets
