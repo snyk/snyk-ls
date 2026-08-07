@@ -3712,11 +3712,10 @@ func Test_ProcessConfigSettings_GlobalReset(t *testing.T) {
 	})
 }
 
-// TestUpdateSettings_LlmProviderRoundTripsToConfigDialog is CP-1's ACC-level
-// integration test (IDE-2274): real UpdateSettings -> real
-// ConstructSettingsFromConfig -> real ConfigHtmlRenderer, nothing mocked. It
-// proves the provider and endpoint a developer saves come back selected in
-// the re-rendered dialog HTML, i.e. the choice survives reopening the dialog.
+// TestUpdateSettings_LlmProviderRoundTripsToConfigDialog exercises the real
+// UpdateSettings -> ConstructSettingsFromConfig -> ConfigHtmlRenderer chain,
+// nothing mocked, proving the provider and endpoint a developer saves come
+// back selected in the re-rendered dialog HTML.
 func TestUpdateSettings_LlmProviderRoundTripsToConfigDialog(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
@@ -3741,10 +3740,9 @@ func TestUpdateSettings_LlmProviderRoundTripsToConfigDialog(t *testing.T) {
 	assert.Contains(t, html, "http://localhost:11434", "the saved endpoint must come back in the re-rendered dialog")
 }
 
-// TestUpdateSettings_LlmModelRoundTripsToConfigDialog is IDE-2274's CP-1
-// integration coverage for the model field (OD-1): ollama and litellm have no
-// default model in remy-cli-extension, so the model a developer saves must
-// survive reopening the dialog exactly like provider and endpoint do.
+// TestUpdateSettings_LlmModelRoundTripsToConfigDialog covers the model field:
+// ollama and litellm have no default model in remy-cli-extension, so a saved
+// model must survive reopening the dialog exactly like provider and endpoint do.
 func TestUpdateSettings_LlmModelRoundTripsToConfigDialog(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
@@ -3781,10 +3779,9 @@ func TestApplyLlmProviderConfig_PersistsProviderAndBaseUrl(t *testing.T) {
 	assert.Equal(t, "https://llm-gateway.internal", types.GetGlobalString(conf, types.SettingLlmBaseUrl))
 }
 
-// TestApplyLlmProviderConfig_PersistsModel is IDE-2274's OD-1 unit coverage:
-// the model field goes through the identical persist path as provider and
-// base URL, with no environment-variable side effect (that belongs to CP-2's
-// buildRemyFixConfig, which sets it as a GAF config key at fix time).
+// TestApplyLlmProviderConfig_PersistsModel proves the model field goes through
+// the identical persist path as provider and base URL, with no
+// environment-variable side effect - that happens in buildRemyFixConfig at fix time.
 func TestApplyLlmProviderConfig_PersistsModel(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
@@ -3821,7 +3818,6 @@ func TestApplyLlmProviderConfig_AbsentSettingsLeaveConfigAndEnvUntouched(t *test
 	t.Setenv("ANTHROPIC_BASE_URL", "")
 	require.NoError(t, os.Unsetenv("ANTHROPIC_BASE_URL"))
 
-	// M5 guard: neither field present/Changed in this settings payload.
 	applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{
 		types.SettingSnykOssEnabled: {Value: true, Changed: true},
 	})
@@ -3925,9 +3921,6 @@ func TestApplyLlmProviderConfig_DoesNotUnsetEnvItNeverSet(t *testing.T) {
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 
-	// D4 guard: a pre-existing ANTHROPIC_BASE_URL from the developer's own shell
-	// environment must survive an unrelated settings save that never touched the
-	// LLM provider fields.
 	t.Setenv("ANTHROPIC_BASE_URL", "developer-own-value")
 
 	applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{

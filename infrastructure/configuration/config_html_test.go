@@ -1083,10 +1083,10 @@ func TestConfigHtml_LockedFolderAutonomyIsDisabled(t *testing.T) {
 	assert.Contains(t, match, "disabled", "org-locked folder autonomy control must be disabled")
 }
 
-// TestConfigHtmlRenderer_RendersLlmProviderSection is IDE-2274 CP-1's UNIT-9:
-// the "Autonomous remediation" section, all five provider options, the
-// custom-endpoint input, and the "key comes from your environment" note must
-// all be present in the rendered dialog.
+// TestConfigHtmlRenderer_RendersLlmProviderSection verifies the "Autonomous
+// remediation" section, all five provider options, the custom-endpoint input,
+// and the "key comes from your environment" note are all present in the
+// rendered dialog.
 func TestConfigHtmlRenderer_RendersLlmProviderSection(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))

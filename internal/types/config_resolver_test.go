@@ -2141,7 +2141,7 @@ func TestGlobalOrg_SurfacesDefaultResolvedOrg_AfterPriming(t *testing.T) {
 }
 
 // Test_UpdateSettings_PersistsAmbientCanaryAutonomyPerFolder verifies an explicit per-folder
-// choice for ambient_canary_autonomy is persisted as a user override (IDE-2426/IDE-2279).
+// choice for ambient_canary_autonomy is persisted as a user override.
 func Test_UpdateSettings_PersistsAmbientCanaryAutonomyPerFolder(t *testing.T) {
 	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
@@ -2168,7 +2168,7 @@ func Test_UpdateSettings_PersistsAmbientCanaryAutonomyPerFolder(t *testing.T) {
 	assert.Equal(t, "notify_only", val)
 }
 
-// Test_ToLspFolderConfig_OmitsUnsetAmbientCanaryAutonomy protects OD-1/OD-2: an untouched folder
+// Test_ToLspFolderConfig_OmitsUnsetAmbientCanaryAutonomy protects that an untouched folder
 // must send nothing for ambient_canary_autonomy, leaving ambient-canary's --autonomy-level default
 // in effect for that folder.
 func Test_ToLspFolderConfig_OmitsUnsetAmbientCanaryAutonomy(t *testing.T) {
