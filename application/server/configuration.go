@@ -1364,7 +1364,7 @@ func applyCliReleaseChannel(conf configuration.Configuration, settings map[strin
 // Snyk Remediation Agent's CLI extension reads its custom base URL from. openai
 // intentionally has no entry: the CLI extension has no base-URL env var for it, so
 // a custom endpoint chosen with the openai provider is persisted and echoed back in
-// the dialog but never exported to the process environment (IDE-2274, known limitation).
+// the dialog but never exported to the process environment.
 var llmProviderBaseUrlEnvVar = map[string]string{
 	"anthropic": "ANTHROPIC_BASE_URL",
 	"vertex":    "VERTEX_BASE_URL",
@@ -1383,19 +1383,19 @@ var llmProviderBaseUrlEnvVar = map[string]string{
 var llmProviderConfigMu sync.Mutex
 
 // applyLlmProviderConfig persists the developer's chosen LLM provider, model and
-// custom API endpoint for autonomous remediation (IDE-2274, CP-1: settings-only,
-// behavior-neutral). It never touches the API key - that continues to come only
-// from the developer's own process environment (M4).
+// custom API endpoint for autonomous remediation. It never touches the API key -
+// that continues to come only from the developer's own process environment.
 //
-// The model (OD-1) goes through the identical persist path as provider and base
-// URL - ollama and litellm have no default model in remy-cli-extension, so without
-// it those two providers would be unusable. Unlike base URL, the model has no
-// environment-variable side effect here: CP-2's buildRemyFixConfig reads it and
-// sets it as a GAF config key at fix time, the same lever used for provider.
+// The model goes through the identical persist path as provider and base URL -
+// ollama and litellm have no default model in remy-cli-extension, so without it
+// those two providers would be unusable. Unlike base URL, the model has no
+// environment-variable side effect here: buildRemyFixConfig reads it and sets it
+// as a GAF config key at fix time, the same lever used for provider.
 //
-// D4: it never unsets an environment variable it did not itself previously set - it
-// diffs against the persisted provider/base-URL (not the live env), so a base-URL env
-// var the developer set in their own shell is left alone by an unrelated settings save.
+// It never unsets an environment variable it did not itself previously set - it
+// diffs against the persisted provider/base-URL (not the live env), so a base-URL
+// env var the developer set in their own shell is left alone by an unrelated
+// settings save.
 func applyLlmProviderConfig(conf configuration.Configuration, logger *zerolog.Logger, settings map[string]*types.ConfigSetting) {
 	llmProviderConfigMu.Lock()
 	defer llmProviderConfigMu.Unlock()
@@ -1404,7 +1404,6 @@ func applyLlmProviderConfig(conf configuration.Configuration, logger *zerolog.Lo
 	baseUrl, baseUrlOk := settingStr(settings, types.SettingLlmBaseUrl)
 	model, modelOk := settingStr(settings, types.SettingLlmModel)
 	if !providerOk && !baseUrlOk && !modelOk {
-		// M5 guard: none of the fields were touched in this save - leave config and env alone.
 		return
 	}
 

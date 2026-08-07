@@ -328,10 +328,10 @@ func TestIsFolderScopedSetting(t *testing.T) {
 	assert.False(t, IsFolderScopedSetting(fm, SettingCliPath))
 }
 
-// TestRegisterAllConfigurations_LlmSettingsAreMachineScope is IDE-2274's D1
-// guard: the LLM provider and custom endpoint settings must be machine-scope
-// (one choice for the whole daemon, not per folder/repo) and must not carry
-// an LDX-Sync remote key (D2 - this is a local-only, non-synced setting).
+// TestRegisterAllConfigurations_LlmSettingsAreMachineScope guards that the LLM
+// provider and custom endpoint settings are machine-scope (one choice for the
+// whole daemon, not per folder/repo) and carry no LDX-Sync remote key (this is
+// a local-only, non-synced setting).
 func TestRegisterAllConfigurations_LlmSettingsAreMachineScope(t *testing.T) {
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	RegisterAllConfigurations(fs)
@@ -362,10 +362,9 @@ func TestIsWriteOnlySetting(t *testing.T) {
 	assert.False(t, IsWriteOnlySetting(nil, SettingToken))
 }
 
-// Test_RegisterAmbientCanaryAutonomy_IsFolderScopedAndEmitted is the real-wiring deliverable for
-// IDE-2426: it must go RED if the folder-scope annotation on ambient_canary_autonomy is ever
-// dropped, since that annotation is what makes the setting appear in the per-folder $/snyk.configuration
-// push at all.
+// Test_RegisterAmbientCanaryAutonomy_IsFolderScopedAndEmitted must go RED if the folder-scope
+// annotation on ambient_canary_autonomy is ever dropped, since that annotation is what makes the
+// setting appear in the per-folder $/snyk.configuration push at all.
 func Test_RegisterAmbientCanaryAutonomy_IsFolderScopedAndEmitted(t *testing.T) {
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	RegisterAllConfigurations(fs)
@@ -383,10 +382,9 @@ func Test_RegisterAmbientCanaryAutonomy_IsFolderScopedAndEmitted(t *testing.T) {
 	assert.True(t, IsFolderScopedSetting(fm, SettingAmbientCanaryAutonomy))
 }
 
-// Test_AmbientCanaryAutonomy_DefaultsToUnsetAndIsOmittedFromWire guards the exact regression named
-// in IDE-2426: registering the default as "notify_only" would emit that value for every folder,
-// defeating OD-1/OD-2 (ambient-canary's --autonomy-level must govern any folder with no explicit
-// per-folder choice).
+// Test_AmbientCanaryAutonomy_DefaultsToUnsetAndIsOmittedFromWire guards against registering the
+// default as "notify_only", which would emit that value for every folder and defeat
+// ambient-canary's --autonomy-level governing any folder with no explicit per-folder choice.
 func Test_AmbientCanaryAutonomy_DefaultsToUnsetAndIsOmittedFromWire(t *testing.T) {
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	RegisterAllConfigurations(fs)

@@ -449,8 +449,8 @@ func Test_sendFolderConfigs_IncludesAmbientCanaryAutonomy(t *testing.T) {
 	assert.Equal(t, "notify_only", configParam.FolderConfigs[0].Settings[types.SettingAmbientCanaryAutonomy].Value)
 }
 
-// Test_BuildLspConfiguration_PerFolderAutonomyIsIndependent guards the "renders blank"/omission
-// risk called out in IDE-2426: a per-folder explicit choice on one folder must not leak into, or be
+// Test_BuildLspConfiguration_PerFolderAutonomyIsIndependent guards against the "renders blank"/
+// omission risk: a per-folder explicit choice on one folder must not leak into, or be
 // overwritten by, another folder's setting.
 func Test_BuildLspConfiguration_PerFolderAutonomyIsIndependent(t *testing.T) {
 	engine := testutil.UnitTest(t)

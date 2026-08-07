@@ -47,11 +47,11 @@ func TestBuildRemyFixConfig_SelectsSastAgenticFlow(t *testing.T) {
 	assert.False(t, conf.IsSet(""), "no empty-string key may be set")
 }
 
-// TestBuildRemyFixConfig_ForwardsPersistedLlmProviderAndModel wires the CP-1
-// persistence primitive (types.SetGlobalUser) to buildRemyFixConfig on a real
-// configuration.Configuration, proving the developer's saved provider/model
-// choice reaches the fix workflow's config under the exact keys
-// remy-cli-extension reads (FlagProvider/FlagModel: "provider"/"model").
+// TestBuildRemyFixConfig_ForwardsPersistedLlmProviderAndModel wires
+// types.SetGlobalUser to buildRemyFixConfig on a real configuration.Configuration,
+// proving the developer's saved provider/model choice reaches the fix workflow's
+// config under the exact keys remy-cli-extension reads (FlagProvider/FlagModel:
+// "provider"/"model").
 func TestBuildRemyFixConfig_ForwardsPersistedLlmProviderAndModel(t *testing.T) {
 	const contentRoot = "/work/repo-root"
 
@@ -66,7 +66,7 @@ func TestBuildRemyFixConfig_ForwardsPersistedLlmProviderAndModel(t *testing.T) {
 }
 
 // TestBuildRemyFixConfig_NoProviderChosen guards the no-forced-default
-// requirement (IDE-2274-M5): a developer who never chose a provider must not
+// requirement: a developer who never chose a provider must not
 // have "provider"/"model" keys set at all, matching the empty-string-key
 // discipline the other flags already follow.
 func TestBuildRemyFixConfig_NoProviderChosen(t *testing.T) {

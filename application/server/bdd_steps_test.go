@@ -224,15 +224,10 @@ func (s *bddSteps) afterScenario(ctx context.Context, sc *godog.Scenario, err er
 	return ctx, err
 }
 
-// reported stops a double-send when fn returns normally instead of exiting
-// via Goexit; the same defer also recovers a panic from fn, so every path -
-// return, Goexit, panic - sends exactly once, and a panicking step fails
-// only its own scenario instead of crashing TestBDD.
-//
-// runStep also calls s.scenarioT.Fail() on a step error or panic: without
-// it, only godog's own goroutine learns of the failure, so the
-// per-scenario subtest would report a false PASS in isolation. Fail (not
-// FailNow) is safe here since it doesn't call runtime.Goexit.
+// runStep sends exactly one result on every exit path - return, panic, or a
+// scenarioT.Fatal/FailNow Goexit - and calls scenarioT.Fail() on error or
+// panic so the per-scenario subtest reflects the failure instead of reporting
+// a false PASS.
 func (s *bddSteps) runStep(fn func() error) {
 	reported := false
 	defer func() {
@@ -982,11 +977,11 @@ func (s *bddSteps) editorNotifiedOfNewAndUnbaselinedIssues() error {
 // theDeveloperAsksSnykToFixAFolder drives the real snyk.remediationAgent.fixFolder
 // command end to end: real LSP request -> real command dispatch -> real
 // remyProvider.FixFolder -> real gafRunner -> real buildRemyFixConfig -> a real
-// workflow.Engine invocation. Only the "fix" workflow itself is substituted
-// (IDE-2448: it is an externally-downloaded CLI extension, not a compiled
-// dependency of snyk-ls) - it captures the exact provider/model config keys it
-// receives instead of running an LLM, so this proves CP-2's wiring rather than
-// stubbing out buildRemyFixConfig/gafRunner themselves.
+// workflow.Engine invocation. Only the "fix" workflow itself is substituted -
+// it is an externally-downloaded CLI extension, not a compiled dependency of
+// snyk-ls - and it captures the exact provider/model config keys it receives
+// instead of running an LLM, proving the real wiring rather than stubbing out
+// buildRemyFixConfig/gafRunner themselves.
 func (s *bddSteps) theDeveloperAsksSnykToFixAFolder(ctx context.Context) error {
 	if err := s.ensureLspInitialized(ctx); err != nil {
 		return err

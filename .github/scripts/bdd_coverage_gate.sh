@@ -1,17 +1,11 @@
 #!/usr/bin/env bash
 #
-# bdd_coverage_gate.sh
-#
 # Enforces that PRs introducing behaviour also update the BDD suite under
 # features/*.feature. See CONTRIBUTING.md's BDD section for the `# maps:`
 # anchor convention and when a scenario is expected.
 #
 #   feat: commits with no features/*.feature change -> hard fail.
 #   fix:  commits with no features/*.feature change -> warning only.
-#
-# Scoped to feat:/fix: only, not every conventional-commit type. Hard-failing
-# every commit type would impose a repo-wide policy off the back of one
-# ticket; that is the team's call to widen later, not this gate's.
 set -euo pipefail
 
 BASE_REF="${BDD_GATE_BASE_REF:-origin/main}"
