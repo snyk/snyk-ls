@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -176,8 +177,18 @@ func (s *bddSteps) runStep(fn func() error) {
 // runtime.Goexit only unwinds the calling goroutine - calling it from
 // godog's goroutine would hang the scenario instead of failing it.
 func (s *bddSteps) runOnScenarioGoroutine(fn func() error) error {
-	s.stepFunc <- fn
-	return <-s.stepResult
+	select {
+	case s.stepFunc <- fn:
+	case <-s.scenarioDied:
+		return errors.New("scenario goroutine died before it could receive the step")
+	}
+
+	select {
+	case err := <-s.stepResult:
+		return err
+	case <-s.scenarioDied:
+		return errors.New("scenario goroutine died before it could report the step's result")
+	}
 }
 
 func (s *bddSteps) aRunningLanguageServer() error {
@@ -566,6 +577,32 @@ func Test_BDDSteps_RunOnScenarioGoroutine_SurvivesPanic(t *testing.T) {
 		assert.Contains(t, err.Error(), "boom")
 	case <-time.After(5 * time.Second):
 		t.Fatal("runOnScenarioGoroutine hung after the step's own goroutine panicked - it must report an error instead")
+	}
+}
+
+// Test_BDDSteps_RunOnScenarioGoroutine_ReturnsPromptlyWhenScenarioAlreadyDied
+// guards against a hang when the scenario goroutine spawned in beforeScenario
+// dies (e.g. panics during s.t.Run's own setup) before it ever reaches the
+// select loop that reads s.stepFunc: without an escape hatch on scenarioDied,
+// runOnScenarioGoroutine's unbuffered send would block forever.
+func Test_BDDSteps_RunOnScenarioGoroutine_ReturnsPromptlyWhenScenarioAlreadyDied(t *testing.T) {
+	s := &bddSteps{
+		scenarioDied: make(chan struct{}),
+		stepFunc:     make(chan func() error),
+		stepResult:   make(chan error),
+	}
+	close(s.scenarioDied)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- s.runOnScenarioGoroutine(func() error { return nil })
+	}()
+
+	select {
+	case err := <-done:
+		assert.Error(t, err, "expected an error instead of a hang once the scenario goroutine had already died")
+	case <-time.After(5 * time.Second):
+		t.Fatal("runOnScenarioGoroutine hung after the scenario goroutine had already died before reading the step")
 	}
 }
 
