@@ -27,6 +27,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
@@ -1371,6 +1372,16 @@ var llmProviderBaseUrlEnvVar = map[string]string{
 	"ollama":    "OLLAMA_HOST",
 }
 
+// llmProviderConfigMu serializes applyLlmProviderConfig's read-old/write-new
+// sequence. The language server's jrpc2 handlers run with unbounded
+// concurrency, so two overlapping workspace/didChangeConfiguration requests
+// could otherwise both read the same stale persisted provider before either
+// writes, then race their os.Setenv/os.Unsetenv calls - leaving the process
+// environment out of sync with whichever provider/base-URL was persisted
+// last, or briefly exposing both providers' base-URL env vars at once to a
+// concurrently spawned CLI subprocess.
+var llmProviderConfigMu sync.Mutex
+
 // applyLlmProviderConfig persists the developer's chosen LLM provider and custom API
 // endpoint for autonomous remediation (IDE-2274, CP-1: settings-only, behavior-neutral).
 // It never touches the API key - that continues to come only from the developer's own
@@ -1380,6 +1391,9 @@ var llmProviderBaseUrlEnvVar = map[string]string{
 // diffs against the persisted provider/base-URL (not the live env), so a base-URL env
 // var the developer set in their own shell is left alone by an unrelated settings save.
 func applyLlmProviderConfig(conf configuration.Configuration, logger *zerolog.Logger, settings map[string]*types.ConfigSetting) {
+	llmProviderConfigMu.Lock()
+	defer llmProviderConfigMu.Unlock()
+
 	provider, providerOk := settingStr(settings, types.SettingLlmProvider)
 	baseUrl, baseUrlOk := settingStr(settings, types.SettingLlmBaseUrl)
 	if !providerOk && !baseUrlOk {
