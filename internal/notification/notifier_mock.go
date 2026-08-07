@@ -87,7 +87,7 @@ func (m *MockNotifier) SendErrorDiagnostic(path types.FilePath, err error) {
 			Range:           sglsp.Range{},
 			Severity:        types.DiagnosticsSeverityWarning,
 			Code:            "Snyk Error",
-			CodeDescription: types.CodeDescription{Href: "https://snyk.io/user-hub"},
+			CodeDescription: &types.CodeDescription{Href: "https://snyk.io/user-hub"},
 			Message:         err.Error(),
 		}},
 	}

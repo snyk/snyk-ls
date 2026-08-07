@@ -196,17 +196,13 @@ func ToDiagnosticsForFolder(issues []types.Issue, canonicalRoot types.FilePath, 
 	diagnostics := []types.Diagnostic{}
 
 	for _, issue := range issues {
-		s := ""
-		if issue.GetIssueDescriptionURL() != nil {
-			s = issue.GetIssueDescriptionURL().String()
-		}
 		diagnostic := types.Diagnostic{
 			Range:           ToRange(issue.GetRange()),
 			Severity:        ToSeverity(issue.GetSeverity()),
 			Code:            issue.GetID(),
 			Source:          string(issue.GetProduct()),
 			Message:         issue.GetMessage(),
-			CodeDescription: types.CodeDescription{Href: types.Uri(s)},
+			CodeDescription: toCodeDescription(issue, logger),
 		}
 		if issue.GetProduct() == product.ProductInfrastructureAsCode {
 			diagnostic.Data = getIacIssue(issue, canonicalRoot, logger)
@@ -220,6 +216,31 @@ func ToDiagnosticsForFolder(issues []types.Issue, canonicalRoot types.FilePath, 
 		diagnostics = append(diagnostics, diagnostic)
 	}
 	return diagnostics
+}
+
+// toCodeDescription returns the documentation link to put behind the
+// diagnostic's code, or nil when the issue has no usable one. Clients treat a
+// present codeDescription as a link target and open its href without further
+// checks: an empty or relative href is resolved against the workspace and opens
+// a file that does not exist, and a non-web URL (file, javascript, data, or an
+// opaque https:foo with no host) is not documentation. Omitting the field
+// renders the code as plain text.
+func toCodeDescription(issue types.Issue, logger *zerolog.Logger) *types.CodeDescription {
+	descriptionURL := issue.GetIssueDescriptionURL()
+	if descriptionURL == nil {
+		return nil
+	}
+	isWebURL := (descriptionURL.Scheme == "https" || descriptionURL.Scheme == "http") && descriptionURL.Host != ""
+	if isWebURL {
+		return &types.CodeDescription{Href: types.Uri(descriptionURL.String())}
+	}
+	if logger != nil {
+		logger.Debug().
+			Str("url", descriptionURL.String()).
+			Str("product", string(issue.GetProduct())).
+			Msg("issue description URL is not a web URL, omitting the diagnostic's codeDescription")
+	}
+	return nil
 }
 
 // canonicalContentRoot returns the canonical registered workspace-folder root to
