@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -59,7 +60,10 @@ type bddSteps struct {
 	scanPersister       persistence.ScanSnapshotPersister
 	scanStateAggregator scanstates.Aggregator
 
-	initResult types.InitializeResult
+	initResult  types.InitializeResult
+	initialized bool
+	dialogHTML  string
+	folderPath  types.FilePath
 
 	deltaFileDir     types.FilePath
 	deltaFilePath    types.FilePath
@@ -128,6 +132,42 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	})
 	sc.Then(`^the editor is notified of the newly introduced issue and of the issue from the product without a baseline$`, func() error {
 		return s.runOnScenarioGoroutine(s.editorNotifiedOfNewAndUnbaselinedIssues)
+	})
+	sc.Given(`^a workspace folder is open$`, func() error {
+		return s.runOnScenarioGoroutine(s.aWorkspaceFolderIsOpen)
+	})
+	sc.Then(`^the folder has no Ambient Canary autonomy override$`, func() error {
+		return s.runOnScenarioGoroutine(s.theFolderHasNoAmbientCanaryAutonomyOverride)
+	})
+	sc.When(`^the editor sets the folder's Ambient Canary autonomy to "([^"]*)"$`, func(ctx context.Context, autonomy string) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theEditorSetsTheFoldersAmbientCanaryAutonomyTo(ctx, autonomy) })
+	})
+	sc.Then(`^the folder's effective Ambient Canary autonomy is "([^"]*)"$`, func(autonomy string) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theFoldersEffectiveAmbientCanaryAutonomyIs(autonomy) })
+	})
+	sc.When(`^a developer saves "([^"]*)" as the LLM provider with custom API endpoint "([^"]*)"$`, func(ctx context.Context, provider, endpoint string) error {
+		return s.runOnScenarioGoroutine(func() error { return s.aDeveloperSavesTheLlmProviderAndEndpoint(ctx, provider, endpoint) })
+	})
+	sc.When(`^the developer reopens the Snyk configuration dialog$`, func(ctx context.Context) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperReopensTheConfigurationDialog(ctx) })
+	})
+	sc.When(`^a developer reopens the Snyk configuration dialog$`, func(ctx context.Context) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperReopensTheConfigurationDialog(ctx) })
+	})
+	sc.When(`^a developer reopens the Snyk configuration dialog without ever choosing an LLM provider$`, func(ctx context.Context) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperReopensTheConfigurationDialog(ctx) })
+	})
+	sc.Then(`^the configuration dialog shows "([^"]*)" as the selected LLM provider$`, func(provider string) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theDialogShowsTheSelectedLlmProvider(provider) })
+	})
+	sc.Then(`^the configuration dialog shows "([^"]*)" as the custom API endpoint$`, func(endpoint string) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theDialogShowsTheCustomApiEndpoint(endpoint) })
+	})
+	sc.Then(`^the configuration dialog shows no LLM provider selected$`, func() error {
+		return s.runOnScenarioGoroutine(s.theDialogShowsNoLlmProviderSelected)
+	})
+	sc.Then(`^the configuration dialog contains no field for an LLM API key$`, func() error {
+		return s.runOnScenarioGoroutine(s.theDialogContainsNoLlmApiKeyField)
 	})
 }
 
@@ -203,8 +243,18 @@ func (s *bddSteps) runStep(fn func() error) {
 // runtime.Goexit only unwinds the calling goroutine - calling it from
 // godog's goroutine would hang the scenario instead of failing it.
 func (s *bddSteps) runOnScenarioGoroutine(fn func() error) error {
-	s.stepFunc <- fn
-	return <-s.stepResult
+	select {
+	case s.stepFunc <- fn:
+	case <-s.scenarioDied:
+		return errors.New("scenario goroutine died before it could receive the step")
+	}
+
+	select {
+	case err := <-s.stepResult:
+		return err
+	case <-s.scenarioDied:
+		return errors.New("scenario goroutine died before it could report the step's result")
+	}
 }
 
 func (s *bddSteps) aRunningLanguageServer() error {
@@ -295,6 +345,231 @@ func (s *bddSteps) theServerRespondsWithItsCapabilities() error {
 	}
 	if s.initResult.Capabilities.TextDocumentSync == nil {
 		return fmt.Errorf("expected capabilities to be populated, got a zero value")
+	}
+	return nil
+}
+
+// ensureLspInitialized calls the "initialize" request exactly once per
+// scenario, ahead of the first real settings/dialog call. Both
+// workspace/didChangeConfiguration and workspace/executeCommand are only
+// meaningful after the LSP initialize handshake, mirroring how a real editor
+// drives the protocol.
+func (s *bddSteps) ensureLspInitialized(ctx context.Context) error {
+	if s.initialized {
+		return nil
+	}
+	if _, err := s.loc.Client.Call(ctx, "initialize", types.InitializeParams{}); err != nil {
+		return fmt.Errorf("initialize call failed: %w", err)
+	}
+	s.initialized = true
+	return nil
+}
+
+// aDeveloperSavesTheLlmProviderAndEndpoint drives the real
+// workspace/didChangeConfiguration request an editor sends when a developer
+// changes and saves settings in the configuration dialog.
+func (s *bddSteps) aDeveloperSavesTheLlmProviderAndEndpoint(ctx context.Context, provider, endpoint string) error {
+	if err := s.ensureLspInitialized(ctx); err != nil {
+		return err
+	}
+	params := types.DidChangeConfigurationParams{
+		Settings: types.LspConfigurationParam{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingLlmProvider: {Value: provider, Changed: true},
+				types.SettingLlmBaseUrl:  {Value: endpoint, Changed: true},
+			},
+		},
+	}
+	if _, err := s.loc.Client.Call(ctx, "workspace/didChangeConfiguration", params); err != nil {
+		return fmt.Errorf("workspace/didChangeConfiguration call failed: %w", err)
+	}
+	return nil
+}
+
+// theDeveloperReopensTheConfigurationDialog drives the real
+// workspace/executeCommand request the menubar sends to render the
+// configuration dialog, and stashes the returned HTML for the Then steps.
+func (s *bddSteps) theDeveloperReopensTheConfigurationDialog(ctx context.Context) error {
+	if err := s.ensureLspInitialized(ctx); err != nil {
+		return err
+	}
+	response, err := s.loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		Command:   types.WorkspaceConfigurationCommand,
+		Arguments: []any{},
+	})
+	if err != nil {
+		return fmt.Errorf("workspace/executeCommand call failed: %w", err)
+	}
+	var html string
+	if err := response.UnmarshalResult(&html); err != nil {
+		return fmt.Errorf("unmarshalling configuration dialog result failed: %w", err)
+	}
+	if html == "" {
+		return fmt.Errorf("expected non-empty configuration dialog HTML")
+	}
+	s.dialogHTML = html
+	return nil
+}
+
+func (s *bddSteps) theDialogShowsTheSelectedLlmProvider(provider string) error {
+	needle := `id="llm_provider"`
+	idx := strings.Index(s.dialogHTML, needle)
+	if idx == -1 {
+		return fmt.Errorf("expected an llm_provider field in the configuration dialog HTML")
+	}
+	// The selected <option> for the chosen provider must carry "selected" within
+	// the llm_provider <select> element.
+	selectEnd := strings.Index(s.dialogHTML[idx:], "</select>")
+	if selectEnd == -1 {
+		return fmt.Errorf("expected a closing </select> for the llm_provider field")
+	}
+	selectHTML := s.dialogHTML[idx : idx+selectEnd]
+	optionNeedle := fmt.Sprintf(`value="%s" selected`, provider)
+	if !strings.Contains(selectHTML, optionNeedle) {
+		return fmt.Errorf("expected provider %q to be selected in the llm_provider field, got: %s", provider, selectHTML)
+	}
+	return nil
+}
+
+func (s *bddSteps) theDialogShowsTheCustomApiEndpoint(endpoint string) error {
+	if !strings.Contains(s.dialogHTML, endpoint) {
+		return fmt.Errorf("expected custom API endpoint %q to be shown in the configuration dialog HTML", endpoint)
+	}
+	return nil
+}
+
+func (s *bddSteps) theDialogShowsNoLlmProviderSelected() error {
+	needle := `id="llm_provider"`
+	idx := strings.Index(s.dialogHTML, needle)
+	if idx == -1 {
+		return fmt.Errorf("expected an llm_provider field in the configuration dialog HTML")
+	}
+	selectEnd := strings.Index(s.dialogHTML[idx:], "</select>")
+	if selectEnd == -1 {
+		return fmt.Errorf("expected a closing </select> for the llm_provider field")
+	}
+	selectHTML := s.dialogHTML[idx : idx+selectEnd]
+	if !strings.Contains(selectHTML, `value="" selected`) {
+		return fmt.Errorf("expected no provider (the empty \"Automatic\" option) to be selected, got: %s", selectHTML)
+	}
+	return nil
+}
+
+func (s *bddSteps) theDialogContainsNoLlmApiKeyField() error {
+	if strings.Contains(strings.ToLower(s.dialogHTML), "llm_api_key") {
+		return fmt.Errorf("configuration dialog must never contain an LLM API key field")
+	}
+	return nil
+}
+
+func (s *bddSteps) aWorkspaceFolderIsOpen() error {
+	folderPath := types.FilePath(s.scenarioT.TempDir())
+	initParams := types.InitializeParams{
+		WorkspaceFolders: []types.WorkspaceFolder{
+			{Uri: uri.PathToUri(folderPath), Name: "bdd-folder"},
+		},
+	}
+	if _, err := s.loc.Client.Call(s.scenarioT.Context(), "initialize", initParams); err != nil {
+		return fmt.Errorf("initialize call failed: %w", err)
+	}
+
+	disableAutoScan(s.scenarioT, s.engine.GetConfiguration())
+
+	if _, err := s.loc.Client.Call(s.scenarioT.Context(), "initialized", types.InitializedParams{}); err != nil {
+		return fmt.Errorf("initialized call failed: %w", err)
+	}
+	types.WaitForLspInitialized(s.engine.GetConfiguration())
+
+	s.folderPath = folderPath
+	return nil
+}
+
+// waitForFolderConfigNotification polls $/snyk.configuration notifications
+// (didChangeConfiguration processing runs in the background) until one
+// carrying this scenario's folder satisfies match. Notifications are
+// delivered to the test's jrpc2 client on a goroutine per received message,
+// so two notifications sent moments apart are not guaranteed to be recorded
+// in send order; scanning for a match rather than trusting the recorder's
+// last entry keeps the wait correct regardless of that delivery order.
+func (s *bddSteps) waitForFolderConfigNotification(match func(types.LspFolderConfig) bool) (types.LspFolderConfig, error) {
+	deadline := time.Now().Add(5 * time.Second)
+	var lastSeen types.LspFolderConfig
+	sawFolder := false
+	for {
+		notifications := s.jsonRPCRecorder.FindNotificationsByMethod("$/snyk.configuration")
+		for _, notification := range notifications {
+			var param types.LspConfigurationParam
+			if err := notification.UnmarshalParams(&param); err != nil {
+				continue
+			}
+			for _, fc := range param.FolderConfigs {
+				if !folderConfigPathsMatch(fc.FolderPath, s.folderPath) {
+					continue
+				}
+				lastSeen = fc
+				sawFolder = true
+				if match(fc) {
+					return fc, nil
+				}
+			}
+		}
+		if time.Now().After(deadline) {
+			if sawFolder {
+				return lastSeen, fmt.Errorf("no matching $/snyk.configuration notification found for folder %s within timeout", s.folderPath)
+			}
+			return types.LspFolderConfig{}, fmt.Errorf("no $/snyk.configuration notification found for folder %s", s.folderPath)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func (s *bddSteps) theFolderHasNoAmbientCanaryAutonomyOverride() error {
+	fc, err := s.waitForFolderConfigNotification(func(fc types.LspFolderConfig) bool {
+		return fc.Settings[types.SettingAmbientCanaryAutonomy] == nil
+	})
+	if err != nil {
+		return err
+	}
+	if setting := fc.Settings[types.SettingAmbientCanaryAutonomy]; setting != nil {
+		return fmt.Errorf("expected no ambient_canary_autonomy override, got %v", setting.Value)
+	}
+	return nil
+}
+
+func (s *bddSteps) theEditorSetsTheFoldersAmbientCanaryAutonomyTo(ctx context.Context, autonomy string) error {
+	s.jsonRPCRecorder.ClearNotifications()
+	params := types.DidChangeConfigurationParams{
+		Settings: types.LspConfigurationParam{
+			FolderConfigs: []types.LspFolderConfig{
+				{
+					FolderPath: s.folderPath,
+					Settings: map[string]*types.ConfigSetting{
+						types.SettingAmbientCanaryAutonomy: {Value: autonomy, Changed: true},
+					},
+				},
+			},
+		},
+	}
+	if _, err := s.loc.Client.Call(ctx, "workspace/didChangeConfiguration", params); err != nil {
+		return fmt.Errorf("didChangeConfiguration call failed: %w", err)
+	}
+	return nil
+}
+
+func (s *bddSteps) theFoldersEffectiveAmbientCanaryAutonomyIs(autonomy string) error {
+	fc, err := s.waitForFolderConfigNotification(func(fc types.LspFolderConfig) bool {
+		setting := fc.Settings[types.SettingAmbientCanaryAutonomy]
+		return setting != nil && setting.Value == autonomy
+	})
+	if err != nil {
+		return err
+	}
+	setting := fc.Settings[types.SettingAmbientCanaryAutonomy]
+	if setting == nil {
+		return fmt.Errorf("expected ambient_canary_autonomy override %q, got no override", autonomy)
+	}
+	if setting.Value != autonomy {
+		return fmt.Errorf("expected ambient_canary_autonomy override %q, got %v", autonomy, setting.Value)
 	}
 	return nil
 }
@@ -770,6 +1045,32 @@ func Test_BDDSteps_RunOnScenarioGoroutine_SurvivesPanic(t *testing.T) {
 		assert.Contains(t, err.Error(), "boom")
 	case <-time.After(5 * time.Second):
 		t.Fatal("runOnScenarioGoroutine hung after the step's own goroutine panicked - it must report an error instead")
+	}
+}
+
+// Test_BDDSteps_RunOnScenarioGoroutine_ReturnsPromptlyWhenScenarioAlreadyDied
+// guards against a hang when the scenario goroutine spawned in beforeScenario
+// dies (e.g. panics during s.t.Run's own setup) before it ever reaches the
+// select loop that reads s.stepFunc: without an escape hatch on scenarioDied,
+// runOnScenarioGoroutine's unbuffered send would block forever.
+func Test_BDDSteps_RunOnScenarioGoroutine_ReturnsPromptlyWhenScenarioAlreadyDied(t *testing.T) {
+	s := &bddSteps{
+		scenarioDied: make(chan struct{}),
+		stepFunc:     make(chan func() error),
+		stepResult:   make(chan error),
+	}
+	close(s.scenarioDied)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- s.runOnScenarioGoroutine(func() error { return nil })
+	}()
+
+	select {
+	case err := <-done:
+		assert.Error(t, err, "expected an error instead of a hang once the scenario goroutine had already died")
+	case <-time.After(5 * time.Second):
+		t.Fatal("runOnScenarioGoroutine hung after the scenario goroutine had already died before reading the step")
 	}
 }
 
