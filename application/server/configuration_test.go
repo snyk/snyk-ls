@@ -3959,10 +3959,12 @@ func TestApplyLlmProviderConfig_UnknownProviderPersistsWithoutEnvWrite(t *testin
 // applyLlmProviderConfig's env var read-modify-write. Two goroutines
 // continuously switch the provider back and forth while a third goroutine
 // watches for the telltale torn state: both providers' base-URL env vars set
-// at once, which the unlocked read-old/write-new sequence can produce (e.g.
+// at once, which an unlocked read-old/write-new sequence could produce (e.g.
 // both goroutines racing on the same stale "no provider set yet" read) but a
 // correctly serialized sequence can never produce, since it always unsets the
-// previous provider's env var before setting the new one.
+// previous provider's env var before setting the new one. The monitor takes
+// llmProviderConfigMu around its own reads so its two-var check is atomic
+// with respect to the writers it is observing.
 func TestApplyLlmProviderConfig_ConcurrentUpdatesAreSerialized(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
@@ -4002,7 +4004,15 @@ func TestApplyLlmProviderConfig_ConcurrentUpdatesAreSerialized(t *testing.T) {
 			case <-stop:
 				return
 			default:
-				if os.Getenv("ANTHROPIC_BASE_URL") != "" && os.Getenv("VERTEX_BASE_URL") != "" {
+				// Reading both vars while holding the same mutex the writers use makes this
+				// pair of reads atomic with respect to them - otherwise a writer's unset-then-set
+				// transition can complete entirely between two independent, unlocked os.Getenv
+				// calls, making the monitor see a stale "true" and a fresh "true" as if both
+				// were set at once, even though they never were.
+				llmProviderConfigMu.Lock()
+				bothSet := os.Getenv("ANTHROPIC_BASE_URL") != "" && os.Getenv("VERTEX_BASE_URL") != ""
+				llmProviderConfigMu.Unlock()
+				if bothSet {
 					bothSetObserved.Store(true)
 				}
 			}
