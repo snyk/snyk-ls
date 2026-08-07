@@ -109,6 +109,7 @@ func ConstructSettingsFromConfig(engine workflow.Engine, r types.ConfigResolverI
 		types.SettingAdditionalEnvironment: r.GetString(types.SettingAdditionalEnvironment, nil),
 		types.SettingLlmProvider:           r.GetString(types.SettingLlmProvider, nil),
 		types.SettingLlmBaseUrl:            r.GetString(types.SettingLlmBaseUrl, nil),
+		types.SettingLlmModel:              r.GetString(types.SettingLlmModel, nil),
 	}
 
 	folderConfigs := collectFolderConfigs(conf, logger, engine, r)
