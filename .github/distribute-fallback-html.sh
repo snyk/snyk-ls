@@ -23,6 +23,9 @@
 # Required env vars:
 #   GH_TOKEN - GitHub PAT with write access to all target repos (use TEAM_IDE_PAT)
 #              Minimum required scopes: contents:write, pull_requests:write
+#   PUB_SIGNING_KEY - team-ide-user's public SSH signing key (use TEAM_IDE_USER_SSH_PUB).
+#              The matching private key must already be loaded into ssh-agent (see
+#              webfactory/ssh-agent in distribute-fallback-html.yaml) so git can sign with it.
 #
 # Usage: Run from the snyk-ls repository root.
 
@@ -53,7 +56,13 @@ FAILED=()
 
 # Single parent temp dir — one EXIT trap covers all per-repo clones.
 PARENT_WORK=$(mktemp -d)
-trap "rm -rf '$PARENT_WORK'" EXIT
+trap 'rm -rf "$PARENT_WORK"' EXIT
+
+# SSH-format commit signing key, written once and reused by every per-repo clone below.
+# The matching private key must be loaded into ssh-agent by the caller (see PUB_SIGNING_KEY
+# in the header comment) — git shells out to `ssh-keygen -Y sign`, which signs via ssh-agent.
+SIGNING_KEY_FILE="$PARENT_WORK/signingkey.pub"
+echo "$PUB_SIGNING_KEY" > "$SIGNING_KEY_FILE"
 
 gh auth setup-git
 
@@ -74,6 +83,10 @@ process_repo() {
 
   gh repo clone "$REPO" "$WORK_DIR" -- --depth=1 --quiet
 
+  local BASE_BRANCH
+  BASE_BRANCH=$(gh repo view "$REPO" --json defaultBranchRef --jq '.defaultBranchRef.name') \
+    || { echo "    ERROR: failed to fetch default branch for $REPO" >&2; return 1; }
+
   local DEST_FULL="$WORK_DIR/$DEST_PATH"
   mkdir -p "$(dirname "$DEST_FULL")"
   # Abort early if the destination path is git-ignored in the target repo.
@@ -92,13 +105,17 @@ process_repo() {
 
   git -C "$WORK_DIR" config user.email "team-ide@snyk.io"
   git -C "$WORK_DIR" config user.name "Snyk Team IDE"
+  git -C "$WORK_DIR" config gpg.format ssh
+  git -C "$WORK_DIR" config commit.gpgsign true
+  git -C "$WORK_DIR" config user.signingkey "$SIGNING_KEY_FILE"
   git -C "$WORK_DIR" checkout -B "$BRANCH"
   git -C "$WORK_DIR" add "$DEST_PATH"
   git -C "$WORK_DIR" commit -m "$COMMIT_MSG"
   # Design decision: this branch is exclusively owned by this automation.
   # Force-push is intentional — any human commits on the sync branch will be
   # overwritten. Reviewers should not push changes directly to this branch.
-  git -C "$WORK_DIR" push -f -u origin "$BRANCH"
+  git -C "$WORK_DIR" push -f -u origin "$BRANCH" \
+    || { echo "    ERROR: git push failed for $REPO" >&2; return 1; }
 
   local PR_BODY
   PR_BODY="Automatic sync of \`settings-fallback.html\` triggered by [snyk/snyk-ls@${LS_SHA}](https://github.com/snyk/snyk-ls/commit/${LS_SHA_FULL}).
@@ -121,13 +138,15 @@ Review and merge when ready. No manual testing is required beyond confirming tha
     echo "    Creating PR in $REPO"
     gh pr create \
       --repo "$REPO" \
-      --base main \
+      --base "$BASE_BRANCH" \
       --head "$BRANCH" \
       --title "$PR_TITLE" \
-      --body "$PR_BODY"
+      --body "$PR_BODY" \
+      || { echo "    ERROR: gh pr create failed for $REPO" >&2; return 1; }
   else
     echo "    Updating existing PR #$EXISTING_PR in $REPO"
-    gh pr edit "$EXISTING_PR" --repo "$REPO" --body "$PR_BODY"
+    gh pr edit "$EXISTING_PR" --repo "$REPO" --body "$PR_BODY" \
+      || { echo "    ERROR: gh pr edit failed for $REPO (PR #$EXISTING_PR)" >&2; return 1; }
   fi
 
   echo "    Done."

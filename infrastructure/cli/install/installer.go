@@ -85,19 +85,25 @@ func (i *Install) Install(ctx context.Context) (string, error) {
 }
 
 func (i *Install) installRelease(release *Release) (string, error) {
-	d := NewDownloader(i.engine, i.errorReporter, i.httpClient, i.configResolver)
+	d := NewDownloader(i.engine, i.errorReporter, i.httpClient)
 	lockFileName, err := createLockFile(i.engine, d)
 	if err != nil {
 		return "", err
 	}
 	defer func(name string) { cleanupLockFile(i.engine, name) }(lockFileName)
 
-	err = d.Download(release, false)
+	cliPath := i.configResolver.GetString(types.SettingCliPath, nil)
+	if cliPath == "" {
+		return "", fmt.Errorf("CLI path is not configured")
+	}
+	cliPath = filepath.Clean(cliPath)
+
+	installedCliPath, err := d.Download(release, cliPath, false)
 	if err != nil {
 		return "", err
 	}
 
-	return i.Find()
+	return installedCliPath, nil
 }
 
 func (i *Install) Update(ctx context.Context) (bool, error) {
@@ -111,7 +117,7 @@ func (i *Install) Update(ctx context.Context) (bool, error) {
 }
 
 func (i *Install) updateFromRelease(r *Release) (bool, error) {
-	d := NewDownloader(i.engine, i.errorReporter, i.httpClient, i.configResolver)
+	d := NewDownloader(i.engine, i.errorReporter, i.httpClient)
 	lockFileName, err := createLockFile(i.engine, d)
 	if err != nil {
 		return false, err
@@ -125,9 +131,10 @@ func (i *Install) updateFromRelease(r *Release) (bool, error) {
 	}
 
 	cliPath := i.configResolver.GetString(types.SettingCliPath, nil)
-	if cliPath != "" {
-		cliPath = filepath.Clean(cliPath)
+	if cliPath == "" {
+		return false, fmt.Errorf("CLI path is not configured")
 	}
+	cliPath = filepath.Clean(cliPath)
 	err = compareChecksum(i.engine.GetLogger(), latestChecksum, cliPath)
 	if err == nil {
 		// checksum match, no new version available
@@ -135,13 +142,13 @@ func (i *Install) updateFromRelease(r *Release) (bool, error) {
 	}
 
 	// Carry out the download of the latest release
-	err = d.Download(r, true)
+	latestCliFile, err := d.Download(r, cliPath, true)
 	if err != nil {
 		// download failed
 		return false, err
 	}
 
-	err = replaceOutdatedCli(i.engine, i.configResolver, cliDiscovery)
+	err = replaceOutdatedCli(i.engine, cliPath, latestCliFile)
 	if err != nil {
 		return false, err
 	}
@@ -149,15 +156,9 @@ func (i *Install) updateFromRelease(r *Release) (bool, error) {
 	return true, nil
 }
 
-func replaceOutdatedCli(engine workflow.Engine, configResolver types.ConfigResolverInterface, cliDiscovery Discovery) error {
+func replaceOutdatedCli(engine workflow.Engine, cliPath string, latestCliFile string) error {
 	logger := engine.GetLogger()
 	logger.Info().Str("method", "replaceOutdatedCli").Msg("replacing outdated CLI with latest")
-
-	cliPath := configResolver.GetString(types.SettingCliPath, nil)
-	if cliPath != "" {
-		cliPath = filepath.Clean(cliPath)
-	}
-	latestCliFile := filepath.Join(filepath.Dir(cliPath), cliDiscovery.ExecutableName(true))
 
 	if //goland:noinspection GoBoolExpressions
 	runtime.GOOS == "windows" {
@@ -291,7 +292,7 @@ func (t *FakeInstaller) Install(_ context.Context) (string, error) {
 	}
 
 	t.installs++
-	return "", nil
+	return path, nil
 }
 
 func (t *FakeInstaller) Update(_ context.Context) (bool, error) {
