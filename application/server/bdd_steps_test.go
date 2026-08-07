@@ -30,6 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -310,10 +311,18 @@ func (s *bddSteps) aRunningLanguageServer() error {
 	if !ok {
 		return fmt.Errorf("workspace does not implement snyk.IssueProvider")
 	}
+	// A real FolderRemediator (built the same way application/di/init.go builds
+	// it for production) so snyk.remediationAgent.fixFolder scenarios exercise
+	// the real command -> remyProvider.FixFolder wiring instead of failing with
+	// "remediation agent is not enabled".
+	folderRemediator, ok := remediation.NewRemyProvider(engine, nil).(remediation.FolderRemediator)
+	if !ok {
+		return fmt.Errorf("remediation.NewRemyProvider did not return a FolderRemediator")
+	}
 	command.SetService(command.NewService(
 		engine, engine.GetLogger(), deps.AuthenticationService, deps.FeatureFlagService, deps.Notifier,
 		deps.LearnService, issueProvider, nil, nil, deps.LdxSyncService,
-		deps.ConfigResolver, deps.ScanStateAggregator.StateSnapshot, nil,
+		deps.ConfigResolver, deps.ScanStateAggregator.StateSnapshot, folderRemediator,
 	))
 
 	// Scenarios that save a file through the real didSave pipeline (as opposed to
@@ -510,7 +519,6 @@ func (s *bddSteps) theDialogContainsNoLlmApiKeyField() error {
 	return nil
 }
 
-<<<<<<< HEAD
 func (s *bddSteps) aWorkspaceFolderIsOpen() error {
 	folderPath := types.FilePath(s.scenarioT.TempDir())
 	initParams := types.InitializeParams{
