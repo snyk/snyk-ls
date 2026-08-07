@@ -120,7 +120,11 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 		learnService = learnMock
 	}
 
-	scanPersister = persistence.NopScanPersister{}
+	if overrideDeps != nil && overrideDeps.ScanPersister != nil {
+		scanPersister = overrideDeps.ScanPersister
+	} else {
+		scanPersister = persistence.NopScanPersister{}
+	}
 	if overrideDeps != nil && overrideDeps.ScanStateAggregator != nil {
 		scanStateAggregator = overrideDeps.ScanStateAggregator
 	} else {

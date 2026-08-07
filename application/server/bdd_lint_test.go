@@ -11,7 +11,7 @@ import (
 
 // trackedFeatureRequirements is a manually-maintained ratchet: extend it alongside
 // each new feature file so it can't silently drift from real coverage.
-var trackedFeatureRequirements = []string{"M1", "M2", "IDE-2274-M1", "IDE-2274-M2", "IDE-2274-M4", "IDE-2274-M5"}
+var trackedFeatureRequirements = []string{"M1", "M2", "M3", "M4", "M5", "M6", "IDE-2274-M1", "IDE-2274-M2", "IDE-2274-M4", "IDE-2274-M5"}
 
 func Test_FeatureFiles_MapEveryRequirement(t *testing.T) {
 	scenarios, err := parseFeatureDir("../../features")
