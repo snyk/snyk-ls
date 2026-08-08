@@ -107,6 +107,9 @@ func ConstructSettingsFromConfig(engine workflow.Engine, r types.ConfigResolverI
 		// Env is stored as string under SettingAdditionalEnvironment UserGlobalKey (written by applyEnvironment).
 		types.SettingAdditionalParameters:  strings.Join(r.GetStringSlice(types.SettingCliAdditionalOssParameters, nil), " "),
 		types.SettingAdditionalEnvironment: r.GetString(types.SettingAdditionalEnvironment, nil),
+		types.SettingLlmProvider:           r.GetString(types.SettingLlmProvider, nil),
+		types.SettingLlmBaseUrl:            r.GetString(types.SettingLlmBaseUrl, nil),
+		types.SettingLlmModel:              r.GetString(types.SettingLlmModel, nil),
 	}
 
 	folderConfigs := collectFolderConfigs(conf, logger, engine, r)
@@ -168,6 +171,7 @@ func computeEffectiveConfig(fc *types.FolderConfig) map[string]types.EffectiveVa
 		types.SettingSnykIacEnabled,
 		types.SettingSnykSecretsEnabled,
 		types.SettingRiskScoreThreshold,
+		types.SettingAmbientCanaryAutonomy,
 	}
 
 	for _, settingName := range orgScopeSettings {

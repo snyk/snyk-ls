@@ -117,6 +117,15 @@ func gafRunner(ctx context.Context, eng workflow.Engine, contentRoot string, _ s
 	return err
 }
 
+// remyProviderConfigKey and remyModelConfigKey match remy-cli-extension's
+// FlagProvider/FlagModel (internal/commands/remyfix/flags.go) — the fix
+// workflow reads the developer's chosen LLM provider/model under these exact
+// keys.
+const (
+	remyProviderConfigKey = "provider"
+	remyModelConfigKey    = "model"
+)
+
 // buildRemyFixConfig clones base and sets the configuration keys that select and
 // drive the fix workflow for contentRoot. It is a pure helper (no engine, no I/O)
 // so the exact config the runner hands to the workflow can be asserted in a unit
@@ -132,6 +141,12 @@ func buildRemyFixConfig(base configuration.Configuration, contentRoot string) co
 	conf.Set("sast", true)
 	conf.Set("experimental", true)
 	conf.Set(configuration.INPUT_DIRECTORY, []string{contentRoot})
+	if provider := types.GetGlobalString(base, types.SettingLlmProvider); provider != "" {
+		conf.Set(remyProviderConfigKey, provider)
+	}
+	if model := types.GetGlobalString(base, types.SettingLlmModel); model != "" {
+		conf.Set(remyModelConfigKey, model)
+	}
 	return conf
 }
 

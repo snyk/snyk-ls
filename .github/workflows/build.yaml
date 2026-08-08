@@ -44,6 +44,38 @@ jobs:
       - name: Lint source code
         run: make lint
 
+  bdd:
+    name: bdd
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare git
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.longpaths true
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Setup tools (`make tools`)
+        uses: ./.github/actions/setup-tools
+
+      - name: Run BDD feature suite
+        run: make test-bdd
+
+      - name: "Enforce BDD coverage for feat:/fix: commits"
+        if: github.event_name == 'pull_request'
+        env:
+          BDD_GATE_BASE_REF: origin/${{ github.event.pull_request.base.ref }}
+          BDD_GATE_HEAD_REF: ${{ github.event.pull_request.head.sha }}
+        run: .github/scripts/bdd_coverage_gate.sh
+
   integration-tests:
     name: integration-tests
     needs: []

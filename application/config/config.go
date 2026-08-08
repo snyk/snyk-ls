@@ -80,6 +80,7 @@ const (
 var (
 	Version                        = "SNAPSHOT"
 	LsProtocolVersion              = "development"
+	LsServerName                   = "snyk-ls"
 	Development                    = "true"
 	LicenseInformation             = "License information\n FILLED DURING BUILD"
 	analyticsPermittedEnvironments = map[string]bool{

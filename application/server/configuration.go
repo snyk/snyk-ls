@@ -27,6 +27,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
@@ -450,6 +451,7 @@ func processConfigSettings(ctx context.Context, conf configuration.Configuration
 	applyProxyConfig(conf, settings)
 	applyCodeEndpoint(conf, settings)
 	applyCliReleaseChannel(conf, settings)
+	applyLlmProviderConfig(conf, logger, settings)
 
 	return globalOrgChanged, lockedMachineFields
 }
@@ -1355,6 +1357,83 @@ func applyPublishSecurityAtInceptionRules(conf configuration.Configuration, sett
 func applyCliReleaseChannel(conf configuration.Configuration, settings map[string]*types.ConfigSetting) {
 	if v, ok := settingStr(settings, types.SettingCliReleaseChannel); ok && v != "" {
 		types.SetGlobalUser(conf, types.SettingCliReleaseChannel, strings.TrimSpace(v))
+	}
+}
+
+// llmProviderBaseUrlEnvVar maps an LLM provider to the environment variable the
+// Snyk Remediation Agent's CLI extension reads its custom base URL from. openai
+// intentionally has no entry: the CLI extension has no base-URL env var for it, so
+// a custom endpoint chosen with the openai provider is persisted and echoed back in
+// the dialog but never exported to the process environment.
+var llmProviderBaseUrlEnvVar = map[string]string{
+	"anthropic": "ANTHROPIC_BASE_URL",
+	"vertex":    "VERTEX_BASE_URL",
+	"litellm":   "LITELLM_BASE_URL",
+	"ollama":    "OLLAMA_HOST",
+}
+
+// llmProviderConfigMu serializes applyLlmProviderConfig's read-old/write-new
+// sequence. The language server's jrpc2 handlers run with unbounded
+// concurrency, so two overlapping workspace/didChangeConfiguration requests
+// could otherwise both read the same stale persisted provider before either
+// writes, then race their os.Setenv/os.Unsetenv calls - leaving the process
+// environment out of sync with whichever provider/base-URL was persisted
+// last, or briefly exposing both providers' base-URL env vars at once to a
+// concurrently spawned CLI subprocess.
+var llmProviderConfigMu sync.Mutex
+
+// applyLlmProviderConfig persists the developer's chosen LLM provider, model and
+// custom API endpoint for autonomous remediation. It never touches the API key -
+// that continues to come only from the developer's own process environment.
+//
+// The model goes through the identical persist path as provider and base URL -
+// ollama and litellm have no default model in remy-cli-extension, so without it
+// those two providers would be unusable. Unlike base URL, the model has no
+// environment-variable side effect here: buildRemyFixConfig reads it and sets it
+// as a GAF config key at fix time, the same lever used for provider.
+//
+// It never unsets an environment variable it did not itself previously set - it
+// diffs against the persisted provider/base-URL (not the live env), so a base-URL
+// env var the developer set in their own shell is left alone by an unrelated
+// settings save.
+func applyLlmProviderConfig(conf configuration.Configuration, logger *zerolog.Logger, settings map[string]*types.ConfigSetting) {
+	llmProviderConfigMu.Lock()
+	defer llmProviderConfigMu.Unlock()
+
+	provider, providerOk := settingStr(settings, types.SettingLlmProvider)
+	baseUrl, baseUrlOk := settingStr(settings, types.SettingLlmBaseUrl)
+	model, modelOk := settingStr(settings, types.SettingLlmModel)
+	if !providerOk && !baseUrlOk && !modelOk {
+		return
+	}
+
+	oldProvider := types.GetGlobalString(conf, types.SettingLlmProvider)
+	oldEnvVar, oldHadEnvVar := llmProviderBaseUrlEnvVar[oldProvider]
+
+	if providerOk {
+		types.SetGlobalUser(conf, types.SettingLlmProvider, provider)
+	} else {
+		provider = oldProvider
+	}
+	if baseUrlOk {
+		types.SetGlobalUser(conf, types.SettingLlmBaseUrl, baseUrl)
+	} else {
+		baseUrl = types.GetGlobalString(conf, types.SettingLlmBaseUrl)
+	}
+	if modelOk {
+		types.SetGlobalUser(conf, types.SettingLlmModel, model)
+	}
+
+	newEnvVar, newHasEnvVar := llmProviderBaseUrlEnvVar[provider]
+	if oldHadEnvVar && (!newHasEnvVar || newEnvVar != oldEnvVar || baseUrl == "") {
+		if err := os.Unsetenv(oldEnvVar); err != nil {
+			logger.Err(err).Msgf("couldn't unset env variable %s", oldEnvVar)
+		}
+	}
+	if newHasEnvVar && baseUrl != "" {
+		if err := os.Setenv(newEnvVar, baseUrl); err != nil {
+			logger.Err(err).Msgf("couldn't set env variable %s", newEnvVar)
+		}
 	}
 }
 
