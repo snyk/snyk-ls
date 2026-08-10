@@ -106,11 +106,21 @@ var _ RemediationProvider = (*remyProvider)(nil)
 var _ FileChangeNotifier = (*remyProvider)(nil)
 var _ FolderRemediator = (*remyProvider)(nil)
 
+// LLMProviderEnvMu guards the LLM endpoint env vars (ANTHROPIC_BASE_URL etc.)
+// that application/server writes on a settings change and gafRunner's Remy
+// invocation reads. remy-cli-extension has no config-based override for the
+// base URL — it reads it via os.Getenv at an unbounded point during the fix
+// workflow — so the read must hold the lock for the whole invocation, not
+// just a snapshot, to rule out observing a torn (unset/not-yet-set) value.
+var LLMProviderEnvMu sync.RWMutex
+
 // gafRunner is the default remyRunner that invokes the legacycli workflow via
 // the Go Application Framework engine. The remy fix workflow is a Go extension
 // registered under the "fix" workflow ID — invoke it directly, not via legacycli.
 // auto-approve suppresses interactive prompts required for non-interactive LS use.
 func gafRunner(ctx context.Context, eng workflow.Engine, contentRoot string, _ string) error {
+	LLMProviderEnvMu.RLock()
+	defer LLMProviderEnvMu.RUnlock()
 	remyWorkflowID := workflow.NewWorkflowIdentifier("fix")
 	conf := buildRemyFixConfig(eng.GetConfiguration(), contentRoot)
 	_, err := eng.Invoke(remyWorkflowID, workflow.WithContext(ctx), workflow.WithConfig(conf))

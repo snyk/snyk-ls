@@ -50,6 +50,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	mock_command "github.com/snyk/snyk-ls/domain/ide/command/mock"
 	"github.com/snyk/snyk-ls/domain/scanstates"
+	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	infraconfig "github.com/snyk/snyk-ls/infrastructure/configuration"
@@ -3956,8 +3957,8 @@ func TestApplyLlmProviderConfig_UnknownProviderPersistsWithoutEnvWrite(t *testin
 // both goroutines racing on the same stale "no provider set yet" read) but a
 // correctly serialized sequence can never produce, since it always unsets the
 // previous provider's env var before setting the new one. The monitor takes
-// llmProviderConfigMu around its own reads so its two-var check is atomic
-// with respect to the writers it is observing.
+// remediation.LLMProviderEnvMu around its own reads so its two-var check is
+// atomic with respect to the writers it is observing.
 func TestApplyLlmProviderConfig_ConcurrentUpdatesAreSerialized(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
@@ -4002,9 +4003,9 @@ func TestApplyLlmProviderConfig_ConcurrentUpdatesAreSerialized(t *testing.T) {
 				// transition can complete entirely between two independent, unlocked os.Getenv
 				// calls, making the monitor see a stale "true" and a fresh "true" as if both
 				// were set at once, even though they never were.
-				llmProviderConfigMu.Lock()
+				remediation.LLMProviderEnvMu.RLock()
 				bothSet := os.Getenv("ANTHROPIC_BASE_URL") != "" && os.Getenv("VERTEX_BASE_URL") != ""
-				llmProviderConfigMu.Unlock()
+				remediation.LLMProviderEnvMu.RUnlock()
 				if bothSet {
 					bothSetObserved.Store(true)
 				}
@@ -4030,4 +4031,98 @@ func TestApplyLlmProviderConfig_ConcurrentUpdatesAreSerialized(t *testing.T) {
 		"the last persisted provider's env var must reflect the last persisted base URL")
 	_, otherPresent := os.LookupEnv(otherEnvVar)
 	assert.False(t, otherPresent, "the previous provider's env var must not survive concurrent updates")
+}
+
+// TestApplyLlmProviderConfig_BlocksUntilInFlightRemyInvocationCompletes proves
+// the fix for the reader/writer gap the writer-only test above cannot catch:
+// applyLlmProviderConfig's lock only ever serialized concurrent settings
+// saves against each other, never against a Remy fix invocation reading the
+// same env var. remy-cli-extension reads ANTHROPIC_BASE_URL via os.Getenv
+// from inside the real GAF workflow invocation, in the same OS process as
+// snyk-ls when running as a CLI extension - so a settings save racing a fix
+// run could unset the old value and not yet have set the new one at the
+// exact instant the fix workflow reads it.
+//
+// This drives the real production path end to end: real
+// remyProvider.FixFolder -> real gafRunner -> real buildRemyFixConfig -> a
+// real workflow.Engine.Invoke. Only the "fix" workflow's own body is
+// substituted (it lives in the private remy-cli-extension module, not a
+// compiled dependency of snyk-ls) with a callback that performs the exact
+// same os.Getenv read the real extension performs, and blocks until the test
+// releases it - simulating the workflow still being in flight.
+//
+// Rather than hoping many iterations happen to land inside the microscopic
+// unset/set window (a statistical, flaky proof), this pins the invocation
+// mid-flight with a channel rendezvous and asserts a concurrent settings save
+// cannot complete while it is pinned. That is a deterministic proof of mutual
+// exclusion: if the write can never overlap ANY part of the read window, it
+// can never overlap the torn sub-window inside it either.
+func TestApplyLlmProviderConfig_BlocksUntilInFlightRemyInvocationCompletes(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+
+	repoDir, err := createGitRepoForFix(t)
+	require.NoError(t, err)
+
+	invocationStarted := make(chan struct{})
+	proceed := make(chan struct{})
+	var observedDuringInvocation string
+
+	fixWorkflowID := workflow.NewWorkflowIdentifier("fix")
+	if _, ok := engine.GetWorkflow(fixWorkflowID); !ok {
+		flagset := workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError))
+		callback := func(_ workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
+			observedDuringInvocation = os.Getenv("ANTHROPIC_BASE_URL")
+			close(invocationStarted)
+			<-proceed
+			return nil, nil
+		}
+		_, regErr := engine.Register(fixWorkflowID, flagset, callback)
+		require.NoError(t, regErr)
+	}
+
+	p, ok := remediation.NewRemyProvider(engine, nil).(remediation.FolderRemediator)
+	require.True(t, ok, "remediation.NewRemyProvider must return a FolderRemediator")
+
+	applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingLlmProvider: {Value: "anthropic", Changed: true},
+		types.SettingLlmBaseUrl:  {Value: "https://a.example", Changed: true},
+	})
+
+	fixDone := make(chan struct{})
+	go func() {
+		defer close(fixDone)
+		_, _ = p.FixFolder(context.Background(), types.FilePath(repoDir))
+	}()
+
+	select {
+	case <-invocationStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("fix workflow never started")
+	}
+
+	writeDone := make(chan struct{})
+	go func() {
+		defer close(writeDone)
+		applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{
+			types.SettingLlmProvider: {Value: "anthropic", Changed: true},
+			types.SettingLlmBaseUrl:  {Value: "https://b.example", Changed: true},
+		})
+	}()
+
+	select {
+	case <-writeDone:
+		t.Fatal("a settings write completed while a Remy fix invocation was still in flight - the write must block until the read window closes")
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	close(proceed)
+	<-fixDone
+	<-writeDone
+
+	assert.Equal(t, "https://a.example", observedDuringInvocation,
+		"the in-flight invocation must observe the base URL that was current when it started, not a value torn by a concurrent write")
+	assert.Equal(t, "https://b.example", os.Getenv("ANTHROPIC_BASE_URL"))
 }

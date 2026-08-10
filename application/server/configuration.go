@@ -27,7 +27,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
@@ -43,6 +42,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/scanstates"
+	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
@@ -1372,16 +1372,6 @@ var llmProviderBaseUrlEnvVar = map[string]string{
 	"ollama":    "OLLAMA_HOST",
 }
 
-// llmProviderConfigMu serializes applyLlmProviderConfig's read-old/write-new
-// sequence. The language server's jrpc2 handlers run with unbounded
-// concurrency, so two overlapping workspace/didChangeConfiguration requests
-// could otherwise both read the same stale persisted provider before either
-// writes, then race their os.Setenv/os.Unsetenv calls - leaving the process
-// environment out of sync with whichever provider/base-URL was persisted
-// last, or briefly exposing both providers' base-URL env vars at once to a
-// concurrently spawned CLI subprocess.
-var llmProviderConfigMu sync.Mutex
-
 // applyLlmProviderConfig persists the developer's chosen LLM provider, model and
 // custom API endpoint for autonomous remediation. It never touches the API key -
 // that continues to come only from the developer's own process environment.
@@ -1397,8 +1387,12 @@ var llmProviderConfigMu sync.Mutex
 // env var the developer set in their own shell is left alone by an unrelated
 // settings save.
 func applyLlmProviderConfig(conf configuration.Configuration, logger *zerolog.Logger, settings map[string]*types.ConfigSetting) {
-	llmProviderConfigMu.Lock()
-	defer llmProviderConfigMu.Unlock()
+	// Shared with gafRunner's Remy invocation (domain/snyk/remediation), which
+	// holds the read side for the whole fix workflow - the env vars written
+	// here are read by the external CLI extension via unbounded os.Getenv
+	// calls, not a bounded snapshot.
+	remediation.LLMProviderEnvMu.Lock()
+	defer remediation.LLMProviderEnvMu.Unlock()
 
 	provider, providerOk := settingStr(settings, types.SettingLlmProvider)
 	baseUrl, baseUrlOk := settingStr(settings, types.SettingLlmBaseUrl)
