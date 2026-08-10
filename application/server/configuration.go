@@ -27,6 +27,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
@@ -1372,6 +1374,27 @@ var llmProviderBaseUrlEnvVar = map[string]string{
 	"ollama":    "OLLAMA_HOST",
 }
 
+// llmSettingsMu serializes the provider/baseUrl/model persist step against
+// other concurrent settings saves. It is independent of
+// remediation.LLMProviderEnvMu: persisting is fast and must never wait behind
+// an in-flight Remy invocation, which can hold that lock for minutes.
+var llmSettingsMu sync.Mutex
+
+// appliedLlmEnvVar is the base-URL env var this process itself last applied
+// via reconcileLlmProviderEnv, or "" if none. The environment is
+// process-global, so this must be too: deriving "did we set this" from the
+// persisted provider setting would be wrong once persisting and env
+// reconciliation can happen at different times - config may already hold a
+// newer provider than what this process has actually applied to the
+// environment. Guarded by remediation.LLMProviderEnvMu.
+var appliedLlmEnvVar string
+
+// llmEnvReconcilePending coalesces concurrent reconciliation requests into a
+// single background worker, so a burst of settings saves arriving while a
+// Remy invocation holds the read lock queues at most one goroutine rather
+// than one per save.
+var llmEnvReconcilePending atomic.Bool
+
 // applyLlmProviderConfig persists the developer's chosen LLM provider, model and
 // custom API endpoint for autonomous remediation. It never touches the API key -
 // that continues to come only from the developer's own process environment.
@@ -1382,18 +1405,8 @@ var llmProviderBaseUrlEnvVar = map[string]string{
 // environment-variable side effect here: buildRemyFixConfig reads it and sets it
 // as a GAF config key at fix time, the same lever used for provider.
 //
-// It never unsets an environment variable it did not itself previously set - it
-// diffs against the persisted provider/base-URL (not the live env), so a base-URL
-// env var the developer set in their own shell is left alone by an unrelated
-// settings save.
+// It never unsets an environment variable it did not itself previously set.
 func applyLlmProviderConfig(conf configuration.Configuration, logger *zerolog.Logger, settings map[string]*types.ConfigSetting) {
-	// Shared with gafRunner's Remy invocation (domain/snyk/remediation), which
-	// holds the read side for the whole fix workflow - the env vars written
-	// here are read by the external CLI extension via unbounded os.Getenv
-	// calls, not a bounded snapshot.
-	remediation.LLMProviderEnvMu.Lock()
-	defer remediation.LLMProviderEnvMu.Unlock()
-
 	provider, providerOk := settingStr(settings, types.SettingLlmProvider)
 	baseUrl, baseUrlOk := settingStr(settings, types.SettingLlmBaseUrl)
 	model, modelOk := settingStr(settings, types.SettingLlmModel)
@@ -1401,33 +1414,79 @@ func applyLlmProviderConfig(conf configuration.Configuration, logger *zerolog.Lo
 		return
 	}
 
-	oldProvider := types.GetGlobalString(conf, types.SettingLlmProvider)
-	oldEnvVar, oldHadEnvVar := llmProviderBaseUrlEnvVar[oldProvider]
-
+	llmSettingsMu.Lock()
 	if providerOk {
 		types.SetGlobalUser(conf, types.SettingLlmProvider, provider)
-	} else {
-		provider = oldProvider
 	}
 	if baseUrlOk {
 		types.SetGlobalUser(conf, types.SettingLlmBaseUrl, baseUrl)
-	} else {
-		baseUrl = types.GetGlobalString(conf, types.SettingLlmBaseUrl)
 	}
 	if modelOk {
 		types.SetGlobalUser(conf, types.SettingLlmModel, model)
 	}
+	llmSettingsMu.Unlock()
 
+	reconcileLlmProviderEnv(conf, logger)
+}
+
+// reconcileLlmProviderEnv syncs the process env vars with the currently
+// persisted LLM provider/base URL. gafRunner's Remy invocation holds
+// remediation.LLMProviderEnvMu.RLock() for its whole (potentially
+// minutes-long) run, so this never blocks the caller on that: it applies
+// synchronously when the lock is free, otherwise defers to a single
+// coalesced background worker and returns immediately. The worker always
+// re-reads live config at the moment it finally acquires the lock, so it
+// converges on whatever is latest then - never a stale snapshot from when it
+// was scheduled.
+func reconcileLlmProviderEnv(conf configuration.Configuration, logger *zerolog.Logger) {
+	if remediation.LLMProviderEnvMu.TryLock() {
+		applyLlmProviderEnvLocked(conf, logger)
+		remediation.LLMProviderEnvMu.Unlock()
+		return
+	}
+
+	if !llmEnvReconcilePending.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		remediation.LLMProviderEnvMu.Lock()
+		llmEnvReconcilePending.Store(false)
+		applyLlmProviderEnvLocked(conf, logger)
+		remediation.LLMProviderEnvMu.Unlock()
+	}()
+}
+
+// llmProviderSettingsSnapshot reads provider and baseUrl as one pair under
+// llmSettingsMu, the same lock the persist step uses. Reading them
+// independently would risk a torn pair: a concurrent persist call could land
+// between the two reads and pair one call's provider with another call's
+// baseUrl.
+func llmProviderSettingsSnapshot(conf configuration.Configuration) (provider, baseUrl string) {
+	llmSettingsMu.Lock()
+	defer llmSettingsMu.Unlock()
+	return types.GetGlobalString(conf, types.SettingLlmProvider), types.GetGlobalString(conf, types.SettingLlmBaseUrl)
+}
+
+// applyLlmProviderEnvLocked must be called with remediation.LLMProviderEnvMu
+// held for writing. It never unsets appliedLlmEnvVar unless this process
+// itself previously set it - a provider recorded in conf that this process
+// never applied (e.g. loaded from disk before this function ever ran) must
+// never justify clearing a developer's own environment variable.
+func applyLlmProviderEnvLocked(conf configuration.Configuration, logger *zerolog.Logger) {
+	provider, baseUrl := llmProviderSettingsSnapshot(conf)
 	newEnvVar, newHasEnvVar := llmProviderBaseUrlEnvVar[provider]
-	if oldHadEnvVar && (!newHasEnvVar || newEnvVar != oldEnvVar || baseUrl == "") {
-		if err := os.Unsetenv(oldEnvVar); err != nil {
-			logger.Err(err).Msgf("couldn't unset env variable %s", oldEnvVar)
+
+	if appliedLlmEnvVar != "" && (!newHasEnvVar || newEnvVar != appliedLlmEnvVar || baseUrl == "") {
+		if err := os.Unsetenv(appliedLlmEnvVar); err != nil {
+			logger.Err(err).Msgf("couldn't unset env variable %s", appliedLlmEnvVar)
 		}
+		appliedLlmEnvVar = ""
 	}
 	if newHasEnvVar && baseUrl != "" {
 		if err := os.Setenv(newEnvVar, baseUrl); err != nil {
 			logger.Err(err).Msgf("couldn't set env variable %s", newEnvVar)
 		}
+		appliedLlmEnvVar = newEnvVar
 	}
 }
 

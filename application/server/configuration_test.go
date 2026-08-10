@@ -3964,7 +3964,9 @@ func TestApplyLlmProviderConfig_ConcurrentUpdatesAreSerialized(t *testing.T) {
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 	t.Setenv("ANTHROPIC_BASE_URL", "")
+	require.NoError(t, os.Unsetenv("ANTHROPIC_BASE_URL"))
 	t.Setenv("VERTEX_BASE_URL", "")
+	require.NoError(t, os.Unsetenv("VERTEX_BASE_URL"))
 
 	const iterations = 300
 	var writers sync.WaitGroup
@@ -4027,21 +4029,50 @@ func TestApplyLlmProviderConfig_ConcurrentUpdatesAreSerialized(t *testing.T) {
 		wantEnvVar, otherEnvVar = otherEnvVar, wantEnvVar
 	}
 
-	assert.Equal(t, finalBaseUrl, os.Getenv(wantEnvVar),
-		"the last persisted provider's env var must reflect the last persisted base URL")
+	require.Eventually(t, func() bool {
+		return os.Getenv(wantEnvVar) == finalBaseUrl
+	}, 2*time.Second, 5*time.Millisecond,
+		"the last persisted provider's env var must eventually reflect the last persisted base URL")
 	_, otherPresent := os.LookupEnv(otherEnvVar)
 	assert.False(t, otherPresent, "the previous provider's env var must not survive concurrent updates")
 }
 
-// TestApplyLlmProviderConfig_BlocksUntilInFlightRemyInvocationCompletes proves
-// the fix for the reader/writer gap the writer-only test above cannot catch:
-// applyLlmProviderConfig's lock only ever serialized concurrent settings
-// saves against each other, never against a Remy fix invocation reading the
-// same env var. remy-cli-extension reads ANTHROPIC_BASE_URL via os.Getenv
-// from inside the real GAF workflow invocation, in the same OS process as
-// snyk-ls when running as a CLI extension - so a settings save racing a fix
-// run could unset the old value and not yet have set the new one at the
-// exact instant the fix workflow reads it.
+// promptSaveThreshold bounds how long a settings save may take while a Remy
+// fix invocation - potentially minutes long - is in flight. A save that
+// merely contends with the invocation's read lock must return almost
+// immediately by deferring env sync to a background worker, not block for
+// any noticeable fraction of the invocation's duration.
+const promptSaveThreshold = 100 * time.Millisecond
+
+// registerBlockingFixWorkflow registers the "fix" workflow (once per engine)
+// with a callback that samples ANTHROPIC_BASE_URL, signals invocationStarted,
+// then blocks on proceed - simulating a real remy-cli-extension invocation
+// that reads its endpoint env var lazily while the workflow is in flight.
+func registerBlockingFixWorkflow(t *testing.T, engine workflow.Engine, invocationStarted chan struct{}, proceed <-chan struct{}, sample func(step string)) {
+	t.Helper()
+	fixWorkflowID := workflow.NewWorkflowIdentifier("fix")
+	if _, ok := engine.GetWorkflow(fixWorkflowID); ok {
+		return
+	}
+	flagset := workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError))
+	callback := func(_ workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
+		sample("start")
+		close(invocationStarted)
+		<-proceed
+		sample("end")
+		return nil, nil
+	}
+	_, regErr := engine.Register(fixWorkflowID, flagset, callback)
+	require.NoError(t, regErr)
+}
+
+// TestApplyLlmProviderConfig_SettingsSaveDoesNotBlockOnInFlightRemyInvocation
+// proves the fix for the config-starvation bug the blocking design above
+// caused: gafRunner correctly holds remediation.LLMProviderEnvMu.RLock() for
+// the whole (potentially minutes-long) Remy invocation so the invocation
+// never observes a torn env var, but a settings save must never wait behind
+// that RLock - it must return promptly, deferring env reconciliation to a
+// background worker.
 //
 // This drives the real production path end to end: real
 // remyProvider.FixFolder -> real gafRunner -> real buildRemyFixConfig -> a
@@ -4050,14 +4081,7 @@ func TestApplyLlmProviderConfig_ConcurrentUpdatesAreSerialized(t *testing.T) {
 // compiled dependency of snyk-ls) with a callback that performs the exact
 // same os.Getenv read the real extension performs, and blocks until the test
 // releases it - simulating the workflow still being in flight.
-//
-// Rather than hoping many iterations happen to land inside the microscopic
-// unset/set window (a statistical, flaky proof), this pins the invocation
-// mid-flight with a channel rendezvous and asserts a concurrent settings save
-// cannot complete while it is pinned. That is a deterministic proof of mutual
-// exclusion: if the write can never overlap ANY part of the read window, it
-// can never overlap the torn sub-window inside it either.
-func TestApplyLlmProviderConfig_BlocksUntilInFlightRemyInvocationCompletes(t *testing.T) {
+func TestApplyLlmProviderConfig_SettingsSaveDoesNotBlockOnInFlightRemyInvocation(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
@@ -4068,20 +4092,10 @@ func TestApplyLlmProviderConfig_BlocksUntilInFlightRemyInvocationCompletes(t *te
 
 	invocationStarted := make(chan struct{})
 	proceed := make(chan struct{})
-	var observedDuringInvocation string
-
-	fixWorkflowID := workflow.NewWorkflowIdentifier("fix")
-	if _, ok := engine.GetWorkflow(fixWorkflowID); !ok {
-		flagset := workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError))
-		callback := func(_ workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
-			observedDuringInvocation = os.Getenv("ANTHROPIC_BASE_URL")
-			close(invocationStarted)
-			<-proceed
-			return nil, nil
-		}
-		_, regErr := engine.Register(fixWorkflowID, flagset, callback)
-		require.NoError(t, regErr)
-	}
+	observed := map[string]string{}
+	registerBlockingFixWorkflow(t, engine, invocationStarted, proceed, func(step string) {
+		observed[step] = os.Getenv("ANTHROPIC_BASE_URL")
+	})
 
 	p, ok := remediation.NewRemyProvider(engine, nil).(remediation.FolderRemediator)
 	require.True(t, ok, "remediation.NewRemyProvider must return a FolderRemediator")
@@ -4103,26 +4117,130 @@ func TestApplyLlmProviderConfig_BlocksUntilInFlightRemyInvocationCompletes(t *te
 		t.Fatal("fix workflow never started")
 	}
 
-	writeDone := make(chan struct{})
+	saveStart := time.Now()
+	applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingLlmProvider: {Value: "anthropic", Changed: true},
+		types.SettingLlmBaseUrl:  {Value: "https://b.example", Changed: true},
+	})
+	assert.Less(t, time.Since(saveStart), promptSaveThreshold,
+		"a settings save must return promptly even while a Remy fix invocation is in flight")
+
+	close(proceed)
+	<-fixDone
+
+	assert.Equal(t, "https://a.example", observed["start"])
+	assert.Equal(t, "https://a.example", observed["end"],
+		"the in-flight invocation must observe a stable endpoint throughout, not a value torn by a concurrent write")
+
+	require.Eventually(t, func() bool {
+		return os.Getenv("ANTHROPIC_BASE_URL") == "https://b.example"
+	}, 2*time.Second, 10*time.Millisecond,
+		"the env must converge to the latest persisted setting once the invocation completes")
+}
+
+// TestApplyLlmProviderConfig_MultipleSavesDuringInFlightInvocation_ConvergeToLatestValue
+// proves several settings saves queued while one Remy invocation is in
+// flight all return promptly, the invocation never observes anything but the
+// endpoint that was current when it started, and once it completes the env
+// converges to the LAST persisted value - not an earlier queued one replayed
+// out of order by a stray background worker.
+func TestApplyLlmProviderConfig_MultipleSavesDuringInFlightInvocation_ConvergeToLatestValue(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+
+	repoDir, err := createGitRepoForFix(t)
+	require.NoError(t, err)
+
+	invocationStarted := make(chan struct{})
+	proceed := make(chan struct{})
+	observed := map[string]string{}
+	registerBlockingFixWorkflow(t, engine, invocationStarted, proceed, func(step string) {
+		observed[step] = os.Getenv("ANTHROPIC_BASE_URL")
+	})
+
+	p, ok := remediation.NewRemyProvider(engine, nil).(remediation.FolderRemediator)
+	require.True(t, ok, "remediation.NewRemyProvider must return a FolderRemediator")
+
+	applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingLlmProvider: {Value: "anthropic", Changed: true},
+		types.SettingLlmBaseUrl:  {Value: "https://a.example", Changed: true},
+	})
+
+	fixDone := make(chan struct{})
 	go func() {
-		defer close(writeDone)
-		applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{
-			types.SettingLlmProvider: {Value: "anthropic", Changed: true},
-			types.SettingLlmBaseUrl:  {Value: "https://b.example", Changed: true},
-		})
+		defer close(fixDone)
+		_, _ = p.FixFolder(context.Background(), types.FilePath(repoDir))
 	}()
 
 	select {
-	case <-writeDone:
-		t.Fatal("a settings write completed while a Remy fix invocation was still in flight - the write must block until the read window closes")
-	case <-time.After(200 * time.Millisecond):
+	case <-invocationStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("fix workflow never started")
+	}
+
+	urls := []string{"https://u1.example", "https://u2.example", "https://u3.example"}
+	for _, u := range urls {
+		start := time.Now()
+		applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{
+			types.SettingLlmProvider: {Value: "anthropic", Changed: true},
+			types.SettingLlmBaseUrl:  {Value: u, Changed: true},
+		})
+		assert.Less(t, time.Since(start), promptSaveThreshold, "each queued settings save must return promptly")
 	}
 
 	close(proceed)
 	<-fixDone
-	<-writeDone
 
-	assert.Equal(t, "https://a.example", observedDuringInvocation,
-		"the in-flight invocation must observe the base URL that was current when it started, not a value torn by a concurrent write")
-	assert.Equal(t, "https://b.example", os.Getenv("ANTHROPIC_BASE_URL"))
+	assert.Equal(t, "https://a.example", observed["start"])
+	assert.Equal(t, "https://a.example", observed["end"])
+
+	latest := urls[len(urls)-1]
+	require.Eventually(t, func() bool {
+		return os.Getenv("ANTHROPIC_BASE_URL") == latest
+	}, 2*time.Second, 10*time.Millisecond, "env must converge to the last persisted value, not an earlier queued one")
+
+	time.Sleep(50 * time.Millisecond)
+	assert.Equal(t, latest, os.Getenv("ANTHROPIC_BASE_URL"),
+		"env must not flap back to a stale queued value after convergence")
+}
+
+// resetLlmProviderEnvStateForTest clears the process-global record of which
+// env var this process last applied. It takes the same lock the production
+// code uses so the reset has a proper happens-before edge with any prior
+// test's reconciliation, avoiding a race-detector false positive on the
+// shared package var.
+func resetLlmProviderEnvStateForTest(t *testing.T) {
+	t.Helper()
+	remediation.LLMProviderEnvMu.Lock()
+	appliedLlmEnvVar = ""
+	remediation.LLMProviderEnvMu.Unlock()
+}
+
+// TestApplyLlmProviderConfig_ProcessNeverAppliedEnv_DoesNotUnsetDeveloperValue
+// guards the reason the "old env var" tracking must be process-global state,
+// not something derived from persisted config: config can hold a provider
+// this process itself never wrote to the environment - e.g. loaded from disk
+// at startup - and the environment is process-global, so only this process's
+// own actions may justify unsetting a variable in it.
+func TestApplyLlmProviderConfig_ProcessNeverAppliedEnv_DoesNotUnsetDeveloperValue(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	resetLlmProviderEnvStateForTest(t)
+
+	types.SetGlobalUser(conf, types.SettingLlmProvider, "anthropic")
+
+	t.Setenv("ANTHROPIC_BASE_URL", "developer-own-value")
+	t.Setenv("VERTEX_BASE_URL", "")
+
+	applyLlmProviderConfig(conf, logger, map[string]*types.ConfigSetting{
+		types.SettingLlmProvider: {Value: "vertex", Changed: true},
+		types.SettingLlmBaseUrl:  {Value: "https://vertex.example", Changed: true},
+	})
+
+	assert.Equal(t, "developer-own-value", os.Getenv("ANTHROPIC_BASE_URL"),
+		"a config-scoped 'old provider' must never be trusted to unset an env var this process didn't itself set")
+	assert.Equal(t, "https://vertex.example", os.Getenv("VERTEX_BASE_URL"))
 }
