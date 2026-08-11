@@ -119,3 +119,37 @@ func TestBuildRemyFixConfig_ProviderSwitchDoesNotLeakStaleModel(t *testing.T) {
 	assert.Equal(t, "anthropic", conf.GetString("provider"))
 	assert.False(t, conf.IsSet("model"), "switching provider must not leak the previous provider's model")
 }
+
+// TestTryWithLLMProviderEnvLock_ReturnsFalseWithoutRunningFnWhenLocked guards the
+// non-blocking path application/server relies on: it must never invoke fn, nor
+// block, while the lock is held elsewhere.
+func TestTryWithLLMProviderEnvLock_ReturnsFalseWithoutRunningFnWhenLocked(t *testing.T) {
+	llmProviderEnvMu.Lock()
+	defer llmProviderEnvMu.Unlock()
+
+	called := false
+	ok := TryWithLLMProviderEnvLock(func() { called = true })
+
+	assert.False(t, ok)
+	assert.False(t, called)
+}
+
+// TestTryWithLLMProviderEnvLock_RunsFnAndReturnsTrueWhenFree is the counterpart:
+// when the lock is free, fn must run synchronously under it and TryLock must
+// report success.
+func TestTryWithLLMProviderEnvLock_RunsFnAndReturnsTrueWhenFree(t *testing.T) {
+	called := false
+	ok := TryWithLLMProviderEnvLock(func() { called = true })
+
+	assert.True(t, ok)
+	assert.True(t, called)
+}
+
+// TestWithLLMProviderEnvLock_RunsFnUnderExclusiveLock guards the blocking path
+// used by the coalesced background worker.
+func TestWithLLMProviderEnvLock_RunsFnUnderExclusiveLock(t *testing.T) {
+	called := false
+	WithLLMProviderEnvLock(func() { called = true })
+
+	assert.True(t, called)
+}

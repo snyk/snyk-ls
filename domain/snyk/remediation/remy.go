@@ -106,21 +106,40 @@ var _ RemediationProvider = (*remyProvider)(nil)
 var _ FileChangeNotifier = (*remyProvider)(nil)
 var _ FolderRemediator = (*remyProvider)(nil)
 
-// LLMProviderEnvMu guards the LLM endpoint env vars (ANTHROPIC_BASE_URL etc.)
+// llmProviderEnvMu guards the LLM endpoint env vars (ANTHROPIC_BASE_URL etc.)
 // that application/server writes on a settings change and gafRunner's Remy
 // invocation reads. remy-cli-extension has no config-based override for the
 // base URL — it reads it via os.Getenv at an unbounded point during the fix
 // workflow — so the read must hold the lock for the whole invocation, not
 // just a snapshot, to rule out observing a torn (unset/not-yet-set) value.
-var LLMProviderEnvMu sync.RWMutex
+var llmProviderEnvMu sync.RWMutex
+
+// TryWithLLMProviderEnvLock attempts to acquire the LLM provider env lock for
+// writing without blocking, runs fn if it succeeds, and reports whether fn ran.
+func TryWithLLMProviderEnvLock(fn func()) bool {
+	if !llmProviderEnvMu.TryLock() {
+		return false
+	}
+	defer llmProviderEnvMu.Unlock()
+	fn()
+	return true
+}
+
+// WithLLMProviderEnvLock acquires the LLM provider env lock for writing,
+// blocking until it is free, and runs fn under it.
+func WithLLMProviderEnvLock(fn func()) {
+	llmProviderEnvMu.Lock()
+	defer llmProviderEnvMu.Unlock()
+	fn()
+}
 
 // gafRunner is the default remyRunner that invokes the legacycli workflow via
 // the Go Application Framework engine. The remy fix workflow is a Go extension
 // registered under the "fix" workflow ID — invoke it directly, not via legacycli.
 // auto-approve suppresses interactive prompts required for non-interactive LS use.
 func gafRunner(ctx context.Context, eng workflow.Engine, contentRoot string, _ string) error {
-	LLMProviderEnvMu.RLock()
-	defer LLMProviderEnvMu.RUnlock()
+	llmProviderEnvMu.RLock()
+	defer llmProviderEnvMu.RUnlock()
 	remyWorkflowID := workflow.NewWorkflowIdentifier("fix")
 	conf := buildRemyFixConfig(eng.GetConfiguration(), contentRoot)
 	_, err := eng.Invoke(remyWorkflowID, workflow.WithContext(ctx), workflow.WithConfig(conf))

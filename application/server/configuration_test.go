@@ -3947,6 +3947,57 @@ func TestApplyLlmProviderConfig_UnknownProviderPersistsWithoutEnvWrite(t *testin
 	assert.Equal(t, "https://example.internal", types.GetGlobalString(conf, types.SettingLlmBaseUrl))
 }
 
+// TestApplyLlmProviderEnvLocked_SetenvFailure_DoesNotUpdateAppliedEnvVar guards
+// against a Setenv failure (e.g. an invalid value) leaving appliedLlmEnvVar
+// claiming success when the environment was never actually updated - a later
+// reconcile would then believe there is nothing to do, and the developer's
+// configured endpoint never gets applied.
+func TestApplyLlmProviderEnvLocked_SetenvFailure_DoesNotUpdateAppliedEnvVar(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	resetLlmProviderEnvStateForTest(t)
+
+	types.SetGlobalUser(conf, types.SettingLlmProvider, "anthropic")
+	types.SetGlobalUser(conf, types.SettingLlmBaseUrl, "https://example.internal")
+
+	origSetenv := osSetenv
+	osSetenv = func(_, _ string) error { return errors.New("boom") }
+	defer func() { osSetenv = origSetenv }()
+
+	remediation.WithLLMProviderEnvLock(func() {
+		applyLlmProviderEnvLocked(conf, logger)
+	})
+
+	assert.Equal(t, "", appliedLlmEnvVar, "a failed Setenv must not be recorded as applied")
+}
+
+// TestApplyLlmProviderEnvLocked_UnsetenvFailure_DoesNotClearAppliedEnvVar is the
+// symmetric guard: a failed Unsetenv must not be recorded as cleared, or a
+// later reconcile would believe a developer's still-set env var is already gone.
+func TestApplyLlmProviderEnvLocked_UnsetenvFailure_DoesNotClearAppliedEnvVar(t *testing.T) {
+	engine, _ := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	resetLlmProviderEnvStateForTest(t)
+	remediation.WithLLMProviderEnvLock(func() {
+		appliedLlmEnvVar = "ANTHROPIC_BASE_URL"
+	})
+
+	types.SetGlobalUser(conf, types.SettingLlmProvider, "openai")
+	types.SetGlobalUser(conf, types.SettingLlmBaseUrl, "https://example.internal")
+
+	origUnsetenv := osUnsetenv
+	osUnsetenv = func(_ string) error { return errors.New("boom") }
+	defer func() { osUnsetenv = origUnsetenv }()
+
+	remediation.WithLLMProviderEnvLock(func() {
+		applyLlmProviderEnvLocked(conf, logger)
+	})
+
+	assert.Equal(t, "ANTHROPIC_BASE_URL", appliedLlmEnvVar, "a failed Unsetenv must not be recorded as cleared")
+}
+
 // TestApplyLlmProviderConfig_ConcurrentUpdatesAreSerialized guards against the
 // language server's unbounded jrpc2 concurrency (Concurrency: 0) letting two
 // workspace/didChangeConfiguration requests interleave inside
@@ -3957,8 +4008,8 @@ func TestApplyLlmProviderConfig_UnknownProviderPersistsWithoutEnvWrite(t *testin
 // both goroutines racing on the same stale "no provider set yet" read) but a
 // correctly serialized sequence can never produce, since it always unsets the
 // previous provider's env var before setting the new one. The monitor takes
-// remediation.LLMProviderEnvMu around its own reads so its two-var check is
-// atomic with respect to the writers it is observing.
+// remediation.WithLLMProviderEnvLock around its own reads so its two-var check
+// is atomic with respect to the writers it is observing.
 func TestApplyLlmProviderConfig_ConcurrentUpdatesAreSerialized(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
@@ -4000,17 +4051,16 @@ func TestApplyLlmProviderConfig_ConcurrentUpdatesAreSerialized(t *testing.T) {
 			case <-stop:
 				return
 			default:
-				// Reading both vars while holding the same mutex the writers use makes this
+				// Reading both vars while holding the same lock the writers use makes this
 				// pair of reads atomic with respect to them - otherwise a writer's unset-then-set
 				// transition can complete entirely between two independent, unlocked os.Getenv
 				// calls, making the monitor see a stale "true" and a fresh "true" as if both
 				// were set at once, even though they never were.
-				remediation.LLMProviderEnvMu.RLock()
-				bothSet := os.Getenv("ANTHROPIC_BASE_URL") != "" && os.Getenv("VERTEX_BASE_URL") != ""
-				remediation.LLMProviderEnvMu.RUnlock()
-				if bothSet {
-					bothSetObserved.Store(true)
-				}
+				remediation.WithLLMProviderEnvLock(func() {
+					if os.Getenv("ANTHROPIC_BASE_URL") != "" && os.Getenv("VERTEX_BASE_URL") != "" {
+						bothSetObserved.Store(true)
+					}
+				})
 			}
 		}
 	}()
@@ -4068,11 +4118,11 @@ func registerBlockingFixWorkflow(t *testing.T, engine workflow.Engine, invocatio
 
 // TestApplyLlmProviderConfig_SettingsSaveDoesNotBlockOnInFlightRemyInvocation
 // proves the fix for the config-starvation bug the blocking design above
-// caused: gafRunner correctly holds remediation.LLMProviderEnvMu.RLock() for
-// the whole (potentially minutes-long) Remy invocation so the invocation
-// never observes a torn env var, but a settings save must never wait behind
-// that RLock - it must return promptly, deferring env reconciliation to a
-// background worker.
+// caused: gafRunner correctly holds the remediation package's LLM provider env
+// lock for reading for the whole (potentially minutes-long) Remy invocation so
+// the invocation never observes a torn env var, but a settings save must never
+// wait behind that read lock - it must return promptly, deferring env
+// reconciliation to a background worker.
 //
 // This drives the real production path end to end: real
 // remyProvider.FixFolder -> real gafRunner -> real buildRemyFixConfig -> a
@@ -4213,9 +4263,9 @@ func TestApplyLlmProviderConfig_MultipleSavesDuringInFlightInvocation_ConvergeTo
 // shared package var.
 func resetLlmProviderEnvStateForTest(t *testing.T) {
 	t.Helper()
-	remediation.LLMProviderEnvMu.Lock()
-	appliedLlmEnvVar = ""
-	remediation.LLMProviderEnvMu.Unlock()
+	remediation.WithLLMProviderEnvLock(func() {
+		appliedLlmEnvVar = ""
+	})
 }
 
 // TestApplyLlmProviderConfig_ProcessNeverAppliedEnv_DoesNotUnsetDeveloperValue

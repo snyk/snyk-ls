@@ -1359,7 +1359,8 @@ func Test_enrichCachedIssuesWithDelta_NoCurrentIssues_StillRecordsBaselineAvaila
 		notification.NewMockNotifier(), mockPersister,
 		scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(engine), engine)
 
-	require.False(t, f.IsBaselineAvailable(product.ProductCode))
+	_, cached := f.baselineAvailable.Load(product.ProductCode)
+	require.False(t, cached, "no baseline availability should be cached before any scan runs")
 
 	err := f.enrichCachedIssuesWithDelta(product.ProductCode)
 
@@ -1397,6 +1398,70 @@ func Test_IsBaselineAvailable_DefaultsFalse(t *testing.T) {
 	f := NewMockFolder(engine, notification.NewMockNotifier())
 
 	assert.False(t, f.IsBaselineAvailable(product.ProductCode), "a folder that has never recorded a baseline must fail open")
+}
+
+// Test_IsBaselineAvailable_NoCacheEntry_ConsultsPersisterAndFindsBaseline covers
+// the restart case: no scan has run yet this session, so baselineAvailable has
+// no cache entry, but a baseline actually exists on disk from a previous
+// session. IsBaselineAvailable must consult the persister lazily rather than
+// reporting the empty-cache zero value.
+func Test_IsBaselineAvailable_NoCacheEntry_ConsultsPersisterAndFindsBaseline(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+
+	mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
+	mockPersister.EXPECT().
+		GetPersistedIssueList(gomock.Any(), product.ProductCode).
+		Return([]types.Issue{&snyk.Issue{ID: "baseline-issue"}}, nil).
+		Times(1)
+
+	f := NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.FilePath(t.TempDir()), "test", scanner.NewTestScanner(),
+		hover.NewFakeHoverService(), scanner.NewMockScanNotifier(),
+		notification.NewMockNotifier(), mockPersister,
+		scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(engine), engine)
+
+	assert.True(t, f.IsBaselineAvailable(product.ProductCode), "a baseline on disk from a previous session must be found even before any scan runs this session")
+}
+
+// Test_IsBaselineAvailable_NoCacheEntry_ConsultsPersisterAndFindsNoBaseline is
+// the counterpart: no cache entry and no baseline on disk either.
+func Test_IsBaselineAvailable_NoCacheEntry_ConsultsPersisterAndFindsNoBaseline(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+
+	mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
+	mockPersister.EXPECT().
+		GetPersistedIssueList(gomock.Any(), product.ProductCode).
+		Return(nil, persistence.ErrBaselineDoesntExist).
+		Times(1)
+
+	f := NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.FilePath(t.TempDir()), "test", scanner.NewTestScanner(),
+		hover.NewFakeHoverService(), scanner.NewMockScanNotifier(),
+		notification.NewMockNotifier(), mockPersister,
+		scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(engine), engine)
+
+	assert.False(t, f.IsBaselineAvailable(product.ProductCode), "no baseline on disk must fail open")
+}
+
+// Test_IsBaselineAvailable_CachedEntry_DoesNotHitPersister guards the other
+// half of the fix: once a scan this session has already recorded a baseline
+// state, IsBaselineAvailable must not re-read from disk.
+func Test_IsBaselineAvailable_CachedEntry_DoesNotHitPersister(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+
+	mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
+	mockPersister.EXPECT().
+		GetPersistedIssueList(gomock.Any(), product.ProductCode).
+		Times(0)
+
+	f := NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.FilePath(t.TempDir()), "test", scanner.NewTestScanner(),
+		hover.NewFakeHoverService(), scanner.NewMockScanNotifier(),
+		notification.NewMockNotifier(), mockPersister,
+		scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(engine), engine)
+	f.baselineAvailable.Store(product.ProductCode, true)
+
+	assert.True(t, f.IsBaselineAvailable(product.ProductCode), "a scan-populated cache entry must be returned as-is")
 }
 
 func Test_enrichCachedIssuesWithDelta_BaselineMissingVsSnapshotCorrupted(t *testing.T) {

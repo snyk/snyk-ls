@@ -1375,9 +1375,9 @@ var llmProviderBaseUrlEnvVar = map[string]string{
 }
 
 // llmSettingsMu serializes the provider/baseUrl/model persist step against
-// other concurrent settings saves. It is independent of
-// remediation.LLMProviderEnvMu: persisting is fast and must never wait behind
-// an in-flight Remy invocation, which can hold that lock for minutes.
+// other concurrent settings saves. It is independent of the remediation
+// package's LLM provider env lock: persisting is fast and must never wait
+// behind an in-flight Remy invocation, which can hold that lock for minutes.
 var llmSettingsMu sync.Mutex
 
 // appliedLlmEnvVar is the base-URL env var this process itself last applied
@@ -1386,7 +1386,7 @@ var llmSettingsMu sync.Mutex
 // persisted provider setting would be wrong once persisting and env
 // reconciliation can happen at different times - config may already hold a
 // newer provider than what this process has actually applied to the
-// environment. Guarded by remediation.LLMProviderEnvMu.
+// environment. Guarded by the remediation package's LLM provider env lock.
 var appliedLlmEnvVar string
 
 // llmEnvReconcilePending coalesces concurrent reconciliation requests into a
@@ -1394,6 +1394,13 @@ var appliedLlmEnvVar string
 // Remy invocation holds the read lock queues at most one goroutine rather
 // than one per save.
 var llmEnvReconcilePending atomic.Bool
+
+// osSetenv and osUnsetenv are indirections over os.Setenv/os.Unsetenv so tests
+// can exercise applyLlmProviderEnvLocked's failure handling.
+var (
+	osSetenv   = os.Setenv
+	osUnsetenv = os.Unsetenv
+)
 
 // applyLlmProviderConfig persists the developer's chosen LLM provider, model and
 // custom API endpoint for autonomous remediation. It never touches the API key -
@@ -1430,18 +1437,19 @@ func applyLlmProviderConfig(conf configuration.Configuration, logger *zerolog.Lo
 }
 
 // reconcileLlmProviderEnv syncs the process env vars with the currently
-// persisted LLM provider/base URL. gafRunner's Remy invocation holds
-// remediation.LLMProviderEnvMu.RLock() for its whole (potentially
-// minutes-long) run, so this never blocks the caller on that: it applies
-// synchronously when the lock is free, otherwise defers to a single
+// persisted LLM provider/base URL. gafRunner's Remy invocation holds the
+// remediation package's LLM provider env lock for reading for its whole
+// (potentially minutes-long) run, so this never blocks the caller on that: it
+// applies synchronously when the lock is free, otherwise defers to a single
 // coalesced background worker and returns immediately. The worker always
 // re-reads live config at the moment it finally acquires the lock, so it
 // converges on whatever is latest then - never a stale snapshot from when it
 // was scheduled.
 func reconcileLlmProviderEnv(conf configuration.Configuration, logger *zerolog.Logger) {
-	if remediation.LLMProviderEnvMu.TryLock() {
+	applied := remediation.TryWithLLMProviderEnvLock(func() {
 		applyLlmProviderEnvLocked(conf, logger)
-		remediation.LLMProviderEnvMu.Unlock()
+	})
+	if applied {
 		return
 	}
 
@@ -1449,10 +1457,10 @@ func reconcileLlmProviderEnv(conf configuration.Configuration, logger *zerolog.L
 		return
 	}
 	go func() {
-		remediation.LLMProviderEnvMu.Lock()
-		llmEnvReconcilePending.Store(false)
-		applyLlmProviderEnvLocked(conf, logger)
-		remediation.LLMProviderEnvMu.Unlock()
+		remediation.WithLLMProviderEnvLock(func() {
+			llmEnvReconcilePending.Store(false)
+			applyLlmProviderEnvLocked(conf, logger)
+		})
 	}()
 }
 
@@ -1467,9 +1475,10 @@ func llmProviderSettingsSnapshot(conf configuration.Configuration) (provider, ba
 	return types.GetGlobalString(conf, types.SettingLlmProvider), types.GetGlobalString(conf, types.SettingLlmBaseUrl)
 }
 
-// applyLlmProviderEnvLocked must be called with remediation.LLMProviderEnvMu
-// held for writing. It never unsets appliedLlmEnvVar unless this process
-// itself previously set it - a provider recorded in conf that this process
+// applyLlmProviderEnvLocked must be called with the remediation package's LLM
+// provider env lock held for writing (see remediation.TryWithLLMProviderEnvLock /
+// remediation.WithLLMProviderEnvLock). It never unsets appliedLlmEnvVar unless
+// this process itself previously set it - a provider recorded in conf that this process
 // never applied (e.g. loaded from disk before this function ever ran) must
 // never justify clearing a developer's own environment variable.
 func applyLlmProviderEnvLocked(conf configuration.Configuration, logger *zerolog.Logger) {
@@ -1477,16 +1486,18 @@ func applyLlmProviderEnvLocked(conf configuration.Configuration, logger *zerolog
 	newEnvVar, newHasEnvVar := llmProviderBaseUrlEnvVar[provider]
 
 	if appliedLlmEnvVar != "" && (!newHasEnvVar || newEnvVar != appliedLlmEnvVar || baseUrl == "") {
-		if err := os.Unsetenv(appliedLlmEnvVar); err != nil {
+		if err := osUnsetenv(appliedLlmEnvVar); err != nil {
 			logger.Err(err).Msgf("couldn't unset env variable %s", appliedLlmEnvVar)
+		} else {
+			appliedLlmEnvVar = ""
 		}
-		appliedLlmEnvVar = ""
 	}
 	if newHasEnvVar && baseUrl != "" {
-		if err := os.Setenv(newEnvVar, baseUrl); err != nil {
+		if err := osSetenv(newEnvVar, baseUrl); err != nil {
 			logger.Err(err).Msgf("couldn't set env variable %s", newEnvVar)
+		} else {
+			appliedLlmEnvVar = newEnvVar
 		}
-		appliedLlmEnvVar = newEnvVar
 	}
 }
 

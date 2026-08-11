@@ -629,10 +629,34 @@ func (f *Folder) GetDelta(p product.Product) snyk.IssuesByFile {
 }
 
 // IsBaselineAvailable returns whether a delta baseline has been recorded for the given
-// product. It defaults to false, so a folder that has never been scanned fails open.
+// product. If no scan has run yet this session, it lazily consults the persister so a
+// restart doesn't make a baseline from a previous session look unavailable; the result
+// is cached so later calls don't hit disk again. It defaults to false on any persister
+// error, so a folder with no real baseline fails open.
 func (f *Folder) IsBaselineAvailable(p product.Product) bool {
-	available, _ := f.baselineAvailable.Load(p)
+	available, _ := f.baselineAvailable.LoadOrCompute(p, func() bool {
+		return f.queryBaselineAvailableFromPersister(p)
+	})
 	return available
+}
+
+func (f *Folder) queryBaselineAvailableFromPersister(p product.Product) bool {
+	logger := f.logger.With().
+		Str("method", "queryBaselineAvailableFromPersister").
+		Str("folderPath", string(f.path)).
+		Str("product", string(p)).
+		Logger()
+
+	_, err := f.scanPersister.GetPersistedIssueList(f.path, p)
+	if err == nil {
+		return true
+	}
+	if errors.Is(err, persistence.ErrBaselineDoesntExist) {
+		logger.Debug().Msg("delta findings unavailable - no baseline exists yet")
+	} else {
+		logger.Warn().Err(err).Msg("failed to get persisted issue list, snapshot may be corrupted")
+	}
+	return false
 }
 
 // IsDeltaAppliedForProduct returns whether delta findings are both enabled and actually
