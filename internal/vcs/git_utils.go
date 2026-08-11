@@ -33,7 +33,7 @@ import (
 )
 
 var (
-	InvalidBranchNameRegex, _ = regexp.Compile(`[^a-z0-9_\-]+`)
+	InvalidBranchNameRegex, _ = regexp.Compile(`[^a-z0-9_\-]+`) //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 )
 
 // GitRepoRoot resolves the git repository root directory from any path within

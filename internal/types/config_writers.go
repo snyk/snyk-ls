@@ -136,7 +136,7 @@ func HasGlobalUserOverride(conf configuration.Configuration, name string) bool {
 // KEEP IN SYNC with GLOBAL_RESET_FIELDS in
 // infrastructure/configuration/template/js/ui/form-handler.js.
 // A test in js-tests/global-reset.test.mjs asserts the two lists match.
-var GlobalResettableSettings = []string{
+var GlobalResettableSettings = []string{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	SettingSnykOssEnabled,
 	SettingSnykCodeEnabled,
 	SettingSnykIacEnabled,

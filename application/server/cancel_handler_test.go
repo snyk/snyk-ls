@@ -63,7 +63,7 @@ func (f *fakeScanner) registered() map[types.FilePath]func() {
 
 // Handler contract: a scan token registers reset-on-cancel for exactly the
 // workspace folder it belongs to via the Scanner interface (never any other
-// open folder), then progress.Cancel fires (defer). The registration
+// open folder), then Tracker.Cancel fires (defer). The registration
 // happens BEFORE the cancel — that is the register-vs-consume race fix
 // exercised end-to-end.
 func TestHandleWindowWorkDoneProgressCancel_ScanToken_RegistersBeforeCancel(t *testing.T) {
@@ -75,15 +75,15 @@ func TestHandleWindowWorkDoneProgressCancel_ScanToken_RegistersBeforeCancel(t *t
 
 	scanner := &fakeScanner{}
 	agg := scanstates.NewNoopStateAggregator()
+	tracker := progress.NewTracker(engine.GetLogger())
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
 		ctx2.DepScanners:            scanner,
 		ctx2.DepScanStateAggregator: agg,
+		ctx2.DepProgressTracker:     tracker,
 	})
 
-	logger := engine.GetLogger()
-	tracker := progress.NewScanTracker(true, logger, folderA)
-	token := tracker.GetToken()
-	require.True(t, progress.IsScanToken(token), "precondition: NewScanTracker must register a scan token")
+	token := tracker.NewScan(true, folderA).GetToken()
+	require.True(t, tracker.IsScanToken(token), "precondition: NewScan must register a scan token")
 
 	_, err := handleWindowWorkDoneProgressCancel(ctx,
 		types.WorkdoneProgressCancelParams{Token: token},
@@ -97,11 +97,11 @@ func TestHandleWindowWorkDoneProgressCancel_ScanToken_RegistersBeforeCancel(t *t
 	assert.NotContains(t, got, folderB, "callback must NOT be registered for an untouched folder")
 	assert.Len(t, got, 1, "exactly one callback, for the canceled token's folder")
 
-	// The deferred progress.Cancel must have run by the time the handler returns,
+	// The deferred Tracker.Cancel must have run by the time the handler returns,
 	// so the scan token is no longer recognized. This is the ordering guarantee
 	// that prevents the register-vs-consume race.
-	assert.False(t, progress.IsScanToken(token),
-		"progress.Cancel must have fired (deferred) — registration happened first, then cancel")
+	assert.False(t, tracker.IsScanToken(token),
+		"Tracker.Cancel must have fired (deferred) — registration happened first, then cancel")
 }
 
 // Non-scan tokens (e.g. CLI download progress) must not register any reset
@@ -114,15 +114,15 @@ func TestHandleWindowWorkDoneProgressCancel_NonScanToken_NoRegistration(t *testi
 
 	scanner := &fakeScanner{}
 	agg := scanstates.NewNoopStateAggregator()
+	tracker := progress.NewTracker(engine.GetLogger())
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
 		ctx2.DepScanners:            scanner,
 		ctx2.DepScanStateAggregator: agg,
+		ctx2.DepProgressTracker:     tracker,
 	})
 
-	logger := engine.GetLogger()
-	tracker := progress.NewTracker(true, logger) // plain tracker — NOT a scan token
-	token := tracker.GetToken()
-	require.False(t, progress.IsScanToken(token), "precondition: NewTracker must NOT register as a scan token")
+	token := tracker.New(true).GetToken() // plain task — NOT a scan token
+	require.False(t, tracker.IsScanToken(token), "precondition: New must NOT register as a scan token")
 
 	_, err := handleWindowWorkDoneProgressCancel(ctx,
 		types.WorkdoneProgressCancelParams{Token: token},
@@ -131,8 +131,8 @@ func TestHandleWindowWorkDoneProgressCancel_NonScanToken_NoRegistration(t *testi
 
 	assert.Empty(t, scanner.registered(),
 		"non-scan tokens must not register a reset callback — generic progress must not wipe scan results")
-	assert.True(t, progress.IsCanceled(token),
-		"progress.Cancel must still fire for non-scan tokens so the download is stopped")
+	assert.True(t, tracker.IsCanceled(token),
+		"Tracker.Cancel must still fire for non-scan tokens so the download is stopped")
 }
 
 // When the scanner is missing from context (early startup / tests that don't
@@ -146,20 +146,20 @@ func TestHandleWindowWorkDoneProgressCancel_ScanToken_NoScanner_NoSyncFallback(t
 
 	// Aggregator is present, but scanner is intentionally missing.
 	agg := scanstates.NewNoopStateAggregator()
+	tracker := progress.NewTracker(engine.GetLogger())
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
 		ctx2.DepScanStateAggregator: agg,
+		ctx2.DepProgressTracker:     tracker,
 	})
 
-	logger := engine.GetLogger()
-	tracker := progress.NewScanTracker(true, logger, folderA)
-	token := tracker.GetToken()
+	token := tracker.NewScan(true, folderA).GetToken()
 
 	_, err := handleWindowWorkDoneProgressCancel(ctx,
 		types.WorkdoneProgressCancelParams{Token: token},
 	)
 	require.NoError(t, err)
 
-	// progress.Cancel still fires (defer). No reset happened — the racy sync
+	// Tracker.Cancel still fires (defer). No reset happened — the racy sync
 	// fallback the reviewer flagged on #3382206417 is gone.
-	assert.False(t, progress.IsScanToken(token))
+	assert.False(t, tracker.IsScanToken(token))
 }

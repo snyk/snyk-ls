@@ -30,12 +30,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-var _ Disposable = (*TreeScanStateEmitter)(nil)
-
-type Disposable interface {
-	Dispose()
-}
-
 // TreeScanStateEmitter adapts the ScanStateChangeEmitter interface to emit tree view HTML.
 // It is registered alongside the summary emitter in the composite emitter.
 //
@@ -91,8 +85,13 @@ func (e *TreeScanStateEmitter) Emit(state scanstates.StateSnapshot) {
 	}
 }
 
-// Dispose stops the background render goroutine. Safe to call multiple times.
+// Dispose stops the background render goroutine. Safe to call multiple times,
+// and on a nil receiver: emitter construction is allowed to fail, so owners
+// hold an optional emitter and can dispose it unconditionally.
 func (e *TreeScanStateEmitter) Dispose() {
+	if e == nil {
+		return
+	}
 	e.disposeOnce.Do(func() { close(e.done) })
 }
 

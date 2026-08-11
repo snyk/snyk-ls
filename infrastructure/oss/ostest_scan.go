@@ -33,8 +33,8 @@ import (
 )
 
 var (
-	getTestResultsFromWorkflowData = ufm.GetTestResultsFromWorkflowData
-	convertTestResultToIssuesFn    = convertTestResultToIssues
+	getTestResultsFromWorkflowData = ufm.GetTestResultsFromWorkflowData //nolint:gochecknoglobals // legacy process-global state
+	convertTestResultToIssuesFn    = convertTestResultToIssues          //nolint:gochecknoglobals // legacy process-global state
 )
 
 func (cliScanner *CLIScanner) ostestScan(_ context.Context, pathToScan types.FilePath, cmd []string, folderConfig *types.FolderConfig, env gotenv.Env) ([]workflow.Data, error) {
@@ -111,7 +111,7 @@ func (cliScanner *CLIScanner) ostestScan(_ context.Context, pathToScan types.Fil
 
 // lsToFrameworkFeatureFlagMap maps LS feature flag names to their framework config equivalents
 // used by cli-extension-os-flows for routing decisions.
-var lsToFrameworkFeatureFlagMap = map[string]string{
+var lsToFrameworkFeatureFlagMap = map[string]string{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	featureflag.UseExperimentalRiskScore:      "internal_snyk_cli_experimental_risk_score",
 	featureflag.UseExperimentalRiskScoreInCLI: "internal_snyk_cli_experimental_risk_score_in_cli",
 	featureflag.UseOsTest:                     "internal_snyk_cli_use_test_shim_for_os_cli_test",

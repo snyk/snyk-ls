@@ -97,6 +97,6 @@ func downloadCLI(engine workflow.Engine, cliDir string) (string, error) {
 
 	er := error_reporting.NewTestErrorReporter(engine)
 	resolver := testutil.DefaultConfigResolver(engine)
-	installer := install.NewInstaller(engine, er, func() *http.Client { return http.DefaultClient }, resolver)
+	installer := install.NewInstaller(engine, er, func() *http.Client { return http.DefaultClient }, resolver, testutil.NewDrainedProgressTracker())
 	return installer.Install(ctx)
 }

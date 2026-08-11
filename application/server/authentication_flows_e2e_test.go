@@ -525,7 +525,9 @@ func startE2ELocalServer(
 	if configureDeps != nil {
 		deps = configureDeps(deps)
 	}
-	command.SetService(command.NewService(
+	// Build and inject a real command service into deps so that the context-injected
+	// handler sees it, rather than the CommandServiceMock produced by di.TestInit.
+	deps.CommandService = command.NewService(
 		engine,
 		engine.GetLogger(),
 		deps.AuthenticationService,
@@ -539,14 +541,15 @@ func startE2ELocalServer(
 		deps.ConfigResolver,
 		nil,
 		nil,
-	))
+		deps.ScanCtx,
+	)
 	recorder := &testsupport.JsonRPCRecorder{}
 	loc := startServer(engine, tokenService, nil, recorder, deps, 0)
-	cleanupChannels()
+	cleanupChannels(deps)
 
 	t.Cleanup(func() {
 		_ = shutdownLSPClient(t, loc)
-		cleanupChannels()
+		cleanupChannels(deps)
 		recorder.ClearCallbacks()
 		recorder.ClearNotifications()
 	})
@@ -620,7 +623,9 @@ var _ command.LdxSyncService = (*startupAuthRequestLdxSyncService)(nil)
 
 func newAuthFlowE2EEngine(t *testing.T, apiURL string, configFile string) (workflow.Engine, *config.TokenServiceImpl) {
 	t.Helper()
-	t.Setenv(shellenv.DisableShellEnvLoadingEnvVar, "1")
+	// Must stay set for the rest of the binary: t.Setenv's cleanup would re-enable the
+	// `bash --login -i` spawn this guard exists to prevent. Same as testutil's engine setup.
+	_ = os.Setenv(shellenv.DisableShellEnvLoadingEnvVar, "1") //nolint:usetesting // t.Setenv panics when called from a parallel test (Go 1.25+)
 
 	conf := configuration.NewWithOpts()
 	conf.Set(configuration.API_URL, apiURL)

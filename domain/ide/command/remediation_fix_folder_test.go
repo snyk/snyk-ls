@@ -97,7 +97,7 @@ func buildFixFolderService(t *testing.T, provider remediation.FolderRemediator, 
 	t.Helper()
 	engine, _ := testutil.UnitTestWithEngine(t)
 	logger := engine.GetLogger()
-	return command.NewService(engine, logger, nil, nil, notifier, nil, nil, nil, nil, nil, nil, nil, provider)
+	return command.NewService(engine, logger, nil, nil, notifier, nil, nil, nil, nil, nil, nil, nil, provider, t.Context())
 }
 
 // ACC-101: gate ON; fake runner edits 2 files; response is FolderFixResult with 2 entries;

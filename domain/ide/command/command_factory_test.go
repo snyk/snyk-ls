@@ -58,6 +58,7 @@ func TestCreateFromCommandData_FixFolder_WiresProvider(t *testing.T) {
 		nil, // configResolver
 		nil, // scanStateFunc
 		provider,
+		context.Background(), // scanCtx
 	)
 	require.NoError(t, err)
 	require.NotNil(t, cmd)

@@ -89,7 +89,7 @@ var _ ConfigResolverInterface = (*ConfigResolver)(nil)
 
 // folderMetadataSettings are stored under FolderMetadataKey, not UserFolderKey.
 // Configuration resolver only reads UserFolderKey; metadata must be read directly.
-var folderMetadataSettings = map[string]bool{
+var folderMetadataSettings = map[string]bool{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	SettingLocalBranches:     true,
 	SettingAutoDeterminedOrg: true,
 }
@@ -98,7 +98,7 @@ var folderMetadataSettings = map[string]bool{
 // the folder's authoritative value, not a user override of an org default. These settings
 // may still be sourced from a locked remote (which takes precedence), but when the value
 // comes from UserFolderKey (e.g. git enrichment), their wire source string is "folder".
-var folderNativeSettings = map[string]bool{
+var folderNativeSettings = map[string]bool{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	SettingPreferredOrg: true,
 	SettingOrgSetByUser: true,
 	SettingBaseBranch:   true,

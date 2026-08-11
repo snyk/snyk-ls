@@ -47,7 +47,7 @@ func (cmd *toggleTreeFilter) Command() types.CommandData {
 // filterTokenToSetting maps a combined filter token (e.g. "severity_high") to its
 // per-folder setting name. Tokens that carry a bool enabled value are listed here;
 // riskScore and reset are handled separately.
-var filterTokenToSetting = map[string]string{
+var filterTokenToSetting = map[string]string{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	"severity_critical":       types.SettingSeverityFilterCritical,
 	"severity_high":           types.SettingSeverityFilterHigh,
 	"severity_medium":         types.SettingSeverityFilterMedium,

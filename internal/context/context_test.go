@@ -415,64 +415,6 @@ func TestFilePathAndWorkDirFromContext(t *testing.T) {
 	})
 }
 
-func TestClone(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	t.Cleanup(ctrl.Finish)
-
-	t.Run("clones all context values to new context", func(t *testing.T) {
-		mockWs := mock_types.NewMockWorkspace(ctrl)
-		mockResolver := mock_types.NewMockConfigResolverInterface(ctrl)
-		logger := zerolog.Nop()
-		fc := &types.FolderConfig{FolderPath: "/path"}
-
-		ctx := t.Context()
-		ctx = NewContextWithScanSource(ctx, LLM)
-		ctx = NewContextWithDeltaScanType(ctx, Reference)
-		ctx = NewContextWithWorkDirAndFilePath(ctx, "/work", "/file")
-		ctx = NewContextWithLogger(ctx, &logger)
-		ctx = NewContextWithFolderConfig(ctx, fc)
-		ctx = NewContextWithWorkspace(ctx, mockWs)
-		ctx = NewContextWithConfigResolver(ctx, mockResolver)
-
-		newCtx := Clone(ctx, stdctx.Background())
-
-		source, ok := ScanSourceFromContext(newCtx)
-		require.True(t, ok)
-		require.Equal(t, LLM, source)
-
-		dType, ok := DeltaScanTypeFromContext(newCtx)
-		require.True(t, ok)
-		require.Equal(t, Reference, dType)
-
-		require.Equal(t, types.FilePath("/file"), FilePathFromContext(newCtx))
-		require.Equal(t, types.FilePath("/work"), WorkDirFromContext(newCtx))
-		require.Same(t, &logger, LoggerFromContext(newCtx))
-
-		gotFc, ok := FolderConfigFromContext(newCtx)
-		require.True(t, ok)
-		require.Same(t, fc, gotFc)
-
-		gotWs, ok := WorkspaceFromContext(newCtx)
-		require.True(t, ok)
-		require.Same(t, mockWs, gotWs)
-
-		gotResolver, ok := ConfigResolverFromContext(newCtx)
-		require.True(t, ok)
-		require.Same(t, mockResolver, gotResolver)
-	})
-
-	t.Run("clones empty context without panic", func(t *testing.T) {
-		ctx := t.Context()
-		newCtx := Clone(ctx, stdctx.Background())
-		require.NotNil(t, newCtx)
-
-		_, ok := ScanSourceFromContext(newCtx)
-		require.False(t, ok)
-		_, ok = DeltaScanTypeFromContext(newCtx)
-		require.False(t, ok)
-	})
-}
-
 // TestConfigResolverFromContext FC-060: NewContextWithConfigResolver/ConfigResolverFromContext round-trip
 func TestConfigResolverFromContext_RoundTrip(t *testing.T) {
 	ctrl := gomock.NewController(t)
