@@ -2403,7 +2403,14 @@ func setupMonorepoRealScanHarness(t *testing.T) *monorepoRealScanHarness {
 	benchmark.AssertMonorepoFixtureLayout(t, repoDir, nCode, nOSS)
 	cloneTarget := types.FilePath(repoDir)
 
-	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
+	// The benchmark defaults to prod. Passing it per-server keeps it out of the process
+	// environment, where it would leak into every other test in the binary.
+	endpoint := os.Getenv("SNYK_API")
+	if endpoint == "" {
+		endpoint = "https://api.snyk.io"
+	}
+
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI(), WithAPIEndpoint(endpoint))
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
@@ -2518,10 +2525,6 @@ func monorepoLeafFoldersHaveMatchingDiagnostics(jsonRPCRecorder *testsupport.Jso
 // Opt-in: set SMOKE_TESTS=1 and BENCHMARK_REAL_SCAN_MONOREPO=1 (see testsupport.BenchmarkRealScanMonorepoEnvVar).
 func Test_SmokeRealScanMonorepoFixture(t *testing.T) {
 	testsupport.SkipUnlessBenchmarkRealScanMonorepo(t)
-
-	if os.Getenv("SNYK_API") == "" {
-		t.Setenv("SNYK_API", "https://api.snyk.io")
-	}
 
 	h := setupMonorepoRealScanHarness(t)
 	withMonorepoRealScanPprof(t, os.Getenv(testsupport.BenchmarkRealScanMonorepoProfileDirEnvVar), func() {

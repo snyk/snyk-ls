@@ -623,7 +623,9 @@ var _ command.LdxSyncService = (*startupAuthRequestLdxSyncService)(nil)
 
 func newAuthFlowE2EEngine(t *testing.T, apiURL string, configFile string) (workflow.Engine, *config.TokenServiceImpl) {
 	t.Helper()
-	t.Setenv(shellenv.DisableShellEnvLoadingEnvVar, "1")
+	// Must stay set for the rest of the binary: t.Setenv's cleanup would re-enable the
+	// `bash --login -i` spawn this guard exists to prevent. Same as testutil's engine setup.
+	_ = os.Setenv(shellenv.DisableShellEnvLoadingEnvVar, "1") //nolint:usetesting // t.Setenv panics when called from a parallel test (Go 1.25+)
 
 	conf := configuration.NewWithOpts()
 	conf.Set(configuration.API_URL, apiURL)
