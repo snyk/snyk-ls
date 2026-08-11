@@ -41,11 +41,11 @@ type Downloader struct {
 	mkdirTemp     func(string, string) (string, error)
 }
 
-// The progressOwner must be non-nil and its channel drained: a long download blocks on
+// The progressTracker must be non-nil and its channel drained: a long download blocks on
 // a full channel and never finishes.
-func NewDownloader(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, httpClientFunc func() *http.Client, progressOwner *progress.Tracker) *Downloader {
+func NewDownloader(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, httpClientFunc func() *http.Client, progressTracker *progress.Tracker) *Downloader {
 	return &Downloader{
-		progressTask:  progressOwner.New(true),
+		progressTask:  progressTracker.New(true),
 		errorReporter: errorReporter,
 		httpClient:    httpClientFunc,
 		engine:        engine,
@@ -55,27 +55,12 @@ func NewDownloader(engine workflow.Engine, errorReporter error_reporting.ErrorRe
 	}
 }
 
-// activeProgressBar returns the progress Task for this download.
-func (d *Downloader) activeProgressBar() progressReporter {
-	return d.progressTask
-}
-
-// progressReporter is the subset of ui.ProgressBar used internally by the
-// downloader. Using an interface keeps writeCounter/newWriter free of the
-// concrete *Tracker/*Task types.
-type progressReporter interface {
-	BeginWithMessage(title, message string)
-	Report(percentage int)
-	EndWithMessage(message string)
-	CancelOrDone(onCancel func(), doneCh <-chan struct{})
-}
-
 // writeCounter counts the number of bytes written to it.
 type writeCounter struct {
 	total        int64 // total size
 	downloaded   int64 // downloaded # of bytes transferred
-	onProgressFn func(downloaded int64, total int64, pb progressReporter)
-	pb           progressReporter
+	onProgressFn func(downloaded int64, total int64, pb *progress.Task)
+	pb           *progress.Task
 }
 
 // Write implements the io.Writer interface.
@@ -88,11 +73,11 @@ func (wc *writeCounter) Write(p []byte) (n int, e error) {
 	return
 }
 
-func newWriter(size int64, pb progressReporter, onProgressFn func(downloaded, total int64, pb progressReporter)) io.Writer {
+func newWriter(size int64, pb *progress.Task, onProgressFn func(downloaded, total int64, pb *progress.Task)) io.Writer {
 	return &writeCounter{total: size, pb: pb, onProgressFn: onProgressFn}
 }
 
-func onProgress(downloaded, total int64, pb progressReporter) {
+func onProgress(downloaded, total int64, pb *progress.Task) {
 	percentage := float64(downloaded) / float64(total) * 100
 	pb.Report(int(percentage))
 }
@@ -143,7 +128,7 @@ func (d *Downloader) Download(r *Release, cliPath string, isUpdate bool) (destin
 
 	logger.Debug().Str("download_url", downloadURL).Msgf("Snyk CLI %s in progress...", kindStr)
 
-	pb := d.activeProgressBar()
+	pb := d.progressTask
 	if isUpdate {
 		pb.BeginWithMessage("Updating Snyk CLI...", "")
 	} else {

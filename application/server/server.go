@@ -594,11 +594,11 @@ func progressTrackerFromContext(ctx context.Context) (*progress.Tracker, bool) {
 }
 
 func mustProgressTrackerFromContext(ctx context.Context) *progress.Tracker {
-	owner, ok := progressTrackerFromContext(ctx)
+	tracker, ok := progressTrackerFromContext(ctx)
 	if !ok {
 		panic("ProgressTracker missing from context")
 	}
-	return owner
+	return tracker
 }
 
 func textDocumentDidChangeHandler(conf configuration.Configuration, onFileChange func(types.FilePath)) jrpc2.Handler {

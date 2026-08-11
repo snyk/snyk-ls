@@ -47,15 +47,13 @@ func TestWithAPIEndpoint_IsolatesPerEngine(t *testing.T) {
 
 	// Set up engine A with endpoint A.
 	engineA, tokenServiceA := testutil.UnitTestWithEngine(t)
-	loc, _, _ := setupServer(t, engineA, tokenServiceA, WithAPIEndpoint(endpointA))
-	_ = loc
+	setupServer(t, engineA, tokenServiceA, WithAPIEndpoint(endpointA))
 	gotA := types.GetGlobalString(engineA.GetConfiguration(), types.SettingApiEndpoint)
 	require.Equal(t, endpointA, gotA, "engine A must have endpoint A")
 
 	// Set up engine B with endpoint B — independently of engine A.
 	engineB, tokenServiceB := testutil.UnitTestWithEngine(t)
-	loc, _, _ = setupServer(t, engineB, tokenServiceB, WithAPIEndpoint(endpointB))
-	_ = loc
+	setupServer(t, engineB, tokenServiceB, WithAPIEndpoint(endpointB))
 	gotB := types.GetGlobalString(engineB.GetConfiguration(), types.SettingApiEndpoint)
 	assert.Equal(t, endpointB, gotB,
 		"engine B must have endpoint B regardless of the order in which A and B are set up; "+
@@ -81,8 +79,7 @@ func TestWithAPIEndpoint_EmptyIsNoOp(t *testing.T) {
 	config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), presetEndpoint)
 
 	// WithAPIEndpoint("") must not overwrite the preset.
-	loc, _, _ := setupServer(t, engine, tokenService, WithAPIEndpoint(""))
-	_ = loc
+	setupServer(t, engine, tokenService, WithAPIEndpoint(""))
 
 	got := types.GetGlobalString(engine.GetConfiguration(), types.SettingApiEndpoint)
 	assert.Equal(t, presetEndpoint, got, "empty WithAPIEndpoint must not overwrite existing config")

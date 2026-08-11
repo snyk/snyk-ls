@@ -45,24 +45,24 @@ func TestValidateProgressChannelIsolation(t *testing.T) {
 	chA := make(chan types.ProgressParams, 100)
 	chB := make(chan types.ProgressParams, 100)
 
-	ownerA := progress.NewTrackerWithChannel(chA, &logger)
-	ownerB := progress.NewTrackerWithChannel(chB, &logger)
+	trackerA := progress.NewTrackerWithChannel(chA, &logger)
+	trackerB := progress.NewTrackerWithChannel(chB, &logger)
 
-	depsA := di.TestInit(t, engineA, tokenServiceA, &di.Dependencies{ProgressTracker: ownerA})
-	depsB := di.TestInit(t, engineB, tokenServiceB, &di.Dependencies{ProgressTracker: ownerB})
+	depsA := di.TestInit(t, engineA, tokenServiceA, &di.Dependencies{ProgressTracker: trackerA})
+	depsB := di.TestInit(t, engineB, tokenServiceB, &di.Dependencies{ProgressTracker: trackerB})
 
 	// TestInit must hand back the injected Tracker verbatim — otherwise the
 	// channels below would be some other tracker's and the isolation assertions
 	// would be vacuous.
-	require.Same(t, ownerA, depsA.ProgressTracker, "TestInit must use the injected ProgressTracker for server A")
-	require.Same(t, ownerB, depsB.ProgressTracker, "TestInit must use the injected ProgressTracker for server B")
+	require.Same(t, trackerA, depsA.ProgressTracker, "TestInit must use the injected ProgressTracker for server A")
+	require.Same(t, trackerB, depsB.ProgressTracker, "TestInit must use the injected ProgressTracker for server B")
 
 	// Verify each deps routes through the right channel.
 	chFromA := depsA.ProgressTracker.Channel()
 	chFromB := depsB.ProgressTracker.Channel()
 
 	// Create a task routed through server A's channel.
-	taskA := ownerA.New(false)
+	taskA := trackerA.New(false)
 	taskA.Begin("scan-A")
 	taskA.End()
 
@@ -77,7 +77,7 @@ func TestValidateProgressChannelIsolation(t *testing.T) {
 		<-chFromA
 	}
 
-	taskB := ownerB.New(false)
+	taskB := trackerB.New(false)
 	taskB.Begin("scan-B")
 	taskB.End()
 

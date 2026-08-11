@@ -28,30 +28,30 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 )
 
-func TestNewDownloader_RoutesToInjectedOwnerChannel(t *testing.T) {
+func TestNewDownloader_RoutesToInjectedTrackerChannel(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	logger := zerolog.Nop()
 
-	owner := progress.NewTracker(&logger)
+	tracker := progress.NewTracker(&logger)
 
-	d := NewDownloader(engine, nil, nil, owner)
+	d := NewDownloader(engine, nil, nil, tracker)
 
 	require.NotNil(t, d.progressTask, "progressTask must be set")
-	assert.Equal(t, owner.Channel(), d.progressTask.GetChannel(),
-		"progressTask's channel must be the owner's channel")
+	assert.Equal(t, tracker.Channel(), d.progressTask.GetChannel(),
+		"progressTask's channel must be the tracker's channel")
 }
 
-// The installer must thread its injected owner into every downloader it builds,
+// The installer must thread its injected tracker into every downloader it builds,
 // otherwise download progress goes to a channel nothing drains.
-func TestInstall_NewDownloader_RoutesToInjectedOwnerChannel(t *testing.T) {
+func TestInstall_NewDownloader_RoutesToInjectedTrackerChannel(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	owner := testutil.NewTestProgressTracker(t)
+	tracker := testutil.NewDrainedProgressTracker()
 
-	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine), owner)
+	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine), tracker)
 
 	d := i.newDownloader()
 
 	require.NotNil(t, d.progressTask, "progressTask must be set")
-	assert.Equal(t, owner.Channel(), d.progressTask.GetChannel(),
-		"the installer-produced downloader must route to the injected owner's channel")
+	assert.Equal(t, tracker.Channel(), d.progressTask.GetChannel(),
+		"the installer-produced downloader must route to the injected tracker's channel")
 }

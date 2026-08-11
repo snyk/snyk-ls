@@ -43,8 +43,8 @@ func TestDownloader_Download(t *testing.T) {
 	engine := testutil.IntegTest(t)
 	r := getTestAsset()
 	progressCh := make(chan types.ProgressParams, 100000)
-	owner := progress.NewTrackerWithChannel(progressCh, engine.GetLogger())
-	d := NewDownloader(engine, nil, func() *http.Client { return http.DefaultClient }, owner)
+	tracker := progress.NewTrackerWithChannel(progressCh, engine.GetLogger())
+	d := NewDownloader(engine, nil, func() *http.Client { return http.DefaultClient }, tracker)
 	exec := (&Discovery{}).ExecutableName(false)
 	destination := filepath.Join(t.TempDir(), exec)
 	lockFileName, err := d.lockFileName()
@@ -69,16 +69,16 @@ func TestDownloader_Download(t *testing.T) {
 func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	engine := testutil.IntegTest(t)
 	progressCh := make(chan types.ProgressParams, 100000)
-	owner := progress.NewTrackerWithChannel(progressCh, engine.GetLogger())
-	d := NewDownloader(engine, nil, func() *http.Client { return http.DefaultClient }, owner)
+	tracker := progress.NewTrackerWithChannel(progressCh, engine.GetLogger())
+	d := NewDownloader(engine, nil, func() *http.Client { return http.DefaultClient }, tracker)
 
 	r := getTestAsset()
 	cliPath := filepath.Join(t.TempDir(), (&Discovery{}).ExecutableName(false))
 
-	// simulate cancellation when some progress received: cancel the task via the owner
+	// simulate cancellation when some progress received: cancel the task via the tracker
 	go func() {
 		p := <-progressCh
-		owner.Cancel(p.Token)
+		tracker.Cancel(p.Token)
 	}()
 
 	_, err := d.Download(r, cliPath, false)
@@ -102,7 +102,7 @@ func TestDownloaderDownload_ReturnsErrorWhenCliPathIsEmpty(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), func() *http.Client { return server.Client() }, testutil.NewTestProgressTracker(t))
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), func() *http.Client { return server.Client() }, testutil.NewDrainedProgressTracker())
 	exec := (&Discovery{}).ExecutableName(false)
 
 	got, err := downloader.Download(testRelease(server.URL, "deadbeef  "+exec), "", false)

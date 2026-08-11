@@ -18,7 +18,7 @@ package progress
 
 // Task is the per-operation progress handle. One Task represents a single
 // in-flight progress operation. Obtain a Task from Tracker.New(cancellable),
-// which registers it so the owner can resolve it for cancellation.
+// which registers it so the tracker can resolve it for cancellation.
 //
 // All ui.ProgressBar methods (Begin/Report/End/Clear/CancelOrDone/…) are
 // implemented here.
@@ -37,7 +37,7 @@ import (
 // It implements ui.ProgressBar (verified by the compile-time assertion in
 // tracker.go).
 type Task struct {
-	owner         *Tracker
+	tracker       *Tracker
 	channel       chan types.ProgressParams
 	cancelChannel chan bool
 	token         types.ProgressToken
@@ -46,7 +46,7 @@ type Task struct {
 	// progress tasks so window/workDoneProgress/cancel can scope the
 	// summary-panel reset to scan cancellations only (IDE-1035).
 	// Written before the task is registered and never again; only ever read under
-	// the owner's mutex, by Tracker.IsScanToken/FolderForScanToken.
+	// the tracker's mutex, by Tracker.IsScanToken/FolderForScanToken.
 	isScan bool
 	// folderPath is the workspace folder this scan task belongs to, set only
 	// for isScan tasks. Lets the cancel handler scope a reset to the canceled
@@ -58,6 +58,23 @@ type Task struct {
 	lastMessage          string
 	m                    sync.Mutex
 	logger               *zerolog.Logger
+}
+
+// NewTestTask creates a standalone Task for use in tests that need to
+// inject a pre-wired channel and cancel channel. The task is not
+// registered with any Tracker; callers are responsible for draining
+// the channels when the test ends.
+func NewTestTask(channel chan types.ProgressParams, cancelChannel chan bool, logger *zerolog.Logger) *Task {
+	return &Task{
+		tracker:       nil,
+		channel:       channel,
+		cancelChannel: cancelChannel,
+		// deepcode ignore HardcodedPassword: false positive
+		token:                "token",
+		cancellable:          true,
+		lastReportPercentage: -1,
+		logger:               logger,
+	}
 }
 
 // GetToken returns the unique token for this task.
@@ -75,14 +92,14 @@ func (t *Task) GetCancelChannel() chan bool {
 	return t.cancelChannel
 }
 
-// IsCanceled delegates to the owner registry: the task is no longer tracked once
-// it is canceled, ended or cleared. Ownerless tasks (test-only, see NewTestTask)
+// IsCanceled delegates to the tracker registry: the task is no longer tracked once
+// it is canceled, ended or cleared. Trackerless tasks (test-only, see NewTestTask)
 // always report false.
 func (t *Task) IsCanceled() bool {
-	if t.owner == nil {
+	if t.tracker == nil {
 		return false
 	}
-	return t.owner.IsCanceled(t.token)
+	return t.tracker.IsCanceled(t.token)
 }
 
 // Begin starts an unquantifiable-length progress operation.
@@ -179,7 +196,7 @@ func (t *Task) End() {
 }
 
 // EndWithMessage terminates the progress operation with a final message and
-// deregisters it from the owner. Panics if called twice (matching the existing
+// deregisters it from the tracker. Panics if called twice (matching the existing
 // Tracker behavior).
 func (t *Task) EndWithMessage(message string) {
 	if !t.finish(message) {
@@ -209,25 +226,25 @@ func (t *Task) finish(message string) bool {
 		},
 	}
 	t.send(params, logger)
-	if t.owner != nil {
-		t.owner.delete(t.token)
+	if t.tracker != nil {
+		t.tracker.delete(t.token)
 	}
 	return true
 }
 
 // Clear terminates the progress operation (if not already finished) and
-// deregisters it from the owner.
+// deregisters it from the tracker.
 func (t *Task) Clear() error {
 	t.finish("")
 	return nil
 }
 
 // CancelOrDone blocks until either a cancel signal is received or doneCh is
-// closed, then deregisters the task from the owner (if any) and invokes onCancel.
+// closed, then deregisters the task from the tracker (if any) and invokes onCancel.
 func (t *Task) CancelOrDone(onCancel func(), doneCh <-chan struct{}) {
 	logger := t.logger
-	if t.owner != nil {
-		defer t.owner.delete(t.token)
+	if t.tracker != nil {
+		defer t.tracker.delete(t.token)
 	}
 	defer onCancel()
 	for {

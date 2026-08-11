@@ -197,24 +197,20 @@ func CLIDownloadLockFileCleanUp(t *testing.T, conf configuration.Configuration) 
 	})
 }
 
-func NewTestProgressTracker(t *testing.T) *progress.Tracker {
-	t.Helper()
-	return NewDrainedProgressTracker()
-}
-
-// NewDrainedProgressTracker is usable from TestMain, where there is no *testing.T.
-// Nop logger rather than a test writer: producers can outlive the test, and
-// logging after it finishes panics.
+// NewDrainedProgressTracker returns a Tracker whose channel is drained for the
+// life of the test binary, so a producer never blocks on a full channel. Takes no
+// *testing.T so it is usable from TestMain too. Nop logger rather than a test
+// writer: producers can outlive the test, and logging after it finishes panics.
 // ponytail: the drain goroutine never exits — the channel is never closed. Fine
 // for test binaries; close the channel if a leak check ever lands.
 func NewDrainedProgressTracker() *progress.Tracker {
 	logger := zerolog.Nop()
-	owner := progress.NewTracker(&logger)
+	tracker := progress.NewTracker(&logger)
 	go func() {
-		for range owner.Channel() {
+		for range tracker.Channel() {
 		}
 	}()
-	return owner
+	return tracker
 }
 
 func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) (workflow.Engine, *config.TokenServiceImpl) {

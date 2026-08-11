@@ -90,7 +90,7 @@ func Test_Tracker_End(t *testing.T) {
 }
 
 // TestGenerateTrackerRoutesToInjectedChannel (IDE-2036) verifies that
-// GenerateTracker routes progress events to the channel of the per-server owner
+// GenerateTracker routes progress events to the channel of the per-server tracker
 // injected via NewCodeTrackerFactory, NOT to the global
 // progress.ToServerProgressChannel.
 //

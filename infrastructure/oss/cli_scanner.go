@@ -104,10 +104,10 @@ type CLIScanner struct {
 	engine                  workflow.Engine
 	logger                  *zerolog.Logger
 	configResolver          types.ConfigResolverInterface
-	progressOwner           *progress.Tracker
+	progressTracker         *progress.Tracker
 }
 
-func NewCLIScanner(engine workflow.Engine, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, learnService learn.Service, notifier noti.Notifier, configResolver types.ConfigResolverInterface, progressOwner *progress.Tracker) types.ProductScanner {
+func NewCLIScanner(engine workflow.Engine, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, learnService learn.Service, notifier noti.Notifier, configResolver types.ConfigResolverInterface, progressTracker *progress.Tracker) types.ProductScanner {
 	scanner := CLIScanner{
 		instrumentor:            instrumentor,
 		errorReporter:           errorReporter,
@@ -126,7 +126,7 @@ func NewCLIScanner(engine workflow.Engine, instrumentor performance.Instrumentor
 		engine:                  engine,
 		logger:                  engine.GetLogger(),
 		configResolver:          configResolver,
-		progressOwner:           progressOwner,
+		progressTracker:         progressTracker,
 		supportedFiles: map[string]bool{
 			"yarn.lock":               true,
 			"package-lock.json":       true,
@@ -253,7 +253,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	// Use workspace folder from folderConfig for CLI execution (org lookup, etc.)
 	workspaceFolder := folderConfig.FolderPath
 
-	p := cliScanner.progressOwner.NewScan(true, workspaceFolder)
+	p := cliScanner.progressTracker.NewScan(true, workspaceFolder)
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
 	p.BeginUnquantifiableLength("Scanning for Snyk Open Source issues", string(path))
 	defer p.EndWithMessage("Snyk Open Source scan completed.")

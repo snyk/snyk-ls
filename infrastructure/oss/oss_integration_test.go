@@ -66,7 +66,7 @@ func Test_Scan(t *testing.T) {
 	er := error_reporting.NewTestErrorReporter(engine)
 	notifier := notification.NewMockNotifier()
 	cliExecutor := cli.NewExecutor(engine, er, notifier, testutil.DefaultConfigResolver(engine))
-	scanner := oss.NewCLIScanner(engine, instrumentor, er, cliExecutor, deps.LearnService, notifier, deps.ConfigResolver, testutil.NewTestProgressTracker(t))
+	scanner := oss.NewCLIScanner(engine, instrumentor, er, cliExecutor, deps.LearnService, notifier, deps.ConfigResolver, testutil.NewDrainedProgressTracker())
 
 	workingDir, _ := os.Getwd()
 	path, _ := filepath.Abs(filepath.Join(workingDir, "testdata", "package.json"))

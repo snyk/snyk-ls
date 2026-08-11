@@ -43,25 +43,25 @@ type Installer interface {
 }
 
 type Install struct {
-	errorReporter  error_reporting.ErrorReporter
-	httpClient     func() *http.Client
-	engine         workflow.Engine
-	configResolver types.ConfigResolverInterface
-	progressOwner  *progress.Tracker
+	errorReporter   error_reporting.ErrorReporter
+	httpClient      func() *http.Client
+	engine          workflow.Engine
+	configResolver  types.ConfigResolverInterface
+	progressTracker *progress.Tracker
 }
 
-func NewInstaller(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, client func() *http.Client, configResolver types.ConfigResolverInterface, progressOwner *progress.Tracker) *Install {
+func NewInstaller(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, client func() *http.Client, configResolver types.ConfigResolverInterface, progressTracker *progress.Tracker) *Install {
 	return &Install{
-		errorReporter:  errorReporter,
-		httpClient:     client,
-		engine:         engine,
-		configResolver: configResolver,
-		progressOwner:  progressOwner,
+		errorReporter:   errorReporter,
+		httpClient:      client,
+		engine:          engine,
+		configResolver:  configResolver,
+		progressTracker: progressTracker,
 	}
 }
 
 func (i *Install) newDownloader() *Downloader {
-	return NewDownloader(i.engine, i.errorReporter, i.httpClient, i.progressOwner)
+	return NewDownloader(i.engine, i.errorReporter, i.httpClient, i.progressTracker)
 }
 
 func (i *Install) Find() (string, error) {

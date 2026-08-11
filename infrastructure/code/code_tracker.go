@@ -28,20 +28,20 @@ import (
 )
 
 type trackerFactory struct {
-	progressOwner *progress.Tracker
+	progressTracker *progress.Tracker
 }
 
-func NewCodeTrackerFactory(progressOwner *progress.Tracker) codeClientScan.TrackerFactory {
-	return &trackerFactory{progressOwner: progressOwner}
+func NewCodeTrackerFactory(progressTracker *progress.Tracker) codeClientScan.TrackerFactory {
+	return &trackerFactory{progressTracker: progressTracker}
 }
 
-// GenerateTracker takes the owner's channel rather than a registered task: this
+// GenerateTracker takes the tracker's channel rather than a registered task: this
 // tracker mints its own token and code-client-go exposes no cancel hook for the
 // upload phase, so a registry entry would never be resolved nor released. That
 // also keeps the token out of the scan-token registry, which is what we want —
 // it reports Cancellable: false and has no folder to reset.
 func (t trackerFactory) GenerateTracker() codeClientScan.Tracker {
-	return newCodeTracker(t.progressOwner.Channel())
+	return newCodeTracker(t.progressTracker.Channel())
 }
 
 type tracker struct {

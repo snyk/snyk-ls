@@ -61,18 +61,12 @@ import (
 //
 // Remaining global side effects (not safe for parallel tests without further work):
 //   - types.SetGlobalSystemDefault — stores into the per-engine configuration.
+//
+//nolint:gocyclo // high branching is inherent: one nil-check per overrideable dependency
 func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenService, overrideDeps *Dependencies) Dependencies {
 	t.Helper()
 	gafConfiguration := engine.GetConfiguration()
 	types.SetGlobalSystemDefault(gafConfiguration, types.SettingCliPath, filepath.Join(t.TempDir(), "fake-cli"))
-
-	return buildTestDependencies(t, engine, tokenService, overrideDeps)
-}
-
-//nolint:gocyclo // high branching is inherent: one nil-check per overrideable dependency
-func buildTestDependencies(t *testing.T, engine workflow.Engine, tokenService types.TokenService, overrideDeps *Dependencies) Dependencies {
-	t.Helper()
-	gafConfiguration := engine.GetConfiguration()
 
 	var localNotifier domainNotify.Notifier
 	if overrideDeps != nil && overrideDeps.Notifier != nil {
@@ -153,15 +147,15 @@ func buildTestDependencies(t *testing.T, engine workflow.Engine, tokenService ty
 		localFeatureFlagService = featureflag.New(gafConfiguration, logger, engine, localConfigResolver)
 	}
 
-	var localProgressOwner *progress.Tracker
+	var localProgressTracker *progress.Tracker
 	if overrideDeps != nil && overrideDeps.ProgressTracker != nil {
-		localProgressOwner = overrideDeps.ProgressTracker
+		localProgressTracker = overrideDeps.ProgressTracker
 	} else {
-		localProgressOwner = progress.NewTracker(logger)
+		localProgressTracker = progress.NewTracker(logger)
 	}
-	localSnykCodeScanner := code.New(engine, localInstrumentor, localSnykApiClient, localCodeErrorReporter, localLearnService, localFeatureFlagService, localNotifier, localCodeInstrumentor, localCodeErrorReporter, code.NewFakeCodeScannerClient, localConfigResolver, localProgressOwner)
-	localOpenSourceScanner := oss.NewCLIScanner(engine, localInstrumentor, localErrorReporter, localSnykCli, localLearnService, localNotifier, localConfigResolver, localProgressOwner)
-	localIaCScanner := iac.New(gafConfiguration, logger, localInstrumentor, localErrorReporter, localSnykCli, localConfigResolver, localProgressOwner)
+	localSnykCodeScanner := code.New(engine, localInstrumentor, localSnykApiClient, localCodeErrorReporter, localLearnService, localFeatureFlagService, localNotifier, localCodeInstrumentor, localCodeErrorReporter, code.NewFakeCodeScannerClient, localConfigResolver, localProgressTracker)
+	localOpenSourceScanner := oss.NewCLIScanner(engine, localInstrumentor, localErrorReporter, localSnykCli, localLearnService, localNotifier, localConfigResolver, localProgressTracker)
+	localIaCScanner := iac.New(gafConfiguration, logger, localInstrumentor, localErrorReporter, localSnykCli, localConfigResolver, localProgressTracker)
 	localScanner := scanner2.NewDelegatingScanner(engine, tokenService, localScanInitializer, localInstrumentor, localScanNotifier, localSnykApiClient, localAuthenticationService, localNotifier, localScanPersister, localScanStateAggregator, localConfigResolver, localSnykCodeScanner, localIaCScanner, localOpenSourceScanner)
 
 	var localHoverService hover.Service
@@ -219,7 +213,7 @@ func buildTestDependencies(t *testing.T, engine workflow.Engine, tokenService ty
 		CodeActionService:     localCodeActionService,
 		Installer:             localInstaller,
 		CommandService:        localCommandService,
-		ProgressTracker:       localProgressOwner,
+		ProgressTracker:       localProgressTracker,
 		ScanCtx:               localScanCtx,
 		ScanCancel:            localScanCancel,
 	}

@@ -27,20 +27,20 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func (o *Tracker) registrySize() int {
-	o.mu.RLock()
-	defer o.mu.RUnlock()
-	return len(o.tasks)
+func (t *Tracker) registrySize() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return len(t.tasks)
 }
 
 // halfRegisteredScanCount counts registered tasks that would answer a cancel the
 // way a non-scan task does — evaluating the same predicate IsScanToken and
 // FolderForScanToken evaluate, over every entry, under the one lock they use.
-func (o *Tracker) halfRegisteredScanCount() int {
-	o.mu.RLock()
-	defer o.mu.RUnlock()
+func (t *Tracker) halfRegisteredScanCount() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 	count := 0
-	for _, task := range o.tasks {
+	for _, task := range t.tasks {
 		if !task.isScan || task.folderPath == "" {
 			count++
 		}

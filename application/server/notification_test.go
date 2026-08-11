@@ -120,7 +120,7 @@ func TestServerInitializeShouldStartProgressListener(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create a task via the per-server owner so progress events are routed
+	// Create a task via the per-server tracker so progress events are routed
 	// to the channel the server's progress listener is reading.
 	progressTracker := deps.ProgressTracker.New(true)
 	progressTracker.BeginWithMessage("title", "message")
@@ -152,7 +152,7 @@ func TestCancelProgress(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Register a real task via the per-server owner so the cancel handler can
+	// Register a real task via the per-server tracker so the cancel handler can
 	// look it up and remove it from the registry [IDE-2036].
 	task := deps.ProgressTracker.New(true)
 

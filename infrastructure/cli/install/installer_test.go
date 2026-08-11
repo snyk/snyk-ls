@@ -56,7 +56,7 @@ func TestInstaller_Find(t *testing.T) {
 
 	t.Setenv("PATH", cliDir)
 
-	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine), testutil.NewTestProgressTracker(t))
+	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine), testutil.NewDrainedProgressTracker())
 
 	execPath, err := i.Find()
 
@@ -83,7 +83,7 @@ func Test_Find_CliPathInSettings_CliPathFound(t *testing.T) {
 	t.Setenv("SNYK_TOKEN", "")
 	t.Setenv("SNYK_CLI_PATH", "")
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), cliPath)
-	installer := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine), testutil.NewTestProgressTracker(t))
+	installer := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine), testutil.NewDrainedProgressTracker())
 
 	// Act
 	foundPath, err := installer.Find()
@@ -122,7 +122,7 @@ func TestInstallRelease_ReturnsErrorWhenCliPathIsEmpty(t *testing.T) {
 		error_reporting.NewTestErrorReporter(engine),
 		func() *http.Client { return server.Client() },
 		resolver,
-		testutil.NewTestProgressTracker(t),
+		testutil.NewDrainedProgressTracker(),
 	)
 
 	got, err := installer.installRelease(testRelease(server.URL, fmt.Sprintf("%x  %s", checksum, filename.ExecutableName)))
@@ -150,7 +150,7 @@ func TestUpdateFromRelease_ReturnsErrorWhenCliPathIsEmpty(t *testing.T) {
 		error_reporting.NewTestErrorReporter(engine),
 		func() *http.Client { return server.Client() },
 		resolver,
-		testutil.NewTestProgressTracker(t),
+		testutil.NewDrainedProgressTracker(),
 	)
 
 	updated, err := installer.updateFromRelease(testRelease(server.URL, fmt.Sprintf("%x  %s", checksum, filename.ExecutableName)))
@@ -186,7 +186,7 @@ func TestInstallRelease_ReturnsInstalledPath_WhenResolverCannotRediscoverIt(t *t
 		error_reporting.NewTestErrorReporter(engine),
 		func() *http.Client { return server.Client() },
 		resolver,
-		testutil.NewTestProgressTracker(t),
+		testutil.NewDrainedProgressTracker(),
 	)
 
 	release := testRelease(server.URL, fmt.Sprintf("%x  %s", checksum, filename.ExecutableName))
@@ -218,7 +218,7 @@ func TestInstallerUpdate_ResolvesCliPathOnce(t *testing.T) {
 		error_reporting.NewTestErrorReporter(engine),
 		func() *http.Client { return server.Client() },
 		resolver,
-		testutil.NewTestProgressTracker(t),
+		testutil.NewDrainedProgressTracker(),
 	)
 
 	updated, err := installer.updateFromRelease(testRelease(server.URL, fmt.Sprintf("%x  %s", checksum, filename.ExecutableName)))
@@ -248,7 +248,7 @@ func TestInstallRelease_ReturnsConfiguredDestination_OnSuccessfulInstall(t *test
 		error_reporting.NewTestErrorReporter(engine),
 		func() *http.Client { return server.Client() },
 		testutil.DefaultConfigResolver(engine),
-		testutil.NewTestProgressTracker(t),
+		testutil.NewDrainedProgressTracker(),
 	)
 
 	release := testRelease(server.URL, fmt.Sprintf("%x  %s", checksum, filename.ExecutableName))
@@ -281,7 +281,7 @@ func TestDownloaderDestinationPath_ReturnsConfiguredPath(t *testing.T) {
 
 func TestDownloaderMoveToDestination_ReturnsErrorWhenCliPathIsEmpty(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.NewTestProgressTracker(t))
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.NewDrainedProgressTracker())
 	t.Chdir(t.TempDir())
 
 	sourceFile, err := os.CreateTemp(t.TempDir(), "cli-source")
@@ -309,7 +309,7 @@ func TestDownloaderMoveToDestination_ReturnsExistingPathWhenConcurrentInstallAlr
 	require.NoError(t, err)
 	require.NoError(t, sourceFile.Close())
 
-	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.NewTestProgressTracker(t))
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.NewDrainedProgressTracker())
 	downloader.removeFile = func(string) error { return os.ErrPermission }
 	expectedChecksum := sha256.Sum256(existingBinary)
 
@@ -333,7 +333,7 @@ func TestDownloaderMoveToDestination_ReturnsExistingPathWhenConcurrentInstallRen
 	require.NoError(t, sourceFile.Close())
 
 	renameErr := os.ErrPermission
-	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.NewTestProgressTracker(t))
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.NewDrainedProgressTracker())
 	downloader.renameFile = func(_, destinationFilePath string) error {
 		require.NoError(t, os.WriteFile(destinationFilePath, existingBinary, 0755))
 		return renameErr
@@ -358,7 +358,7 @@ func TestDownloaderMoveToDestination_ReturnsErrorWhenConcurrentInstallRenamedWro
 	require.NoError(t, sourceFile.Close())
 
 	renameErr := os.ErrPermission
-	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.NewTestProgressTracker(t))
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.NewDrainedProgressTracker())
 	downloader.renameFile = func(_, destinationFilePath string) error {
 		require.NoError(t, os.WriteFile(destinationFilePath, []byte("wrong-cli"), 0755))
 		return renameErr
@@ -383,7 +383,7 @@ func TestDownloaderMoveToDestination_ReturnsErrorWhenExistingBinaryCannotBeRemov
 	require.NoError(t, err)
 	require.NoError(t, sourceFile.Close())
 
-	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.NewTestProgressTracker(t))
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.NewDrainedProgressTracker())
 	downloader.removeFile = func(string) error { return os.ErrPermission }
 	expectedChecksum := sha256.Sum256([]byte("new-cli"))
 
@@ -411,7 +411,7 @@ func TestDownloaderDownload_ReturnsExistingPathWhenConcurrentInstallRenamedExpec
 	}))
 	t.Cleanup(server.Close)
 
-	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), func() *http.Client { return server.Client() }, testutil.NewTestProgressTracker(t))
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), func() *http.Client { return server.Client() }, testutil.NewDrainedProgressTracker())
 	downloader.renameFile = func(_, destinationFilePath string) error {
 		require.NoError(t, os.WriteFile(destinationFilePath, existingBinary, 0755))
 		return os.ErrPermission
@@ -436,7 +436,7 @@ func TestDownloaderDownload_ReturnsExistingPathWhenConcurrentInstallAlreadyWrote
 	}))
 	t.Cleanup(server.Close)
 
-	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), func() *http.Client { return server.Client() }, testutil.NewTestProgressTracker(t))
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), func() *http.Client { return server.Client() }, testutil.NewDrainedProgressTracker())
 	downloader.removeFile = func(string) error { return os.ErrPermission }
 
 	got, err := downloader.Download(testRelease(server.URL, fmt.Sprintf("%x  %s", checksum, filename.ExecutableName)), cliPath, false)
@@ -458,7 +458,7 @@ func TestDownloaderDownload_ReturnsErrorWhenConcurrentInstallWroteWrongBinary(t 
 	}))
 	t.Cleanup(server.Close)
 
-	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), func() *http.Client { return server.Client() }, testutil.NewTestProgressTracker(t))
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), func() *http.Client { return server.Client() }, testutil.NewDrainedProgressTracker())
 	downloader.removeFile = func(string) error { return os.ErrPermission }
 
 	got, err := downloader.Download(testRelease(server.URL, fmt.Sprintf("%x  %s", checksum, filename.ExecutableName)), cliPath, false)
@@ -493,7 +493,7 @@ func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
 	}
 	_ = file.Close()
 
-	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine), testutil.NewTestProgressTracker(t))
+	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine), testutil.NewDrainedProgressTracker())
 	_, err = i.installRelease(r)
 
 	assert.Error(t, err)
@@ -502,7 +502,7 @@ func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
 func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	// prepare
-	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine), testutil.NewTestProgressTracker(t))
+	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine), testutil.NewDrainedProgressTracker())
 
 	temp := t.TempDir()
 	fakeCliFile := testsupport.CreateTempFile(t, temp)
@@ -550,7 +550,7 @@ func TestInstaller_Update_DownloadsLatestCli(t *testing.T) {
 
 	// prepare
 	ctx := t.Context()
-	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), func() *http.Client { return http.DefaultClient }, testutil.DefaultConfigResolver(engine), testutil.NewTestProgressTracker(t))
+	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), func() *http.Client { return http.DefaultClient }, testutil.DefaultConfigResolver(engine), testutil.NewDrainedProgressTracker())
 	cliDir := t.TempDir()
 
 	fakeCliFile := testsupport.CreateTempFile(t, cliDir)

@@ -72,28 +72,28 @@ var extensions = map[string]bool{ //nolint:gochecknoglobals // effectively a pac
 }
 
 type Scanner struct {
-	instrumentor   performance.Instrumentor
-	errorReporter  error_reporting.ErrorReporter
-	cli            cli.Executor
-	mutex          sync.Mutex
-	runningScans   map[sglsp.DocumentURI]*scans.ScanProgress
-	conf           configuration.Configuration
-	logger         *zerolog.Logger
-	configResolver types.ConfigResolverInterface
-	progressOwner  *progress.Tracker
+	instrumentor    performance.Instrumentor
+	errorReporter   error_reporting.ErrorReporter
+	cli             cli.Executor
+	mutex           sync.Mutex
+	runningScans    map[sglsp.DocumentURI]*scans.ScanProgress
+	conf            configuration.Configuration
+	logger          *zerolog.Logger
+	configResolver  types.ConfigResolverInterface
+	progressTracker *progress.Tracker
 }
 
-func New(conf configuration.Configuration, logger *zerolog.Logger, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, configResolver types.ConfigResolverInterface, progressOwner *progress.Tracker) *Scanner {
+func New(conf configuration.Configuration, logger *zerolog.Logger, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, configResolver types.ConfigResolverInterface, progressTracker *progress.Tracker) *Scanner {
 	return &Scanner{
-		instrumentor:   instrumentor,
-		errorReporter:  errorReporter,
-		cli:            cli,
-		mutex:          sync.Mutex{},
-		runningScans:   map[sglsp.DocumentURI]*scans.ScanProgress{},
-		conf:           conf,
-		logger:         logger,
-		configResolver: configResolver,
-		progressOwner:  progressOwner,
+		instrumentor:    instrumentor,
+		errorReporter:   errorReporter,
+		cli:             cli,
+		mutex:           sync.Mutex{},
+		runningScans:    map[sglsp.DocumentURI]*scans.ScanProgress{},
+		conf:            conf,
+		logger:          logger,
+		configResolver:  configResolver,
+		progressTracker: progressTracker,
 	}
 }
 
@@ -156,7 +156,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 		logger.Debug().Msg("IaC scan skipped: path is not a supported IaC file or directory")
 		return []types.Issue{}, nil
 	}
-	p := iac.progressOwner.NewScan(true, workspaceFolder)
+	p := iac.progressTracker.NewScan(true, workspaceFolder)
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
 	p.BeginUnquantifiableLength("Scanning for Snyk IaC issues", string(pathToScan))
 	defer p.EndWithMessage("Snyk Iac Scan completed.")

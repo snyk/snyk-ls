@@ -43,16 +43,16 @@ func TestTwoServerCancelIsolation_ViaTracker(t *testing.T) {
 	engineA, tokenServiceA := testutil.UnitTestWithEngine(t)
 	engineB, tokenServiceB := testutil.UnitTestWithEngine(t)
 
-	ownerA := progress.NewTracker(&logger)
-	ownerB := progress.NewTracker(&logger)
+	trackerA := progress.NewTracker(&logger)
+	trackerB := progress.NewTracker(&logger)
 
-	depsA := di.TestInit(t, engineA, tokenServiceA, &di.Dependencies{ProgressTracker: ownerA})
-	depsB := di.TestInit(t, engineB, tokenServiceB, &di.Dependencies{ProgressTracker: ownerB})
+	depsA := di.TestInit(t, engineA, tokenServiceA, &di.Dependencies{ProgressTracker: trackerA})
+	depsB := di.TestInit(t, engineB, tokenServiceB, &di.Dependencies{ProgressTracker: trackerB})
 
-	require.Equal(t, ownerA, depsA.ProgressTracker, "depsA.ProgressTracker must be ownerA")
-	require.Equal(t, ownerB, depsB.ProgressTracker, "depsB.ProgressTracker must be ownerB")
+	require.Equal(t, trackerA, depsA.ProgressTracker, "depsA.ProgressTracker must be trackerA")
+	require.Equal(t, trackerB, depsB.ProgressTracker, "depsB.ProgressTracker must be trackerB")
 
-	// Create a task on each owner.
+	// Create a task on each tracker.
 	taskA := depsA.ProgressTracker.New(true)
 	taskB := depsB.ProgressTracker.New(true)
 
@@ -63,11 +63,11 @@ func TestTwoServerCancelIsolation_ViaTracker(t *testing.T) {
 	assert.False(t, depsA.ProgressTracker.IsCanceled(tokenA), "taskA should not be canceled initially")
 	assert.False(t, depsB.ProgressTracker.IsCanceled(tokenB), "taskB should not be canceled initially")
 
-	// Cancel A via its owner.
+	// Cancel A via its tracker.
 	depsA.ProgressTracker.Cancel(tokenA)
 
 	assert.True(t, depsA.ProgressTracker.IsCanceled(tokenA), "taskA should be canceled after Cancel")
-	assert.False(t, depsB.ProgressTracker.IsCanceled(tokenB), "taskB on ownerB must NOT be affected by canceling ownerA's task")
+	assert.False(t, depsB.ProgressTracker.IsCanceled(tokenB), "taskB on trackerB must NOT be affected by canceling trackerA's task")
 
 	// Tracker.Cancel writes to the buffered cancel channel before returning, so
 	// the signal must already be there — no waiting required.
@@ -86,9 +86,9 @@ func TestProgressTrackerInjectedIntoContext(t *testing.T) {
 
 	logger := zerolog.Nop()
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	owner := progress.NewTracker(&logger)
+	tracker := progress.NewTracker(&logger)
 
-	deps := di.TestInit(t, engine, tokenService, &di.Dependencies{ProgressTracker: owner})
+	deps := di.TestInit(t, engine, tokenService, &di.Dependencies{ProgressTracker: tracker})
 
 	// Build the context dep map the same way withContext does.
 	ctxDeps := make(map[string]any)
@@ -99,5 +99,5 @@ func TestProgressTrackerInjectedIntoContext(t *testing.T) {
 
 	// The Tracker retrieved from context must be exactly the one we injected.
 	got := mustProgressTrackerFromContext(ctx)
-	require.Equal(t, owner, got, "mustProgressTrackerFromContext must return the injected Tracker")
+	require.Equal(t, tracker, got, "mustProgressTrackerFromContext must return the injected Tracker")
 }

@@ -14,13 +14,10 @@
  * limitations under the License.
  */
 
+// Package progress reports long-running operations to the LSP client. A
+// per-server Tracker owns the progress channel and the live-task registry; each
+// in-flight operation holds a Task (see task.go).
 package progress
-
-// This file defines the per-server progress owner type (Tracker) and its
-// per-operation handle (Task). Together they replace the process-global
-// ToServerProgressChannel, global trackers map, and package-level Cancel /
-// IsCanceled functions — see the expand→contract migration plan in
-// docs/requirements/architecture.md.
 
 import (
 	"sync"
@@ -39,8 +36,8 @@ var _ ui.ProgressBar = (*Task)(nil)
 // Tracker — per-server progress channel + live-task registry
 // -----------------------------------------------------------------------------
 
-// Tracker is the per-server owner of the progress channel and the
-// token→*Task registry. Each server instance holds exactly one Tracker;
+// Tracker holds the per-server progress channel and the token→*Task
+// registry. Each server instance holds exactly one Tracker;
 // progress events from that server travel exclusively through its channel,
 // preventing cross-server event leakage.
 //
@@ -76,27 +73,27 @@ func NewTrackerWithChannel(ch chan types.ProgressParams, logger *zerolog.Logger)
 
 // Channel returns the progress event channel for this Tracker. Pass this to
 // createProgressListener to drain progress events to the LSP client.
-func (o *Tracker) Channel() chan types.ProgressParams {
-	return o.ch
+func (t *Tracker) Channel() chan types.ProgressParams {
+	return t.ch
 }
 
 // New creates and registers a new per-operation Task on this Tracker's channel.
 // cancellable controls whether the LSP client may cancel this operation via
 // window/workDoneProgress/cancel.
-func (o *Tracker) New(cancellable bool) *Task {
-	task := o.newTask(cancellable)
-	o.register(task)
+func (t *Tracker) New(cancellable bool) *Task {
+	task := t.newTask(cancellable)
+	t.register(task)
 	return task
 }
 
-func (o *Tracker) newTask(cancellable bool) *Task {
+func (t *Tracker) newTask(cancellable bool) *Task {
 	return &Task{
-		owner:         o,
-		channel:       o.ch,
+		tracker:       t,
+		channel:       t.ch,
 		cancelChannel: make(chan bool, 1),
 		token:         types.ProgressToken(uuid.NewString()),
 		cancellable:   cancellable,
-		logger:        o.logger,
+		logger:        t.logger,
 	}
 }
 
@@ -106,14 +103,14 @@ func (o *Tracker) newTask(cancellable bool) *Task {
 // events do not reset the summary panel. folderPath is the workspace folder
 // this scan belongs to; FolderForScanToken hands it back so a cancel handler
 // can scope a reset to this folder alone.
-func (o *Tracker) NewScan(cancellable bool, folderPath types.FilePath) *Task {
-	task := o.newTask(cancellable)
+func (t *Tracker) NewScan(cancellable bool, folderPath types.FilePath) *Task {
+	task := t.newTask(cancellable)
 	// Set before the task becomes visible in the registry: a cancel arriving between
 	// registration and these writes would see a task that is not flagged as a scan and
 	// skip the summary-panel reset (IDE-1035).
 	task.isScan = true
 	task.folderPath = folderPath
-	o.register(task)
+	t.register(task)
 	return task
 }
 
@@ -121,10 +118,10 @@ func (o *Tracker) NewScan(cancellable bool, folderPath types.FilePath) *Task {
 // NewScan. Returns false once the task is removed (e.g. after Cancel or
 // delete), giving the cancel handler a single source of truth without a
 // parallel registry.
-func (o *Tracker) IsScanToken(token types.ProgressToken) bool {
-	o.mu.RLock()
-	defer o.mu.RUnlock()
-	task, ok := o.tasks[token]
+func (t *Tracker) IsScanToken(token types.ProgressToken) bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	task, ok := t.tasks[token]
 	return ok && task.isScan
 }
 
@@ -132,10 +129,10 @@ func (o *Tracker) IsScanToken(token types.ProgressToken) bool {
 // registered via NewScan. The second return value is false if the token is
 // unknown, already consumed (e.g. by Cancel), or belongs to a non-scan task —
 // callers must not fall back to resetting every folder in that case.
-func (o *Tracker) FolderForScanToken(token types.ProgressToken) (types.FilePath, bool) {
-	o.mu.RLock()
-	defer o.mu.RUnlock()
-	task, ok := o.tasks[token]
+func (t *Tracker) FolderForScanToken(token types.ProgressToken) (types.FilePath, bool) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	task, ok := t.tasks[token]
 	if !ok || !task.isScan {
 		return "", false
 	}
@@ -145,38 +142,38 @@ func (o *Tracker) FolderForScanToken(token types.ProgressToken) (types.FilePath,
 // Cancel signals cancellation for the task identified by token, then removes
 // it from the registry. Idempotent: canceling an already-canceled token is a
 // no-op.
-func (o *Tracker) Cancel(token types.ProgressToken) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	task, ok := o.tasks[token]
+func (t *Tracker) Cancel(token types.ProgressToken) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	task, ok := t.tasks[token]
 	if ok {
 		task.cancelChannel <- true
-		delete(o.tasks, token)
+		delete(t.tasks, token)
 		close(task.cancelChannel)
 	}
 }
 
 // IsCanceled reports whether token has been canceled (i.e., removed from the
 // registry). A token that was never registered also returns true (not found).
-func (o *Tracker) IsCanceled(token types.ProgressToken) bool {
-	o.mu.RLock()
-	defer o.mu.RUnlock()
-	_, ok := o.tasks[token]
+func (t *Tracker) IsCanceled(token types.ProgressToken) bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	_, ok := t.tasks[token]
 	return !ok
 }
 
 // register adds task to the registry. Called by New immediately after
 // construction so the task can be looked up for cancellation.
-func (o *Tracker) register(task *Task) {
-	o.mu.Lock()
-	o.tasks[task.token] = task
-	o.mu.Unlock()
+func (t *Tracker) register(task *Task) {
+	t.mu.Lock()
+	t.tasks[task.token] = task
+	t.mu.Unlock()
 }
 
 // delete removes task from the registry. Called by every terminal path —
 // Task.EndWithMessage, Task.Clear and Task.CancelOrDone.
-func (o *Tracker) delete(token types.ProgressToken) {
-	o.mu.Lock()
-	delete(o.tasks, token)
-	o.mu.Unlock()
+func (t *Tracker) delete(token types.ProgressToken) {
+	t.mu.Lock()
+	delete(t.tasks, token)
+	t.mu.Unlock()
 }

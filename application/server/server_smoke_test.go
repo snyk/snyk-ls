@@ -2610,7 +2610,7 @@ func substituteRemyFlow(t *testing.T, engine workflow.Engine) {
 	if err != nil {
 		t.Skipf("skipping: preview CLI release fetch failed (no network?): %v", err)
 	}
-	downloader := install.NewDownloader(engine, er, func() *http.Client { return http.DefaultClient }, testutil.NewTestProgressTracker(t))
+	downloader := install.NewDownloader(engine, er, func() *http.Client { return http.DefaultClient }, testutil.NewDrainedProgressTracker())
 	if _, err = downloader.Download(release, previewCLIPath, false); err != nil {
 		t.Skipf("skipping: preview CLI download failed (no network?): %v", err)
 	}

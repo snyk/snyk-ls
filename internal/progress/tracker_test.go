@@ -27,30 +27,30 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// IDE-2036-UNIT-110: Two separate owners cancel independently.
-// Canceling a task on owner A must NOT affect tasks on owner B.
+// IDE-2036-UNIT-110: Two separate trackers cancel independently.
+// Canceling a task on tracker A must NOT affect tasks on tracker B.
 func TestTracker_CancelIsolation(t *testing.T) {
 	logger := zerolog.Nop()
 
-	ownerA := NewTracker(&logger)
-	ownerB := NewTracker(&logger)
+	trackerA := NewTracker(&logger)
+	trackerB := NewTracker(&logger)
 
-	taskA := ownerA.New(true)
-	taskB := ownerB.New(true)
+	taskA := trackerA.New(true)
+	taskB := trackerB.New(true)
 
 	tokenA := taskA.GetToken()
 	tokenB := taskB.GetToken()
 
 	// Before canceling: both tasks should be active (not canceled).
-	assert.False(t, ownerA.IsCanceled(tokenA), "taskA should not be canceled before Cancel")
-	assert.False(t, ownerB.IsCanceled(tokenB), "taskB should not be canceled before Cancel")
+	assert.False(t, trackerA.IsCanceled(tokenA), "taskA should not be canceled before Cancel")
+	assert.False(t, trackerB.IsCanceled(tokenB), "taskB should not be canceled before Cancel")
 
-	// Cancel task A via owner A.
-	ownerA.Cancel(tokenA)
+	// Cancel task A via tracker A.
+	trackerA.Cancel(tokenA)
 
 	// After canceling A: A is canceled, B is unaffected.
-	assert.True(t, ownerA.IsCanceled(tokenA), "taskA should be canceled after Cancel")
-	assert.False(t, ownerB.IsCanceled(tokenB), "taskB on ownerB must not be affected by canceling ownerA's task")
+	assert.True(t, trackerA.IsCanceled(tokenA), "taskA should be canceled after Cancel")
+	assert.False(t, trackerB.IsCanceled(tokenB), "taskB on trackerB must not be affected by canceling trackerA's task")
 
 	// The cancel signal must actually have been delivered, not just removed from
 	// the registry. Tracker.Cancel writes before returning, so no waiting needed.
@@ -62,43 +62,43 @@ func TestTracker_CancelIsolation(t *testing.T) {
 	}
 }
 
-// IDE-2036-UNIT-111: Two separate owners route to separate channels.
-// Progress events from owner A must NOT appear on owner B's channel.
+// IDE-2036-UNIT-111: Two separate trackers route to separate channels.
+// Progress events from tracker A must NOT appear on tracker B's channel.
 func TestTracker_ChannelIsolation(t *testing.T) {
 	logger := zerolog.Nop()
 
-	ownerA := NewTracker(&logger)
-	ownerB := NewTracker(&logger)
+	trackerA := NewTracker(&logger)
+	trackerB := NewTracker(&logger)
 
-	chA := ownerA.Channel()
-	chB := ownerB.Channel()
+	chA := trackerA.Channel()
+	chB := trackerB.Channel()
 
 	// Distinct channel objects — different memory addresses.
-	require.NotEqual(t, chA, chB, "each owner must have its own channel")
+	require.NotEqual(t, chA, chB, "each tracker must have its own channel")
 
-	// Create a task on owner A and send a progress event.
-	taskA := ownerA.New(false)
+	// Create a task on tracker A and send a progress event.
+	taskA := trackerA.New(false)
 	taskA.Begin("A-title")
 
 	// Event must arrive on chA only.
 	assert.Eventually(t, func() bool { return len(chA) > 0 }, time.Second, time.Millisecond,
-		"progress event from owner A must arrive on chA")
+		"progress event from tracker A must arrive on chA")
 	assert.Never(t, func() bool { return len(chB) > 0 }, 50*time.Millisecond, time.Millisecond,
-		"progress event from owner A must NOT appear on chB")
+		"progress event from tracker A must NOT appear on chB")
 
 	// Drain chA.
 	for len(chA) > 0 {
 		<-chA
 	}
 
-	// Now do the same for owner B.
-	taskB := ownerB.New(false)
+	// Now do the same for tracker B.
+	taskB := trackerB.New(false)
 	taskB.Begin("B-title")
 
 	assert.Eventually(t, func() bool { return len(chB) > 0 }, time.Second, time.Millisecond,
-		"progress event from owner B must arrive on chB")
+		"progress event from tracker B must arrive on chB")
 	assert.Never(t, func() bool { return len(chA) > 0 }, 50*time.Millisecond, time.Millisecond,
-		"progress event from owner B must NOT appear on chA")
+		"progress event from tracker B must NOT appear on chA")
 
 	// End tasks so the test cleans up without blocking.
 	taskA.End()
@@ -112,20 +112,20 @@ func TestTracker_ChannelIsolation(t *testing.T) {
 }
 
 // TestTask_SelfCancel verifies that a Task can signal its own cancel channel
-// without affecting other tasks on the same owner.
+// without affecting other tasks on the same tracker.
 func TestTask_SelfCancel(t *testing.T) {
 	logger := zerolog.Nop()
-	owner := NewTracker(&logger)
+	tracker := NewTracker(&logger)
 
-	task := owner.New(true)
+	task := tracker.New(true)
 	token := task.GetToken()
 
-	assert.False(t, owner.IsCanceled(token), "task should not be canceled initially")
+	assert.False(t, tracker.IsCanceled(token), "task should not be canceled initially")
 
-	// Self-cancel via owner.Cancel (mirroring the code.go self-cancel pattern).
-	owner.Cancel(token)
+	// Self-cancel via tracker.Cancel (mirroring the code.go self-cancel pattern).
+	tracker.Cancel(token)
 
-	assert.True(t, owner.IsCanceled(token), "task should be canceled after owner.Cancel")
+	assert.True(t, tracker.IsCanceled(token), "task should be canceled after tracker.Cancel")
 
 	select {
 	case <-task.GetCancelChannel():
@@ -141,12 +141,12 @@ func TestNewTrackerWithChannel(t *testing.T) {
 	logger := zerolog.Nop()
 
 	ch := make(chan types.ProgressParams, 100)
-	owner := NewTrackerWithChannel(ch, &logger)
+	tracker := NewTrackerWithChannel(ch, &logger)
 
 	// Channel() must return the caller-supplied channel.
-	assert.Equal(t, ch, owner.Channel(), "Channel() must return the caller-supplied channel")
+	assert.Equal(t, ch, tracker.Channel(), "Channel() must return the caller-supplied channel")
 
-	task := owner.New(false)
+	task := tracker.New(false)
 	task.Begin("test")
 	task.End()
 
@@ -158,23 +158,23 @@ func TestNewTrackerWithChannel(t *testing.T) {
 // If Task doesn't implement ui.ProgressBar, this test file won't compile.
 func TestTask_ImplementsProgressBar(t *testing.T) {
 	logger := zerolog.Nop()
-	owner := NewTracker(&logger)
-	task := owner.New(false)
+	tracker := NewTracker(&logger)
+	task := tracker.New(false)
 	// Type assertion: *Task must implement ui.ProgressBar
 	// (checked by the var _ ui.ProgressBar = (*Task)(nil) in task.go)
 	_ = task
 }
 
 // IDE-2036-UNIT-113: A drained 1000-item channel does not deadlock producers.
-// This verifies the NewTestProgressTracker helper's cleanup contract: a test that
-// creates an owner, fires >1000 progress events, and relies on the t.Cleanup
+// This verifies the NewDrainedProgressTracker helper's cleanup contract: a test that
+// creates a tracker, fires >1000 progress events, and relies on the t.Cleanup
 // drainer will not block even if the test never reads from the channel itself.
-func TestOwner_DrainedChannelNoDeadlock(t *testing.T) {
+func TestTracker_DrainedChannelNoDeadlock(t *testing.T) {
 	logger := zerolog.Nop()
 	ch := make(chan types.ProgressParams, 1000)
-	owner := NewTrackerWithChannel(ch, &logger)
+	tracker := NewTrackerWithChannel(ch, &logger)
 
-	// Register a cleanup drainer (same pattern as testutil.NewTestProgressTracker).
+	// Register a cleanup drainer (same pattern as testutil.NewDrainedProgressTracker).
 	t.Cleanup(func() {
 	drain:
 		for {
@@ -189,7 +189,7 @@ func TestOwner_DrainedChannelNoDeadlock(t *testing.T) {
 	// Fire exactly 1000 Begin events — channel capacity. Must not deadlock.
 	tasks := make([]*Task, 1000)
 	for i := range tasks {
-		tasks[i] = owner.New(false)
+		tasks[i] = tracker.New(false)
 	}
 	done := make(chan struct{})
 	go func() {
