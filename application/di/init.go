@@ -139,6 +139,7 @@ func Init(engine workflow.Engine, tokenService types.TokenService) Dependencies 
 	var localScanStateChangeEmitter scanstates.ScanStateChangeEmitter
 	if localTreeEmitterErr != nil {
 		logger.Warn().Err(localTreeEmitterErr).Msg("failed to create tree scan state emitter, using summary emitter only")
+		localTreeEmitter = nil // Dependencies.TreeEmitter promises nil on failure
 		localScanStateChangeEmitter = localSummaryEmitter
 	} else {
 		localScanStateChangeEmitter = scanstates.NewCompositeEmitter(localSummaryEmitter, localTreeEmitter)
