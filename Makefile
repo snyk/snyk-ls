@@ -93,6 +93,13 @@ test: test-js
 	 [ -n "$(SMOKE_TESTS)" ] && stages="$$stages test-smoke" || true; \
 	 for s in $$stages; do $(MAKE) --no-print-directory _save-test-hash STAGE=$$s; done
 
+## test-live: Run tests printing each failure as it happens, not at the end (local dev).
+## Usage: make test-live PKG=./application/server/ ARGS="-race"
+.PHONY: test-live
+test-live: PKG ?= ./...
+test-live:
+	@scripts/test-live.sh $(PKG) $(TIMEOUT) $(ARGS)
+
 ## test-integ: Run integration tests (alias for INTEG_TESTS=1 make test).
 .PHONY: test-integ
 test-integ:
