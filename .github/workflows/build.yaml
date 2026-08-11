@@ -213,7 +213,7 @@ jobs:
             export SNYK_TOKEN=${{ secrets.SNYK_TOKEN_4 }}
           fi
 
-          go test -timeout=25m -count=1 ./...
+          go test -timeout=25m -count=1 -parallel=12 ./...
 
   proxy-test:
     name: proxy-test

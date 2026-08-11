@@ -34,6 +34,11 @@ PACT_V := 2.4.2
 
 TIMEOUT := "-timeout=90m"
 
+# These tests block on network calls and CLI subprocesses, not CPU, so the
+# GOMAXPROCS default caps t.Parallel() concurrency far below what the workload
+# can overlap. Override with PARALLEL= to compare against the default.
+PARALLEL ?= -parallel=12
+
 
 ## tools: Install required tooling.
 .PHONY: tools
@@ -87,7 +92,7 @@ format: lint-fix
 test: test-js
 	@echo "==> Running tests..."
 	@mkdir -p $(BUILD_DIR)
-	go test $(TIMEOUT) -failfast ./...
+	go test $(TIMEOUT) $(PARALLEL) -failfast ./...
 	@stages="test"; \
 	 [ -n "$(INTEG_TESTS)" ] && stages="$$stages test-integ" || true; \
 	 [ -n "$(SMOKE_TESTS)" ] && stages="$$stages test-smoke" || true; \
