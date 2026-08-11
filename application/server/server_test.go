@@ -1786,6 +1786,17 @@ func TestInitializeHandler_MissingDep_PropagatesLSPError(t *testing.T) {
 			mutate:      func(d *di.Dependencies) { d.ConfigResolver = nil },
 			wantMessage: "mandatory DI dependency missing: ConfigResolver",
 		},
+		// Concrete-pointer deps, the ones a boxed-into-`any` check lets through.
+		{
+			name:        "missing FileWatcher",
+			mutate:      func(d *di.Dependencies) { d.FileWatcher = nil },
+			wantMessage: "mandatory DI dependency missing: FileWatcher",
+		},
+		{
+			name:        "missing CodeActionService",
+			mutate:      func(d *di.Dependencies) { d.CodeActionService = nil },
+			wantMessage: "mandatory DI dependency missing: CodeActionService",
+		},
 	}
 
 	for _, tc := range cases {

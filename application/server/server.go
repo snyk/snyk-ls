@@ -150,29 +150,32 @@ func Start(engine workflow.Engine, tokenService *config.TokenServiceImpl) {
 // validateMandatoryDeps returns an error if any mandatory DI dependency is nil.
 // All deps in this list are always created by di.Init and di.TestInit; a nil value
 // means the server was started with broken wiring and cannot function correctly.
+// Nil-ness is evaluated here, at the call site, on the statically typed field —
+// never on a value boxed into an `any`, where a nil concrete pointer yields a
+// non-nil interface and slips through the check.
 func validateMandatoryDeps(deps di.Dependencies) error {
 	checks := []struct {
-		name  string
-		value any
+		name    string
+		present bool
 	}{
-		{"ConfigResolver", deps.ConfigResolver},
-		{"AuthenticationService", deps.AuthenticationService},
-		{"LdxSyncService", deps.LdxSyncService},
-		{"Notifier", deps.Notifier},
-		{"FeatureFlagService", deps.FeatureFlagService},
-		{"ErrorReporter", deps.ErrorReporter},
-		{"LearnService", deps.LearnService},
-		{"Scanner", deps.Scanner},
-		{"HoverService", deps.HoverService},
-		{"ScanNotifier", deps.ScanNotifier},
-		{"ScanPersister", deps.ScanPersister},
-		{"ScanStateAggregator", deps.ScanStateAggregator},
-		{"FileWatcher", deps.FileWatcher},
-		{"CodeActionService", deps.CodeActionService},
-		{"CommandService", deps.CommandService},
+		{"ConfigResolver", deps.ConfigResolver != nil},
+		{"AuthenticationService", deps.AuthenticationService != nil},
+		{"LdxSyncService", deps.LdxSyncService != nil},
+		{"Notifier", deps.Notifier != nil},
+		{"FeatureFlagService", deps.FeatureFlagService != nil},
+		{"ErrorReporter", deps.ErrorReporter != nil},
+		{"LearnService", deps.LearnService != nil},
+		{"Scanner", deps.Scanner != nil},
+		{"HoverService", deps.HoverService != nil},
+		{"ScanNotifier", deps.ScanNotifier != nil},
+		{"ScanPersister", deps.ScanPersister != nil},
+		{"ScanStateAggregator", deps.ScanStateAggregator != nil},
+		{"FileWatcher", deps.FileWatcher != nil},
+		{"CodeActionService", deps.CodeActionService != nil},
+		{"CommandService", deps.CommandService != nil},
 	}
 	for _, c := range checks {
-		if c.value == nil {
+		if !c.present {
 			return fmt.Errorf("snyk-ls: mandatory DI dependency missing: %s", c.name)
 		}
 	}
