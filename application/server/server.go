@@ -73,17 +73,35 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
-var cacheCheckCancel context.CancelFunc //nolint:gochecknoglobals // process-global cancel for the periodic cache-check goroutine
+// backgroundInit hands the background scanner-init lifecycle (IDE-2181) from
+// initializedHandler, which launches the heavy init in a goroutine, to
+// shutdownHandler, which must cancel and await it before disposing the notifier/
+// tree-emitter/timers it uses. It is per-server, so parallel servers in one process
+// cannot cancel each other's init or cache-check goroutine.
+type backgroundInit struct {
+	mu         sync.Mutex
+	cancel     context.CancelFunc
+	done       chan struct{}
+	cacheCheck context.CancelFunc
+}
 
-// Background scanner-init lifecycle (IDE-2181). initializedHandler launches the heavy
-// scanner init in a background goroutine; shutdownHandler must cancel and await it
-// before disposing the notifier/tree-emitter/timers it uses. These are written
-// synchronously in the initialized handler (mirroring cacheCheckCancel) and read by
-// shutdown, which runs later in the LSP lifecycle.
-var (
-	backgroundInitCancel context.CancelFunc //nolint:gochecknoglobals // written by the initialized handler, read by shutdown — same LSP lifecycle, one per process
-	backgroundInitDone   chan struct{}      //nolint:gochecknoglobals // written by the initialized handler, read by shutdown — same LSP lifecycle, one per process
-)
+func (b *backgroundInit) setInit(cancel context.CancelFunc, done chan struct{}) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.cancel, b.done = cancel, done
+}
+
+func (b *backgroundInit) setCacheCheck(cancel context.CancelFunc) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.cacheCheck = cancel
+}
+
+func (b *backgroundInit) get() (cancel context.CancelFunc, done chan struct{}, cacheCheck context.CancelFunc) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.cancel, b.done, b.cacheCheck
+}
 
 // backgroundInitShutdownTimeout bounds how long shutdown waits for the background
 // scanner-init goroutine to observe cancellation and finish before it disposes shared
@@ -299,8 +317,9 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	// Use the per-server progress channel from ProgressTracker so that progress
 	// events from this server's scanners are never misrouted to another server's listener.
 	progressCh := deps.ProgressTracker.Channel()
+	bgInit := &backgroundInit{}
 	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv, progressStopChan, progressCh))
-	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv))
+	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv, bgInit))
 	var onFileChange func(types.FilePath)
 	if deps.RemediationNotifier != nil {
 		onFileChange = deps.RemediationNotifier.InvalidateFile
@@ -316,7 +335,7 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	handlers["textDocument/willSave"] = enrich(noOpHandler())
 	handlers["textDocument/willSaveWaitUntil"] = enrich(noOpHandler())
 	handlers["codeAction/resolve"] = enrich(codeActionResolveHandler(logger, deps.CodeActionService, srv))
-	handlers["shutdown"] = enrich(shutdownHandler(progressStopChan, scanCancel, deps.TreeEmitter))
+	handlers["shutdown"] = enrich(shutdownHandler(progressStopChan, scanCancel, deps.TreeEmitter, bgInit))
 	handlers["exit"] = enrich(exitHandler(srv))
 	handlers["workspace/didChangeWorkspaceFolders"] = enrich(workspaceDidChangeWorkspaceFoldersHandler(conf, engine, srv, scanCtx))
 	handlers["workspace/willDeleteFiles"] = enrich(workspaceWillDeleteFilesHandler(conf))
@@ -917,7 +936,7 @@ func getDownloadURL(conf configuration.Configuration, engine workflow.Engine, pr
 	}
 }
 
-func initializedHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server) handler.Func {
+func initializedHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server, bgInit *backgroundInit) handler.Func {
 	return handler.New(func(ctx context.Context, params types.InitializedParams) (any, error) {
 		// Readiness-signal safety net. The normal signal fires at the END of the
 		// background scanner-init goroutine launched below (scanner-readiness waiters
@@ -987,12 +1006,12 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 		}()
 
 		// The cache janitor is auth-independent and cheap; keep it on the handler
-		// goroutine so cacheCheckCancel is written before shutdown can read it (avoids a
+		// goroutine so the cancel func is recorded before shutdown can read it (avoids a
 		// data race with shutdownHandler that moving it into the background goroutine
 		// would introduce).
 		deleteExpiredCache(conf)
 		cacheCtx, cancel := context.WithCancel(context.Background())
-		cacheCheckCancel = cancel
+		bgInit.setCacheCheck(cancel)
 		go periodicallyCheckForExpiredCache(cacheCtx, conf)
 
 		// Run scanner init, folder handling and the first workspace scan in the
@@ -1016,9 +1035,8 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 		// goroutine is still mid-init, and the goroutine would then run HandleFolders/
 		// ScanWorkspace against disposed state → use-after-dispose (IDE-2181).
 		initCtx, initCancel := context.WithCancel(context.Background())
-		backgroundInitCancel = initCancel
 		done := make(chan struct{})
-		backgroundInitDone = done
+		bgInit.setInit(initCancel, done)
 		go func() {
 			// close(done) is registered first so it runs LAST: shutdown, which waits on
 			// this channel, only observes completion after the readiness signal below has
@@ -1232,7 +1250,7 @@ func monitorClientProcess(pid int) time.Duration {
 	return time.Since(start)
 }
 
-func shutdownHandler(progressStopChan chan<- bool, scanCancel context.CancelFunc, treeEmitter *treeview.TreeScanStateEmitter) jrpc2.Handler {
+func shutdownHandler(progressStopChan chan<- bool, scanCancel context.CancelFunc, treeEmitter *treeview.TreeScanStateEmitter, bgInit *backgroundInit) jrpc2.Handler {
 	return handler.New(func(ctx context.Context) (any, error) {
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "Shutdown").Logger()
 		logger.Info().Msg("ENTERING")
@@ -1245,12 +1263,13 @@ func shutdownHandler(progressStopChan chan<- bool, scanCancel context.CancelFunc
 		// awaiting guarantees the goroutine cannot run HandleFolders/ScanWorkspace against
 		// disposed state (IDE-2181). The wait is bounded so a non-cooperative init path
 		// cannot hang shutdown.
-		if backgroundInitCancel != nil {
-			backgroundInitCancel()
+		initCancel, initDone, cacheCheckCancel := bgInit.get()
+		if initCancel != nil {
+			initCancel()
 		}
-		if backgroundInitDone != nil {
+		if initDone != nil {
 			select {
-			case <-backgroundInitDone:
+			case <-initDone:
 			case <-time.After(backgroundInitShutdownTimeout):
 				logger.Warn().Msg("timed out waiting for background initialization to finish during shutdown; disposing anyway")
 			}
