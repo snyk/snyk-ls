@@ -45,8 +45,8 @@ type Task struct {
 	// isScan distinguishes scan-operation tasks (Tracker.NewScan) from generic
 	// progress tasks so window/workDoneProgress/cancel can scope the
 	// summary-panel reset to scan cancellations only (IDE-1035).
-	// Written under the owner's mutex when the task is registered; only ever
-	// read via Tracker.IsScanToken under the same lock.
+	// Written before the task is registered and never again; only ever read under
+	// the owner's mutex, by Tracker.IsScanToken/FolderForScanToken.
 	isScan bool
 	// folderPath is the workspace folder this scan task belongs to, set only
 	// for isScan tasks. Lets the cancel handler scope a reset to the canceled
@@ -75,8 +75,8 @@ func (t *Task) GetCancelChannel() chan bool {
 	return t.cancelChannel
 }
 
-// IsCanceled delegates to the owner registry: the task is canceled when it has
-// been removed from the registry. Ownerless tasks (test-only, see NewTestTask)
+// IsCanceled delegates to the owner registry: the task is no longer tracked once
+// it is canceled, ended or cleared. Ownerless tasks (test-only, see NewTestTask)
 // always report false.
 func (t *Task) IsCanceled() bool {
 	if t.owner == nil {
@@ -178,32 +178,25 @@ func (t *Task) End() {
 	t.EndWithMessage("")
 }
 
-// EndWithMessage terminates the progress operation with a final message.
-// Panics if called twice (matching the existing Tracker behavior).
+// EndWithMessage terminates the progress operation with a final message and
+// deregisters it from the owner. Panics if called twice (matching the existing
+// Tracker behavior).
 func (t *Task) EndWithMessage(message string) {
-	logger := t.logger.With().Str("token", string(t.token)).Str("method", "Task.EndWithMessage").Logger()
-	if t.finished {
+	if !t.finish(message) {
 		panic("Called end progress twice. This breaks LSP in Eclipse fix me now and avoid headaches later")
 	}
-	t.finished = true
-	params := types.ProgressParams{
-		Token: t.token,
-		Value: types.WorkDoneProgressEnd{
-			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: types.WorkDoneProgressEndKind},
-			Message:              message,
-		},
-	}
-	t.send(params, logger)
 }
 
-// Clear terminates the progress operation (if not already finished) and
-// deregisters it from the owner.
-func (t *Task) Clear() error {
-	logger := t.logger.With().Str("token", string(t.token)).Str("method", "Task.Clear").Logger()
+// finish sends the end event and releases the registry entry, reporting false if
+// the task was already terminal. Ending is as terminal as clearing: callers that
+// end without clearing (the CLI downloader, framework progress bars) would
+// otherwise leave a registry entry behind for the life of the server.
+func (t *Task) finish(message string) bool {
+	logger := t.logger.With().Str("token", string(t.token)).Str("method", "Task.finish").Logger()
 	t.m.Lock()
 	if t.finished {
 		t.m.Unlock()
-		return nil
+		return false
 	}
 	t.finished = true
 	t.m.Unlock()
@@ -212,13 +205,20 @@ func (t *Task) Clear() error {
 		Token: t.token,
 		Value: types.WorkDoneProgressEnd{
 			WorkDoneProgressKind: types.WorkDoneProgressKind{Kind: types.WorkDoneProgressEndKind},
-			Message:              "",
+			Message:              message,
 		},
 	}
 	t.send(params, logger)
 	if t.owner != nil {
 		t.owner.delete(t.token)
 	}
+	return true
+}
+
+// Clear terminates the progress operation (if not already finished) and
+// deregisters it from the owner.
+func (t *Task) Clear() error {
+	t.finish("")
 	return nil
 }
 

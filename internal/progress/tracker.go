@@ -84,7 +84,13 @@ func (o *Tracker) Channel() chan types.ProgressParams {
 // cancellable controls whether the LSP client may cancel this operation via
 // window/workDoneProgress/cancel.
 func (o *Tracker) New(cancellable bool) *Task {
-	task := &Task{
+	task := o.newTask(cancellable)
+	o.register(task)
+	return task
+}
+
+func (o *Tracker) newTask(cancellable bool) *Task {
+	return &Task{
 		owner:         o,
 		channel:       o.ch,
 		cancelChannel: make(chan bool, 1),
@@ -92,8 +98,6 @@ func (o *Tracker) New(cancellable bool) *Task {
 		cancellable:   cancellable,
 		logger:        o.logger,
 	}
-	o.register(task)
-	return task
 }
 
 // NewScan creates and registers a Task tagged as a scan token, so IsScanToken
@@ -103,11 +107,13 @@ func (o *Tracker) New(cancellable bool) *Task {
 // this scan belongs to; FolderForScanToken hands it back so a cancel handler
 // can scope a reset to this folder alone.
 func (o *Tracker) NewScan(cancellable bool, folderPath types.FilePath) *Task {
-	task := o.New(cancellable)
-	o.mu.Lock()
+	task := o.newTask(cancellable)
+	// Set before the task becomes visible in the registry: a cancel arriving between
+	// registration and these writes would see a task that is not flagged as a scan and
+	// skip the summary-panel reset (IDE-1035).
 	task.isScan = true
 	task.folderPath = folderPath
-	o.mu.Unlock()
+	o.register(task)
 	return task
 }
 
@@ -167,8 +173,8 @@ func (o *Tracker) register(task *Task) {
 	o.mu.Unlock()
 }
 
-// delete removes task from the registry. Called by Task.Clear and
-// Task.CancelOrDone when the operation completes or is aborted.
+// delete removes task from the registry. Called by every terminal path —
+// Task.EndWithMessage, Task.Clear and Task.CancelOrDone.
 func (o *Tracker) delete(token types.ProgressToken) {
 	o.mu.Lock()
 	delete(o.tasks, token)
