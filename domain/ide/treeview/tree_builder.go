@@ -630,16 +630,20 @@ type issueStats struct {
 	ignoredCount   int
 }
 
-// computeIssueStats deduplicates by fingerprint and computes all counts in a single pass.
+// computeIssueStats counts issues and all their subsets in a single pass. Issues
+// are collapsed by fingerprint only for products where a shared fingerprint means
+// the same finding (product.CollapsesByFingerprint — currently only Secrets);
+// every other product's issues are counted individually.
 func computeIssueStats(issues []types.Issue) issueStats {
 	seen := make(map[string]bool, len(issues))
 	stats := issueStats{severityCounts: &SeverityCounts{}}
 	for _, issue := range issues {
 		fp := issue.GetFingerprint()
-		if fp != "" && seen[fp] {
+		collapses := fp != "" && issue.GetProduct().CollapsesByFingerprint()
+		if collapses && seen[fp] {
 			continue
 		}
-		if fp != "" {
+		if collapses {
 			seen[fp] = true
 		}
 		stats.uniqueIssues = append(stats.uniqueIssues, issue)
@@ -734,19 +738,30 @@ func (b *TreeBuilder) buildIssueNodes(issues []types.Issue) []TreeNode {
 	copy(sorted, issues)
 	sortIssuesByPriority(sorted)
 
-	// Group by fingerprint, preserving priority sort order.
+	// Group by fingerprint, preserving priority sort order. Only products where a
+	// shared fingerprint means the same finding (product.CollapsesByFingerprint —
+	// currently only Secrets) are grouped into one node with location children;
+	// every other product's issues get a unique group key so each renders as its
+	// own issue node.
 	type fpGroup struct {
 		fingerprint string
 		issues      []types.Issue
 	}
 	var groups []fpGroup
 	groupIdx := make(map[string]int)
-	for _, issue := range sorted {
+	for i, issue := range sorted {
 		fp := issue.GetFingerprint()
-		if idx, exists := groupIdx[fp]; exists {
+		var key string
+		if fp != "" && issue.GetProduct().CollapsesByFingerprint() {
+			key = "fp:" + fp
+		} else {
+			// Unique per issue → never grouped.
+			key = fmt.Sprintf("issue:%d:%s", i, issue.GetID())
+		}
+		if idx, exists := groupIdx[key]; exists {
 			groups[idx].issues = append(groups[idx].issues, issue)
 		} else {
-			groupIdx[fp] = len(groups)
+			groupIdx[key] = len(groups)
 			groups = append(groups, fpGroup{fingerprint: fp, issues: []types.Issue{issue}})
 		}
 	}

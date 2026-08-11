@@ -174,15 +174,18 @@ func UpdateSeverityCount(sic SeverityIssueCounts, issue Issue) {
 
 type IssuesByFile map[FilePath][]Issue
 
-// DeduplicateByFingerprint returns one representative issue per fingerprint group.
-// Issues with the same non-empty fingerprint are collapsed into a single entry (the first seen).
-// Issues with an empty fingerprint are treated as unique.
+// DeduplicateByFingerprint returns one representative issue per fingerprint group
+// for products where a shared fingerprint means the same finding (see
+// product.CollapsesByFingerprint) — currently only Secrets. Such issues with the
+// same non-empty fingerprint are collapsed into a single entry (the first seen).
+// Issues of every other product, and issues with an empty fingerprint, are
+// treated as unique, since their fingerprints are not per-finding identities.
 func DeduplicateByFingerprint(issues []Issue) []Issue {
 	seen := make(map[string]bool, len(issues))
 	var unique []Issue
 	for _, issue := range issues {
 		fp := issue.GetFingerprint()
-		if fp == "" {
+		if fp == "" || !issue.GetProduct().CollapsesByFingerprint() {
 			unique = append(unique, issue)
 			continue
 		}
