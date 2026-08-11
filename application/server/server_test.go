@@ -741,14 +741,16 @@ func Test_initialize_updatesSettings(t *testing.T) {
 }
 
 func Test_initialize_integrationInInitializationOptions_readFromInitializationOptions(t *testing.T) {
+	t.Parallel()
+
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	// Arrange
 	const expectedIntegrationName = "ECLIPSE"
 	const expectedIntegrationVersion = "0.0.1rc1"
 
-	// The info in initializationOptions takes priority over env-vars
-	t.Setenv(cli.IntegrationNameEnvVarKey, "NOT_"+expectedIntegrationName)
-	t.Setenv(cli.IntegrationVersionEnvVarKey, "NOT_"+expectedIntegrationVersion)
+	// The info in initializationOptions takes priority over the configured integration
+	engine.GetConfiguration().Set(configuration.INTEGRATION_NAME, "NOT_"+expectedIntegrationName)
+	engine.GetConfiguration().Set(configuration.INTEGRATION_VERSION, "NOT_"+expectedIntegrationVersion)
 
 	loc, _, _ := setupServer(t, engine, tokenService)
 	clientParams := types.InitializeParams{
@@ -774,15 +776,17 @@ func Test_initialize_integrationInInitializationOptions_readFromInitializationOp
 }
 
 func Test_initialize_integrationInClientInfo_readFromClientInfo(t *testing.T) {
+	t.Parallel()
+
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	// Arrange
 	const expectedIntegrationName = "ECLIPSE"
 	const expectedIntegrationVersion = "8.0.0ServicePack92-preview4"
 	const expectedIdeVersion = "0.0.1rc1"
 
-	// The data in clientInfo takes priority over env-vars
-	t.Setenv(cli.IntegrationNameEnvVarKey, "NOT_"+expectedIntegrationName)
-	t.Setenv(cli.IntegrationVersionEnvVarKey, "NOT_"+expectedIdeVersion)
+	// The data in clientInfo takes priority over the configured integration
+	engine.GetConfiguration().Set(configuration.INTEGRATION_NAME, "NOT_"+expectedIntegrationName)
+	engine.GetConfiguration().Set(configuration.INTEGRATION_VERSION, "NOT_"+expectedIdeVersion)
 
 	loc, _, _ := setupServer(t, engine, tokenService)
 	clientParams := types.InitializeParams{
@@ -808,14 +812,16 @@ func Test_initialize_integrationInClientInfo_readFromClientInfo(t *testing.T) {
 	assert.Equal(t, expectedIdeVersion, engine.GetConfiguration().GetString(configuration.INTEGRATION_ENVIRONMENT_VERSION))
 }
 
-func Test_initialize_integrationOnlyInEnvVars_readFromEnvVars(t *testing.T) {
+func Test_initialize_integrationOnlyInConfiguration_readFromConfiguration(t *testing.T) {
+	t.Parallel()
+
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	// Arrange
 	const expectedIntegrationName = "ECLIPSE"
 	const expectedIntegrationVersion = "0.0.1rc1"
 
-	t.Setenv(cli.IntegrationNameEnvVarKey, expectedIntegrationName)
-	t.Setenv(cli.IntegrationVersionEnvVarKey, expectedIntegrationVersion)
+	engine.GetConfiguration().Set(configuration.INTEGRATION_NAME, expectedIntegrationName)
+	engine.GetConfiguration().Set(configuration.INTEGRATION_VERSION, expectedIntegrationVersion)
 	loc, _, _ := setupServer(t, engine, tokenService)
 
 	// Act
@@ -827,6 +833,19 @@ func Test_initialize_integrationOnlyInEnvVars_readFromEnvVars(t *testing.T) {
 	// Assert
 	assert.Equal(t, expectedIntegrationName, engine.GetConfiguration().GetString(configuration.INTEGRATION_NAME))
 	assert.Equal(t, expectedIntegrationVersion, engine.GetConfiguration().GetString(configuration.INTEGRATION_VERSION))
+}
+
+// Test_integrationConfigKeys_matchTheirEnvVarNames guards the reason
+// Test_initialize_integrationOnlyInConfiguration_readFromConfiguration is allowed to stop
+// writing process environment: the configuration resolves SNYK_INTEGRATION_NAME/_VERSION
+// itself through viper's AutomaticEnv, which uppercases the config key to find the variable.
+// If a key and its env var name ever drift apart, that resolution silently stops working and
+// IDEs that pass the integration by environment lose it.
+func Test_integrationConfigKeys_matchTheirEnvVarNames(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, cli.IntegrationNameEnvVarKey, strings.ToUpper(configuration.INTEGRATION_NAME))
+	assert.Equal(t, cli.IntegrationVersionEnvVarKey, strings.ToUpper(configuration.INTEGRATION_VERSION))
 }
 
 func Test_initialize_shouldOfferAllCommands(t *testing.T) {

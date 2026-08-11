@@ -55,7 +55,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	scanner2 "github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
-	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
@@ -1211,7 +1210,7 @@ func addWorkspaceFolders(ctx context.Context, conf configuration.Configuration, 
 // setClientInformation sets the integration name and version from the client information.
 // The integration version refers to the plugin version, not the IDE version.
 // The function attempts to pull the values from the initialization options, then the client info, and finally
-// from the environment variables.
+// from the configuration, which resolves SNYK_INTEGRATION_NAME/_VERSION from the environment itself.
 func setClientInformation(conf configuration.Configuration, engine workflow.Engine, initParams types.InitializeParams) {
 	var integrationName, integrationVersion string
 	clientInfoName := initParams.ClientInfo.Name
@@ -1222,9 +1221,9 @@ func setClientInformation(conf configuration.Configuration, engine workflow.Engi
 		integrationVersion = initParams.InitializationOptions.IntegrationVersion
 	} else if clientInfoName != "" {
 		integrationName = strings.ToUpper(strings.ReplaceAll(clientInfoName, " ", "_"))
-	} else if integrationNameEnvVar := os.Getenv(cli.IntegrationNameEnvVarKey); integrationNameEnvVar != "" {
-		integrationName = integrationNameEnvVar
-		integrationVersion = os.Getenv(cli.IntegrationVersionEnvVarKey)
+	} else if configuredName := conf.GetString(configuration.INTEGRATION_NAME); configuredName != "" {
+		integrationName = configuredName
+		integrationVersion = conf.GetString(configuration.INTEGRATION_VERSION)
 	} else {
 		return
 	}
