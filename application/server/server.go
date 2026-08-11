@@ -1255,51 +1255,57 @@ func monitorClientProcess(pid int) time.Duration {
 
 func shutdownHandler(progressStopChan chan<- bool, scanCancel context.CancelFunc, treeEmitter *treeview.TreeScanStateEmitter, bgInit *backgroundInit) jrpc2.Handler {
 	return handler.New(func(ctx context.Context) (any, error) {
-		logger := ctx2.LoggerFromContext(ctx).With().Str("method", "Shutdown").Logger()
-		logger.Info().Msg("ENTERING")
-		defer logger.Info().Msg("RETURNING")
-		mustErrorReporterFromContext(ctx).FlushErrorReporting()
-
-		// Cancel and await the background scanner-init goroutine BEFORE disposing the
-		// notifier/tree-emitter/timers it uses. If the IDE closes while init is still in
-		// flight (e.g. a failing startup token refresh), canceling lets Init unwind and
-		// awaiting guarantees the goroutine cannot run HandleFolders/ScanWorkspace against
-		// disposed state (IDE-2181). The wait is bounded so a non-cooperative init path
-		// cannot hang shutdown.
-		initCancel, initDone, cacheCheckCancel := bgInit.get()
-		if initCancel != nil {
-			initCancel()
-		}
-		if initDone != nil {
-			select {
-			case <-initDone:
-			case <-time.After(backgroundInitShutdownTimeout):
-				logger.Warn().Msg("timed out waiting for background initialization to finish during shutdown; disposing anyway")
-			}
-		}
-
-		if cacheCheckCancel != nil {
-			cacheCheckCancel()
-		}
-		treeEmitter.Dispose()
-		// Non-blocking: if initialize was never called the listener goroutine was
-		// never started, so no one reads the channel. A second shutdown call (e.g.
-		// from t.Cleanup after an explicit shutdown in the test body) must not block.
-		select {
-		case progressStopChan <- true:
-		default:
-		}
-		// Cancel the server-lifetime scan context so that any in-flight workspace
-		// scan goroutines exit cleanly. context.WithCancel cancel funcs are
-		// idempotent, so a second shutdown call is safe. Guard against nil in case
-		// a caller has not set ScanCancel in deps (should not happen after D1).
-		if scanCancel != nil {
-			scanCancel()
-		}
-		mustNotifierFromContext(ctx).DisposeListener()
-		command.StopPendingRescanTimers()
-		return nil, nil
+		return nil, shutdown(ctx, progressStopChan, scanCancel, treeEmitter, bgInit)
 	})
+}
+
+func shutdown(ctx context.Context, progressStopChan chan<- bool, scanCancel context.CancelFunc, treeEmitter *treeview.TreeScanStateEmitter, bgInit *backgroundInit) error {
+	logger := ctx2.LoggerFromContext(ctx).With().Str("method", "Shutdown").Logger()
+	logger.Info().Msg("ENTERING")
+	defer logger.Info().Msg("RETURNING")
+	mustErrorReporterFromContext(ctx).FlushErrorReporting()
+
+	// Cancel and await the background scanner-init goroutine BEFORE disposing the
+	// notifier/tree-emitter/timers it uses. If the IDE closes while init is still in
+	// flight (e.g. a failing startup token refresh), canceling lets Init unwind and
+	// awaiting guarantees the goroutine cannot run HandleFolders/ScanWorkspace against
+	// disposed state (IDE-2181). The wait is bounded so a non-cooperative init path
+	// cannot hang shutdown.
+	initCancel, initDone, cacheCheckCancel := bgInit.get()
+	if initCancel != nil {
+		initCancel()
+	}
+	if initDone != nil {
+		select {
+		case <-initDone:
+		case <-time.After(backgroundInitShutdownTimeout):
+			logger.Warn().Msg("timed out waiting for background initialization to finish during shutdown; disposing anyway")
+		}
+	}
+
+	if cacheCheckCancel != nil {
+		cacheCheckCancel()
+	}
+	treeEmitter.Dispose()
+	// Cancel the server-lifetime scan context so that any in-flight workspace scan
+	// goroutines exit cleanly. This happens BEFORE the progress listener is stopped:
+	// scanners write to the progress channel unguarded, so a live scan whose reader
+	// has already gone away blocks as soon as the channel buffer fills. Cancel funcs
+	// are idempotent, so a second shutdown call is safe. Guard against nil in case a
+	// caller has not set ScanCancel in deps (should not happen after D1).
+	if scanCancel != nil {
+		scanCancel()
+	}
+	// Non-blocking: if initialize was never called the listener goroutine was
+	// never started, so no one reads the channel. A second shutdown call (e.g.
+	// from t.Cleanup after an explicit shutdown in the test body) must not block.
+	select {
+	case progressStopChan <- true:
+	default:
+	}
+	mustNotifierFromContext(ctx).DisposeListener()
+	command.StopPendingRescanTimers()
+	return nil
 }
 
 func exitHandler(srv *jrpc2.Server) jrpc2.Handler {
