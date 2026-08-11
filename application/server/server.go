@@ -173,6 +173,8 @@ func validateMandatoryDeps(deps di.Dependencies) error {
 		{"FileWatcher", deps.FileWatcher != nil},
 		{"CodeActionService", deps.CodeActionService != nil},
 		{"CommandService", deps.CommandService != nil},
+		{"ProgressTracker", deps.ProgressTracker != nil},
+		{"ScanCancel", deps.ScanCancel != nil},
 	}
 	for _, c := range checks {
 		if !c.present {
@@ -317,11 +319,8 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	// without passing it through multiple closures [IDE-2036 Decision D1].
 	scanCtx := deps.ScanCtx
 	scanCancel := deps.ScanCancel
-	// Use the per-server progress channel from ProgressTracker so that progress
-	// events from this server's scanners are never misrouted to another server's listener.
-	progressCh := deps.ProgressTracker.Channel()
 	bgInit := &backgroundInit{}
-	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv, progressStopChan, progressCh))
+	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv, progressStopChan))
 	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv, bgInit))
 	var onFileChange func(types.FilePath)
 	if deps.RemediationNotifier != nil {
@@ -711,7 +710,7 @@ func initNetworkAccessHeaders(engine workflow.Engine) {
 	engine.GetNetworkAccess().AddHeaderField("User-Agent", ua.String())
 }
 
-func initializeHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server, progressStopChan <-chan bool, progressCh chan types.ProgressParams) handler.Func {
+func initializeHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server, progressStopChan <-chan bool) handler.Func {
 	return handler.New(func(ctx context.Context, params types.InitializeParams) (any, error) {
 		method := "initializeHandler"
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", method).Logger()
@@ -761,7 +760,12 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		// NewLspInitializedChannel must precede registerNotifier: the notifier
 		// goroutine reads this channel on its first message.
 		types.NewLspInitializedChannel(conf)
-		go createProgressListener(progressCh, progressStopChan, srv, &logger)
+		// This server's own progress channel, so events from its scanners are never
+		// misrouted to another server's listener. Read from context rather than
+		// dereferenced when the handlers are registered: withContext validates the
+		// tracker first, so broken wiring is a named error, not a nil dereference
+		// before any handler runs.
+		go createProgressListener(mustProgressTrackerFromContext(ctx).Channel(), progressStopChan, srv, &logger)
 		registerNotifier(conf, engine, mustConfigResolverFromContext(ctx), &logger, srv, mustNotifierFromContext(ctx), mustCommandServiceFromContext(ctx))
 
 		result := types.InitializeResult{
@@ -1291,11 +1295,8 @@ func shutdown(ctx context.Context, progressStopChan chan<- bool, scanCancel cont
 	// goroutines exit cleanly. This happens BEFORE the progress listener is stopped:
 	// scanners write to the progress channel unguarded, so a live scan whose reader
 	// has already gone away blocks as soon as the channel buffer fills. Cancel funcs
-	// are idempotent, so a second shutdown call is safe. Guard against nil in case a
-	// caller has not set ScanCancel in deps (should not happen after D1).
-	if scanCancel != nil {
-		scanCancel()
-	}
+	// are idempotent, so a second shutdown call is safe.
+	scanCancel()
 	// Non-blocking: if initialize was never called the listener goroutine was
 	// never started, so no one reads the channel. A second shutdown call (e.g.
 	// from t.Cleanup after an explicit shutdown in the test body) must not block.

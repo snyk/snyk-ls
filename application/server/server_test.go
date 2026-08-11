@@ -1797,6 +1797,19 @@ func TestInitializeHandler_MissingDep_PropagatesLSPError(t *testing.T) {
 			mutate:      func(d *di.Dependencies) { d.CodeActionService = nil },
 			wantMessage: "mandatory DI dependency missing: CodeActionService",
 		},
+		// Both are dereferenced outside a handler — the progress listener reads the
+		// tracker's channel, shutdown calls ScanCancel — so a nil one must be
+		// reported by name rather than panicking.
+		{
+			name:        "missing ProgressTracker",
+			mutate:      func(d *di.Dependencies) { d.ProgressTracker = nil },
+			wantMessage: "mandatory DI dependency missing: ProgressTracker",
+		},
+		{
+			name:        "missing ScanCancel",
+			mutate:      func(d *di.Dependencies) { d.ScanCancel = nil },
+			wantMessage: "mandatory DI dependency missing: ScanCancel",
+		},
 	}
 
 	for _, tc := range cases {
