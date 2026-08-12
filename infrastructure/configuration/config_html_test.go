@@ -131,10 +131,10 @@ func TestConfigHtmlRenderer_IntegrationFolderLabels(t *testing.T) {
 		singular        string
 		plural          string
 	}{
-		{integrationName: "VISUAL_STUDIO", singular: "Solution", plural: "Solutions"},
-		{integrationName: "VS_CODE", singular: "Project", plural: "Projects"},
-		{integrationName: "JETBRAINS_IDE", singular: "Project", plural: "Projects"},
-		{integrationName: "ECLIPSE", singular: "Project", plural: "Projects"},
+		{integrationName: constants.IntegrationNameVisualStudio, singular: "Solution", plural: "Solutions"},
+		{integrationName: constants.IntegrationNameVSCode, singular: "Project", plural: "Projects"},
+		{integrationName: constants.IntegrationNameJetBrains, singular: "Project", plural: "Projects"},
+		{integrationName: constants.IntegrationNameEclipse, singular: "Project", plural: "Projects"},
 	}
 
 	for _, tt := range tests {
@@ -614,12 +614,16 @@ func TestConfigHtmlRenderer_EclipsePathField(t *testing.T) {
 	}
 
 	t.Run("ECLIPSE shows path field", func(t *testing.T) {
-		html := renderForIntegration(t, "ECLIPSE")
+		html := renderForIntegration(t, constants.IntegrationNameEclipse)
 		assert.Contains(t, html, `id="user_settings_path"`)
 		assert.Contains(t, html, `/usr/local/bin`)
 	})
 
-	for _, name := range []string{"VS_CODE", "VISUAL_STUDIO", "JETBRAINS_IDE"} {
+	for _, name := range []string{
+		constants.IntegrationNameVSCode,
+		constants.IntegrationNameVisualStudio,
+		constants.IntegrationNameJetBrains,
+	} {
 		t.Run(name+" hides path field", func(t *testing.T) {
 			html := renderForIntegration(t, name)
 			assert.NotContains(t, html, `id="user_settings_path"`)
@@ -640,10 +644,15 @@ func TestConfigHtmlRenderer_SecureAtInceptionIntegrationGate(t *testing.T) {
 		}, nil)
 	}
 
-	for _, integrationName := range []string{"JETBRAINS_IDE", "ECLIPSE", "VISUAL_STUDIO", ""} {
+	for _, integrationName := range []string{
+		constants.IntegrationNameJetBrains,
+		constants.IntegrationNameEclipse,
+		constants.IntegrationNameVisualStudio,
+		"",
+	} {
 		t.Run(integrationName+" hides section", func(t *testing.T) {
 			html := renderForIntegration(t, integrationName, true, "Smart Scan")
-			assert.NotContains(t, html, "<h2>Snyk Studio</h2>")
+			assert.NotContains(t, html, "<h2>Secure At Inception</h2>")
 			assert.NotContains(t, html, `name="`+types.SettingAutoConfigureMcpServer+`"`)
 			assert.NotContains(t, html, `name="`+types.SettingSecureAtInceptionExecutionFreq+`"`)
 		})
@@ -653,8 +662,8 @@ func TestConfigHtmlRenderer_SecureAtInceptionIntegrationGate(t *testing.T) {
 		for _, frequency := range []string{"On Code Generation", "Smart Scan", "Manual"} {
 			name := fmt.Sprintf("VS_CODE auto=%t frequency=%s", autoConfigure, frequency)
 			t.Run(name, func(t *testing.T) {
-				html := renderForIntegration(t, constants.VSCodeIntegrationName, autoConfigure, frequency)
-				assert.Contains(t, html, "<h2>Snyk Studio</h2>")
+				html := renderForIntegration(t, constants.IntegrationNameVSCode, autoConfigure, frequency)
+				assert.Contains(t, html, "<h2>Secure At Inception</h2>")
 				assert.Contains(t, html, `title="Automatically configure Snyk Studio for supported development environments.">Auto-configure Snyk Studio</span>`)
 				assert.Contains(t, html, `title="Choose when Snyk Studio rules are applied.">Execution frequency</span>`)
 
@@ -683,7 +692,7 @@ func TestConfigHtmlRenderer_SecureAtInceptionIndependentOfSecrets(t *testing.T) 
 	for _, secretsEnabled := range []bool{false, true} {
 		t.Run(fmt.Sprintf("secrets=%t", secretsEnabled), func(t *testing.T) {
 			engine := testutil.UnitTest(t)
-			engine.GetConfiguration().Set(gafconfiguration.INTEGRATION_NAME, constants.VSCodeIntegrationName)
+			engine.GetConfiguration().Set(gafconfiguration.INTEGRATION_NAME, constants.IntegrationNameVSCode)
 			resolver := testutil.DefaultConfigResolver(engine)
 			folderPath := types.FilePath("/path/to/project")
 			folderConfigs := []types.FolderConfig{{
@@ -703,7 +712,7 @@ func TestConfigHtmlRenderer_SecureAtInceptionIndependentOfSecrets(t *testing.T) 
 				types.SettingSnykSecretsEnabled:             true,
 			}, folderConfigs)
 
-			assert.Contains(t, html, "<h2>Snyk Studio</h2>")
+			assert.Contains(t, html, "<h2>Secure At Inception</h2>")
 			assert.Contains(t, html, `name="`+types.SettingAutoConfigureMcpServer+`"`)
 			assert.Contains(t, html, `name="`+types.SettingSecureAtInceptionExecutionFreq+`"`)
 			assert.Equal(t, secretsEnabled, strings.Contains(html, `name="snyk_secrets_enabled"`))

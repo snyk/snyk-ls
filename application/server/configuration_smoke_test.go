@@ -80,7 +80,7 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 	initParams := types.InitializeParams{
 		WorkspaceFolders: []types.WorkspaceFolder{folder},
 		InitializationOptions: types.InitializationOptions{
-			IntegrationName: constants.VSCodeIntegrationName,
+			IntegrationName: constants.IntegrationNameVSCode,
 			Settings: map[string]*types.ConfigSetting{
 				types.SettingToken:                  {Value: config.GetToken(engine.GetConfiguration()), Changed: true},
 				types.SettingTrustEnabled:           {Value: false, Changed: true},
@@ -144,7 +144,7 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 		})
 
 		t.Run("Secure At Inception", func(t *testing.T) {
-			assert.Contains(t, html, "<h2>Snyk Studio</h2>")
+			assert.Contains(t, html, "<h2>Secure At Inception</h2>")
 			assert.Contains(t, html, `title="Automatically configure Snyk Studio for supported development environments.">Auto-configure Snyk Studio</span>`)
 			assert.Contains(t, html, `title="Choose when Snyk Studio rules are applied.">Execution frequency</span>`)
 

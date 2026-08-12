@@ -184,9 +184,9 @@ The `{{FolderLabel}} defaults` (Project Defaults) tab has a **Reset overrides** 
 
 This is distinct from the **per-section Reset** buttons (`.reset-section-btn`, handled by `reset-handler.js`): a section reset only writes hard-coded constant defaults back into the form fields client-side (it does not clear `user:global` overrides server-side), whereas **Reset overrides** clears the stored overrides so the effective values fall back through the precedence chain. It also mirrors the per-folder **Reset overrides** button (`.reset-overrides-btn`), which clears `user:folder` overrides for a single folder rather than the machine-wide `user:global` layer.
 
-### Snyk Studio (VS Code only)
+### Secure At Inception (VS Code only)
 
-The dialog renders the Snyk Studio section only when `configuration.INTEGRATION_NAME` is
+The dialog renders the Secure At Inception section only when `configuration.INTEGRATION_NAME` is
 exactly `VS_CODE`. It serializes two top-level machine-scope values:
 `auto_configure_mcp_server` as a boolean and
 `secure_at_inception_execution_frequency` as one of `On Code Generation`,
@@ -194,7 +194,7 @@ exactly `VS_CODE`. It serializes two top-level machine-scope values:
 persisting a value merely by rendering the dialog.
 
 The VS Code bridge maps these LS machine-scope values to window-scoped VS Code
-settings; neither value belongs in `folderConfigs`. The Snyk Studio section Reset action
+settings; neither value belongs in `folderConfigs`. The Secure At Inception section Reset action
 sets the form values to `false` and `Manual`. Its visibility is independent of
 the Secrets feature flag. JetBrains, Eclipse, Visual Studio, and integrations
 with a blank name intentionally do not render the section because their
