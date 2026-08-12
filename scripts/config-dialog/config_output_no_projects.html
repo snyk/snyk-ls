@@ -1059,6 +1059,38 @@ button.secondary[disabled] {
                 </div>
 
                 
+                
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="section">
+                            <div class="section-header">
+                                <h2>Secure At Inception</h2>
+                                <button type="button" class="reset-section-btn" data-section="secureAtInception" title="Reset this section to defaults">Reset</button>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="auto_configure_mcp_server" checked>
+                                    <span data-toggle="tooltip" title="Automatically configure the Snyk MCP server for supported development environments.">Auto-configure Snyk MCP server</span>
+                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="auto_configure_mcp_server"></span>
+                                </label>
+                            </div>
+
+                            <div class="form-group half-width">
+                                <label for="secure_at_inception_execution_frequency">
+                                    <span data-toggle="tooltip" title="Choose when Secure At Inception rules are applied.">Execution frequency</span>
+                                    <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="secure_at_inception_execution_frequency"></span>
+                                </label>
+                                <select id="secure_at_inception_execution_frequency" name="secure_at_inception_execution_frequency">
+                                    <option value="On Code Generation" >On Code Generation</option>
+                                    <option value="Smart Scan" selected>Smart Scan</option>
+                                    <option value="Manual" >Manual</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
             </div>
 
             
