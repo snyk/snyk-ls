@@ -18,5 +18,6 @@
 package constants
 
 const (
-	DataHome = "SNYKLS_INTERNAL_DATAHOME"
+	DataHome              = "SNYKLS_INTERNAL_DATAHOME"
+	VSCodeIntegrationName = "VS_CODE"
 )

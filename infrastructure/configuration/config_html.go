@@ -32,6 +32,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -382,7 +383,7 @@ func isEclipse(integrationName string) bool {
 }
 
 func isVSCode(integrationName string) bool {
-	return integrationName == "VS_CODE"
+	return integrationName == constants.VSCodeIntegrationName
 }
 
 // getCliReleaseChannel returns the configured CLI release channel, falling back to a

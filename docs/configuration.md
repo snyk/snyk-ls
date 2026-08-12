@@ -76,11 +76,11 @@ Scope is declared at registration time via the `config.scope` annotation on each
 - For **machine-scope** settings, it is the primary user-writable layer (overrides remote:machine default, falls back to remote:machine value if not set).
 - For **folder-scope** settings, it is the lowest-priority user-set fallback: if a folder has no `user:folder` value and no remote config, the global user value is used. This lets users set a default that applies to all folders unless overridden.
 
-The Secure At Inception settings `auto_configure_mcp_server` and
+The Snyk Studio settings `auto_configure_mcp_server` and
 `secure_at_inception_execution_frequency` are machine-scoped and remain
 top-level in the LS configuration payload, never in `folderConfigs`. The VS
 Code bridge maps them to window-scoped native settings; see
-[Configuration Dialog Integration Guide](configuration-dialog.md#secure-at-inception-vs-code-only)
+[Configuration Dialog Integration Guide](configuration-dialog.md#snyk-studio-vs-code-only)
 for the VS Code-only dialog contract.
 
 ### How `user:folder` Relates to Remote Config

@@ -18,6 +18,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
@@ -642,7 +643,7 @@ func TestConfigHtmlRenderer_SecureAtInceptionIntegrationGate(t *testing.T) {
 	for _, integrationName := range []string{"JETBRAINS_IDE", "ECLIPSE", "VISUAL_STUDIO", ""} {
 		t.Run(integrationName+" hides section", func(t *testing.T) {
 			html := renderForIntegration(t, integrationName, true, "Smart Scan")
-			assert.NotContains(t, html, "<h2>Secure At Inception</h2>")
+			assert.NotContains(t, html, "<h2>Snyk Studio</h2>")
 			assert.NotContains(t, html, `name="`+types.SettingAutoConfigureMcpServer+`"`)
 			assert.NotContains(t, html, `name="`+types.SettingSecureAtInceptionExecutionFreq+`"`)
 		})
@@ -652,18 +653,20 @@ func TestConfigHtmlRenderer_SecureAtInceptionIntegrationGate(t *testing.T) {
 		for _, frequency := range []string{"On Code Generation", "Smart Scan", "Manual"} {
 			name := fmt.Sprintf("VS_CODE auto=%t frequency=%s", autoConfigure, frequency)
 			t.Run(name, func(t *testing.T) {
-				html := renderForIntegration(t, "VS_CODE", autoConfigure, frequency)
-				assert.Contains(t, html, "<h2>Secure At Inception</h2>")
+				html := renderForIntegration(t, constants.VSCodeIntegrationName, autoConfigure, frequency)
+				assert.Contains(t, html, "<h2>Snyk Studio</h2>")
+				assert.Contains(t, html, `title="Automatically configure Snyk Studio for supported development environments.">Auto-configure Snyk Studio</span>`)
+				assert.Contains(t, html, `title="Choose when Snyk Studio rules are applied.">Execution frequency</span>`)
 
-				checkbox := requireConfigOpeningTagByName(t, html, "input", types.SettingAutoConfigureMcpServer)
+				checkbox := testutil.RequireOpeningTagByName(t, html, "input", types.SettingAutoConfigureMcpServer)
 				assert.Equal(t, autoConfigure, strings.Contains(checkbox, "checked"))
 
-				selectMarkup := requireConfigElementByName(t, html, "select", types.SettingSecureAtInceptionExecutionFreq)
-				assert.Equal(t, []configSelectOption{
+				selectMarkup := testutil.RequireElementByName(t, html, "select", types.SettingSecureAtInceptionExecutionFreq)
+				assert.Equal(t, []testutil.SelectOption{
 					{Value: "On Code Generation", Text: "On Code Generation", Selected: frequency == "On Code Generation"},
 					{Value: "Smart Scan", Text: "Smart Scan", Selected: frequency == "Smart Scan"},
 					{Value: "Manual", Text: "Manual", Selected: frequency == "Manual"},
-				}, parseConfigSelectOptions(t, selectMarkup))
+				}, testutil.ParseSelectOptions(t, selectMarkup))
 
 				assert.Contains(t, html, `data-setting-key="`+types.SettingAutoConfigureMcpServer+`"`)
 				assert.Contains(t, html, `data-setting-key="`+types.SettingSecureAtInceptionExecutionFreq+`"`)
@@ -675,10 +678,12 @@ func TestConfigHtmlRenderer_SecureAtInceptionIntegrationGate(t *testing.T) {
 }
 
 func TestConfigHtmlRenderer_SecureAtInceptionIndependentOfSecrets(t *testing.T) {
+	// The originating Slack report described missing Studio controls alongside Secrets
+	// visibility, so this guards against accidentally coupling Studio to that feature flag.
 	for _, secretsEnabled := range []bool{false, true} {
 		t.Run(fmt.Sprintf("secrets=%t", secretsEnabled), func(t *testing.T) {
 			engine := testutil.UnitTest(t)
-			engine.GetConfiguration().Set(gafconfiguration.INTEGRATION_NAME, "VS_CODE")
+			engine.GetConfiguration().Set(gafconfiguration.INTEGRATION_NAME, constants.VSCodeIntegrationName)
 			resolver := testutil.DefaultConfigResolver(engine)
 			folderPath := types.FilePath("/path/to/project")
 			folderConfigs := []types.FolderConfig{{
@@ -698,51 +703,12 @@ func TestConfigHtmlRenderer_SecureAtInceptionIndependentOfSecrets(t *testing.T) 
 				types.SettingSnykSecretsEnabled:             true,
 			}, folderConfigs)
 
-			assert.Contains(t, html, "<h2>Secure At Inception</h2>")
+			assert.Contains(t, html, "<h2>Snyk Studio</h2>")
 			assert.Contains(t, html, `name="`+types.SettingAutoConfigureMcpServer+`"`)
 			assert.Contains(t, html, `name="`+types.SettingSecureAtInceptionExecutionFreq+`"`)
 			assert.Equal(t, secretsEnabled, strings.Contains(html, `name="snyk_secrets_enabled"`))
 		})
 	}
-}
-
-type configSelectOption struct {
-	Value    string
-	Text     string
-	Selected bool
-}
-
-func requireConfigOpeningTagByName(t *testing.T, html, tag, name string) string {
-	t.Helper()
-	pattern := regexp.MustCompile(`<` + tag + `\b[^>]*\bname="` + regexp.QuoteMeta(name) + `"[^>]*>`)
-	match := pattern.FindString(html)
-	require.NotEmpty(t, match, "%s[name=%q] must be present", tag, name)
-	return match
-}
-
-func requireConfigElementByName(t *testing.T, html, tag, name string) string {
-	t.Helper()
-	pattern := regexp.MustCompile(`(?s)<` + tag + `\b[^>]*\bname="` + regexp.QuoteMeta(name) + `"[^>]*>.*?</` + tag + `>`)
-	match := pattern.FindString(html)
-	require.NotEmpty(t, match, "%s[name=%q] must be present", tag, name)
-	return match
-}
-
-func parseConfigSelectOptions(t *testing.T, selectMarkup string) []configSelectOption {
-	t.Helper()
-	optionPattern := regexp.MustCompile(`(?s)<option\b[^>]*\bvalue="([^"]*)"([^>]*)>([^<]*)</option>`)
-	matches := optionPattern.FindAllStringSubmatch(selectMarkup, -1)
-	require.NotEmpty(t, matches, "select must contain options")
-
-	options := make([]configSelectOption, 0, len(matches))
-	for _, match := range matches {
-		options = append(options, configSelectOption{
-			Value:    match[1],
-			Text:     strings.TrimSpace(match[3]),
-			Selected: strings.Contains(match[2], "selected"),
-		})
-	}
-	return options
 }
 
 func TestTmplSourceIndicator(t *testing.T) {

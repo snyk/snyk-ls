@@ -17,7 +17,6 @@
 package server
 
 import (
-	"regexp"
 	"strings"
 	"testing"
 
@@ -27,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -80,7 +80,7 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 	initParams := types.InitializeParams{
 		WorkspaceFolders: []types.WorkspaceFolder{folder},
 		InitializationOptions: types.InitializationOptions{
-			IntegrationName: "VS_CODE",
+			IntegrationName: constants.VSCodeIntegrationName,
 			Settings: map[string]*types.ConfigSetting{
 				types.SettingToken:                  {Value: config.GetToken(engine.GetConfiguration()), Changed: true},
 				types.SettingTrustEnabled:           {Value: false, Changed: true},
@@ -144,18 +144,20 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 		})
 
 		t.Run("Secure At Inception", func(t *testing.T) {
-			assert.Contains(t, html, "<h2>Secure At Inception</h2>")
+			assert.Contains(t, html, "<h2>Snyk Studio</h2>")
+			assert.Contains(t, html, `title="Automatically configure Snyk Studio for supported development environments.">Auto-configure Snyk Studio</span>`)
+			assert.Contains(t, html, `title="Choose when Snyk Studio rules are applied.">Execution frequency</span>`)
 
-			checkbox := requireOpeningTagByName(t, html, "input", types.SettingAutoConfigureMcpServer)
+			checkbox := testutil.RequireOpeningTagByName(t, html, "input", types.SettingAutoConfigureMcpServer)
 			assert.Contains(t, checkbox, `type="checkbox"`)
 			assert.NotContains(t, checkbox, "checked")
 
-			selectMarkup := requireElementByName(t, html, "select", types.SettingSecureAtInceptionExecutionFreq)
-			assert.Equal(t, []selectOption{
+			selectMarkup := testutil.RequireElementByName(t, html, "select", types.SettingSecureAtInceptionExecutionFreq)
+			assert.Equal(t, []testutil.SelectOption{
 				{Value: "On Code Generation", Text: "On Code Generation"},
 				{Value: "Smart Scan", Text: "Smart Scan"},
 				{Value: "Manual", Text: "Manual", Selected: true},
-			}, parseSelectOptions(t, selectMarkup))
+			}, testutil.ParseSelectOptions(t, selectMarkup))
 
 			assert.NotContains(t, html, "folder_0_"+types.SettingAutoConfigureMcpServer)
 			assert.NotContains(t, html, "folder_0_"+types.SettingSecureAtInceptionExecutionFreq)
@@ -281,43 +283,4 @@ func assertFieldPresent(t *testing.T, html, fieldName, description string) {
 	}
 
 	assert.True(t, found, "%s must be present in configuration HTML (field: %s)", description, fieldName)
-}
-
-type selectOption struct {
-	Value    string
-	Text     string
-	Selected bool
-}
-
-func requireOpeningTagByName(t *testing.T, html, tag, name string) string {
-	t.Helper()
-	pattern := regexp.MustCompile(`<` + tag + `\b[^>]*\bname="` + regexp.QuoteMeta(name) + `"[^>]*>`)
-	match := pattern.FindString(html)
-	require.NotEmpty(t, match, "%s[name=%q] must be present", tag, name)
-	return match
-}
-
-func requireElementByName(t *testing.T, html, tag, name string) string {
-	t.Helper()
-	pattern := regexp.MustCompile(`(?s)<` + tag + `\b[^>]*\bname="` + regexp.QuoteMeta(name) + `"[^>]*>.*?</` + tag + `>`)
-	match := pattern.FindString(html)
-	require.NotEmpty(t, match, "%s[name=%q] must be present", tag, name)
-	return match
-}
-
-func parseSelectOptions(t *testing.T, selectMarkup string) []selectOption {
-	t.Helper()
-	optionPattern := regexp.MustCompile(`(?s)<option\b[^>]*\bvalue="([^"]*)"([^>]*)>([^<]*)</option>`)
-	matches := optionPattern.FindAllStringSubmatch(selectMarkup, -1)
-	require.NotEmpty(t, matches, "select must contain options")
-
-	options := make([]selectOption, 0, len(matches))
-	for _, match := range matches {
-		options = append(options, selectOption{
-			Value:    match[1],
-			Text:     strings.TrimSpace(match[3]),
-			Selected: strings.Contains(match[2], "selected"),
-		})
-	}
-	return options
 }
