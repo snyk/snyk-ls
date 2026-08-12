@@ -124,6 +124,38 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	assert.Contains(t, html, "combine with any per-")
 }
 
+func TestConfigHtmlRenderer_IntegrationFolderLabels(t *testing.T) {
+	tests := []struct {
+		integrationName string
+		singular        string
+		plural          string
+	}{
+		{integrationName: "VISUAL_STUDIO", singular: "Solution", plural: "Solutions"},
+		{integrationName: "VS_CODE", singular: "Project", plural: "Projects"},
+		{integrationName: "JETBRAINS_IDE", singular: "Project", plural: "Projects"},
+		{integrationName: "ECLIPSE", singular: "Project", plural: "Projects"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.integrationName, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			engine.GetConfiguration().Set(gafconfiguration.INTEGRATION_NAME, tt.integrationName)
+			configResolver := testutil.DefaultConfigResolver(engine)
+			renderer, err := NewConfigHtmlRenderer(engine, configResolver)
+			require.NoError(t, err)
+
+			html := renderer.GetConfigHtml(nil, []types.FolderConfig{
+				{FolderPath: "/workspace/one", ConfigResolver: configResolver},
+				{FolderPath: "/workspace/two", ConfigResolver: configResolver},
+			})
+
+			assert.Contains(t, html, `data-folder-label="`+tt.singular+`"`)
+			assert.Contains(t, html, ">"+tt.singular+" defaults</button>")
+			assert.Contains(t, html, `id="folderDropdownLabel">`+tt.plural+"</span>")
+		})
+	}
+}
+
 func TestConfigHtmlRenderer_ProjectDefaultsAdvancedFieldsRenderValues(t *testing.T) {
 	engine := testutil.UnitTest(t)
 
@@ -592,6 +624,125 @@ func TestConfigHtmlRenderer_EclipsePathField(t *testing.T) {
 			assert.NotContains(t, html, `id="user_settings_path"`)
 		})
 	}
+}
+
+func TestConfigHtmlRenderer_SecureAtInceptionIntegrationGate(t *testing.T) {
+	renderForIntegration := func(t *testing.T, integrationName string, autoConfigure bool, frequency string) string {
+		t.Helper()
+		engine := testutil.UnitTest(t)
+		engine.GetConfiguration().Set(gafconfiguration.INTEGRATION_NAME, integrationName)
+		renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
+		require.NoError(t, err)
+		return renderer.GetConfigHtml(map[string]any{
+			types.SettingAutoConfigureMcpServer:         autoConfigure,
+			types.SettingSecureAtInceptionExecutionFreq: frequency,
+		}, nil)
+	}
+
+	for _, integrationName := range []string{"JETBRAINS_IDE", "ECLIPSE", "VISUAL_STUDIO", ""} {
+		t.Run(integrationName+" hides section", func(t *testing.T) {
+			html := renderForIntegration(t, integrationName, true, "Smart Scan")
+			assert.NotContains(t, html, "<h2>Secure At Inception</h2>")
+			assert.NotContains(t, html, `name="`+types.SettingAutoConfigureMcpServer+`"`)
+			assert.NotContains(t, html, `name="`+types.SettingSecureAtInceptionExecutionFreq+`"`)
+		})
+	}
+
+	for _, autoConfigure := range []bool{false, true} {
+		for _, frequency := range []string{"On Code Generation", "Smart Scan", "Manual"} {
+			name := fmt.Sprintf("VS_CODE auto=%t frequency=%s", autoConfigure, frequency)
+			t.Run(name, func(t *testing.T) {
+				html := renderForIntegration(t, "VS_CODE", autoConfigure, frequency)
+				assert.Contains(t, html, "<h2>Secure At Inception</h2>")
+
+				checkbox := requireConfigOpeningTagByName(t, html, "input", types.SettingAutoConfigureMcpServer)
+				assert.Equal(t, autoConfigure, strings.Contains(checkbox, "checked"))
+
+				selectMarkup := requireConfigElementByName(t, html, "select", types.SettingSecureAtInceptionExecutionFreq)
+				assert.Equal(t, []configSelectOption{
+					{Value: "On Code Generation", Text: "On Code Generation", Selected: frequency == "On Code Generation"},
+					{Value: "Smart Scan", Text: "Smart Scan", Selected: frequency == "Smart Scan"},
+					{Value: "Manual", Text: "Manual", Selected: frequency == "Manual"},
+				}, parseConfigSelectOptions(t, selectMarkup))
+
+				assert.Contains(t, html, `data-setting-key="`+types.SettingAutoConfigureMcpServer+`"`)
+				assert.Contains(t, html, `data-setting-key="`+types.SettingSecureAtInceptionExecutionFreq+`"`)
+				assert.NotContains(t, html, "folder_0_"+types.SettingAutoConfigureMcpServer)
+				assert.NotContains(t, html, "folder_0_"+types.SettingSecureAtInceptionExecutionFreq)
+			})
+		}
+	}
+}
+
+func TestConfigHtmlRenderer_SecureAtInceptionIndependentOfSecrets(t *testing.T) {
+	for _, secretsEnabled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("secrets=%t", secretsEnabled), func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			engine.GetConfiguration().Set(gafconfiguration.INTEGRATION_NAME, "VS_CODE")
+			resolver := testutil.DefaultConfigResolver(engine)
+			folderPath := types.FilePath("/path/to/project")
+			folderConfigs := []types.FolderConfig{{
+				FolderPath:     folderPath,
+				ConfigResolver: resolver,
+			}}
+			if secretsEnabled {
+				ffKey := configresolver.FolderMetadataKey(string(types.PathKey(folderPath)), types.FeatureFlagPrefix+featureflag.SnykSecretsEnabled)
+				engine.GetConfiguration().Set(ffKey, true)
+			}
+
+			renderer, err := NewConfigHtmlRenderer(engine, resolver)
+			require.NoError(t, err)
+			html := renderer.GetConfigHtml(map[string]any{
+				types.SettingAutoConfigureMcpServer:         false,
+				types.SettingSecureAtInceptionExecutionFreq: "Manual",
+				types.SettingSnykSecretsEnabled:             true,
+			}, folderConfigs)
+
+			assert.Contains(t, html, "<h2>Secure At Inception</h2>")
+			assert.Contains(t, html, `name="`+types.SettingAutoConfigureMcpServer+`"`)
+			assert.Contains(t, html, `name="`+types.SettingSecureAtInceptionExecutionFreq+`"`)
+			assert.Equal(t, secretsEnabled, strings.Contains(html, `name="snyk_secrets_enabled"`))
+		})
+	}
+}
+
+type configSelectOption struct {
+	Value    string
+	Text     string
+	Selected bool
+}
+
+func requireConfigOpeningTagByName(t *testing.T, html, tag, name string) string {
+	t.Helper()
+	pattern := regexp.MustCompile(`<` + tag + `\b[^>]*\bname="` + regexp.QuoteMeta(name) + `"[^>]*>`)
+	match := pattern.FindString(html)
+	require.NotEmpty(t, match, "%s[name=%q] must be present", tag, name)
+	return match
+}
+
+func requireConfigElementByName(t *testing.T, html, tag, name string) string {
+	t.Helper()
+	pattern := regexp.MustCompile(`(?s)<` + tag + `\b[^>]*\bname="` + regexp.QuoteMeta(name) + `"[^>]*>.*?</` + tag + `>`)
+	match := pattern.FindString(html)
+	require.NotEmpty(t, match, "%s[name=%q] must be present", tag, name)
+	return match
+}
+
+func parseConfigSelectOptions(t *testing.T, selectMarkup string) []configSelectOption {
+	t.Helper()
+	optionPattern := regexp.MustCompile(`(?s)<option\b[^>]*\bvalue="([^"]*)"([^>]*)>([^<]*)</option>`)
+	matches := optionPattern.FindAllStringSubmatch(selectMarkup, -1)
+	require.NotEmpty(t, matches, "select must contain options")
+
+	options := make([]configSelectOption, 0, len(matches))
+	for _, match := range matches {
+		options = append(options, configSelectOption{
+			Value:    match[1],
+			Text:     strings.TrimSpace(match[3]),
+			Selected: strings.Contains(match[2], "selected"),
+		})
+	}
+	return options
 }
 
 func TestTmplSourceIndicator(t *testing.T) {

@@ -831,6 +831,8 @@ func buildDummySettings(
 		dummySeverityFilterCritical = true
 		dummySeverityFilterHigh     = false
 		dummyIssueViewIgnoredIssues = true
+		dummyAutoConfigureMcpServer = true
+		dummyExecutionFrequency     = "Smart Scan"
 	)
 
 	// Set global/project-default settings to demonstrate different scopes
@@ -846,21 +848,23 @@ func buildDummySettings(
 	setGlobal(types.SettingIssueViewIgnoredIssues, dummyIssueViewIgnoredIssues)
 
 	settings := map[string]any{
-		types.SettingToken:                  dummyToken,
-		types.SettingApiEndpoint:            "https://api.snyk.io",
-		types.SettingOrganization:           dummyOrgUUID,
-		types.SettingAuthenticationMethod:   dummyAuthMethod,
-		types.SettingProxyInsecure:          false,
-		types.SettingSnykOssEnabled:         dummyOssEnabled,
-		types.SettingSnykCodeEnabled:        dummyCodeEnabled,
-		types.SettingSnykIacEnabled:         dummyIacEnabled,
-		types.SettingScanAutomatic:          true,
-		types.SettingSeverityFilterCritical: dummySeverityFilterCritical,
-		types.SettingSeverityFilterHigh:     dummySeverityFilterHigh,
-		types.SettingSeverityFilterMedium:   true,
-		types.SettingSeverityFilterLow:      true,
-		types.SettingIssueViewOpenIssues:    true,
-		types.SettingIssueViewIgnoredIssues: dummyIssueViewIgnoredIssues,
+		types.SettingToken:                          dummyToken,
+		types.SettingApiEndpoint:                    "https://api.snyk.io",
+		types.SettingOrganization:                   dummyOrgUUID,
+		types.SettingAuthenticationMethod:           dummyAuthMethod,
+		types.SettingProxyInsecure:                  false,
+		types.SettingSnykOssEnabled:                 dummyOssEnabled,
+		types.SettingSnykCodeEnabled:                dummyCodeEnabled,
+		types.SettingSnykIacEnabled:                 dummyIacEnabled,
+		types.SettingScanAutomatic:                  true,
+		types.SettingSeverityFilterCritical:         dummySeverityFilterCritical,
+		types.SettingSeverityFilterHigh:             dummySeverityFilterHigh,
+		types.SettingSeverityFilterMedium:           true,
+		types.SettingSeverityFilterLow:              true,
+		types.SettingIssueViewOpenIssues:            true,
+		types.SettingIssueViewIgnoredIssues:         dummyIssueViewIgnoredIssues,
+		types.SettingAutoConfigureMcpServer:         dummyAutoConfigureMcpServer,
+		types.SettingSecureAtInceptionExecutionFreq: dummyExecutionFrequency,
 		types.SettingTrustedFolders: []string{
 			"/Users/username/workspace/defaults-project",
 			"/Users/username/trusted/folder",

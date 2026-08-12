@@ -351,6 +351,7 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings map[string]any, folderConfig
 		"CliReleaseChannel":       cliReleaseChannel,
 		"IsSecretsFeatureEnabled": isAnyFolderSecretsEnabled(folderConfigs),
 		"IsEclipse":               isEclipse(integrationName),
+		"IsVSCode":                isVSCode(integrationName),
 	}
 
 	var buffer bytes.Buffer
@@ -378,6 +379,10 @@ func isVisualStudio(integrationName string) bool {
 
 func isEclipse(integrationName string) bool {
 	return integrationName == "ECLIPSE"
+}
+
+func isVSCode(integrationName string) bool {
+	return integrationName == "VS_CODE"
 }
 
 // getCliReleaseChannel returns the configured CLI release channel, falling back to a

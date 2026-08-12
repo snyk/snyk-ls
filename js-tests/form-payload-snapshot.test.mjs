@@ -32,6 +32,21 @@ test("form payload snapshot: collectData() output matches fixture", async () => 
 	const win = await buildDom();
 	const data = win.ConfigApp.formHandler.collectData();
 	const actual = stableStringify(data);
+	assert.equal(typeof data.auto_configure_mcp_server, "boolean");
+	assert.equal(typeof data.secure_at_inception_execution_frequency, "string");
+	for (const folderConfig of data.folderConfigs) {
+		assert.equal(
+			Object.prototype.hasOwnProperty.call(folderConfig, "auto_configure_mcp_server"),
+			false
+		);
+		assert.equal(
+			Object.prototype.hasOwnProperty.call(
+				folderConfig,
+				"secure_at_inception_execution_frequency"
+			),
+			false
+		);
+	}
 
 	if (process.env.UPDATE_SNAPSHOT === "1") {
 		await writeFile(SNAPSHOT_PATH, actual, "utf8");
