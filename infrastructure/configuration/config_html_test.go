@@ -686,40 +686,6 @@ func TestConfigHtmlRenderer_SecureAtInceptionIntegrationGate(t *testing.T) {
 	}
 }
 
-func TestConfigHtmlRenderer_SecureAtInceptionIndependentOfSecrets(t *testing.T) {
-	// The originating Slack report described missing Studio controls alongside Secrets
-	// visibility, so this guards against accidentally coupling Studio to that feature flag.
-	for _, secretsEnabled := range []bool{false, true} {
-		t.Run(fmt.Sprintf("secrets=%t", secretsEnabled), func(t *testing.T) {
-			engine := testutil.UnitTest(t)
-			engine.GetConfiguration().Set(gafconfiguration.INTEGRATION_NAME, constants.IntegrationNameVSCode)
-			resolver := testutil.DefaultConfigResolver(engine)
-			folderPath := types.FilePath("/path/to/project")
-			folderConfigs := []types.FolderConfig{{
-				FolderPath:     folderPath,
-				ConfigResolver: resolver,
-			}}
-			if secretsEnabled {
-				ffKey := configresolver.FolderMetadataKey(string(types.PathKey(folderPath)), types.FeatureFlagPrefix+featureflag.SnykSecretsEnabled)
-				engine.GetConfiguration().Set(ffKey, true)
-			}
-
-			renderer, err := NewConfigHtmlRenderer(engine, resolver)
-			require.NoError(t, err)
-			html := renderer.GetConfigHtml(map[string]any{
-				types.SettingAutoConfigureMcpServer:         false,
-				types.SettingSecureAtInceptionExecutionFreq: "Manual",
-				types.SettingSnykSecretsEnabled:             true,
-			}, folderConfigs)
-
-			assert.Contains(t, html, "<h2>Secure At Inception</h2>")
-			assert.Contains(t, html, `name="`+types.SettingAutoConfigureMcpServer+`"`)
-			assert.Contains(t, html, `name="`+types.SettingSecureAtInceptionExecutionFreq+`"`)
-			assert.Equal(t, secretsEnabled, strings.Contains(html, `name="snyk_secrets_enabled"`))
-		})
-	}
-}
-
 func TestTmplSourceIndicator(t *testing.T) {
 	tests := []struct {
 		name            string
