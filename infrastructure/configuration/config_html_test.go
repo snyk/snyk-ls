@@ -665,7 +665,7 @@ func TestConfigHtmlRenderer_SecureAtInceptionIntegrationGate(t *testing.T) {
 				html := renderForIntegration(t, constants.IntegrationNameVSCode, autoConfigure, frequency)
 				assert.Contains(t, html, "<h2>Secure At Inception</h2>")
 				assert.Contains(t, html, `title="Automatically configure Snyk Studio for supported development environments.">Auto-configure Snyk Studio</span>`)
-				assert.Contains(t, html, `title="Choose when Snyk Studio rules are applied.">Execution frequency</span>`)
+				assert.Contains(t, html, `title="Choose when Secure At Inception rules are applied.">Execution frequency</span>`)
 
 				checkbox := testutil.RequireOpeningTagByName(t, html, "input", types.SettingAutoConfigureMcpServer)
 				assert.Equal(t, autoConfigure, strings.Contains(checkbox, "checked"))
