@@ -43,12 +43,8 @@ func TestDownloader_Download(t *testing.T) {
 	engine := testutil.IntegTest(t)
 	r := getTestAsset()
 	progressCh := make(chan types.ProgressParams, 100000)
-	cancelProgressCh := make(chan bool, 1)
-	d := &Downloader{
-		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh, engine.GetLogger()),
-		httpClient:      func() *http.Client { return http.DefaultClient },
-		engine:          engine,
-	}
+	tracker := progress.NewTrackerWithChannel(progressCh, engine.GetLogger())
+	d := NewDownloader(engine, nil, func() *http.Client { return http.DefaultClient }, tracker)
 	exec := (&Discovery{}).ExecutableName(false)
 	destination := filepath.Join(t.TempDir(), exec)
 	lockFileName, err := d.lockFileName()
@@ -73,21 +69,16 @@ func TestDownloader_Download(t *testing.T) {
 func Test_DoNotDownloadIfCancelled(t *testing.T) {
 	engine := testutil.IntegTest(t)
 	progressCh := make(chan types.ProgressParams, 100000)
-	cancelProgressCh := make(chan bool, 1)
-	progressTracker := progress.NewTestTracker(progressCh, cancelProgressCh, engine.GetLogger())
-	d := &Downloader{
-		progressTracker: progressTracker,
-		httpClient:      func() *http.Client { return http.DefaultClient },
-		engine:          engine,
-	}
+	tracker := progress.NewTrackerWithChannel(progressCh, engine.GetLogger())
+	d := NewDownloader(engine, nil, func() *http.Client { return http.DefaultClient }, tracker)
 
 	r := getTestAsset()
 	cliPath := filepath.Join(t.TempDir(), (&Discovery{}).ExecutableName(false))
 
-	// simulate cancellation when some progress received
+	// simulate cancellation when some progress received: cancel the task via the tracker
 	go func() {
-		<-progressCh
-		progress.Cancel(progressTracker.GetToken())
+		p := <-progressCh
+		tracker.Cancel(p.Token)
 	}()
 
 	_, err := d.Download(r, cliPath, false)
@@ -111,7 +102,7 @@ func TestDownloaderDownload_ReturnsErrorWhenCliPathIsEmpty(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), func() *http.Client { return server.Client() })
+	downloader := NewDownloader(engine, error_reporting.NewTestErrorReporter(engine), func() *http.Client { return server.Client() }, testutil.NewDrainedProgressTracker())
 	exec := (&Discovery{}).ExecutableName(false)
 
 	got, err := downloader.Download(testRelease(server.URL, "deadbeef  "+exec), "", false)
@@ -163,10 +154,10 @@ func TestDownloaderDownload_ClosesResponseBodyOnNon200Status(t *testing.T) {
 	progressCh := make(chan types.ProgressParams, 100)
 	cancelProgressCh := make(chan bool, 1)
 	d := &Downloader{
-		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh, engine.GetLogger()),
-		httpClient:      func() *http.Client { return client },
-		engine:          engine,
-		errorReporter:   error_reporting.NewTestErrorReporter(engine),
+		progressTask:  progress.NewTestTask(progressCh, cancelProgressCh, engine.GetLogger()),
+		httpClient:    func() *http.Client { return client },
+		engine:        engine,
+		errorReporter: error_reporting.NewTestErrorReporter(engine),
 	}
 	exec := (&Discovery{}).ExecutableName(false)
 	cliPath := filepath.Join(t.TempDir(), exec)
@@ -199,9 +190,9 @@ func TestDownloaderDownload_ReportsFailureEndWhenHttpGetFails(t *testing.T) {
 	cancelProgressCh := make(chan bool, 1)
 	client := &http.Client{Transport: &erroringTransport{}}
 	d := &Downloader{
-		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh, engine.GetLogger()),
-		httpClient:      func() *http.Client { return client },
-		engine:          engine,
+		progressTask: progress.NewTestTask(progressCh, cancelProgressCh, engine.GetLogger()),
+		httpClient:   func() *http.Client { return client },
+		engine:       engine,
 	}
 	cliPath := filepath.Join(t.TempDir(), exec)
 
@@ -224,9 +215,9 @@ func TestDownloaderDownload_ReportsFailureEndWhenMkdirAllFails(t *testing.T) {
 	progressCh := make(chan types.ProgressParams, 100)
 	cancelProgressCh := make(chan bool, 1)
 	d := &Downloader{
-		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh, engine.GetLogger()),
-		httpClient:      func() *http.Client { return server.Client() },
-		engine:          engine,
+		progressTask: progress.NewTestTask(progressCh, cancelProgressCh, engine.GetLogger()),
+		httpClient:   func() *http.Client { return server.Client() },
+		engine:       engine,
 	}
 
 	// A regular file where Download needs a directory forces os.MkdirAll to
@@ -254,9 +245,9 @@ func TestDownloaderDownload_ReportsFailureEndWhenMkdirTempFails(t *testing.T) {
 	progressCh := make(chan types.ProgressParams, 100)
 	cancelProgressCh := make(chan bool, 1)
 	d := &Downloader{
-		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh, engine.GetLogger()),
-		httpClient:      func() *http.Client { return server.Client() },
-		engine:          engine,
+		progressTask: progress.NewTestTask(progressCh, cancelProgressCh, engine.GetLogger()),
+		httpClient:   func() *http.Client { return server.Client() },
+		engine:       engine,
 		mkdirTemp: func(string, string) (string, error) {
 			return "", errors.New("simulated mkdir temp failure")
 		},
@@ -305,9 +296,9 @@ func TestDownloaderDownload_ReportsFailureEndWhenIOCopyFails(t *testing.T) {
 	cancelProgressCh := make(chan bool, 1)
 	client := &http.Client{Transport: &bodyReadErrorTransport{}}
 	d := &Downloader{
-		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh, engine.GetLogger()),
-		httpClient:      func() *http.Client { return client },
-		engine:          engine,
+		progressTask: progress.NewTestTask(progressCh, cancelProgressCh, engine.GetLogger()),
+		httpClient:   func() *http.Client { return client },
+		engine:       engine,
 	}
 	cliPath := filepath.Join(t.TempDir(), exec)
 
@@ -330,9 +321,9 @@ func TestDownloaderDownload_ReportsFailureEndWhenChecksumInfoIsMalformed(t *test
 	progressCh := make(chan types.ProgressParams, 100)
 	cancelProgressCh := make(chan bool, 1)
 	d := &Downloader{
-		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh, engine.GetLogger()),
-		httpClient:      func() *http.Client { return server.Client() },
-		engine:          engine,
+		progressTask: progress.NewTestTask(progressCh, cancelProgressCh, engine.GetLogger()),
+		httpClient:   func() *http.Client { return server.Client() },
+		engine:       engine,
 	}
 	cliPath := filepath.Join(t.TempDir(), exec)
 
@@ -356,9 +347,9 @@ func TestDownloaderDownload_ReportsFailureEndWhenChecksumMismatch(t *testing.T) 
 	progressCh := make(chan types.ProgressParams, 100)
 	cancelProgressCh := make(chan bool, 1)
 	d := &Downloader{
-		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh, engine.GetLogger()),
-		httpClient:      func() *http.Client { return server.Client() },
-		engine:          engine,
+		progressTask: progress.NewTestTask(progressCh, cancelProgressCh, engine.GetLogger()),
+		httpClient:   func() *http.Client { return server.Client() },
+		engine:       engine,
 	}
 	cliPath := filepath.Join(t.TempDir(), exec)
 
@@ -404,10 +395,10 @@ func TestDownloaderDownload_DoesNotReportSuccessWhenMoveToDestinationFails(t *te
 	progressCh := make(chan types.ProgressParams, 100)
 	cancelProgressCh := make(chan bool, 1)
 	d := &Downloader{
-		progressTracker: progress.NewTestTracker(progressCh, cancelProgressCh, engine.GetLogger()),
-		httpClient:      func() *http.Client { return server.Client() },
-		engine:          engine,
-		removeFile:      os.Remove,
+		progressTask: progress.NewTestTask(progressCh, cancelProgressCh, engine.GetLogger()),
+		httpClient:   func() *http.Client { return server.Client() },
+		engine:       engine,
+		removeFile:   os.Remove,
 		renameFile: func(string, string) error {
 			return errors.New("simulated rename failure")
 		},

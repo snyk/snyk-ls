@@ -1,0 +1,88 @@
+/*
+ * © 2026 Snyk Limited
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package server
+
+import (
+	"testing"
+	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/snyk-ls/application/di"
+	"github.com/snyk/snyk-ls/internal/progress"
+	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
+)
+
+// TestValidateProgressChannelIsolation (IDE-2036-INTEG-003) verifies that two
+// servers each receive progress events only through their own ProgressTracker,
+// never through the other server's channel.
+//
+// Run with: go test -race ./application/server/... -run TestValidateProgressChannelIsolation -v
+func TestValidateProgressChannelIsolation(t *testing.T) {
+	t.Parallel()
+
+	engineA, tokenServiceA := testutil.UnitTestWithEngine(t)
+	engineB, tokenServiceB := testutil.UnitTestWithEngine(t)
+
+	logger := zerolog.Nop()
+	chA := make(chan types.ProgressParams, 100)
+	chB := make(chan types.ProgressParams, 100)
+
+	trackerA := progress.NewTrackerWithChannel(chA, &logger)
+	trackerB := progress.NewTrackerWithChannel(chB, &logger)
+
+	depsA := di.TestInit(t, engineA, tokenServiceA, &di.Dependencies{ProgressTracker: trackerA})
+	depsB := di.TestInit(t, engineB, tokenServiceB, &di.Dependencies{ProgressTracker: trackerB})
+
+	// TestInit must hand back the injected Tracker verbatim — otherwise the
+	// channels below would be some other tracker's and the isolation assertions
+	// would be vacuous.
+	require.Same(t, trackerA, depsA.ProgressTracker, "TestInit must use the injected ProgressTracker for server A")
+	require.Same(t, trackerB, depsB.ProgressTracker, "TestInit must use the injected ProgressTracker for server B")
+
+	// Verify each deps routes through the right channel.
+	chFromA := depsA.ProgressTracker.Channel()
+	chFromB := depsB.ProgressTracker.Channel()
+
+	// Create a task routed through server A's channel.
+	taskA := trackerA.New(false)
+	taskA.Begin("scan-A")
+	taskA.End()
+
+	// chA must receive events; chB must not.
+	assert.Eventually(t, func() bool { return len(chFromA) > 0 }, time.Second, time.Millisecond,
+		"server A's channel must receive progress events from taskA")
+	assert.Never(t, func() bool { return len(chFromB) > 0 }, 50*time.Millisecond, time.Millisecond,
+		"server B's channel must not receive progress events from taskA")
+
+	// Drain chA and now verify server B's channel.
+	for len(chFromA) > 0 {
+		<-chFromA
+	}
+
+	taskB := trackerB.New(false)
+	taskB.Begin("scan-B")
+	taskB.End()
+
+	assert.Eventually(t, func() bool { return len(chFromB) > 0 }, time.Second, time.Millisecond,
+		"server B's channel must receive progress events from taskB")
+	assert.Never(t, func() bool { return len(chFromA) > 0 }, 50*time.Millisecond, time.Millisecond,
+		"server A's channel must not receive progress events from taskB")
+}

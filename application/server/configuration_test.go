@@ -218,7 +218,7 @@ func Test_WorkspaceDidChangeConfiguration_LspEnvelope(t *testing.T) {
 
 func Test_InitializeSettings_PreservesRefreshedOAuthTokenWhenInitializeSendsStaleToken(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	di.TestInit(t, engine, tokenService, nil)
+	deps := di.TestInit(t, engine, tokenService, nil)
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 
@@ -227,19 +227,18 @@ func Test_InitializeSettings_PreservesRefreshedOAuthTokenWhenInitializeSendsStal
 
 	var authNotificationsMu sync.Mutex
 	var authNotifications []types.AuthenticationParams
-	di.Notifier().CreateListener(func(params any) {
+	deps.Notifier.CreateListener(func(params any) {
 		if authParams, ok := params.(types.AuthenticationParams); ok {
 			authNotificationsMu.Lock()
 			defer authNotificationsMu.Unlock()
 			authNotifications = append(authNotifications, authParams)
 		}
 	})
-	t.Cleanup(func() { di.Notifier().DisposeListener() })
+	t.Cleanup(func() { deps.Notifier.DisposeListener() })
 
-	// UpdateCredentials on the global singleton: both the global service and testCtx's
-	// service write through to the shared engine configuration, so the refreshed token
-	// is visible to whichever service instance ends up in the context.
-	di.AuthenticationService().UpdateCredentials(refreshedToken, true, false)
+	// UpdateCredentials on the local service instance which routes notifications through
+	// the per-test notifier set up above.
+	deps.AuthenticationService.UpdateCredentials(refreshedToken, true, false)
 
 	require.NoError(t, InitializeSettings(testCtx(t, t.Context(), engine, tokenService), conf, engine, logger, types.InitializationOptions{
 		Settings: map[string]*types.ConfigSetting{
@@ -1722,7 +1721,6 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 
 		// Set up a real ConfigResolver so validateLockedFields can use it.
 		resolver := testutil.DefaultConfigResolver(setup.engine)
-		di.SetConfigResolver(resolver)
 
 		// Incoming update: switch to org-B AND change SnykCodeEnabled (which org-B locks)
 		newOrg := "org-b"
@@ -1760,7 +1758,6 @@ func Test_validateLockedFields_UsesNewOrgPolicyOnOrgSwitch(t *testing.T) {
 		// org-B has no locks
 
 		resolver := testutil.DefaultConfigResolver(setup.engine)
-		di.SetConfigResolver(resolver)
 
 		// Incoming update: switch to org-B AND change SnykCodeEnabled
 		newOrg := "org-b"
@@ -1919,7 +1916,6 @@ func Test_validateLockedFields_RestoresConfigAfterValidation(t *testing.T) {
 	types.WriteOrgConfigToConfiguration(prefixKeyConf, orgConfigB)
 
 	resolver := testutil.DefaultConfigResolver(setup.engine)
-	di.SetConfigResolver(resolver)
 
 	// Capture original config state
 	folderPath := string(types.PathKey(setup.folderPath))
@@ -2348,7 +2344,7 @@ func Test_applyOrganization_ResetsSummaryPanelOnOrgChange(t *testing.T) {
 		emitter.EXPECT().Emit(gomock.Any()).AnyTimes()
 		realAgg := scanstates.NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), emitter, testutil.DefaultConfigResolver(engine), engine)
 		mockNotifier := notification.NewMockNotifier()
-		di.TestInit(t, engine, tokenService, &di.Dependencies{ScanStateAggregator: realAgg, Notifier: mockNotifier})
+		testDeps := di.TestInit(t, engine, tokenService, &di.Dependencies{ScanStateAggregator: realAgg, Notifier: mockNotifier})
 
 		tmpDir := types.FilePath(t.TempDir())
 		require.NoError(t, initTestRepo(t, string(tmpDir)))
@@ -2370,8 +2366,8 @@ func Test_applyOrganization_ResetsSummaryPanelOnOrgChange(t *testing.T) {
 		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
 			ctx2.DepNotifier:            mockNotifier,
 			ctx2.DepScanStateAggregator: realAgg,
-			ctx2.DepAuthService:         di.AuthenticationService(),
-			ctx2.DepFeatureFlagService:  di.FeatureFlagService(),
+			ctx2.DepAuthService:         testDeps.AuthenticationService,
+			ctx2.DepFeatureFlagService:  testDeps.FeatureFlagService,
 		})
 		return engine, folderPath, realAgg, ctx
 	}
@@ -2811,7 +2807,7 @@ func Test_validateLockedMachineFields_EarlyReturns(t *testing.T) {
 
 func Test_UpdateSettings_LockedFields_EmitsExactlyOneNotification(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	di.TestInit(t, engine, tokenService, nil)
+	testDeps := di.TestInit(t, engine, tokenService, nil)
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 
@@ -2840,7 +2836,6 @@ func Test_UpdateSettings_LockedFields_EmitsExactlyOneNotification(t *testing.T) 
 	types.WriteOrgConfigToConfiguration(conf, orgConfig)
 
 	resolver := testutil.DefaultConfigResolver(engine)
-	di.SetConfigResolver(resolver)
 
 	// Use a local notifier so this test is fully isolated from the global DI
 	// singleton and can run in parallel without cross-test interference.
@@ -2883,9 +2878,9 @@ func Test_UpdateSettings_LockedFields_EmitsExactlyOneNotification(t *testing.T) 
 
 	ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
 		ctx2.DepNotifier:           localNotifier,
-		ctx2.DepAuthService:        di.AuthenticationService(),
+		ctx2.DepAuthService:        testDeps.AuthenticationService,
 		ctx2.DepConfigResolver:     resolver,
-		ctx2.DepFeatureFlagService: di.FeatureFlagService(),
+		ctx2.DepFeatureFlagService: testDeps.FeatureFlagService,
 	})
 	UpdateSettings(ctx, conf, engine, logger, machineSettings, folderConfigs, analytics.TriggerSourceTest, resolver)
 
@@ -3189,10 +3184,11 @@ func Test_UpdateSettings_FolderConfigChange_EmitsExactlyOneLspConfiguration(t *t
 		conf.Set(types.SettingIsLspInitialized, true)
 
 		mockNotifier := notification.NewMockNotifier()
+		deps := di.TestInit(t, engine, tokenService, &di.Dependencies{Notifier: mockNotifier})
 		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
 			ctx2.DepNotifier:            mockNotifier,
-			ctx2.DepAuthService:         di.TestInit(t, engine, tokenService, &di.Dependencies{Notifier: mockNotifier}).AuthenticationService,
-			ctx2.DepFeatureFlagService:  di.FeatureFlagService(),
+			ctx2.DepAuthService:         deps.AuthenticationService,
+			ctx2.DepFeatureFlagService:  deps.FeatureFlagService,
 			ctx2.DepConfigResolver:      cr,
 			ctx2.DepLdxSyncService:      command.NewLdxSyncService(cr),
 			ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
@@ -3232,10 +3228,11 @@ func Test_UpdateSettings_FolderConfigChange_EmitsExactlyOneLspConfiguration(t *t
 		conf.Set(types.SettingIsLspInitialized, true)
 
 		mockNotifier := notification.NewMockNotifier()
+		deps := di.TestInit(t, engine, tokenService, &di.Dependencies{Notifier: mockNotifier})
 		ctx := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
 			ctx2.DepNotifier:            mockNotifier,
-			ctx2.DepAuthService:         di.TestInit(t, engine, tokenService, &di.Dependencies{Notifier: mockNotifier}).AuthenticationService,
-			ctx2.DepFeatureFlagService:  di.FeatureFlagService(),
+			ctx2.DepAuthService:         deps.AuthenticationService,
+			ctx2.DepFeatureFlagService:  deps.FeatureFlagService,
 			ctx2.DepConfigResolver:      cr,
 			ctx2.DepLdxSyncService:      command.NewLdxSyncService(cr),
 			ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),
@@ -3259,8 +3256,8 @@ func Test_UpdateSettings_FolderConfigChange_EmitsExactlyOneLspConfiguration(t *t
 		mockNotifier2 := notification.NewMockNotifier()
 		ctx2Deps := ctx2.NewContextWithDependencies(t.Context(), map[string]any{
 			ctx2.DepNotifier:            mockNotifier2,
-			ctx2.DepAuthService:         di.AuthenticationService(),
-			ctx2.DepFeatureFlagService:  di.FeatureFlagService(),
+			ctx2.DepAuthService:         deps.AuthenticationService,
+			ctx2.DepFeatureFlagService:  deps.FeatureFlagService,
 			ctx2.DepConfigResolver:      cr,
 			ctx2.DepLdxSyncService:      command.NewLdxSyncService(cr),
 			ctx2.DepScanStateAggregator: scanstates.NewNoopStateAggregator(),

@@ -260,3 +260,24 @@ func Test_SnykCli_GetCommand_ReplacesExistingOrgFlag(t *testing.T) {
 	}
 	assert.Equal(t, 1, orgCount, "Command should contain exactly one --org flag")
 }
+
+// Test_NewExecutor_SharesProcessGlobalSemaphore verifies that all SnykCli executors
+// created via NewExecutor share the same underlying semaphore instance, so the total
+// number of concurrent CLI executions across all executor instances is bounded by
+// concurrencyLimit (not N*concurrencyLimit where N is the number of executors).
+func Test_NewExecutor_SharesProcessGlobalSemaphore(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	er := error_reporting.NewTestErrorReporter(engine)
+	notifier := notification.NewMockNotifier()
+	resolver := testutil.DefaultConfigResolver(engine)
+
+	executor1 := NewExecutor(engine, er, notifier, resolver).(*SnykCli)
+	executor2 := NewExecutor(engine, er, notifier, resolver).(*SnykCli)
+
+	// Both executors must share the same process-global semaphore pointer.
+	// If each NewExecutor call allocates a fresh semaphore.NewWeighted, this fails
+	// because executor1.semaphore != executor2.semaphore.
+	assert.Same(t, executor1.semaphore, executor2.semaphore,
+		"all NewExecutor instances must share the process-global semaphore so "+
+			"total concurrent CLI executions are bounded by concurrencyLimit, not N*concurrencyLimit")
+}

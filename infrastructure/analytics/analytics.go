@@ -34,7 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
-var analyticsMu = sync.RWMutex{}
+var analyticsMu = sync.RWMutex{} //nolint:gochecknoglobals // process-global analytics mutex
 
 func NewAnalyticsEventParam(interactionType string, err error, path types.FilePath) types.AnalyticsEventParam {
 	status := string(analytics.Success)

@@ -164,16 +164,17 @@ func runOSSComparisonTest(t *testing.T, unifiedScan bool, dir string) []types.Di
 func setupOSSComparisonTest(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder) {
 	t.Helper()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretNameForRiskScore, "SMOKE_SHARD_4")
-	testutil.CreateDummyProgressListener(t)
+	// Set the endpoint on this server's engine config instead of os.Setenv so
+	// parallel smoke tests cannot clobber each other's endpoint.
 	endpoint := os.Getenv("SNYK_API")
-	if endpoint == "" {
-		t.Setenv("SNYK_API", "https://api.snyk.io")
+	switch endpoint {
+	case "":
+		endpoint = "https://api.snyk.io"
+	case "/v1":
+		// Not a usable endpoint; WithAPIEndpoint("") leaves the engine's own value.
+		endpoint = ""
 	}
-
-	if endpoint != "" && endpoint != "/v1" {
-		t.Setenv("SNYK_API", endpoint)
-	}
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI(), WithAPIEndpoint(endpoint))
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
