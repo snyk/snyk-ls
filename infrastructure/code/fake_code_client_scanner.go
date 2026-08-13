@@ -34,6 +34,7 @@ import (
 
 type FakeCodeScannerClient struct {
 	UploadAndAnalyzeWasCalled bool
+	LegacyUploadWasCalled     bool   // Records which of the two upload paths the scan took
 	Organization              string // Captures the org the scanner was created with
 }
 
@@ -424,6 +425,7 @@ func (f *FakeCodeScannerClient) UploadAndAnalyzeLegacy(
 	statusChannel chan<- scan.LegacyScanStatus,
 ) (*codeClientSarif.SarifResponse, string, error) {
 	defer close(statusChannel)
+	f.LegacyUploadWasCalled = true
 	return f.UploadAndAnalyze(ctx, requestId, target, files, changedFiles)
 }
 
