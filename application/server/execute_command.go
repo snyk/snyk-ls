@@ -24,7 +24,6 @@ import (
 	"github.com/creachadair/jrpc2/handler"
 	sglsp "github.com/sourcegraph/go-lsp"
 
-	"github.com/snyk/snyk-ls/domain/ide/command"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -38,7 +37,7 @@ func executeCommandHandler(srv *jrpc2.Server) jrpc2.Handler {
 
 		commandData := types.CommandData{CommandId: params.Command, Arguments: params.Arguments, Title: params.Command}
 
-		result, err := command.Service().ExecuteCommandData(ctx, commandData, srv)
+		result, err := mustCommandServiceFromContext(ctx).ExecuteCommandData(ctx, commandData, srv)
 		logError(logger, mustErrorReporterFromContext(ctx), err, fmt.Sprintf("Error executing command %v", commandData))
 		return result, err
 	})

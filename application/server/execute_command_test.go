@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/creachadair/jrpc2"
+	"github.com/creachadair/jrpc2/handler"
 	"github.com/golang/mock/gomock"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	sglsp "github.com/sourcegraph/go-lsp"
@@ -44,10 +46,10 @@ import (
 
 func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, _, deps := setupServer(t, engine, tokenService, WithRealDI())
 
 	s := &scanner.TestScanner{}
-	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine))
+	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", s, deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine))
 
 	params := sglsp.ExecuteCommandParams{Command: types.WorkspaceScanCommand}
 	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
@@ -61,10 +63,10 @@ func Test_executeWorkspaceScanCommand_shouldStartWorkspaceScanOnCommandReceipt(t
 
 func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceipt(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, _, deps := setupServer(t, engine, tokenService, WithRealDI())
 
 	s := &scanner.TestScanner{}
-	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine))
+	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", s, deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine))
 
 	params := sglsp.ExecuteCommandParams{Command: types.WorkspaceFolderScanCommand, Arguments: []any{"dummy"}}
 	_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
@@ -78,12 +80,12 @@ func Test_executeWorkspaceFolderScanCommand_shouldStartFolderScanOnCommandReceip
 
 func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostics(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, _, deps := setupServer(t, engine, tokenService, WithRealDI())
 
 	scannerForFolder := scanner.NewTestScanner()
 	scannerForDontClear := scanner.NewTestScanner()
-	folder := workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", scannerForFolder, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine)
-	dontClear := workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dontclear"), "dontclear", scannerForDontClear, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine)
+	folder := workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", scannerForFolder, deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine)
+	dontClear := workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dontclear"), "dontclear", scannerForDontClear, deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine)
 
 	dontClearIssuePath := types.FilePath("dontclear/file.txt")
 	scannerForDontClear.AddTestIssue(&snyk.Issue{AffectedFilePath: dontClearIssuePath})
@@ -111,10 +113,10 @@ func Test_executeWorkspaceFolderScanCommand_shouldNotClearOtherFoldersDiagnostic
 
 func Test_executeWorkspaceScanCommand_doesNotScanUntrustedFolder(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, _, deps := setupServer(t, engine, tokenService, WithRealDI())
 
 	s := &scanner.TestScanner{}
-	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine))
+	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", s, deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine))
 	// explicitly enable folder trust which is disabled by default in tests
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
 
@@ -130,10 +132,10 @@ func Test_executeWorkspaceScanCommand_doesNotScanUntrustedFolder(t *testing.T) {
 
 func Test_executeWorkspaceScanCommand_shouldAcceptScanSourceParam(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, _, deps := setupServer(t, engine, tokenService, WithRealDI())
 
 	s := &scanner.TestScanner{}
-	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", s, di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine))
+	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("dummy"), "dummy", s, deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine))
 	// explicitly enable folder trust which is disabled by default in tests
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
 
@@ -154,10 +156,20 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockLdxSyncService := mockcommand.NewMockLdxSyncService(ctrl)
+
+	// Build base deps first so we can create a real command service that shares
+	// the same auth service instance as the server — both must point to the same
+	// FakeAuthenticationProvider so that IsAuthenticated=false is visible to the
+	// command handler that runs inside the server.
+	baseDeps := di.TestInit(t, engine, tokenService, &di.Dependencies{
+		LdxSyncService: mockLdxSyncService,
+	})
+	realCommandService := command.NewService(engine, engine.GetLogger(), baseDeps.AuthenticationService, baseDeps.FeatureFlagService, baseDeps.Notifier, baseDeps.LearnService, nil, nil, nil, mockLdxSyncService, nil, nil, nil, baseDeps.ScanCtx)
+	baseDeps.CommandService = realCommandService
+
+	// Pass all pre-built deps so setupServer reuses the same service instances.
 	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService,
-		WithDeps(di.Dependencies{
-			LdxSyncService: mockLdxSyncService,
-		}))
+		WithDeps(baseDeps))
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 
@@ -166,9 +178,9 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 	fakeAuthenticationProvider.IsAuthenticated = false
 
 	// Add workspace folder
-	folder := workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("/test/path"), "test", di.Scanner(), di.HoverService(),
-		di.ScanNotifier(), di.Notifier(), di.ScanPersister(),
-		di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine)
+	folder := workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.PathKey("/test/path"), "test", deps.Scanner, deps.HoverService,
+		deps.ScanNotifier, deps.Notifier, deps.ScanPersister,
+		deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine)
 	config.GetWorkspace(engine.GetConfiguration()).AddFolder(folder)
 
 	// Expect RefreshConfigFromLdxSync to be called during initialization with the workspace folder
@@ -180,9 +192,6 @@ func Test_loginCommand_StartsAuthentication(t *testing.T) {
 			assert.Len(t, folders, 1)
 			assert.Equal(t, folder.Path(), folders[0].Path())
 		})
-
-	// reset to use real service with mock injected
-	command.SetService(command.NewService(engine, engine.GetLogger(), authenticationService, deps.FeatureFlagService, deps.Notifier, deps.LearnService, nil, nil, nil, mockLdxSyncService, nil, nil, nil))
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	if err != nil {
@@ -242,9 +251,9 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 
 	t.Run("Doesn't mutate trusted folders, if trusted folders disabled", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
-		loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
+		loc, _, deps := setupServer(t, engine, tokenService, WithRealDI())
 
-		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath1, "dummy", scanner.NewTestScanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine))
+		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath1, "dummy", scanner.NewTestScanner(), deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine))
 
 		params := sglsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
 		_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", params)
@@ -258,10 +267,10 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 
 	t.Run("Updates trusted workspace folders", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
-		loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
+		loc, _, deps := setupServer(t, engine, tokenService, WithRealDI())
 
-		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath1, "dummy", scanner.NewTestScanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine))
-		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath2, "dummy", scanner.NewTestScanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine))
+		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath1, "dummy", scanner.NewTestScanner(), deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine))
+		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath2, "dummy", scanner.NewTestScanner(), deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine))
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
 
 		params := sglsp.ExecuteCommandParams{Command: types.TrustWorkspaceFoldersCommand}
@@ -278,9 +287,9 @@ func Test_TrustWorkspaceFolders(t *testing.T) {
 
 	t.Run("Existing trusted workspace folders are not removed", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)
-		loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
+		loc, _, deps := setupServer(t, engine, tokenService, WithRealDI())
 
-		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath1, "dummy", scanner.NewTestScanner(), di.HoverService(), di.ScanNotifier(), di.Notifier(), di.ScanPersister(), di.ScanStateAggregator(), di.FeatureFlagService(), di.ConfigResolver(), engine))
+		config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath1, "dummy", scanner.NewTestScanner(), deps.HoverService, deps.ScanNotifier, deps.Notifier, deps.ScanPersister, deps.ScanStateAggregator, deps.FeatureFlagService, deps.ConfigResolver, engine))
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{folderPath2})
 
@@ -340,20 +349,42 @@ func (tcs *testCommandService) ExecuteCommandData(ctx context.Context, cmdData t
 	return tcs.testCmd.Execute(ctx)
 }
 
+func Test_WithContext_InjectsCommandServiceFromDeps(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	injected := types.NewCommandServiceMock()
+
+	deps := di.TestInit(t, engine, tokenService, nil)
+	deps.CommandService = injected
+
+	var gotCommandService types.CommandService
+	wrapped := withContext(
+		handler.New(func(ctx context.Context, _ *jrpc2.Request) (any, error) {
+			gotCommandService, _ = commandServiceFromContext(ctx)
+			return nil, nil
+		}),
+		logger, conf, engine, deps, nil,
+	)
+
+	_, err := wrapped(t.Context(), nil)
+	require.NoError(t, err)
+
+	require.NotNil(t, gotCommandService, "CommandService must be injected into context by withContext")
+	assert.Same(t, injected, gotCommandService,
+		"withContext must inject deps.CommandService into context")
+}
+
 func Test_ExecuteCommand_CancelRequest(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _, _ := setupServer(t, engine, tokenService)
 
 	testCmd := newWaitForCancelTestCommand(t)
 
-	originalCmdService := command.Service()
 	fakeCommandService := &testCommandService{
 		testCmd: testCmd,
 	}
-	command.SetService(fakeCommandService)
-	t.Cleanup(func() {
-		command.SetService(originalCmdService)
-	})
+	loc, _, _ := setupServer(t, engine, tokenService, WithDeps(di.Dependencies{CommandService: fakeCommandService}))
 
 	var cmdDone atomic.Bool
 	go func() {

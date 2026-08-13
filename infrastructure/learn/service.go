@@ -70,7 +70,7 @@ type LessonLookupParams struct {
 
 const cacheExpiry = 24 * time.Hour
 
-var ecosystemAliases = map[string]string{
+var ecosystemAliases = map[string]string{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	"js":             "javascript",
 	"ts":             "javascript",
 	"npm":            "javascript",

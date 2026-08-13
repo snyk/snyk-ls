@@ -26,7 +26,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/diagnostics/directory_check"
 )
 
-var WORKFLOWID_IDE_DIRECTORY_CHECK = workflow.NewWorkflowIdentifier("tools.ide-directory-check")
+var WORKFLOWID_IDE_DIRECTORY_CHECK = workflow.NewWorkflowIdentifier("tools.ide-directory-check") //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 
 func initToolsIDEDirectoryCheck(engine workflow.Engine) error {
 	flags := pflag.NewFlagSet("tools.ide-directory-check", pflag.ContinueOnError)

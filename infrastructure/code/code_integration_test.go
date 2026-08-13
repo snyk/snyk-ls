@@ -91,6 +91,7 @@ func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 		newTestCodeErrorReporter(),
 		NewFakeCodeScannerClient,
 		resolver,
+		testutil.NewDrainedProgressTracker(),
 	)
 
 	// Create folder configs with SAST enabled

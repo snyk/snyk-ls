@@ -73,10 +73,10 @@ func setupLocalBareRepo(t *testing.T) localRepo {
 
 // ── resolveCliDir ────────────────────────────────────────────────────────────
 
-func TestResolveCliDir_NoCacheEnv(t *testing.T) {
-	t.Setenv("SNYK_LS_CLI_CACHE_DIR", "")
+func TestResolveCliDir_NoCacheDir(t *testing.T) {
+	t.Parallel()
 
-	dir, cleanup := resolveCliDir()
+	dir, cleanup := resolveCliDir("")
 
 	assert.NotEmpty(t, dir)
 	_, err := os.Stat(dir)
@@ -87,26 +87,27 @@ func TestResolveCliDir_NoCacheEnv(t *testing.T) {
 	assert.True(t, os.IsNotExist(err), "cleanup must remove the temp dir")
 }
 
-func TestResolveCliDir_WithCacheEnv(t *testing.T) {
-	cacheDir := t.TempDir()
-	t.Setenv("SNYK_LS_CLI_CACHE_DIR", cacheDir)
+func TestResolveCliDir_WithCacheDir(t *testing.T) {
+	t.Parallel()
 
-	dir, cleanup := resolveCliDir()
+	cacheDir := t.TempDir()
+
+	dir, cleanup := resolveCliDir(cacheDir)
 	defer cleanup()
 
-	assert.Equal(t, cacheDir, dir, "must return the env-specified cache dir")
+	assert.Equal(t, cacheDir, dir, "must return the requested cache dir")
 
 	cleanup()
 	_, err := os.Stat(cacheDir)
 	assert.NoError(t, err, "cleanup must be a no-op for a pre-configured cache dir")
 }
 
-func TestResolveCliDir_WithCacheEnvCreatesDir(t *testing.T) {
-	parent := t.TempDir()
-	cacheDir := filepath.Join(parent, "cli-cache")
-	t.Setenv("SNYK_LS_CLI_CACHE_DIR", cacheDir)
+func TestResolveCliDir_WithCacheDirCreatesDir(t *testing.T) {
+	t.Parallel()
 
-	dir, cleanup := resolveCliDir()
+	cacheDir := filepath.Join(t.TempDir(), "cli-cache")
+
+	dir, cleanup := resolveCliDir(cacheDir)
 	defer cleanup()
 
 	assert.Equal(t, cacheDir, dir)

@@ -129,6 +129,9 @@ brain/
 .verification-result.*
 .verify-report
 .localtmp
+.security-scan-progress
+.security-scan-scope
+*_implementation_plan.md
 IDE-2052_20260629_110429_ctx.log
 
 # CCE (code-context-engine)
