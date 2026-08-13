@@ -25,6 +25,10 @@ const RESET_FIELDS = [
 	"additional_environment",
 	"scan_command_config",
 ];
+const SECURE_AT_INCEPTION_FIELDS = [
+	"auto_configure_mcp_server",
+	"secure_at_inception_execution_frequency",
+];
 
 // Folder paths embedded in the dummy-data fixture (js-tests/fixtures/config-page.html).
 const PATH_A = "/Users/username/workspace/defaults-project";
@@ -34,6 +38,16 @@ const PATH_C = "/Users/username/workspace/org-locked-project";
 function assertAllNull(entry, fields) {
 	for (const f of fields) {
 		assert.equal(entry[f], null, `${f} should be null`);
+	}
+}
+
+function assertSecureAtInceptionFieldsAbsent(entry) {
+	for (const field of SECURE_AT_INCEPTION_FIELDS) {
+		assert.equal(
+			Object.prototype.hasOwnProperty.call(entry, field),
+			false,
+			`${field} must be absent from folder reset payload`
+		);
 	}
 }
 
@@ -81,6 +95,7 @@ test("applyFolderResets sets all 17 fields to null on an existing edited folder,
 	assert.ok(entry, "edited folder entry preserved");
 	assert.equal(entry.folderPath, PATH_A, "folderPath preserved");
 	assertAllNull(entry, RESET_FIELDS);
+	assertSecureAtInceptionFieldsAbsent(entry);
 });
 
 test("applyFolderResets emits a reset-only folder absent from data.folderConfigs", async () => {
@@ -96,6 +111,7 @@ test("applyFolderResets emits a reset-only folder absent from data.folderConfigs
 	const entry = data.folderConfigs[0];
 	assert.equal(entry.folderPath, PATH_A, "pushed entry carries folderPath");
 	assertAllNull(entry, RESET_FIELDS);
+	assertSecureAtInceptionFieldsAbsent(entry);
 });
 
 test("applyFolderResets creates folderConfigs array when missing", async () => {
@@ -168,6 +184,7 @@ test("DOM-driven: clicking .reset-overrides-btn produces 17 nulls for that folde
 	const entry = (saved.folderConfigs || []).find((f) => f.folderPath === PATH_B);
 	assert.ok(entry, "outbound payload contains an entry for the reset folderPath");
 	assertAllNull(entry, RESET_FIELDS);
+	assertSecureAtInceptionFieldsAbsent(entry);
 });
 
 test("DOM-driven: reset button click does not require the folder to have other edits", async () => {
