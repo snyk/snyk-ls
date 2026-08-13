@@ -30,6 +30,7 @@ import (
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
+	gafUtils "github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -366,6 +367,13 @@ func Test_fetch_resolvesConfigKeysAsConfigKeys(t *testing.T) {
 			assert.True(t, flags[configKey])
 		})
 	}
+}
+
+// Test_gafConfigResolvedFlags_coversFileFilterKeys pins the membership file filtering depends on: a key
+// dropped from this list is not a compile or runtime error, it just reads false forever.
+func Test_gafConfigResolvedFlags_coversFileFilterKeys(t *testing.T) {
+	assert.Contains(t, gafConfigResolvedFlags, gafUtils.FF_GITIGNORE_RESPECT_TRACKED_FILES)
+	assert.Contains(t, gafConfigResolvedFlags, gafUtils.FF_FILE_FILTER_METACHARACTER_FIX)
 }
 
 // Test_getConfigValues_resolvesForTheGivenOrg covers the reason snyk-ls resolves GAF configuration
