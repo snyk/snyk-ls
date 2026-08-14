@@ -12,6 +12,7 @@ jobs:
       - checkout
       - prodsec/security_scans:
           mode: auto
+          open-source-agentic-fix-enabled: true
           open-source-additional-arguments: --exclude=testdata
           iac-scan: disabled
 
