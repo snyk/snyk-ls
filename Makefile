@@ -229,7 +229,7 @@ tree-view-fixture:
 config-dialog-fixture:
 	@echo "==> Generating config dialog HTML fixture..."
 	@mkdir -p js-tests/fixtures
-	@go run scripts/config-dialog/main.go --dummy-data -no-panel > js-tests/fixtures/config-page.html
+	@go run scripts/config-dialog/main.go --dummy-data --integration VS_CODE -no-panel > js-tests/fixtures/config-page.html
 	@echo "    Written to js-tests/fixtures/config-page.html"
 
 ## settings-fallback-fixture: Regenerate settings fallback HTML fixtures used by JS tests.

@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -78,6 +79,7 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 	initParams := types.InitializeParams{
 		WorkspaceFolders: []types.WorkspaceFolder{folder},
 		InitializationOptions: types.InitializationOptions{
+			IntegrationName: constants.IntegrationNameVSCode,
 			Settings: map[string]*types.ConfigSetting{
 				types.SettingToken:                  {Value: config.GetToken(engine.GetConfiguration()), Changed: true},
 				types.SettingTrustEnabled:           {Value: false, Changed: true},
@@ -138,6 +140,26 @@ func Test_SmokeConfigurationDialog(t *testing.T) {
 			assertFieldPresent(t, html, "severity_filter_low", "FilterSeverity Low field")
 			assertFieldPresent(t, html, "issue_view_open_issues", "IssueViewOptions field")
 			assertFieldPresent(t, html, "scan_net_new", "EnableDeltaFindings field")
+		})
+
+		t.Run("Secure At Inception", func(t *testing.T) {
+			assert.Contains(t, html, "<h2>Secure At Inception</h2>")
+			assert.Contains(t, html, `title="Automatically configure Secure At Inception for supported development environments.">Auto-configure Snyk Studio</span>`)
+			assert.Contains(t, html, `title="Choose when Secure At Inception rules are applied.">Execution frequency</span>`)
+
+			checkbox := testutil.RequireOpeningTagByName(t, html, "input", types.SettingAutoConfigureMcpServer)
+			assert.Contains(t, checkbox, `type="checkbox"`)
+			assert.NotContains(t, checkbox, "checked")
+
+			selectMarkup := testutil.RequireElementByName(t, html, "select", types.SettingSecureAtInceptionExecutionFreq)
+			assert.Equal(t, []testutil.SelectOption{
+				{Value: "On Code Generation", Text: "On Code Generation"},
+				{Value: "Smart Scan", Text: "Smart Scan"},
+				{Value: "Manual", Text: "Manual", Selected: true},
+			}, testutil.ParseSelectOptions(t, selectMarkup))
+
+			assert.NotContains(t, html, "folder_0_"+types.SettingAutoConfigureMcpServer)
+			assert.NotContains(t, html, "folder_0_"+types.SettingSecureAtInceptionExecutionFreq)
 		})
 
 		t.Run("Folder-Specific Settings Fields", func(t *testing.T) {
