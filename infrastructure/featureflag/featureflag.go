@@ -31,6 +31,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
+	gafUtils "github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -62,6 +63,8 @@ var ffServiceResolvedFlags = []string{ //nolint:gochecknoglobals // a fixed list
 // we don't need to worry about the implementation details.
 var gafConfigResolvedFlags = []string{ //nolint:gochecknoglobals // a fixed list Go cannot express as a const; nothing writes to it
 	ignore_workflow.ConfigIgnoreApprovalEnabled,
+	gafUtils.FF_FILE_FILTER_METACHARACTER_FIX,
+	gafUtils.FF_GITIGNORE_RESPECT_TRACKED_FILES,
 }
 
 func UseOsTestWorkflow(folderConfig *types.FolderConfig) bool {

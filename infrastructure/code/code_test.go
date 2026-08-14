@@ -35,6 +35,7 @@ import (
 	codeClient "github.com/snyk/code-client-go"
 	"github.com/snyk/code-client-go/pkg/code"
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
+	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/mocks"
@@ -367,6 +368,7 @@ func Test_Scan(t *testing.T) {
 			realConfig.Set(configresolver.UserGlobalKey(types.SettingToken), "test-token")
 			mockEngine.EXPECT().GetConfiguration().Return(realConfig).AnyTimes()
 			mockEngine.EXPECT().GetLogger().Return(engine.GetLogger()).AnyTimes()
+			mockEngine.EXPECT().GetAnalytics().Return(analytics.New()).AnyTimes()
 
 			fakeFeatureFlagService := featureflag.NewFakeService()
 			fakeFeatureFlagService.SastSettings = &sast_contract.SastResponse{SastEnabled: true}
@@ -820,6 +822,9 @@ func setupMockConfigWithStorage(mockEngine *mocks.MockEngine, enableConsistentIg
 
 	mockEngine.EXPECT().GetConfiguration().Return(realConfig).AnyTimes()
 	mockEngine.EXPECT().GetLogger().Return(logger).AnyTimes()
+
+	// newFilteredFiles hands the engine's analytics to the file filter.
+	mockEngine.EXPECT().GetAnalytics().Return(analytics.New()).AnyTimes()
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = enableConsistentIgnores
