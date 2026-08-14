@@ -24,11 +24,12 @@ import (
 
 	"github.com/erni27/imcache"
 	"github.com/rs/zerolog"
-	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -37,7 +38,14 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// mockExternalCallsProvider is a mock implementation of ExternalCallsProvider for testing
+// Configuration keys used to exercise getConfigValues independently of any particular flag. The tests
+// register the resolver for them, so the names only have to be unique.
+const (
+	testConfigKeyA = "test_config_key_a"
+	testConfigKeyB = "test_config_key_b"
+)
+
+// mockExternalCallsProvider is a mock implementation of externalCalls for testing
 type mockExternalCallsProvider struct {
 	ignoreApprovalByOrg map[string]bool
 	ignoreErr           error
@@ -53,24 +61,41 @@ type mockExternalCallsProvider struct {
 	folderOrgByPath     map[string]string // Maps folder path to org for testing different folders
 
 	// Call counters to verify no unnecessary external calls
-	ignoreApprovalCalls int
-	featureFlagCalls    int
-	sastSettingsCalls   int
-	mu                  sync.Mutex
+	configValuesCalls int
+	featureFlagCalls  int
+	sastSettingsCalls int
+	mu                sync.Mutex
 }
 
-func (m *mockExternalCallsProvider) getIgnoreApprovalEnabled(org string) (bool, error) {
+func (m *mockExternalCallsProvider) getConfigValues(configKeys []string, org string) (map[string]bool, error) {
 	m.mu.Lock()
-	m.ignoreApprovalCalls++
+	m.configValuesCalls++
 	m.mu.Unlock()
+
+	values := make(map[string]bool, len(configKeys))
 	if m.ignoreErr != nil {
-		return false, m.ignoreErr
+		for _, key := range configKeys {
+			values[key] = false
+		}
+		return values, m.ignoreErr
 	}
-	if val, ok := m.ignoreApprovalByOrg[org]; ok {
-		return val, nil
+
+	// ignoreApprovalByOrg wins for its own key: a config key must not pick up a value staged for the
+	// platform flag route, or the mock would answer for a key the real provider never resolves.
+	for _, key := range configKeys {
+		if key == ignore_workflow.ConfigIgnoreApprovalEnabled {
+			if val, ok := m.ignoreApprovalByOrg[org]; ok {
+				values[key] = val
+			} else {
+				// Default value if org not specified
+				values[key] = true
+			}
+			continue
+		}
+		values[key] = m.featureFlagsByOrg[org][key]
 	}
-	// Default value if org not specified
-	return true, nil
+
+	return values, nil
 }
 
 func (m *mockExternalCallsProvider) getFeatureFlag(flag string, org string) (bool, error) {
@@ -149,7 +174,7 @@ func setupMockProvider(t *testing.T) (workflow.Engine, *mockExternalCallsProvide
 func TestFetch(t *testing.T) {
 	t.Run("caches flags with mock provider", func(t *testing.T) {
 		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 		org := "test-org-123"
 
 		// First fetch populates cache
@@ -157,11 +182,11 @@ func TestFetch(t *testing.T) {
 		require.NotNil(t, flags1)
 		assert.Contains(t, flags1, SnykCodeConsistentIgnores)
 		assert.Contains(t, flags1, SnykCodeInlineIgnore)
-		assert.Contains(t, flags1, IgnoreApprovalEnabled)
+		assert.Contains(t, flags1, ignore_workflow.ConfigIgnoreApprovalEnabled)
 
 		// Record call counts after first fetch
 		mockProvider.mu.Lock()
-		firstFetchIgnoreCalls := mockProvider.ignoreApprovalCalls
+		firstFetchIgnoreCalls := mockProvider.configValuesCalls
 		firstFetchFlagCalls := mockProvider.featureFlagCalls
 		mockProvider.mu.Unlock()
 
@@ -171,7 +196,7 @@ func TestFetch(t *testing.T) {
 
 		// Verify no additional calls were made (cache was used)
 		mockProvider.mu.Lock()
-		assert.Equal(t, firstFetchIgnoreCalls, mockProvider.ignoreApprovalCalls, "second fetch should not call getIgnoreApprovalEnabled")
+		assert.Equal(t, firstFetchIgnoreCalls, mockProvider.configValuesCalls, "second fetch should not call getConfigValues")
 		assert.Equal(t, firstFetchFlagCalls, mockProvider.featureFlagCalls, "second fetch should not call getFeatureFlag")
 		mockProvider.mu.Unlock()
 
@@ -196,7 +221,7 @@ func TestFetch(t *testing.T) {
 			SnykCodeInlineIgnore:      true,
 		}
 
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 
 		flags1 := service.fetch(org1)
 		assert.NotNil(t, flags1)
@@ -227,7 +252,7 @@ func TestFetch(t *testing.T) {
 
 	t.Run("concurrent access is thread-safe", func(t *testing.T) {
 		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 		org := "concurrent-org"
 
 		// Launch multiple goroutines that fetch simultaneously
@@ -255,20 +280,20 @@ func TestFetch(t *testing.T) {
 		assert.Len(t, service.orgToFlag.GetAll(), 1)
 	})
 
-	t.Run("fetches IgnoreApprovalEnabled flag via provider", func(t *testing.T) {
+	t.Run("fetches ConfigIgnoreApprovalEnabled flag via provider", func(t *testing.T) {
 		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 
 		flags := service.fetch("test-org")
 
-		// Should contain the special IgnoreApprovalEnabled flag
-		_, exists := flags[IgnoreApprovalEnabled]
-		assert.True(t, exists, "IgnoreApprovalEnabled should be fetched")
+		// Should contain the special ConfigIgnoreApprovalEnabled flag
+		_, exists := flags[ignore_workflow.ConfigIgnoreApprovalEnabled]
+		assert.True(t, exists, "ConfigIgnoreApprovalEnabled should be fetched")
 	})
 
 	t.Run("handles empty org string", func(t *testing.T) {
 		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 		// Should not panic with empty org
 		flags := service.fetch("")
 		assert.NotNil(t, flags)
@@ -281,7 +306,7 @@ func TestFetch(t *testing.T) {
 		mockProvider.flagDelay = 50 * time.Millisecond
 		mockProvider.flagReadyCh = make(chan struct{}, 1)
 
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 		org := "toctou-flags-org"
 
 		done := make(chan struct{})
@@ -302,10 +327,129 @@ func TestFetch(t *testing.T) {
 	})
 }
 
+// configKeyOnlyProvider resolves GAF configuration keys for real and fails any attempt to look a flag
+// up by platform name, so a key that stops being treated as a GAF configuration key is caught rather
+// than silently answered as false by an unrelated route.
+type configKeyOnlyProvider struct {
+	*externalCallsProvider
+}
+
+func (p *configKeyOnlyProvider) getFeatureFlag(flag string, _ string) (bool, error) {
+	return false, fmt.Errorf("%s must be resolved as a GAF configuration key, not by platform flag name", flag)
+}
+
+// Test_fetch_resolvesConfigKeysAsConfigKeys pins which route every entry of gafConfigResolvedFlags
+// takes. Getting this wrong costs nothing at compile time and produces no error at runtime: the flag
+// simply reads false forever and whatever it gates reaches nobody.
+func Test_fetch_resolvesConfigKeysAsConfigKeys(t *testing.T) {
+	const org = "00000000-0000-0000-0000-000000000001"
+
+	// Fails rather than passing vacuously if the list is emptied.
+	require.NotEmpty(t, gafConfigResolvedFlags)
+
+	for _, configKey := range gafConfigResolvedFlags {
+		t.Run(configKey, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			conf := engine.GetConfiguration()
+			conf.AddDefaultValue(configKey, func(_ configuration.Configuration, _ any) (any, error) {
+				return true, nil
+			})
+
+			logger := engine.GetLogger()
+			provider := &configKeyOnlyProvider{
+				externalCallsProvider: &externalCallsProvider{conf: conf, logger: logger, engine: engine},
+			}
+			service := New(conf, logger, engine, testutil.DefaultConfigResolver(engine), withProvider(provider))
+
+			flags := service.fetch(org)
+
+			assert.True(t, flags[configKey])
+		})
+	}
+}
+
+// Test_getConfigValues_resolvesForTheGivenOrg covers the reason snyk-ls resolves GAF configuration
+// keys itself instead of reading them off the engine configuration: a folder can belong to an
+// organization other than the global one, and GAF's resolvers answer for whichever organization the
+// configuration they are handed carries.
+func Test_getConfigValues_resolvesForTheGivenOrg(t *testing.T) {
+	const enabledOrg = "00000000-0000-0000-0000-000000000001"
+	const disabledOrg = "00000000-0000-0000-0000-000000000002"
+
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.AddDefaultValue(testConfigKeyA,
+		func(c configuration.Configuration, _ any) (any, error) {
+			return c.GetString(configuration.ORGANIZATION) == enabledOrg, nil
+		})
+
+	provider := &externalCallsProvider{conf: conf, logger: engine.GetLogger(), engine: engine}
+
+	enabled, err := provider.getConfigValues([]string{testConfigKeyA}, enabledOrg)
+	require.NoError(t, err)
+	assert.True(t, enabled[testConfigKeyA])
+
+	disabled, err := provider.getConfigValues([]string{testConfigKeyA}, disabledOrg)
+	require.NoError(t, err)
+	assert.False(t, disabled[testConfigKeyA])
+}
+
+// Test_getConfigValues_sharesOneCloneAcrossKeys pins the reason the keys share a clone: GAF caches
+// what it resolves on the configuration object it is handed, including one batched evaluation
+// covering the keys it registers together. A clone per key would throw that cache away.
+func Test_getConfigValues_sharesOneCloneAcrossKeys(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+
+	var mu sync.Mutex
+	var handed []configuration.Configuration
+	record := func(c configuration.Configuration, _ any) (any, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		handed = append(handed, c)
+		return false, nil
+	}
+	conf.AddDefaultValue(testConfigKeyA, record)
+	conf.AddDefaultValue(testConfigKeyB, record)
+
+	provider := &externalCallsProvider{conf: conf, logger: engine.GetLogger(), engine: engine}
+
+	_, err := provider.getConfigValues([]string{testConfigKeyA, testConfigKeyB}, "00000000-0000-0000-0000-000000000001")
+	require.NoError(t, err)
+
+	require.Len(t, handed, 2)
+	assert.Same(t, handed[0], handed[1], "both keys must resolve on the same configuration clone")
+	assert.NotSame(t, conf, handed[0], "the engine configuration must not be the one carrying the folder's organization")
+}
+
+// Test_getConfigValues_reportsErrorsWithoutLosingValues covers the fail-closed contract: a key that
+// cannot be resolved is false rather than absent, so a caller reading the map cannot mistake a failed
+// lookup for an enabled flag.
+func Test_getConfigValues_reportsErrorsWithoutLosingValues(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	conf.AddDefaultValue(testConfigKeyA,
+		func(_ configuration.Configuration, _ any) (any, error) {
+			return true, fmt.Errorf("gateway unavailable")
+		})
+	conf.AddDefaultValue(testConfigKeyB,
+		func(_ configuration.Configuration, _ any) (any, error) {
+			return true, nil
+		})
+
+	provider := &externalCallsProvider{conf: conf, logger: engine.GetLogger(), engine: engine}
+
+	values, err := provider.getConfigValues([]string{testConfigKeyA, testConfigKeyB}, "00000000-0000-0000-0000-000000000001")
+
+	require.Error(t, err)
+	assert.False(t, values[testConfigKeyA], "a failed lookup must be false")
+	assert.True(t, values[testConfigKeyB], "one failing key must not discard the others")
+}
+
 func TestFlushCache(t *testing.T) {
 	t.Run("clears all org feature flags", func(t *testing.T) {
 		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 		org := "test-org"
 		_ = service.fetch(org)
 		assert.NotEmpty(t, service.orgToFlag)
@@ -317,7 +461,7 @@ func TestFlushCache(t *testing.T) {
 
 	t.Run("clears SAST settings", func(t *testing.T) {
 		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 
 		org := "test-org-sast"
 		_, _ = service.fetchSastSettings(org)
@@ -330,7 +474,7 @@ func TestFlushCache(t *testing.T) {
 
 	t.Run("concurrent flush during fetch is thread-safe", func(t *testing.T) {
 		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 
 		var wg sync.WaitGroup
 		// Start multiple fetches
@@ -357,7 +501,7 @@ func TestFlushCache(t *testing.T) {
 func TestGetFromFolderConfig(t *testing.T) {
 	t.Run("returns correct flag value", func(t *testing.T) {
 		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 		folderPath := types.FilePath("/test/folder")
 
 		// Setup folder config with specific feature flags via configuration
@@ -378,7 +522,7 @@ func TestGetFromFolderConfig(t *testing.T) {
 
 	t.Run("returns false for non-existent flag", func(t *testing.T) {
 		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 
 		folderPath := types.FilePath("/test/folder")
 		folderConfig := &types.FolderConfig{
@@ -394,7 +538,7 @@ func TestGetFromFolderConfig(t *testing.T) {
 
 	t.Run("handles multiple folders independently", func(t *testing.T) {
 		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 
 		folder1 := types.FilePath("/folder1")
 		folder2 := types.FilePath("/folder2")
@@ -421,7 +565,7 @@ func TestGetFromFolderConfig(t *testing.T) {
 
 	t.Run("handles folder config with no feature flags set", func(t *testing.T) {
 		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 
 		folderPath := types.FilePath("/test")
 
@@ -432,7 +576,7 @@ func TestGetFromFolderConfig(t *testing.T) {
 
 	t.Run("handles empty folder path", func(t *testing.T) {
 		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 
 		// Should not panic with empty path
 		value := service.GetFromFolderConfig("", "anyFlag")
@@ -443,7 +587,7 @@ func TestGetFromFolderConfig(t *testing.T) {
 func TestPopulateFolderConfig(t *testing.T) {
 	t.Run("sets feature flags", func(t *testing.T) {
 		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 
 		folderPath := types.FilePath("/test/folder")
 		folderConfig := &types.FolderConfig{
@@ -460,7 +604,7 @@ func TestPopulateFolderConfig(t *testing.T) {
 
 	t.Run("handles multiple folders", func(t *testing.T) {
 		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 
 		folder1 := &types.FolderConfig{FolderPath: "/folder1", ConfigResolver: testutil.DefaultConfigResolver(engine)}
 		folder2 := &types.FolderConfig{FolderPath: "/folder2", ConfigResolver: testutil.DefaultConfigResolver(engine)}
@@ -476,7 +620,7 @@ func TestPopulateFolderConfig(t *testing.T) {
 
 	t.Run("populates SAST settings", func(t *testing.T) {
 		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 
 		folderPath := types.FilePath("/test/folder")
 		folderConfig := &types.FolderConfig{
@@ -495,7 +639,7 @@ func TestPopulateFolderConfig(t *testing.T) {
 		engine, mockProviderWithError := setupMockProvider(t)
 		// Override with error
 		mockProviderWithError.sastErr = fmt.Errorf("mock error")
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProviderWithError))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProviderWithError))
 
 		folderPath := types.FilePath("/test/folder")
 		folderConfig := &types.FolderConfig{
@@ -511,7 +655,7 @@ func TestPopulateFolderConfig(t *testing.T) {
 
 	t.Run("concurrent population is thread-safe", func(t *testing.T) {
 		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 
 		var wg sync.WaitGroup
 		numFolders := 10
@@ -540,7 +684,7 @@ func TestPopulateFolderConfig(t *testing.T) {
 func TestFetchSastSettings(t *testing.T) {
 	t.Run("caches SAST settings", func(t *testing.T) {
 		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 
 		org := "test-org-sast"
 
@@ -579,7 +723,7 @@ func TestFetchSastSettings(t *testing.T) {
 			},
 		}
 
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 
 		settings1, err1 := service.fetchSastSettings(org1)
 		require.NoError(t, err1)
@@ -610,7 +754,7 @@ func TestFetchSastSettings(t *testing.T) {
 
 	t.Run("concurrent SAST settings fetch is thread-safe", func(t *testing.T) {
 		engine, mockProvider := setupMockProvider(t)
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 		org := "concurrent-sast-org"
 
 		var wg sync.WaitGroup
@@ -726,7 +870,7 @@ func TestServiceImpl_Override_PinsFlag(t *testing.T) {
 		folderOrg: "org1",
 	}
 
-	svc := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(provider))
+	svc := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(provider))
 	svc.Override(UseExperimentalRiskScoreInCLI, false)
 
 	folderPath := types.FilePath(t.TempDir())
@@ -742,7 +886,7 @@ func TestFetchSastSettings_NegativeCache(t *testing.T) {
 		engine, mockProvider := setupMockProvider(t)
 		mockProvider.sastErr = fmt.Errorf("401 unauthorized")
 
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 		org := "fedramp-org"
 
 		const N = 100
@@ -764,7 +908,7 @@ func TestFetchSastSettings_NegativeCache(t *testing.T) {
 			"good-org": {SastEnabled: true},
 		}
 
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 
 		resp, err := service.fetchSastSettings("good-org")
 		require.NoError(t, err)
@@ -775,7 +919,7 @@ func TestFetchSastSettings_NegativeCache(t *testing.T) {
 		engine, mockProvider := setupMockProvider(t)
 		mockProvider.sastErr = fmt.Errorf("401 unauthorized")
 
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 		org := "flush-org"
 
 		_, _ = service.fetchSastSettings(org)
@@ -805,7 +949,7 @@ func TestFetchSastSettings_NegativeCache(t *testing.T) {
 		sastReady := make(chan struct{}, 1)
 		mockProvider.sastReadyCh = sastReady
 
-		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), WithProvider(mockProvider))
+		service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
 		org := "toctou-org"
 
 		// Start a fetch that will sleep 50ms inside getSastSettings.
