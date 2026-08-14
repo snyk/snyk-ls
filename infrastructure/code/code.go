@@ -287,17 +287,11 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, l
 	return results, err
 }
 
-// lsDefaultIgnoredRules keeps version control internals and OS metadata out of every scan, whichever
-// filtering path runs. Both call sites append to it, which allocates a new slice rather than writing
-// into this one only because a composite literal has no spare capacity, so it must never be rebuilt
-// with room to grow.
+// lsDefaultIgnoredRules keeps version control internals and OS metadata out of every scan.
 var lsDefaultIgnoredRules = []string{"**/.git/**", "**/.svn/**", "**/.hg/**", "**/.bzr/**", "**/.DS_Store/**"} //nolint:gochecknoglobals // a fixed rule set Go cannot express as a const
 
-// filteredFiles picks the file filtering implementation for the folder being scanned. Flags and
-// organization both come from the folder config the scan already holds, because resolving either by
-// path builds a fresh folder config, which opens the repository with go-git to enrich it and writes
-// it back to storage — work a scan would otherwise repeat per flag, including scans that end up in
-// legacyFilteredFiles, where neither flag can change what the filter does.
+// filteredFiles picks the file filtering implementation for the folder being scanned based on a FF:
+// newFilteredFiles when it is set for the folder's organization, legacyFilteredFiles when it is not.
 func (sc *Scanner) filteredFiles(folderConfig *types.FolderConfig, logger zerolog.Logger) (chan string, error) {
 	if folderConfig == nil {
 		// Refused rather than defaulted: a missing folder config reads every flag as off, which would
