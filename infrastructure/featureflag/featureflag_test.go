@@ -328,6 +328,16 @@ func TestFetch(t *testing.T) {
 	})
 }
 
+func TestResolvedFlagsDoesNotFetchSecrets(t *testing.T) {
+	engine, mockProvider := setupMockProvider(t)
+	service := New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine), withProvider(mockProvider))
+
+	flags := service.fetch("test-org")
+
+	require.NotEmpty(t, flags)
+	assert.NotContains(t, flags, "isSecretsEnabled")
+}
+
 // configKeyOnlyProvider resolves GAF configuration keys for real and fails any attempt to look a flag
 // up by platform name, so a key that stops being treated as a GAF configuration key is caught rather
 // than silently answered as false by an unrelated route.
