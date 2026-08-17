@@ -20,7 +20,7 @@ const (
 	ErrSnykCodeNotEnabled = "Snyk Code is not enabled for this organization"
 	// ErrSnykCodeNotEnabledForFolder is when Code is turned off for this workspace folder in the IDE / config (not org SAST).
 	ErrSnykCodeNotEnabledForFolder = "Snyk Code is not enabled for this workspace folder"
-	// ErrSnykSecretsNotEnabled is when Secrets is not available for the organization (e.g. feature flag).
+	// ErrSnykSecretsNotEnabled is when Secrets is not available for the organization.
 	ErrSnykSecretsNotEnabled = "Snyk Secrets is not enabled for this organization"
 	// ErrSnykSecretsNotEnabledForFolder is when Secrets is turned off for this workspace folder in the IDE / config.
 	ErrSnykSecretsNotEnabledForFolder = "Snyk Secrets is not enabled for this workspace folder"

@@ -137,6 +137,8 @@ On save (or auto-save), `features/auto-save.js` calls `form-handler.collectData(
 - `additional_parameters` (string, space-separated) — **Project Defaults Advanced section**. Default CLI parameters for all project scans; stored as `cli_additional_oss_parameters` (`[]string`) at `UserGlobalKey` by `applyCliConfig`. These combine with per-project `additional_parameters`: both sets of tokens are used together. Not LDX-Sync routed.
 - `additional_environment` (string, semicolon-separated `KEY=VALUE` pairs) — **Project Defaults Advanced section**. Default environment variables for all project scans; applied via `os.Setenv` and also persisted at `UserGlobalKey(additional_environment)` for dialog pre-population. Combine with per-project values: per-project overrides win on key conflict. Not LDX-Sync routed.
 
+Secrets controls are always visible at both Project Defaults and per-project scope.
+
 **Project Defaults Advanced section**: The `{{FolderLabel}} defaults` tab contains a collapsible "Advanced" section (id `defaults-advanced`) with `name="additional_parameters"` and `name="additional_environment"` global inputs. A static info-box above the fields explains that values at both levels combine. The exact UX copy is TBD (Tars to finalize, per IDE-2110 comment 2026-06-05).
 
 **Per folder:** `folderConfigs` is an array of objects with keys such as `folderPath`, `preferred_org`, `additional_parameters` (array of CLI tokens), `additional_environment`, `org_set_by_user`, `scan_command_config`, plus folder-scope overrides (`scan_automatic`, `severity_filter_critical`, `severity_filter_high`, `severity_filter_medium`, `severity_filter_low`, `snyk_oss_enabled`, …). Folder field `name=` attributes use the `folder_<index>_<setting>` convention (e.g. `folder_0_severity_filter_critical`); `form-handler.collectData()` parses the index and writes the suffix as a flat key under `folderConfigs[i]`. Per-folder `additional_parameters` arrives as a `[]string` (split on whitespace by `form-handler.js`); per-folder `additional_environment` arrives as a raw string.
@@ -195,10 +197,9 @@ persisting a value merely by rendering the dialog.
 
 The VS Code bridge maps these LS machine-scope values to window-scoped VS Code
 settings; neither value belongs in `folderConfigs`. The Secure At Inception section Reset action
-sets the form values to `false` and `Manual`. Its visibility is independent of
-the Secrets feature flag. JetBrains, Eclipse, Visual Studio, and integrations
-with a blank name intentionally do not render the section because their
-configuration bridges do not persist these values.
+sets the form values to `false` and `Manual`. JetBrains, Eclipse, Visual Studio,
+and integrations with a blank name intentionally do not render the Secure At Inception
+section because their configuration bridges do not persist these values.
 
 ### 5. Authentication Flow
 

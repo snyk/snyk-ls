@@ -23,6 +23,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
+	"github.com/snyk/snyk-ls/infrastructure/utils"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -45,12 +46,20 @@ func isIgnorableError(err error) bool {
 	return stderrors.As(err, &snykErr) && ignorableSecretsErrorCodes[snykErr.ErrorCode]
 }
 
+func isSecretsNotEnabledError(err error) bool {
+	var snykErr snyk_errors.Error
+	return stderrors.As(err, &snykErr) && snykErr.ErrorCode == "SNYK-CLI-0016"
+}
+
 // handleSecretsInvokeError processes a non-nil error from engine.InvokeWithConfig.
 // It returns (empty, nil) for ignorable conditions and (nil, wrappedErr) otherwise.
 func handleSecretsInvokeError(err error, logger *zerolog.Logger) ([]types.Issue, error) {
 	if isIgnorableError(err) {
 		logger.Debug().Msg("Secrets scanner: file excluded or unsupported, returning no error")
 		return []types.Issue{}, nil
+	}
+	if isSecretsNotEnabledError(err) {
+		return nil, stderrors.New(utils.ErrSnykSecretsNotEnabled)
 	}
 	return nil, fmt.Errorf("failed secrets scan: %w", err)
 }

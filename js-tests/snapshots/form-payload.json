@@ -45,7 +45,8 @@
       "severity_filter_medium": true,
       "snyk_code_enabled": true,
       "snyk_iac_enabled": true,
-      "snyk_oss_enabled": true
+      "snyk_oss_enabled": true,
+      "snyk_secrets_enabled": false
     },
     {
       "additional_environment": "",
@@ -83,7 +84,8 @@
       "severity_filter_medium": false,
       "snyk_code_enabled": true,
       "snyk_iac_enabled": true,
-      "snyk_oss_enabled": false
+      "snyk_oss_enabled": false,
+      "snyk_secrets_enabled": true
     },
     {
       "additional_environment": "",
@@ -121,7 +123,8 @@
       "severity_filter_medium": true,
       "snyk_code_enabled": false,
       "snyk_iac_enabled": false,
-      "snyk_oss_enabled": true
+      "snyk_oss_enabled": true,
+      "snyk_secrets_enabled": true
     },
     {
       "additional_environment": "",
@@ -160,7 +163,8 @@
       "severity_filter_medium": false,
       "snyk_code_enabled": true,
       "snyk_iac_enabled": false,
-      "snyk_oss_enabled": true
+      "snyk_oss_enabled": true,
+      "snyk_secrets_enabled": false
     }
   ],
   "issue_view_ignored_issues": true,
@@ -178,6 +182,7 @@
   "snyk_code_enabled": true,
   "snyk_iac_enabled": false,
   "snyk_oss_enabled": true,
+  "snyk_secrets_enabled": false,
   "token": "",
   "trusted_folders": [
     "/Users/username/workspace/defaults-project",
