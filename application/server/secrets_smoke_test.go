@@ -122,9 +122,8 @@ func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
 func Test_SmokeSecretsScan(t *testing.T) {
 	t.Parallel()
 	if len(os.Getenv("CI")) > 0 {
-		t.Skip("temporary skipped (still in CB)")
+		t.Skip("requires a live Secrets-enabled organization")
 	}
-	// Secret scanning is only available in pre-prod; use the pre-prod token
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
 	engineConfig := engine.GetConfiguration()
 	engineConfig.Set(configresolver.UserGlobalKey(types.SettingOrganization), secretsSmokeOrg)
@@ -133,15 +132,12 @@ func Test_SmokeSecretsScan(t *testing.T) {
 	// debug would race them and flood the whole shard's output.
 	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlySecrets(engine)
-	// cli-extension-secrets internal/commands/secretstest/workflow.go defines this
-	// internal key, which cannot be imported across the module boundary.
-	engineConfig.Set("internal_snyk_feature_flag_is_secrets_enabled", false)
 
 	// Clone the fake-leaks repo which contains intentional hardcoded secrets for testing
 	cloneTargetDir := copyFakeLeaksDirInto(t, t.TempDir())
 	cloneTargetDirString := string(cloneTargetDir)
 
-	// Configure the folder with the pre-prod org while the extension's temporary legacy feature flag is forced false
+	// Configure the folder with the Secrets smoke-test organization.
 	folderConfig := config.GetFolderConfigFromEngine(engine, deps.ConfigResolver, types.FilePath(cloneTargetDirString), engine.GetLogger())
 	types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderConfig.FolderPath, secretsSmokeOrg, true)
 
