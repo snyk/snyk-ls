@@ -45,9 +45,6 @@ const (
 // The secrets engine filters binary files out (SNYK-CLI-0008) which should be treated as success.
 func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
 	t.Parallel()
-	if len(os.Getenv("CI")) > 0 {
-		t.Skip("temporary skipped (still in CB)")
-	}
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingOrganization), secretsSmokeOrg)
 
@@ -121,9 +118,6 @@ func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
 
 func Test_SmokeSecretsScan(t *testing.T) {
 	t.Parallel()
-	if len(os.Getenv("CI")) > 0 {
-		t.Skip("requires a live Secrets-enabled organization")
-	}
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
 	engineConfig := engine.GetConfiguration()
 	engineConfig.Set(configresolver.UserGlobalKey(types.SettingOrganization), secretsSmokeOrg)
