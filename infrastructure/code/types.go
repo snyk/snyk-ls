@@ -54,18 +54,6 @@ type AnalysisRequest struct {
 	AnalysisContext codeRequestContext `json:"analysisContext"`
 }
 
-// AutofixResponse is the json-based structure to which we can translate the results of the HTTP
-// request to Autofix upstream.
-type AutofixResponse struct {
-	Status             string                     `json:"status"`
-	AutofixSuggestions []autofixResponseSingleFix `json:"fixes"`
-}
-
-type autofixResponseSingleFix struct {
-	Id    string `json:"id"`
-	Value string `json:"value"`
-}
-
 type AutofixRequestKey struct {
 	Type     string         `json:"type"`
 	Hash     string         `json:"hash"`
