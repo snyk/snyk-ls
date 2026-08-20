@@ -369,7 +369,6 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 			go func() {
 				defer referenceBranchScanWaitGroup.Done()
 				isSingleFileScan := pathToScan != folderPath
-				// Reference scans start only after the real folder is enabled.
 				scanTypeCtx := ctx2.NewContextWithDeltaScanType(serverCtx, ctx2.Reference)
 				refScanCtx, refLogger := sc.enrichContextAndLogger(scanTypeCtx, scanLogger, folderPath, pathToScan)
 
