@@ -53,8 +53,8 @@ func LoggerWithProductScanFields(
 }
 
 // RequireProductEnabled returns an error when the product is not enabled for the folder.
-// Reference contexts are created by DelegatingConcurrentScanner.Scan only after the real workspace
-// folder passed IsEnabledForFolder; only the redundant synthetic-path local gate is skipped.
+// Reference scans start only after real-folder enablement, so we can skip checking
+// for reference scans.
 func RequireProductEnabled(ctx context.Context, enabled bool, errNotEnabledForFolder string) error {
 	if enabled {
 		return nil
