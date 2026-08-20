@@ -33,22 +33,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// AutofixUnifiedDiffSuggestion represents the diff between the original and the fixed source code.
-type AutofixUnifiedDiffSuggestion struct {
-	FixId               string            `json:"fixId"`
-	UnifiedDiffsPerFile map[string]string `json:"unifiedDiffsPerFile"`
-	FullTextPerFile     map[string]string `json:"fullTextPerFile"`
-	Explanation         string            `json:"explanation"`
-}
-
-func (a AutofixUnifiedDiffSuggestion) String() string {
-	return fmt.Sprintf("FixId: %s, UnifiedDiffsPerFile: %v", a.FixId, a.UnifiedDiffsPerFile)
-}
-
-func (a AutofixUnifiedDiffSuggestion) GetUnifiedDiffForFile(filePath string) string {
-	return a.UnifiedDiffsPerFile[filePath]
-}
-
 func (sc *Scanner) GetAutofixDiffs(ctx context.Context, baseDir types.FilePath, filePath types.FilePath, issue types.Issue) (unifiedDiffSuggestions []llm.AutofixUnifiedDiffSuggestion, err error) {
 	method := "GetAutofixDiffs"
 	logger := sc.engine.GetLogger().With().Str("method", method).Logger()

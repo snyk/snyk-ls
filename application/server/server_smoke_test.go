@@ -51,6 +51,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
+	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
@@ -1044,8 +1045,55 @@ func checkAutofixDiffs(t *testing.T, engine workflow.Engine, issueList []types.S
 			}
 			return false
 		}, 30*time.Second, time.Millisecond, "failed to get autofix diffs")
+
+		// The explanation comes as a passthrough field on the autofix response (via
+		// code-client-go). Assert we actually get a real, non-empty explanation back.
+		checkAutofixExplanation(t, engine, issue.Id)
 		break
 	}
+}
+
+// checkAutofixExplanation polls AiFixHandler directly — the same object
+// CodeFixDiffsCommand's handleResponse writes to — rather than round-tripping through
+// rendered HTML. This avoids coupling the assertion to html/template's escaping and to
+// the ambiguous window/showDocument callback, which fires on IN_PROGRESS too, not just
+// on the terminal state.
+func checkAutofixExplanation(t *testing.T, engine workflow.Engine, issueId string) {
+	t.Helper()
+	// Safe to pass a nil featureFlagService here: GetHTMLRenderer only needs a real one
+	// on first construction, and CodeFixDiffsCommand.Execute already primed the
+	// process-wide singleton for this engine (with a real service) before this is called.
+	htmlRenderer, err := code.GetHTMLRenderer(engine, nil)
+	require.NoError(t, err)
+	aiFixHandler := htmlRenderer.AiFixHandler
+
+	// Give the test a margin over autofix.go's own 4-minute backend poll timeout, so a
+	// genuine backend timeout surfaces via the GetAiFixDiffError() check below instead
+	// of the less informative "never reached a terminal state" message.
+	require.Eventuallyf(t, func() bool {
+		status := aiFixHandler.GetAiFixDiffStatus()
+		return status == code.AiFixSuccess || status == code.AiFixError
+	}, 5*time.Minute, 100*time.Millisecond, "autofix for issue %s never reached a terminal state", issueId)
+
+	require.NoErrorf(t, aiFixHandler.GetAiFixDiffError(), "autofix failed for issue %s", issueId)
+
+	suggestions := aiFixHandler.GetAiFixDiffResult()
+	if len(suggestions) == 0 {
+		// A legitimate outcome (codeFixDiffs.handleResponse treats "no good fix found"
+		// as AiFixSuccess with no suggestions) — unrelated to whether the explanation
+		// passthrough works, so there's nothing to assert here.
+		t.Logf("autofix for issue %s completed successfully but produced no suggestions", issueId)
+		return
+	}
+
+	hasRealExplanation := false
+	for _, suggestion := range suggestions {
+		if suggestion.Explanation != "" {
+			hasRealExplanation = true
+			break
+		}
+	}
+	assert.True(t, hasRealExplanation, "expected at least one autofix suggestion to carry a non-empty AI explanation from code-client-go")
 }
 
 func isNotStandardRegion(engine workflow.Engine) bool {

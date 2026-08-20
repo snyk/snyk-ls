@@ -842,49 +842,6 @@ func Test_isSecurityIssue(t *testing.T) {
 	})
 }
 
-func Test_AutofixResponse_toUnifiedDiffSuggestions(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	response := AutofixResponse{
-		Status: "COMPLETE",
-	}
-	fixes := []autofixResponseSingleFix{{
-		Id:    "123e4567-e89b-12d3-a456-426614174000/1",
-		Value: "var x = [];",
-	}}
-	response.AutofixSuggestions = append(response.AutofixSuggestions, fixes...)
-	filePath := "file.js"
-	baseDir := types.FilePath(t.TempDir())
-	err := os.WriteFile(filepath.Join(string(baseDir), filePath), []byte("var x = new Array();"), 0666)
-	require.NoError(t, err)
-	unifiedDiffSuggestions := response.toUnifiedDiffSuggestions(engine, baseDir, types.FilePath(filePath))
-
-	assert.Equal(t, len(unifiedDiffSuggestions), 1)
-	assert.Equal(t, unifiedDiffSuggestions[0].FixId, "123e4567-e89b-12d3-a456-426614174000/1")
-	assert.NotEqual(t, len(unifiedDiffSuggestions[0].UnifiedDiffsPerFile), 0)
-}
-
-func Test_AutofixResponse_toUnifiedDiffSuggestions_HtmlEncodedFilePath(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	response := AutofixResponse{
-		Status: "COMPLETE",
-	}
-	fixes := []autofixResponseSingleFix{{
-		Id:    "123e4567-e89b-12d3-a456-426614174000/1",
-		Value: "var x = [];",
-	}}
-	response.AutofixSuggestions = append(response.AutofixSuggestions, fixes...)
-	filePath := "file_with space.js"
-	baseDir := types.FilePath(t.TempDir())
-	err := os.WriteFile(filepath.Join(string(baseDir), filePath), []byte("var x = new Array();"), 0666)
-	require.NoError(t, err)
-	// Here we provide the HTML encoded path, which should be decoded in the function to read the correct file.
-	unifiedDiffSuggestions := response.toUnifiedDiffSuggestions(engine, baseDir, "file_with%20space.js")
-
-	assert.Equal(t, len(unifiedDiffSuggestions), 1)
-	assert.Equal(t, unifiedDiffSuggestions[0].FixId, "123e4567-e89b-12d3-a456-426614174000/1")
-	assert.NotEqual(t, len(unifiedDiffSuggestions[0].UnifiedDiffsPerFile), 0)
-}
-
 func Test_Result_getMarkers_basic(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	r := codeClientSarif.Result{
