@@ -53,13 +53,13 @@ func Test_RequireProductEnabled_ContextContract(t *testing.T) {
 		enabled bool
 		wantErr bool
 	}{
-		{name: "reference bypasses disabled synthetic folder", ctx: ctx2.NewContextWithDeltaScanType(t.Context(), ctx2.Reference), wantErr: false},
-		{name: "working directory preserves disabled error", ctx: ctx2.NewContextWithDeltaScanType(t.Context(), ctx2.WorkingDirectory), wantErr: true},
-		{name: "missing scan type preserves disabled error", ctx: t.Context(), wantErr: true},
-		{name: "unknown scan type preserves disabled error", ctx: ctx2.NewContextWithDeltaScanType(t.Context(), unknownScanType), wantErr: true},
-		{name: "enabled reference remains enabled", ctx: ctx2.NewContextWithDeltaScanType(t.Context(), ctx2.Reference), enabled: true},
-		{name: "enabled working directory remains enabled", ctx: ctx2.NewContextWithDeltaScanType(t.Context(), ctx2.WorkingDirectory), enabled: true},
-		{name: "enabled missing scan type remains enabled", ctx: t.Context(), enabled: true},
+		{name: "reference context overrules disabled to always enabled", ctx: ctx2.NewContextWithDeltaScanType(t.Context(), ctx2.Reference), wantErr: false},
+		{name: "working directory context and disabled returns non failing errors", ctx: ctx2.NewContextWithDeltaScanType(t.Context(), ctx2.WorkingDirectory), wantErr: true},
+		{name: "missing scan type and disabled returns non failing errors", ctx: t.Context(), wantErr: true},
+		{name: "unknown scan type and disabled returns non failing errors", ctx: ctx2.NewContextWithDeltaScanType(t.Context(), unknownScanType), wantErr: true},
+		{name: "reference context and enabled returns no error", ctx: ctx2.NewContextWithDeltaScanType(t.Context(), ctx2.Reference), enabled: true},
+		{name: "working directory context and enabled returns no error", ctx: ctx2.NewContextWithDeltaScanType(t.Context(), ctx2.WorkingDirectory), enabled: true},
+		{name: "missing scan type and enabled returns no error", ctx: t.Context(), enabled: true},
 	}
 
 	for _, tt := range tests {

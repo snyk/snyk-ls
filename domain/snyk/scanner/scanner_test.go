@@ -103,7 +103,8 @@ func TestDelegatingConcurrentScanner_Scan_DisabledRealFolderDoesNotPersistRefere
 	sc.Scan(ctx, folderPath, types.NoopResultProcessor, nil)
 }
 
-func TestDelegatingConcurrentScanner_Scan_ReferenceUsesSyntheticFolderAndPersistsForRealFolder(t *testing.T) {
+func TestDelegatingConcurrentScanner_Scan_ReferenceUsesTemporaryFolderButPersistsAgainstRealFolder(t *testing.T) {
+	// Setup.
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	mockEngine, conf := testutil.SetUpEngineMock(t, engine)
 	tokenService.SetToken(conf, "valid-token")
@@ -156,6 +157,7 @@ func TestDelegatingConcurrentScanner_Scan_ReferenceUsesSyntheticFolderAndPersist
 	mockScanner := mock_types.NewMockProductScanner(ctrl)
 	mockScanner.EXPECT().Product().Return(product.ProductSecrets).AnyTimes()
 	mockScanner.EXPECT().IsEnabledForFolder(folderConfig).Return(true)
+	// Assert working and reference scans.
 	gomock.InOrder(
 		mockScanner.EXPECT().Scan(gomock.Any(), realFolder).DoAndReturn(
 			func(ctx context.Context, path types.FilePath) ([]types.Issue, error) {
@@ -183,6 +185,7 @@ func TestDelegatingConcurrentScanner_Scan_ReferenceUsesSyntheticFolderAndPersist
 	)
 
 	mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
+	// Assert real folder is persisted.
 	mockPersister.EXPECT().Exists(realFolder, expectedHash, product.ProductSecrets).Return(false)
 	mockPersister.EXPECT().Add(realFolder, expectedHash, referenceResults, product.ProductSecrets).Return(nil)
 
@@ -192,7 +195,7 @@ func TestDelegatingConcurrentScanner_Scan_ReferenceUsesSyntheticFolderAndPersist
 
 	sc.Scan(ctx, realFolder, types.NoopResultProcessor, nil)
 
-	require.NoError(t, referenceErr, "reference scan must bypass only the synthetic-folder enablement check")
+	require.NoError(t, referenceErr, "reference scan must bypass only the temporary-folder enablement check")
 	assert.Equal(t, 2, workflowCalls, "working and reference scans must both reach secrets.test")
 }
 

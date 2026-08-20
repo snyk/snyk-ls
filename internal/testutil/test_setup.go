@@ -169,26 +169,6 @@ func UnitTestWithCtx(t *testing.T) (workflow.Engine, context.Context) {
 	return engine, ctx
 }
 
-// ContextWithFolderScan returns a context carrying folderPath's FolderConfig and the given
-// ConfigResolver. Passing no scan type models a scan without a delta scan type in context.
-func ContextWithFolderScan(
-	t *testing.T,
-	resolver *types.ConfigResolver,
-	folderPath types.FilePath,
-	scanTypes ...ctx2.DeltaScanType,
-) context.Context {
-	t.Helper()
-	ctx := ctx2.NewContextWithConfigResolver(t.Context(), resolver)
-	ctx = ctx2.NewContextWithFolderConfig(ctx, &types.FolderConfig{
-		FolderPath:     folderPath,
-		ConfigResolver: resolver,
-	})
-	if len(scanTypes) > 0 {
-		ctx = ctx2.NewContextWithDeltaScanType(ctx, scanTypes[0])
-	}
-	return ctx
-}
-
 func cleanupFakeCliFile(conf configuration.Configuration, logger *zerolog.Logger) {
 	cliPath := conf.GetString(configresolver.UserGlobalKey(types.SettingCliPath))
 	if cliPath != "" {

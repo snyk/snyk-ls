@@ -67,16 +67,16 @@ func newReferenceEnablementScanner(
 	return scanner, mockEngine, resolver, realFolder, referenceFolder
 }
 
-func TestScanner_Scan_ReferenceBypassesOnlySyntheticFolderEnablement(t *testing.T) {
+func TestScanner_Scan_ReferenceBypassesOnlyTemporaryFolderEnablement(t *testing.T) {
 	tests := []struct {
 		name        string
-		scanTypes   []ctx2.DeltaScanType
+		options     []testutil.FolderScanContextOption
 		invoke      bool
 		expectedErr string
 	}{
-		{name: "reference reaches secrets workflow", scanTypes: []ctx2.DeltaScanType{ctx2.Reference}, invoke: true},
-		{name: "working directory remains disabled", scanTypes: []ctx2.DeltaScanType{ctx2.WorkingDirectory}, expectedErr: utils.ErrSnykSecretsNotEnabledForFolder},
-		{name: "missing scan type remains disabled", expectedErr: utils.ErrSnykSecretsNotEnabledForFolder},
+		{name: "reference context overrules disabled and reaches secrets workflow", options: []testutil.FolderScanContextOption{testutil.WithScanType(ctx2.Reference)}, invoke: true},
+		{name: "working directory context and disabled returns not enabled error", options: []testutil.FolderScanContextOption{testutil.WithScanType(ctx2.WorkingDirectory)}, expectedErr: utils.ErrSnykSecretsNotEnabledForFolder},
+		{name: "missing scan type and disabled returns not enabled error", expectedErr: utils.ErrSnykSecretsNotEnabledForFolder},
 	}
 
 	for _, tt := range tests {
@@ -89,7 +89,7 @@ func TestScanner_Scan_ReferenceBypassesOnlySyntheticFolderEnablement(t *testing.
 			}
 
 			issues, err := scanner.Scan(
-				testutil.ContextWithFolderScan(t, resolver, referenceFolder, tt.scanTypes...),
+				testutil.ContextWithFolderScan(t, resolver, referenceFolder, tt.options...),
 				referenceFolder,
 			)
 
@@ -104,11 +104,11 @@ func TestScanner_Scan_ReferenceBypassesOnlySyntheticFolderEnablement(t *testing.
 	}
 }
 
-func TestScanner_Scan_ReferenceStillRequiresAuthentication(t *testing.T) {
+func TestScanner_Scan_ReferenceRequiresAuthentication(t *testing.T) {
 	scanner, _, resolver, _, referenceFolder := newReferenceEnablementScanner(t, "")
 
 	issues, err := scanner.Scan(
-		testutil.ContextWithFolderScan(t, resolver, referenceFolder, ctx2.Reference),
+		testutil.ContextWithFolderScan(t, resolver, referenceFolder, testutil.WithScanType(ctx2.Reference)),
 		referenceFolder,
 	)
 
@@ -116,14 +116,14 @@ func TestScanner_Scan_ReferenceStillRequiresAuthentication(t *testing.T) {
 	assert.Nil(t, issues)
 }
 
-func TestScanner_Scan_ReferenceStillNormalizesWorkflowEntitlement(t *testing.T) {
+func TestScanner_Scan_ReferenceNormalizesWorkflowEntitlement(t *testing.T) {
 	scanner, mockEngine, resolver, _, referenceFolder := newReferenceEnablementScanner(t, "valid-token")
 	mockEngine.EXPECT().
 		InvokeWithConfig(workflow.NewWorkflowIdentifier("secrets.test"), gomock.Any()).
 		Return(nil, cli_errors.NewFeatureNotEnabledError("secrets not enabled for org."))
 
 	issues, err := scanner.Scan(
-		testutil.ContextWithFolderScan(t, resolver, referenceFolder, ctx2.Reference),
+		testutil.ContextWithFolderScan(t, resolver, referenceFolder, testutil.WithScanType(ctx2.Reference)),
 		referenceFolder,
 	)
 
@@ -156,7 +156,7 @@ func TestScanner_Scan_ReferenceWithRemoteOrgFolderEnablement(t *testing.T) {
 	scanner := New(conf, mockEngine, engine.GetLogger(), performance.NewInstrumentor(), &snyk_api.FakeApiClient{}, notification.NewMockNotifier(), resolver)
 
 	issues, err := scanner.Scan(
-		testutil.ContextWithFolderScan(t, resolver, referenceFolder, ctx2.Reference),
+		testutil.ContextWithFolderScan(t, resolver, referenceFolder, testutil.WithScanType(ctx2.Reference)),
 		referenceFolder,
 	)
 

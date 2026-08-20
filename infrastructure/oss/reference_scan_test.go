@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package iac
+package oss
 
 import (
 	"context"
@@ -31,6 +31,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/mock_cli"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
+	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -38,25 +39,24 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func newReferenceIaCScanner(
+func newReferenceOSSScanner(
 	t *testing.T,
 	token string,
-) (*Scanner, *bool, *types.ConfigResolver, types.FilePath, types.FilePath) {
+) (*CLIScanner, *bool, *types.ConfigResolver, types.FilePath) {
 	t.Helper()
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	tokenService.SetToken(engine.GetConfiguration(), token)
 	conf := engine.GetConfiguration()
-	conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
 
 	realFolder := types.FilePath(t.TempDir())
 	referenceFolder := types.FilePath(t.TempDir())
-	supportedPath := types.FilePath(filepath.Join(string(referenceFolder), "main.yml"))
-	require.NoError(t, os.WriteFile(string(supportedPath), []byte("resources: {}"), 0o600))
-	types.SetFolderUserSetting(conf, realFolder, types.SettingSnykIacEnabled, true)
+	require.NoError(t, os.WriteFile(filepath.Join(string(referenceFolder), "package.json"), []byte(`{"name":"reference"}`), 0o600))
+	types.SetFolderUserSetting(conf, realFolder, types.SettingSnykOssEnabled, true)
 
 	resolver := testutil.DefaultConfigResolver(engine)
-	require.True(t, resolver.IsProductEnabledForFolder(product.ProductInfrastructureAsCode, &types.FolderConfig{FolderPath: realFolder}))
-	require.False(t, resolver.IsProductEnabledForFolder(product.ProductInfrastructureAsCode, &types.FolderConfig{FolderPath: referenceFolder}))
+	require.True(t, resolver.IsProductEnabledForFolder(product.ProductOpenSource, &types.FolderConfig{FolderPath: realFolder}))
+	require.False(t, resolver.IsProductEnabledForFolder(product.ProductOpenSource, &types.FolderConfig{FolderPath: referenceFolder}))
 
 	ctrl := gomock.NewController(t)
 	executor := mock_cli.NewMockExecutor(ctrl)
@@ -69,57 +69,57 @@ func newReferenceIaCScanner(
 		Execute(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		DoAndReturn(func(context.Context, []string, types.FilePath, gotenv.Env) ([]byte, error) {
 			executed = true
-			return []byte("[]"), nil
+			return []byte("{}"), nil
 		}).
 		AnyTimes()
-	scanner := New(
-		conf,
-		engine.GetLogger(),
+	scanner := NewCLIScanner(
+		engine,
 		performance.NewInstrumentor(),
 		error_reporting.NewTestErrorReporter(engine),
 		executor,
+		getLearnMock(t),
+		notification.NewMockNotifier(),
 		resolver,
 		testutil.NewDrainedProgressTracker(),
-	)
-	return scanner, &executed, resolver, referenceFolder, supportedPath
+	).(*CLIScanner)
+	return scanner, &executed, resolver, referenceFolder
 }
 
-func TestScanner_Scan_ReferenceBypassesOnlySyntheticFolderEnablement(t *testing.T) {
+func TestCLIScanner_Scan_ReferenceBypassesOnlyTemporaryFolderEnablement(t *testing.T) {
 	tests := []struct {
 		name        string
-		scanTypes   []ctx2.DeltaScanType
+		options     []testutil.FolderScanContextOption
 		expectedErr string
 		executed    bool
 	}{
-		{name: "reference reaches CLI executor", scanTypes: []ctx2.DeltaScanType{ctx2.Reference}, executed: true},
-		{name: "working directory remains disabled", scanTypes: []ctx2.DeltaScanType{ctx2.WorkingDirectory}, expectedErr: utils.ErrSnykIacNotEnabledForFolder},
-		{name: "missing scan type remains disabled", expectedErr: utils.ErrSnykIacNotEnabledForFolder},
+		{name: "reference context overrules disabled and reaches CLI executor", options: []testutil.FolderScanContextOption{testutil.WithScanType(ctx2.Reference)}, executed: true},
+		{name: "working directory context and disabled returns not enabled error", options: []testutil.FolderScanContextOption{testutil.WithScanType(ctx2.WorkingDirectory)}, expectedErr: utils.ErrSnykOssNotEnabledForFolder},
+		{name: "missing scan type and disabled returns not enabled error", expectedErr: utils.ErrSnykOssNotEnabledForFolder},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			scanner, executed, resolver, referenceFolder, supportedPath := newReferenceIaCScanner(t, "valid-token")
+			scanner, executed, resolver, referenceFolder := newReferenceOSSScanner(t, "valid-token")
 
-			issues, err := scanner.Scan(testutil.ContextWithFolderScan(t, resolver, referenceFolder, tt.scanTypes...), supportedPath)
+			issues, err := scanner.Scan(testutil.ContextWithFolderScan(t, resolver, referenceFolder, tt.options...), referenceFolder)
 
 			if tt.expectedErr != "" {
 				require.EqualError(t, err, tt.expectedErr)
 				assert.Nil(t, issues)
 			} else {
 				require.NoError(t, err)
-				assert.Empty(t, issues)
 			}
 			assert.Equal(t, tt.executed, *executed)
 		})
 	}
 }
 
-func TestScanner_Scan_ReferenceStillRequiresAuthentication(t *testing.T) {
-	scanner, executed, resolver, referenceFolder, supportedPath := newReferenceIaCScanner(t, "")
+func TestCLIScanner_Scan_ReferenceRequiresAuthentication(t *testing.T) {
+	scanner, executed, resolver, referenceFolder := newReferenceOSSScanner(t, "")
 
 	issues, err := scanner.Scan(
-		testutil.ContextWithFolderScan(t, resolver, referenceFolder, ctx2.Reference),
-		supportedPath,
+		testutil.ContextWithFolderScan(t, resolver, referenceFolder, testutil.WithScanType(ctx2.Reference)),
+		referenceFolder,
 	)
 
 	require.EqualError(t, err, utils.MsgNotAuthenticatedNoScan)
@@ -127,13 +127,13 @@ func TestScanner_Scan_ReferenceStillRequiresAuthentication(t *testing.T) {
 	assert.False(t, *executed)
 }
 
-func TestScanner_Scan_ReferenceStillSkipsUnsupportedPath(t *testing.T) {
-	scanner, executed, resolver, referenceFolder, _ := newReferenceIaCScanner(t, "valid-token")
-	unsupportedPath := types.FilePath(filepath.Join(string(referenceFolder), "main.txt"))
-	require.NoError(t, os.WriteFile(string(unsupportedPath), []byte("not iac"), 0o600))
+func TestCLIScanner_Scan_ReferenceSkipsUnsupportedPath(t *testing.T) {
+	scanner, executed, resolver, referenceFolder := newReferenceOSSScanner(t, "valid-token")
+	unsupportedPath := types.FilePath(filepath.Join(string(referenceFolder), "main.go"))
+	require.NoError(t, os.WriteFile(string(unsupportedPath), []byte("package main"), 0o600))
 
 	issues, err := scanner.Scan(
-		testutil.ContextWithFolderScan(t, resolver, referenceFolder, ctx2.Reference),
+		testutil.ContextWithFolderScan(t, resolver, referenceFolder, testutil.WithScanType(ctx2.Reference)),
 		unsupportedPath,
 	)
 

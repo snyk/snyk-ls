@@ -82,23 +82,23 @@ func newReferenceCodeScanner(
 	return scanner, resolver, referenceFolder, &factoryCalls
 }
 
-func TestScanner_Scan_ReferenceBypassesOnlySyntheticFolderEnablement(t *testing.T) {
+func TestScanner_Scan_ReferenceBypassesOnlyTemporaryFolderEnablement(t *testing.T) {
 	tests := []struct {
 		name         string
-		scanTypes    []ctx2.DeltaScanType
+		options      []testutil.FolderScanContextOption
 		expectedErr  string
 		factoryCalls int
 	}{
-		{name: "reference reaches code scanner factory", scanTypes: []ctx2.DeltaScanType{ctx2.Reference}, factoryCalls: 1},
-		{name: "working directory remains disabled", scanTypes: []ctx2.DeltaScanType{ctx2.WorkingDirectory}, expectedErr: utils.ErrSnykCodeNotEnabledForFolder},
-		{name: "missing scan type remains disabled", expectedErr: utils.ErrSnykCodeNotEnabledForFolder},
+		{name: "reference context overrules disabled and reaches code scanner factory", options: []testutil.FolderScanContextOption{testutil.WithScanType(ctx2.Reference)}, factoryCalls: 1},
+		{name: "working directory context and disabled returns not enabled error", options: []testutil.FolderScanContextOption{testutil.WithScanType(ctx2.WorkingDirectory)}, expectedErr: utils.ErrSnykCodeNotEnabledForFolder},
+		{name: "missing scan type and disabled returns not enabled error", expectedErr: utils.ErrSnykCodeNotEnabledForFolder},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			scanner, resolver, referenceFolder, factoryCalls := newReferenceCodeScanner(t, "valid-token", true)
 
-			issues, err := scanner.Scan(testutil.ContextWithFolderScan(t, resolver, referenceFolder, tt.scanTypes...), referenceFolder)
+			issues, err := scanner.Scan(testutil.ContextWithFolderScan(t, resolver, referenceFolder, tt.options...), referenceFolder)
 
 			if tt.expectedErr != "" {
 				require.EqualError(t, err, tt.expectedErr)
@@ -111,11 +111,11 @@ func TestScanner_Scan_ReferenceBypassesOnlySyntheticFolderEnablement(t *testing.
 	}
 }
 
-func TestScanner_Scan_ReferenceStillRequiresAuthentication(t *testing.T) {
+func TestScanner_Scan_ReferenceRequiresAuthentication(t *testing.T) {
 	scanner, resolver, referenceFolder, factoryCalls := newReferenceCodeScanner(t, "", true)
 
 	issues, err := scanner.Scan(
-		testutil.ContextWithFolderScan(t, resolver, referenceFolder, ctx2.Reference),
+		testutil.ContextWithFolderScan(t, resolver, referenceFolder, testutil.WithScanType(ctx2.Reference)),
 		referenceFolder,
 	)
 
@@ -124,11 +124,11 @@ func TestScanner_Scan_ReferenceStillRequiresAuthentication(t *testing.T) {
 	assert.Zero(t, *factoryCalls)
 }
 
-func TestScanner_Scan_ReferenceStillRequiresSastEnabled(t *testing.T) {
+func TestScanner_Scan_ReferenceRequiresSastEnabled(t *testing.T) {
 	scanner, resolver, referenceFolder, factoryCalls := newReferenceCodeScanner(t, "valid-token", false)
 
 	issues, err := scanner.Scan(
-		testutil.ContextWithFolderScan(t, resolver, referenceFolder, ctx2.Reference),
+		testutil.ContextWithFolderScan(t, resolver, referenceFolder, testutil.WithScanType(ctx2.Reference)),
 		referenceFolder,
 	)
 
