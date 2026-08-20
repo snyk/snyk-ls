@@ -181,6 +181,7 @@ func (sc *Scanner) checkPreconditions(ctx context.Context, pathToScan types.File
 	ctxLogger := &l
 
 	if err = scannercommon.RequireProductEnabled(
+		ctx,
 		sc.getConfigResolver(ctx).IsProductEnabledForFolder(sc.Product(), workspaceFolderConfig),
 		utils.ErrSnykSecretsNotEnabledForFolder,
 	); err != nil {
