@@ -174,6 +174,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 
 	//returning nil, when no scan has executed. Will return []types.Issue{} when a scan has executed, but no issues were found.
 	if err = scannercommon.RequireProductEnabled(
+		ctx,
 		sc.getConfigResolver(ctx).IsProductEnabledForFolder(product.ProductCode, workspaceFolderConfig),
 		utils.ErrSnykCodeNotEnabledForFolder,
 	); err != nil {

@@ -131,6 +131,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 	logger.Debug().Msg("IAC scanner: starting scan")
 
 	if err = scannercommon.RequireProductEnabled(
+		ctx,
 		iac.getConfigResolver(ctx).IsProductEnabledForFolder(product.ProductInfrastructureAsCode, workspaceFolderConfig),
 		utils.ErrSnykIacNotEnabledForFolder,
 	); err != nil {
