@@ -105,6 +105,11 @@ test-live:
 test-integ:
 	INTEG_TESTS=1 $(MAKE) test
 
+## test-bdd: Run the godog BDD feature suite (features/*.feature, driven from application/server).
+.PHONY: test-bdd
+test-bdd:
+	go test $(TIMEOUT) -run TestBDD ./application/server/...
+
 ## test-smoke: Run smoke tests (all shards, single go test invocation).
 .PHONY: test-smoke
 test-smoke:

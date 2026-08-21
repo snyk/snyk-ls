@@ -1153,9 +1153,11 @@ func Test_GetDelta_BaselineMissingVsSnapshotCorrupted(t *testing.T) {
 			err := f.enrichCachedIssuesWithDelta(product.ProductCode)
 			assert.ErrorIs(t, err, tt.expectedReturnedErr)
 
-			// GetDelta should return empty results since IsNew was never stamped
+			// GetDelta fails open: with no baseline available, all issues are returned
+			// rather than hidden behind an IsNew flag that was never computed.
 			result := f.GetDelta(product.ProductCode)
-			assert.Empty(t, result)
+			require.Len(t, result[filePath], 1)
+			assert.Equal(t, "issue-1", result[filePath][0].GetID())
 		})
 	}
 }
@@ -1190,11 +1192,276 @@ func Test_GetDelta_ReturnsOnlyNewIssues(t *testing.T) {
 		scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(engine), engine)
 
 	f.documentDiagnosticCache.Store(filePath, []types.Issue{newIssue, oldIssue})
+	f.baselineAvailable.Store(product.ProductCode, true)
 
 	result := f.GetDelta(product.ProductCode)
 
 	require.Len(t, result[filePath], 1)
 	assert.Equal(t, "new-issue", result[filePath][0].GetID())
+}
+
+func Test_FilterIssues_NoBaseline_ReturnsAllIssues(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+
+	folderPath := types.FilePath(t.TempDir())
+	filePath := types.FilePath(filepath.Join(string(folderPath), "test.go"))
+
+	mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
+	mockPersister.EXPECT().
+		GetPersistedIssueList(gomock.Any(), product.ProductCode).
+		Return(nil, persistence.ErrBaselineDoesntExist).
+		Times(1)
+
+	issueA := &snyk.Issue{ID: "issue-a", AffectedFilePath: filePath, Severity: types.High, Product: product.ProductCode, AdditionalData: snyk.CodeIssueData{Key: "key-a"}}
+	issueB := &snyk.Issue{ID: "issue-b", AffectedFilePath: filePath, Severity: types.High, Product: product.ProductCode, AdditionalData: snyk.CodeIssueData{Key: "key-b"}}
+
+	notifier := notification.NewMockNotifier()
+	f := NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath, "test", scanner.NewTestScanner(),
+		hover.NewFakeHoverService(), scanner.NewMockScanNotifier(),
+		notifier, mockPersister,
+		scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(engine), engine)
+	setupWorkspaceWithFolder(engine, f, notifier)
+
+	require.ErrorIs(t, f.enrichCachedIssuesWithDelta(product.ProductCode), persistence.ErrBaselineDoesntExist)
+
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
+
+	supportedTypes := map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true}
+	issues := snyk.IssuesByFile{filePath: {issueA, issueB}}
+	filtered := f.filterIssuesWithConfig(issues, supportedTypes, f.FolderConfigReadOnly())
+
+	require.Len(t, filtered[filePath], 2, "no baseline means every finding should be shown, not just IsNew ones")
+}
+
+func Test_FilterIssues_CorruptedSnapshot_ReturnsAllIssues(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+
+	folderPath := types.FilePath(t.TempDir())
+	filePath := types.FilePath(filepath.Join(string(folderPath), "test.go"))
+
+	mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
+	mockPersister.EXPECT().
+		GetPersistedIssueList(gomock.Any(), product.ProductCode).
+		Return(nil, persistence.ErrSnapshotCorrupted).
+		Times(1)
+
+	issueA := &snyk.Issue{ID: "issue-a", AffectedFilePath: filePath, Severity: types.High, Product: product.ProductCode, AdditionalData: snyk.CodeIssueData{Key: "key-a"}}
+
+	notifier := notification.NewMockNotifier()
+	f := NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath, "test", scanner.NewTestScanner(),
+		hover.NewFakeHoverService(), scanner.NewMockScanNotifier(),
+		notifier, mockPersister,
+		scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(engine), engine)
+	setupWorkspaceWithFolder(engine, f, notifier)
+
+	require.ErrorIs(t, f.enrichCachedIssuesWithDelta(product.ProductCode), persistence.ErrSnapshotCorrupted)
+
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
+
+	supportedTypes := map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true}
+	issues := snyk.IssuesByFile{filePath: {issueA}}
+	filtered := f.filterIssuesWithConfig(issues, supportedTypes, f.FolderConfigReadOnly())
+
+	require.Len(t, filtered[filePath], 1, "a corrupted snapshot must fail open, not hide every finding")
+}
+
+func Test_FilterIssues_MixedProducts_FailsOpenPerProduct(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+
+	folderPath := types.FilePath(t.TempDir())
+	filePath := types.FilePath(filepath.Join(string(folderPath), "test.go"))
+
+	codeIssue := &snyk.Issue{ID: "code-issue", AffectedFilePath: filePath, Severity: types.High, Product: product.ProductCode, AdditionalData: snyk.CodeIssueData{Key: "code-key"}}
+	ossExisting := &snyk.Issue{ID: "oss-existing", AffectedFilePath: filePath, Severity: types.High, Product: product.ProductOpenSource, AdditionalData: snyk.CodeIssueData{Key: "oss-key-existing"}}
+	ossNew := &snyk.Issue{ID: "oss-new", AffectedFilePath: filePath, Severity: types.High, Product: product.ProductOpenSource, AdditionalData: snyk.CodeIssueData{Key: "oss-key-new"}}
+	ossBaseline := &snyk.Issue{ID: "oss-existing", AffectedFilePath: filePath, Severity: types.High, Product: product.ProductOpenSource, AdditionalData: snyk.CodeIssueData{Key: "oss-key-existing"}}
+
+	mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
+	mockPersister.EXPECT().
+		GetPersistedIssueList(gomock.Any(), product.ProductCode).
+		Return(nil, persistence.ErrBaselineDoesntExist).
+		Times(1)
+	mockPersister.EXPECT().
+		GetPersistedIssueList(gomock.Any(), product.ProductOpenSource).
+		Return([]types.Issue{ossBaseline}, nil).
+		Times(1)
+
+	f := NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath, "test", scanner.NewTestScanner(),
+		hover.NewFakeHoverService(), scanner.NewMockScanNotifier(),
+		notification.NewMockNotifier(), mockPersister,
+		scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(engine), engine)
+
+	f.documentDiagnosticCache.Store(filePath, []types.Issue{codeIssue, ossExisting, ossNew})
+
+	require.ErrorIs(t, f.enrichCachedIssuesWithDelta(product.ProductCode), persistence.ErrBaselineDoesntExist)
+	require.NoError(t, f.enrichCachedIssuesWithDelta(product.ProductOpenSource))
+
+	codeDelta := f.GetDelta(product.ProductCode)
+	require.Len(t, codeDelta[filePath], 1, "a product without a baseline fails open and keeps its issue")
+	assert.Equal(t, "code-issue", codeDelta[filePath][0].GetID())
+
+	ossDelta := f.GetDelta(product.ProductOpenSource)
+	require.Len(t, ossDelta[filePath], 1, "a product with a baseline only keeps the newly introduced issue")
+	assert.Equal(t, "oss-new", ossDelta[filePath][0].GetID())
+}
+
+func Test_FilterIssues_BaselineLost_RevertsToFailOpen(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+
+	folderPath := types.FilePath(t.TempDir())
+	filePath := types.FilePath(filepath.Join(string(folderPath), "test.go"))
+
+	oldIssue := &snyk.Issue{ID: "old-issue", AffectedFilePath: filePath, Severity: types.High, Product: product.ProductCode, AdditionalData: snyk.CodeIssueData{Key: "key-old"}}
+	baselineIssue := &snyk.Issue{ID: "old-issue", AffectedFilePath: filePath, Severity: types.High, Product: product.ProductCode, AdditionalData: snyk.CodeIssueData{Key: "key-old"}}
+
+	mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
+	gomock.InOrder(
+		mockPersister.EXPECT().GetPersistedIssueList(gomock.Any(), product.ProductCode).Return([]types.Issue{baselineIssue}, nil),
+		mockPersister.EXPECT().GetPersistedIssueList(gomock.Any(), product.ProductCode).Return(nil, persistence.ErrSnapshotCorrupted),
+	)
+
+	f := NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath, "test", scanner.NewTestScanner(),
+		hover.NewFakeHoverService(), scanner.NewMockScanNotifier(),
+		notification.NewMockNotifier(), mockPersister,
+		scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(engine), engine)
+
+	f.documentDiagnosticCache.Store(filePath, []types.Issue{oldIssue})
+
+	require.NoError(t, f.enrichCachedIssuesWithDelta(product.ProductCode))
+	assert.True(t, f.IsBaselineAvailable(product.ProductCode))
+	require.Empty(t, f.GetDelta(product.ProductCode)[filePath], "a known issue is filtered out while the baseline is available")
+
+	require.ErrorIs(t, f.enrichCachedIssuesWithDelta(product.ProductCode), persistence.ErrSnapshotCorrupted)
+	assert.False(t, f.IsBaselineAvailable(product.ProductCode))
+	require.Len(t, f.GetDelta(product.ProductCode)[filePath], 1, "losing the baseline reverts to fail-open")
+}
+
+func Test_enrichCachedIssuesWithDelta_NoCurrentIssues_StillRecordsBaselineAvailability(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+
+	folderPath := types.FilePath(t.TempDir())
+
+	mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
+	mockPersister.EXPECT().
+		GetPersistedIssueList(gomock.Any(), product.ProductCode).
+		Return([]types.Issue{}, nil).
+		Times(1)
+
+	f := NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath, "test", scanner.NewTestScanner(),
+		hover.NewFakeHoverService(), scanner.NewMockScanNotifier(),
+		notification.NewMockNotifier(), mockPersister,
+		scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(engine), engine)
+
+	_, cached := f.baselineAvailable.Load(product.ProductCode)
+	require.False(t, cached, "no baseline availability should be cached before any scan runs")
+
+	err := f.enrichCachedIssuesWithDelta(product.ProductCode)
+
+	require.NoError(t, err)
+	assert.True(t, f.IsBaselineAvailable(product.ProductCode), "GetPersistedIssueList must run and record baseline availability even with no current issues")
+}
+
+func Test_filterByIsNew_KeepsIssuesOfProductsWithoutBaseline(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	f := NewMockFolder(engine, notification.NewMockNotifier())
+
+	filePath := types.FilePath("dummy/test.go")
+	noBaselineIssue := &snyk.Issue{ID: "no-baseline-issue", AffectedFilePath: filePath, Severity: types.High, Product: product.ProductCode, AdditionalData: snyk.CodeIssueData{Key: "key-1"}}
+	noBaselineIssue.SetIsNew(false)
+
+	f.baselineAvailable.Store(product.ProductCode, false)
+
+	result := f.filterByIsNew(snyk.IssuesByFile{filePath: {noBaselineIssue}})
+
+	require.Len(t, result[filePath], 1, "an issue whose product has no baseline must be kept even when IsNew is false")
+}
+
+func Test_IsDeltaAppliedForProduct_FalseWhenDeltaDisabled(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	f := NewMockFolder(engine, notification.NewMockNotifier())
+
+	f.baselineAvailable.Store(product.ProductCode, true)
+
+	require.False(t, f.IsDeltaFindingsEnabled(), "delta findings should be disabled by default")
+	assert.False(t, f.IsDeltaAppliedForProduct(product.ProductCode), "delta cannot be applied when it isn't enabled, even with a baseline available")
+}
+
+func Test_IsBaselineAvailable_DefaultsFalse(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	f := NewMockFolder(engine, notification.NewMockNotifier())
+
+	assert.False(t, f.IsBaselineAvailable(product.ProductCode), "a folder that has never recorded a baseline must fail open")
+}
+
+// Test_IsBaselineAvailable_NoCacheEntry_ConsultsPersisterAndFindsBaseline covers
+// the restart case: no scan has run yet this session, so baselineAvailable has
+// no cache entry, but a baseline actually exists on disk from a previous
+// session. IsBaselineAvailable must consult the persister lazily rather than
+// reporting the empty-cache zero value.
+func Test_IsBaselineAvailable_NoCacheEntry_ConsultsPersisterAndFindsBaseline(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+
+	mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
+	mockPersister.EXPECT().
+		GetPersistedIssueList(gomock.Any(), product.ProductCode).
+		Return([]types.Issue{&snyk.Issue{ID: "baseline-issue"}}, nil).
+		Times(1)
+
+	f := NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.FilePath(t.TempDir()), "test", scanner.NewTestScanner(),
+		hover.NewFakeHoverService(), scanner.NewMockScanNotifier(),
+		notification.NewMockNotifier(), mockPersister,
+		scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(engine), engine)
+
+	assert.True(t, f.IsBaselineAvailable(product.ProductCode), "a baseline on disk from a previous session must be found even before any scan runs this session")
+}
+
+// Test_IsBaselineAvailable_NoCacheEntry_ConsultsPersisterAndFindsNoBaseline is
+// the counterpart: no cache entry and no baseline on disk either.
+func Test_IsBaselineAvailable_NoCacheEntry_ConsultsPersisterAndFindsNoBaseline(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+
+	mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
+	mockPersister.EXPECT().
+		GetPersistedIssueList(gomock.Any(), product.ProductCode).
+		Return(nil, persistence.ErrBaselineDoesntExist).
+		Times(1)
+
+	f := NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.FilePath(t.TempDir()), "test", scanner.NewTestScanner(),
+		hover.NewFakeHoverService(), scanner.NewMockScanNotifier(),
+		notification.NewMockNotifier(), mockPersister,
+		scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(engine), engine)
+
+	assert.False(t, f.IsBaselineAvailable(product.ProductCode), "no baseline on disk must fail open")
+}
+
+// Test_IsBaselineAvailable_CachedEntry_DoesNotHitPersister guards the other
+// half of the fix: once a scan this session has already recorded a baseline
+// state, IsBaselineAvailable must not re-read from disk.
+func Test_IsBaselineAvailable_CachedEntry_DoesNotHitPersister(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+
+	mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
+	mockPersister.EXPECT().
+		GetPersistedIssueList(gomock.Any(), product.ProductCode).
+		Times(0)
+
+	f := NewFolder(engine.GetConfiguration(), engine.GetLogger(), types.FilePath(t.TempDir()), "test", scanner.NewTestScanner(),
+		hover.NewFakeHoverService(), scanner.NewMockScanNotifier(),
+		notification.NewMockNotifier(), mockPersister,
+		scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(engine), engine)
+	f.baselineAvailable.Store(product.ProductCode, true)
+
+	assert.True(t, f.IsBaselineAvailable(product.ProductCode), "a scan-populated cache entry must be returned as-is")
 }
 
 func Test_enrichCachedIssuesWithDelta_BaselineMissingVsSnapshotCorrupted(t *testing.T) {
@@ -1518,6 +1785,7 @@ func Test_filterIssuesWithConfig_UsesCachedIsNew(t *testing.T) {
 		scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), defaultResolver(engine), engine)
 
 	setupWorkspaceWithFolder(engine, f, notifier)
+	f.baselineAvailable.Store(product.ProductCode, true)
 
 	conf := engine.GetConfiguration()
 	conf.Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)

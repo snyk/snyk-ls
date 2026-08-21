@@ -2139,3 +2139,44 @@ func TestGlobalOrg_SurfacesDefaultResolvedOrg_AfterPriming(t *testing.T) {
 	require.True(t, conf.IsSet(configuration.ORGANIZATION))
 	assert.Equal(t, "resolved-org-uuid", resolver.GlobalOrg())
 }
+
+// Test_UpdateSettings_PersistsAmbientCanaryAutonomyPerFolder verifies an explicit per-folder
+// choice for ambient_canary_autonomy is persisted as a user override.
+func Test_UpdateSettings_PersistsAmbientCanaryAutonomyPerFolder(t *testing.T) {
+	conf := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	types.RegisterAllConfigurations(fs)
+	require.NoError(t, conf.AddFlagSet(fs))
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
+	fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
+	fc.ConfigResolver = types.NewMinimalConfigResolver(conf)
+
+	update := &types.LspFolderConfig{
+		FolderPath: "/path/to/folder",
+		Settings: map[string]*types.ConfigSetting{
+			types.SettingAmbientCanaryAutonomy: {Value: "notify_only", Changed: true},
+		},
+	}
+
+	changed := fc.ApplyLspUpdate(update)
+
+	assert.True(t, changed)
+	assert.True(t, types.HasUserOverride(fc.Conf(), fc.FolderPath, types.SettingAmbientCanaryAutonomy))
+	snap := types.ReadFolderConfigSnapshot(fc.Conf(), fc.FolderPath, fm)
+	val, ok := snap.UserOverrides[types.SettingAmbientCanaryAutonomy]
+	assert.True(t, ok)
+	assert.Equal(t, "notify_only", val)
+}
+
+// Test_ToLspFolderConfig_OmitsUnsetAmbientCanaryAutonomy protects that an untouched folder
+// must send nothing for ambient_canary_autonomy, leaving ambient-canary's --autonomy-level default
+// in effect for that folder.
+func Test_ToLspFolderConfig_OmitsUnsetAmbientCanaryAutonomy(t *testing.T) {
+	fc := &types.FolderConfig{
+		FolderPath: "/path/to/folder",
+	}
+
+	result := fc.ToLspFolderConfig()
+
+	assert.Nil(t, result.Settings[types.SettingAmbientCanaryAutonomy])
+}

@@ -979,11 +979,18 @@ func checkForScanParamsWithMaxWait(t *testing.T, jsonRPCRecorder *testsupport.Js
 func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, p product.Product, folderPath types.FilePath) []types.ScanIssue {
 	t.Helper()
 
-	var issueList []types.ScanIssue
+	// A publishDiagnostics notification replaces, not adds to, the previously published
+	// diagnostics for its URI (LSP spec) — only the latest notification per URI counts.
+	latestByURI := make(map[sglsp.DocumentURI]types.PublishDiagnosticsParams)
 	notifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
 	for _, n := range notifications {
 		diagnosticsParams := types.PublishDiagnosticsParams{}
 		_ = n.UnmarshalParams(&diagnosticsParams)
+		latestByURI[diagnosticsParams.URI] = diagnosticsParams
+	}
+
+	var issueList []types.ScanIssue
+	for _, diagnosticsParams := range latestByURI {
 		for _, diagnostic := range diagnosticsParams.Diagnostics {
 			diagnosticCode, ok := diagnostic.Code.(string)
 			if ok && diagnosticCode == "Snyk Error" {
