@@ -32,33 +32,35 @@ import (
 )
 
 type Downloader struct {
-	progressTracker *progress.Tracker
-	errorReporter   error_reporting.ErrorReporter
-	httpClient      func() *http.Client
-	engine          workflow.Engine
-	removeFile      func(string) error
-	renameFile      func(string, string) error
-	mkdirTemp       func(string, string) (string, error)
+	progressTask  *progress.Task
+	errorReporter error_reporting.ErrorReporter
+	httpClient    func() *http.Client
+	engine        workflow.Engine
+	removeFile    func(string) error
+	renameFile    func(string, string) error
+	mkdirTemp     func(string, string) (string, error)
 }
 
-func NewDownloader(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, httpClientFunc func() *http.Client) *Downloader {
+// The progressTracker must be non-nil and its channel drained: a long download blocks on
+// a full channel and never finishes.
+func NewDownloader(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, httpClientFunc func() *http.Client, progressTracker *progress.Tracker) *Downloader {
 	return &Downloader{
-		progressTracker: progress.NewTracker(true, engine.GetLogger()),
-		errorReporter:   errorReporter,
-		httpClient:      httpClientFunc,
-		engine:          engine,
-		removeFile:      os.Remove,
-		renameFile:      os.Rename,
-		mkdirTemp:       os.MkdirTemp,
+		progressTask:  progressTracker.New(true),
+		errorReporter: errorReporter,
+		httpClient:    httpClientFunc,
+		engine:        engine,
+		removeFile:    os.Remove,
+		renameFile:    os.Rename,
+		mkdirTemp:     os.MkdirTemp,
 	}
 }
 
 // writeCounter counts the number of bytes written to it.
 type writeCounter struct {
-	total           int64 // total size
-	downloaded      int64 // downloaded # of bytes transferred
-	onProgress      func(downloaded int64, total int64, progressTracker *progress.Tracker)
-	progressTracker *progress.Tracker
+	total        int64 // total size
+	downloaded   int64 // downloaded # of bytes transferred
+	onProgressFn func(downloaded int64, total int64, pb *progress.Task)
+	pb           *progress.Task
 }
 
 // Write implements the io.Writer interface.
@@ -67,17 +69,17 @@ type writeCounter struct {
 func (wc *writeCounter) Write(p []byte) (n int, e error) {
 	n = len(p)
 	wc.downloaded += int64(n)
-	wc.onProgress(wc.downloaded, wc.total, wc.progressTracker)
+	wc.onProgressFn(wc.downloaded, wc.total, wc.pb)
 	return
 }
 
-func newWriter(size int64, progressTracker *progress.Tracker, onProgress func(downloaded, total int64, progressTracker *progress.Tracker)) io.Writer {
-	return &writeCounter{total: size, progressTracker: progressTracker, onProgress: onProgress}
+func newWriter(size int64, pb *progress.Task, onProgressFn func(downloaded, total int64, pb *progress.Task)) io.Writer {
+	return &writeCounter{total: size, pb: pb, onProgressFn: onProgressFn}
 }
 
-func onProgress(downloaded, total int64, progressTracker *progress.Tracker) {
+func onProgress(downloaded, total int64, pb *progress.Task) {
 	percentage := float64(downloaded) / float64(total) * 100
-	progressTracker.Report(int(percentage))
+	pb.Report(int(percentage))
 }
 
 func (d *Downloader) lockFileName() (string, error) {
@@ -126,10 +128,11 @@ func (d *Downloader) Download(r *Release, cliPath string, isUpdate bool) (destin
 
 	logger.Debug().Str("download_url", downloadURL).Msgf("Snyk CLI %s in progress...", kindStr)
 
+	pb := d.progressTask
 	if isUpdate {
-		d.progressTracker.BeginWithMessage("Updating Snyk CLI...", "")
+		pb.BeginWithMessage("Updating Snyk CLI...", "")
 	} else {
-		d.progressTracker.BeginWithMessage("Downloading Snyk CLI...", "We download Snyk CLI to run security scans.")
+		pb.BeginWithMessage("Downloading Snyk CLI...", "We download Snyk CLI to run security scans.")
 	}
 
 	// Begin was just sent above, so from this point on every return path
@@ -138,13 +141,13 @@ func (d *Downloader) Download(r *Release, cliPath string, isUpdate bool) (destin
 	// regardless of which return statement is hit.
 	defer func() {
 		if err != nil {
-			d.progressTracker.EndWithMessage(fmt.Sprintf("Failed to %s Snyk CLI.", kindStr))
+			pb.EndWithMessage(fmt.Sprintf("Failed to %s Snyk CLI.", kindStr))
 			return
 		}
 		if isUpdate {
-			d.progressTracker.EndWithMessage("Snyk CLI has been updated.")
+			pb.EndWithMessage("Snyk CLI has been updated.")
 		} else {
-			d.progressTracker.EndWithMessage("Snyk CLI has been downloaded.")
+			pb.EndWithMessage("Snyk CLI has been downloaded.")
 		}
 	}()
 
@@ -163,7 +166,7 @@ func (d *Downloader) Download(r *Release, cliPath string, isUpdate bool) (destin
 			_ = body.Close()
 			logger.Debug().Msgf("Cancellation received. Aborting %s.", kindStr)
 		}
-		d.progressTracker.CancelOrDone(cancel, doneCh)
+		pb.CancelOrDone(cancel, doneCh)
 	}(resp.Body)
 
 	executableFileName := cliDiscovery.ExecutableName(isUpdate)
@@ -179,7 +182,7 @@ func (d *Downloader) Download(r *Release, cliPath string, isUpdate bool) (destin
 	}
 
 	// pipe stream
-	cliReader := io.TeeReader(resp.Body, newWriter(resp.ContentLength, d.progressTracker, onProgress))
+	cliReader := io.TeeReader(resp.Body, newWriter(resp.ContentLength, pb, onProgress))
 
 	cliDirectory := filepath.Dir(cliPath)
 	err = os.MkdirAll(cliDirectory, 0755)

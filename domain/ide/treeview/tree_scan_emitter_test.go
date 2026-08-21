@@ -302,6 +302,14 @@ func TestTreeScanStateEmitter_Dispose_StopsRenderLoop(t *testing.T) {
 	emitter.Emit(scanstates.StateSnapshot{AnyScanInProgressWorkingDirectory: true})
 }
 
+// TestTreeScanStateEmitter_Dispose_NilReceiver covers the production case where
+// NewTreeScanStateEmitter failed: callers hold a nil emitter and still have to
+// dispose it on shutdown.
+func TestTreeScanStateEmitter_Dispose_NilReceiver(t *testing.T) {
+	var emitter *TreeScanStateEmitter
+	emitter.Dispose()
+}
+
 func TestAggregateSeverityFilters(t *testing.T) {
 	t.Run("single folder is never mixed", func(t *testing.T) {
 		f := types.NewSeverityFilter(true, false, true, false)

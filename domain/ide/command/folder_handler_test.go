@@ -115,12 +115,6 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	mockEngine, engineConfig := testutil.SetUpEngineMock(t, engine)
 
-	originalService := Service()
-	t.Cleanup(func() {
-		SetService(originalService)
-	})
-	SetService(types.NewCommandServiceMock())
-
 	// Clear token to prevent RefreshConfigFromLdxSync from being called in this test
 	tokenService.SetToken(engineConfig, "")
 

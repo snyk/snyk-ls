@@ -112,7 +112,7 @@ var _ FolderRemediator = (*remyProvider)(nil)
 // base URL — it reads it via os.Getenv at an unbounded point during the fix
 // workflow — so the read must hold the lock for the whole invocation, not
 // just a snapshot, to rule out observing a torn (unset/not-yet-set) value.
-var llmProviderEnvMu sync.RWMutex
+var llmProviderEnvMu sync.RWMutex //nolint:gochecknoglobals // required guard for process-global LLM env vars
 
 // TryWithLLMProviderEnvLock attempts to acquire the LLM provider env lock for
 // writing without blocking, runs fn if it succeeds, and reports whether fn ran.

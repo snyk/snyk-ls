@@ -45,7 +45,7 @@ type ErrorMetadata struct {
 }
 
 // ErrorConfig maps error messages to their metadata
-var ErrorConfig = map[string]ErrorMetadata{
+var ErrorConfig = map[string]ErrorMetadata{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	ErrSnykCodeNotEnabled: {
 		ShowNotification: false,
 		TreeRootSuffix:   "(disabled at Snyk)",
@@ -90,7 +90,7 @@ var ErrorConfig = map[string]ErrorMetadata{
 
 // nonFailingScanErrors lists scanner-returned error strings that should not be logged as failures
 // or shown as error diagnostics. Do not add log-only strings here (scanners must return these as err).
-var nonFailingScanErrors = map[string]bool{
+var nonFailingScanErrors = map[string]bool{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	MsgNotAuthenticatedNoScan:         true,
 	ErrSnykCodeNotEnabledForFolder:    true,
 	ErrSnykIacNotEnabledForFolder:     true,

@@ -64,7 +64,7 @@ import (
 
 //go:generate go run $GOFILE --dummy-data --secrets --integration ECLIPSE --output-file config_output_multi_project.html
 //go:generate go run $GOFILE --dummy-data --single-folder --integration VISUAL_STUDIO --output-file config_output_single_solution.html
-//go:generate go run $GOFILE --dummy-data --no-folders --integration JETBRAINS --output-file config_output_no_projects.html
+//go:generate go run $GOFILE --dummy-data --no-folders --integration VS_CODE --output-file config_output_no_projects.html
 
 func main() {
 	// Parse command line flags
@@ -831,6 +831,8 @@ func buildDummySettings(
 		dummySeverityFilterCritical = true
 		dummySeverityFilterHigh     = false
 		dummyIssueViewIgnoredIssues = true
+		dummyAutoConfigureMcpServer = true
+		dummyExecutionFrequency     = "Smart Scan"
 	)
 
 	// Set global/project-default settings to demonstrate different scopes
@@ -846,21 +848,23 @@ func buildDummySettings(
 	setGlobal(types.SettingIssueViewIgnoredIssues, dummyIssueViewIgnoredIssues)
 
 	settings := map[string]any{
-		types.SettingToken:                  dummyToken,
-		types.SettingApiEndpoint:            "https://api.snyk.io",
-		types.SettingOrganization:           dummyOrgUUID,
-		types.SettingAuthenticationMethod:   dummyAuthMethod,
-		types.SettingProxyInsecure:          false,
-		types.SettingSnykOssEnabled:         dummyOssEnabled,
-		types.SettingSnykCodeEnabled:        dummyCodeEnabled,
-		types.SettingSnykIacEnabled:         dummyIacEnabled,
-		types.SettingScanAutomatic:          true,
-		types.SettingSeverityFilterCritical: dummySeverityFilterCritical,
-		types.SettingSeverityFilterHigh:     dummySeverityFilterHigh,
-		types.SettingSeverityFilterMedium:   true,
-		types.SettingSeverityFilterLow:      true,
-		types.SettingIssueViewOpenIssues:    true,
-		types.SettingIssueViewIgnoredIssues: dummyIssueViewIgnoredIssues,
+		types.SettingToken:                          dummyToken,
+		types.SettingApiEndpoint:                    "https://api.snyk.io",
+		types.SettingOrganization:                   dummyOrgUUID,
+		types.SettingAuthenticationMethod:           dummyAuthMethod,
+		types.SettingProxyInsecure:                  false,
+		types.SettingSnykOssEnabled:                 dummyOssEnabled,
+		types.SettingSnykCodeEnabled:                dummyCodeEnabled,
+		types.SettingSnykIacEnabled:                 dummyIacEnabled,
+		types.SettingScanAutomatic:                  true,
+		types.SettingSeverityFilterCritical:         dummySeverityFilterCritical,
+		types.SettingSeverityFilterHigh:             dummySeverityFilterHigh,
+		types.SettingSeverityFilterMedium:           true,
+		types.SettingSeverityFilterLow:              true,
+		types.SettingIssueViewOpenIssues:            true,
+		types.SettingIssueViewIgnoredIssues:         dummyIssueViewIgnoredIssues,
+		types.SettingAutoConfigureMcpServer:         dummyAutoConfigureMcpServer,
+		types.SettingSecureAtInceptionExecutionFreq: dummyExecutionFrequency,
 		types.SettingTrustedFolders: []string{
 			"/Users/username/workspace/defaults-project",
 			"/Users/username/trusted/folder",

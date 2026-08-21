@@ -53,27 +53,27 @@ func TestRemediate_EnumCtx_SurvivesCallerDeadline(t *testing.T) {
 	commitFile(t, repoRoot, "main.go", "package main\nvar x = 1\n")
 	absPath := filepath.Join(repoRoot, "main.go")
 
-	// The runner writes the fix immediately, then blocks on ctx.Done() to
-	// exhaust the provider's entire time budget before returning.
-	// Returning nil (not an error) means the fix "succeeded" — the caller must
-	// still retrieve the edits even though the ctx is now expired.
-	// Using ctx.Done() (not time.Sleep) makes the expiry deterministic: the runner
-	// always waits for the actual context deadline regardless of machine speed, so
-	// pre-runner git ops cannot accidentally race past the timeout on a loaded agent.
+	callerCtx, cancelCaller := context.WithCancel(context.Background())
+	defer cancelCaller()
+
+	// The runner writes the fix, then cancels the caller ctx — which also expires
+	// the provider's derived ctx — and returns nil ("fix succeeded"). The caller
+	// must still retrieve the edits even though the ctx is now dead.
+	// Canceling explicitly (rather than waiting out a short provider timeout)
+	// keeps the expiry independent of machine speed: slow pre-runner git ops on a
+	// loaded Windows agent can no longer consume the budget before the runner runs.
 	runner := func(ctx context.Context, _ workflow.Engine, root string, _ string) error {
 		if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0o644); err != nil {
 			return err
 		}
-		// Block until the provider's internal timeout ctx fires, then return nil.
-		// This leaves the ctx expired by the time buildWorkspaceEdits is called.
+		cancelCaller()
 		<-ctx.Done()
 		return nil
 	}
 
-	// 500 ms internal timeout — generous enough for pre-runner git ops on slow CI.
-	p := remediation.NewRemyProviderWithTimeout(runner, 500*time.Millisecond)
+	p := remediation.NewRemyProviderWithTimeout(runner, 30*time.Second)
 
-	edit, err := p.Remediate(context.Background(), remediation.RemediationRequest{
+	edit, err := p.Remediate(callerCtx, remediation.RemediationRequest{
 		FindingId:   "f1",
 		ContentRoot: types.FilePath(repoRoot),
 		FilePath:    types.FilePath(absPath),

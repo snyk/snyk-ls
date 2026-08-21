@@ -58,6 +58,7 @@ type bddSteps struct {
 	engine              workflow.Engine
 	loc                 server.Local
 	jsonRPCRecorder     *testsupport.JsonRPCRecorder
+	deps                di.Dependencies
 	scanPersister       persistence.ScanSnapshotPersister
 	scanStateAggregator scanstates.Aggregator
 
@@ -288,15 +289,11 @@ func (s *bddSteps) aRunningLanguageServer() error {
 	}
 	realScanStateAggregator := scanstates.NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), &scanstates.NoopEmitter{}, resolver, engine)
 
-	loc, jsonRPCRecorder, deps := setupServer(s.scenarioT, engine, tokenService, WithDeps(di.Dependencies{
+	baseDeps := di.TestInit(s.scenarioT, engine, tokenService, &di.Dependencies{
 		ScanPersister:       s.scanPersister,
 		ConfigResolver:      resolver,
 		ScanStateAggregator: realScanStateAggregator,
-	}))
-	s.engine = engine
-	s.loc = loc
-	s.jsonRPCRecorder = jsonRPCRecorder
-	s.scanStateAggregator = realScanStateAggregator
+	})
 
 	// di.TestInit unconditionally installs a CommandServiceMock, which returns
 	// (nil, nil) for every command - so workspace/executeCommand(snyk.getTreeView)
@@ -314,17 +311,24 @@ func (s *bddSteps) aRunningLanguageServer() error {
 	if !ok {
 		return fmt.Errorf("remediation.NewRemyProvider did not return a FolderRemediator")
 	}
-	command.SetService(command.NewService(
-		engine, engine.GetLogger(), deps.AuthenticationService, deps.FeatureFlagService, deps.Notifier,
-		deps.LearnService, issueProvider, nil, nil, deps.LdxSyncService,
-		deps.ConfigResolver, deps.ScanStateAggregator.StateSnapshot, folderRemediator,
-	))
+	baseDeps.CommandService = command.NewService(
+		engine, engine.GetLogger(), baseDeps.AuthenticationService, baseDeps.FeatureFlagService, baseDeps.Notifier,
+		baseDeps.LearnService, issueProvider, nil, nil, baseDeps.LdxSyncService,
+		baseDeps.ConfigResolver, baseDeps.ScanStateAggregator.StateSnapshot, folderRemediator, baseDeps.ScanCtx,
+	)
+
+	loc, jsonRPCRecorder, deps := setupServer(s.scenarioT, engine, tokenService, WithDeps(baseDeps))
+	s.engine = engine
+	s.loc = loc
+	s.jsonRPCRecorder = jsonRPCRecorder
+	s.deps = deps
+	s.scanStateAggregator = realScanStateAggregator
 
 	// Scenarios that save a file through the real didSave pipeline (as opposed to
 	// the fake-scanner scenarios, which build a Folder directly) need Snyk Code
 	// scanning enabled and an authenticated user, or the scan never runs.
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider).IsAuthenticated = true
+	deps.AuthenticationService.Provider().(*authentication.FakeAuthenticationProvider).IsAuthenticated = true
 	return nil
 }
 
@@ -640,7 +644,7 @@ func (s *bddSteps) developerSavesFileWithSecurityIssue() error {
 	// find no existing key and silently no-op, so the tree view never sees the
 	// folder as scanned. Mirrors the pattern in configuration_test.go.
 	s.scanStateAggregator.Init([]types.FilePath{fileDir})
-	sendFileSavedMessage(s.scenarioT, s.engine, filePath, fileDir, s.loc)
+	sendFileSavedMessage(s.scenarioT, s.engine, filePath, fileDir, s.loc, s.deps)
 
 	// The scan triggered by didSave completes asynchronously. Steps reused as
 	// "the developer has saved..." go straight on to a pull/tree-view query with
@@ -846,12 +850,12 @@ var _ scanner.Scanner = (*bddFakeScanner)(nil)
 func (s *bddSteps) runScanWithFakeScanner(sc *bddFakeScanner) error {
 	conf := s.engine.GetConfiguration()
 	folder := workspace.NewFolder(conf, s.engine.GetLogger(), s.deltaFileDir, "Test", sc,
-		di.HoverService(), di.ScanNotifier(), di.Notifier(), s.scanPersister,
-		di.ScanStateAggregator(), featureflag.NewFakeService(), di.ConfigResolver(), s.engine)
+		s.deps.HoverService, s.deps.ScanNotifier, s.deps.Notifier, s.scanPersister,
+		s.scanStateAggregator, featureflag.NewFakeService(), s.deps.ConfigResolver, s.engine)
 	config.GetWorkspace(conf).AddFolder(folder)
 
 	folderConfig := config.GetFolderConfigFromEngine(s.engine, testutil.DefaultConfigResolver(s.engine), s.deltaFileDir, s.engine.GetLogger())
-	di.FeatureFlagService().PopulateFolderConfig(folderConfig)
+	s.deps.FeatureFlagService.PopulateFolderConfig(folderConfig)
 
 	folder.ScanFile(s.scenarioT.Context(), s.deltaFilePath)
 	return nil

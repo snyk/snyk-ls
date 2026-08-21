@@ -915,7 +915,7 @@ func globalEffectiveValue(conf configuration.Configuration, name string) any {
 // globalResetFilterKeys is the subset of GlobalResettableSettings whose reset
 // must trigger a diagnostics refresh, mirroring applyProductEnablement /
 // applySeverityFilter / applyIssueViewOptions / applyDeltaFindings.
-var globalResetFilterKeys = map[string]bool{
+var globalResetFilterKeys = map[string]bool{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	types.SettingSnykOssEnabled:         true,
 	types.SettingSnykCodeEnabled:        true,
 	types.SettingSnykIacEnabled:         true,
@@ -1367,7 +1367,7 @@ func applyCliReleaseChannel(conf configuration.Configuration, settings map[strin
 // intentionally has no entry: the CLI extension has no base-URL env var for it, so
 // a custom endpoint chosen with the openai provider is persisted and echoed back in
 // the dialog but never exported to the process environment.
-var llmProviderBaseUrlEnvVar = map[string]string{
+var llmProviderBaseUrlEnvVar = map[string]string{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	"anthropic": "ANTHROPIC_BASE_URL",
 	"vertex":    "VERTEX_BASE_URL",
 	"litellm":   "LITELLM_BASE_URL",
@@ -1378,7 +1378,7 @@ var llmProviderBaseUrlEnvVar = map[string]string{
 // other concurrent settings saves. It is independent of the remediation
 // package's LLM provider env lock: persisting is fast and must never wait
 // behind an in-flight Remy invocation, which can hold that lock for minutes.
-var llmSettingsMu sync.Mutex
+var llmSettingsMu sync.Mutex //nolint:gochecknoglobals // required guard for mutable package state
 
 // appliedLlmEnvVar is the base-URL env var this process itself last applied
 // via reconcileLlmProviderEnv, or "" if none. The environment is
@@ -1387,19 +1387,19 @@ var llmSettingsMu sync.Mutex
 // reconciliation can happen at different times - config may already hold a
 // newer provider than what this process has actually applied to the
 // environment. Guarded by the remediation package's LLM provider env lock.
-var appliedLlmEnvVar string
+var appliedLlmEnvVar string //nolint:gochecknoglobals // process-global env reconciliation state
 
 // llmEnvReconcilePending coalesces concurrent reconciliation requests into a
 // single background worker, so a burst of settings saves arriving while a
 // Remy invocation holds the read lock queues at most one goroutine rather
 // than one per save.
-var llmEnvReconcilePending atomic.Bool
+var llmEnvReconcilePending atomic.Bool //nolint:gochecknoglobals // coalesces concurrent reconciliation requests
 
 // osSetenv and osUnsetenv are indirections over os.Setenv/os.Unsetenv so tests
 // can exercise applyLlmProviderEnvLocked's failure handling.
 var (
-	osSetenv   = os.Setenv
-	osUnsetenv = os.Unsetenv
+	osSetenv   = os.Setenv   //nolint:gochecknoglobals // test indirection over os.Setenv
+	osUnsetenv = os.Unsetenv //nolint:gochecknoglobals // test indirection over os.Unsetenv
 )
 
 // applyLlmProviderConfig persists the developer's chosen LLM provider, model and
@@ -1586,9 +1586,9 @@ func processSingleLspFolderConfig(ctx context.Context, conf configuration.Config
 // into the single deduplicated locked-fields notification per triggering event
 // (see [IDE-1970]).
 //
-// The resolver is passed in (not fetched via di.ConfigResolver()) so that
-// machine-scope and folder-scope validation share the same resolver instance
-// when a caller injects one through UpdateSettings/InitializeSettings.
+// The resolver is passed in rather than constructed here so that machine-scope
+// and folder-scope validation share the same resolver instance when a caller
+// injects one through UpdateSettings/InitializeSettings.
 //
 // If the incoming update changes PreferredOrg, locks are evaluated against the NEW org's policies
 // to prevent bypassing stricter locks during an org switch.

@@ -32,6 +32,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -351,6 +352,7 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings map[string]any, folderConfig
 		"CliReleaseChannel":       cliReleaseChannel,
 		"IsSecretsFeatureEnabled": isAnyFolderSecretsEnabled(folderConfigs),
 		"IsEclipse":               isEclipse(integrationName),
+		"IsVSCode":                isVSCode(integrationName),
 	}
 
 	var buffer bytes.Buffer
@@ -373,11 +375,15 @@ func isAnyFolderSecretsEnabled(folderConfigs []types.FolderConfig) bool {
 }
 
 func isVisualStudio(integrationName string) bool {
-	return integrationName == "VISUAL_STUDIO"
+	return integrationName == constants.IntegrationNameVisualStudio
 }
 
 func isEclipse(integrationName string) bool {
-	return integrationName == "ECLIPSE"
+	return integrationName == constants.IntegrationNameEclipse
+}
+
+func isVSCode(integrationName string) bool {
+	return integrationName == constants.IntegrationNameVSCode
 }
 
 // getCliReleaseChannel returns the configured CLI release channel, falling back to a

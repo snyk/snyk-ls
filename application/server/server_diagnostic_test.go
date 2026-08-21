@@ -27,7 +27,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/workspace"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/code"
@@ -99,7 +98,7 @@ func Test_workspaceDiagnostic_emptyWorkspace(t *testing.T) {
 // ACC-007: workspace/diagnostic skips folders that are not trusted.
 func Test_workspaceDiagnostic_skipsUntrustedFolder(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, _, _ := setupServer(t, engine, tokenService)
+	loc, _, deps := setupServer(t, engine, tokenService)
 
 	// Enable trust feature — any folder not in SettingTrustedFolders is now untrusted.
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
@@ -108,14 +107,14 @@ func Test_workspaceDiagnostic_skipsUntrustedFolder(t *testing.T) {
 	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(
 		engine.GetConfiguration(), engine.GetLogger(), folderPath,
 		"untrusted",
-		di.Scanner(),
-		di.HoverService(),
-		di.ScanNotifier(),
-		di.Notifier(),
-		di.ScanPersister(),
-		di.ScanStateAggregator(),
+		deps.Scanner,
+		deps.HoverService,
+		deps.ScanNotifier,
+		deps.Notifier,
+		deps.ScanPersister,
+		deps.ScanStateAggregator,
 		featureflag.NewFakeService(),
-		di.ConfigResolver(),
+		deps.ConfigResolver,
 		engine,
 	))
 
@@ -148,16 +147,16 @@ func Test_textDocumentDiagnostic_unknownDocumentReturnsEmpty(t *testing.T) {
 // for the same scan state.
 func Test_workspaceDiagnostic_returnsSameFindingSetAsPush(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider).IsAuthenticated = true
+	deps.AuthenticationService.Provider().(*authentication.FakeAuthenticationProvider).IsAuthenticated = true
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	require.NoError(t, err)
 	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
 
 	filePath, fileDir := code.TempWorkdirWithIssues(t)
-	fileUri := sendFileSavedMessage(t, engine, filePath, fileDir, loc)
+	fileUri := sendFileSavedMessage(t, engine, filePath, fileDir, loc, deps)
 
 	require.Eventually(t,
 		checkForPublishedDiagnostics(t, engine, uri.PathFromUri(fileUri), -1, jsonRPCRecorder),
@@ -194,16 +193,16 @@ func Test_workspaceDiagnostic_returnsSameFindingSetAsPush(t *testing.T) {
 // ACC-003: textDocument/diagnostic returns the same file findings as the push path.
 func Test_textDocumentDiagnostic_returnsFileFindings(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService)
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-	di.AuthenticationService().Provider().(*authentication.FakeAuthenticationProvider).IsAuthenticated = true
+	deps.AuthenticationService.Provider().(*authentication.FakeAuthenticationProvider).IsAuthenticated = true
 
 	_, err := loc.Client.Call(t.Context(), "initialize", nil)
 	require.NoError(t, err)
 	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
 
 	filePath, fileDir := code.TempWorkdirWithIssues(t)
-	fileUri := sendFileSavedMessage(t, engine, filePath, fileDir, loc)
+	fileUri := sendFileSavedMessage(t, engine, filePath, fileDir, loc, deps)
 
 	require.Eventually(t,
 		checkForPublishedDiagnostics(t, engine, uri.PathFromUri(fileUri), -1, jsonRPCRecorder),

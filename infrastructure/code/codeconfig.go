@@ -26,7 +26,7 @@ import (
 // A package-level mutex is the correct granularity: it provides a single
 // exclusion domain for all writers in this package regardless of which
 // *CodeConfig instance or call site is involved (IDE-2169).
-var authURLsMu sync.Mutex
+var authURLsMu sync.Mutex //nolint:gochecknoglobals // single process-wide exclusion domain for AUTHENTICATION_ADDITIONAL_URLS writers
 
 // CodeConfig provides a concrete implementation of the codeClientConfig.Config interface
 // It's lazy and delegates most calls to the language server config, only storing Organization for the folder

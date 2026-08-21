@@ -27,6 +27,21 @@ var GLOBAL_RESET_FIELDS = [
 	"risk_score_threshold",
 	"organization",
 ];
+var SECURE_AT_INCEPTION_FIELDS = [
+	"auto_configure_mcp_server",
+	"secure_at_inception_execution_frequency",
+];
+
+function assertSecureAtInceptionFieldsAbsent(entry, message) {
+	for (var i = 0; i < SECURE_AT_INCEPTION_FIELDS.length; i++) {
+		var key = SECURE_AT_INCEPTION_FIELDS[i];
+		assert.equal(
+			Object.prototype.hasOwnProperty.call(entry, key),
+			false,
+			message + ": " + key + " must be absent"
+		);
+	}
+}
 
 // ---------------------------------------------------------------------------
 // markGlobalForReset / isGlobalMarkedForReset
@@ -70,6 +85,8 @@ test("applyGlobalResets: sets all 14 fields to null at top level (flag cleared b
 		assert.ok(Object.prototype.hasOwnProperty.call(data, key), key + " must be present at top level");
 		assert.equal(data[key], null, key + " must be null at top level");
 	}
+	assertSecureAtInceptionFieldsAbsent(data, "global reset payload");
+	assertSecureAtInceptionFieldsAbsent(data.folderConfigs[0], "global reset folder payload");
 
 	// Resets must NOT be written inside folderConfigs.
 	assert.equal(data.folderConfigs[0].organization, "folder-org", "folderConfigs must be untouched");
@@ -112,10 +129,15 @@ test("clicking .reset-global-overrides-btn saves 14 top-level nulls immediately 
 		assert.ok(Object.prototype.hasOwnProperty.call(saved, key), key + " must be present in saved payload");
 		assert.equal(saved[key], null, key + " must be null in saved payload");
 	}
+	assertSecureAtInceptionFieldsAbsent(saved, "saved global reset payload");
 
 	// Resets live at the top level, never inside folderConfigs.
 	if (saved.folderConfigs) {
 		for (var f = 0; f < saved.folderConfigs.length; f++) {
+			assertSecureAtInceptionFieldsAbsent(
+				saved.folderConfigs[f],
+				"saved global reset folder payload"
+			);
 			assert.equal(
 				Object.prototype.hasOwnProperty.call(saved.folderConfigs[f], "snyk_code_enabled") &&
 					saved.folderConfigs[f].snyk_code_enabled === null,

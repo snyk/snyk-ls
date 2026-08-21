@@ -18,6 +18,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
@@ -122,6 +123,38 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	assert.Contains(t, html, "Additional environment variables")
 	// Combine message
 	assert.Contains(t, html, "combine with any per-")
+}
+
+func TestConfigHtmlRenderer_IntegrationFolderLabels(t *testing.T) {
+	tests := []struct {
+		integrationName string
+		singular        string
+		plural          string
+	}{
+		{integrationName: constants.IntegrationNameVisualStudio, singular: "Solution", plural: "Solutions"},
+		{integrationName: constants.IntegrationNameVSCode, singular: "Project", plural: "Projects"},
+		{integrationName: constants.IntegrationNameJetBrains, singular: "Project", plural: "Projects"},
+		{integrationName: constants.IntegrationNameEclipse, singular: "Project", plural: "Projects"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.integrationName, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			engine.GetConfiguration().Set(gafconfiguration.INTEGRATION_NAME, tt.integrationName)
+			configResolver := testutil.DefaultConfigResolver(engine)
+			renderer, err := NewConfigHtmlRenderer(engine, configResolver)
+			require.NoError(t, err)
+
+			html := renderer.GetConfigHtml(nil, []types.FolderConfig{
+				{FolderPath: "/workspace/one", ConfigResolver: configResolver},
+				{FolderPath: "/workspace/two", ConfigResolver: configResolver},
+			})
+
+			assert.Contains(t, html, `data-folder-label="`+tt.singular+`"`)
+			assert.Contains(t, html, ">"+tt.singular+" defaults</button>")
+			assert.Contains(t, html, `id="folderDropdownLabel">`+tt.plural+"</span>")
+		})
+	}
 }
 
 func TestConfigHtmlRenderer_ProjectDefaultsAdvancedFieldsRenderValues(t *testing.T) {
@@ -581,16 +614,75 @@ func TestConfigHtmlRenderer_EclipsePathField(t *testing.T) {
 	}
 
 	t.Run("ECLIPSE shows path field", func(t *testing.T) {
-		html := renderForIntegration(t, "ECLIPSE")
+		html := renderForIntegration(t, constants.IntegrationNameEclipse)
 		assert.Contains(t, html, `id="user_settings_path"`)
 		assert.Contains(t, html, `/usr/local/bin`)
 	})
 
-	for _, name := range []string{"VS_CODE", "VISUAL_STUDIO", "JETBRAINS_IDE"} {
+	for _, name := range []string{
+		constants.IntegrationNameVSCode,
+		constants.IntegrationNameVisualStudio,
+		constants.IntegrationNameJetBrains,
+	} {
 		t.Run(name+" hides path field", func(t *testing.T) {
 			html := renderForIntegration(t, name)
 			assert.NotContains(t, html, `id="user_settings_path"`)
 		})
+	}
+}
+
+func TestConfigHtmlRenderer_SecureAtInceptionIntegrationGate(t *testing.T) {
+	renderForIntegration := func(t *testing.T, integrationName string, autoConfigure bool, frequency string) string {
+		t.Helper()
+		engine := testutil.UnitTest(t)
+		engine.GetConfiguration().Set(gafconfiguration.INTEGRATION_NAME, integrationName)
+		renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
+		require.NoError(t, err)
+		return renderer.GetConfigHtml(map[string]any{
+			types.SettingAutoConfigureMcpServer:         autoConfigure,
+			types.SettingSecureAtInceptionExecutionFreq: frequency,
+		}, nil)
+	}
+
+	for _, integrationName := range []string{
+		constants.IntegrationNameJetBrains,
+		constants.IntegrationNameEclipse,
+		constants.IntegrationNameVisualStudio,
+		"",
+	} {
+		t.Run(integrationName+" hides section", func(t *testing.T) {
+			html := renderForIntegration(t, integrationName, true, "Smart Scan")
+			assert.NotContains(t, html, "<h2>Secure At Inception</h2>")
+			assert.NotContains(t, html, `name="`+types.SettingAutoConfigureMcpServer+`"`)
+			assert.NotContains(t, html, `name="`+types.SettingSecureAtInceptionExecutionFreq+`"`)
+		})
+	}
+
+	for _, autoConfigure := range []bool{false, true} {
+		for _, frequency := range []string{"On Code Generation", "Smart Scan", "Manual"} {
+			name := fmt.Sprintf("VS_CODE auto=%t frequency=%s", autoConfigure, frequency)
+			t.Run(name, func(t *testing.T) {
+				html := renderForIntegration(t, constants.IntegrationNameVSCode, autoConfigure, frequency)
+				assert.Contains(t, html, "<h2>Secure At Inception</h2>")
+				assert.Contains(t, html, `title="Automatically configure Secure At Inception for supported development environments.">Auto-configure Snyk Studio</span>`)
+				assert.Contains(t, html, `title="Choose when Secure At Inception rules are applied.">Execution frequency</span>`)
+
+				checkbox := testutil.RequireOpeningTagByName(t, html, "input", types.SettingAutoConfigureMcpServer)
+				assert.Equal(t, autoConfigure, strings.Contains(checkbox, "checked"))
+
+				selectMarkup := testutil.RequireElementByName(t, html, "select", types.SettingSecureAtInceptionExecutionFreq)
+				assert.Equal(t, []testutil.SelectOption{
+					{Value: "On Code Generation", Text: "On Code Generation", Selected: frequency == "On Code Generation"},
+					{Value: "Smart Scan", Text: "Smart Scan", Selected: frequency == "Smart Scan"},
+					{Value: "Manual", Text: "Manual", Selected: frequency == "Manual"},
+				}, testutil.ParseSelectOptions(t, selectMarkup))
+
+				assert.Contains(t, html, `data-setting-key="`+types.SettingAutoConfigureMcpServer+`"`)
+				assert.Contains(t, html, `data-setting-key="`+types.SettingSecureAtInceptionExecutionFreq+`"`)
+				assert.NotContains(t, html, "folder_0_"+types.SettingAutoConfigureMcpServer)
+				assert.NotContains(t, html, "folder_0_"+types.SettingSecureAtInceptionExecutionFreq)
+			})
+		}
 	}
 }
 
