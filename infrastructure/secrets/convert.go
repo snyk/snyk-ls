@@ -18,6 +18,7 @@ package secrets
 
 import (
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -30,6 +31,15 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
+
+// secretsDocsUrl documents Secrets scanning. It is the link target behind the
+// rule id shown next to a finding, and must be an http(s) URL: clients resolve a
+// relative href against the workspace and try to open it as a file.
+const secretsDocsUrl = "https://docs.snyk.io/scan-fix-and-prevent/scan-with-snyk/snyk-secrets"
+
+// secretsDocsLink is parsed once and shared by every issue found by the Secrets scanner.
+// Consumers only read it, so the same pointer is safe to hand out.
+var secretsDocsLink, _ = url.Parse(secretsDocsUrl) //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 
 // FindingsConverter converts unified API findings into internal Issue types.
 type FindingsConverter struct {
@@ -128,18 +138,19 @@ func (c *FindingsConverter) findingToIssues(finding *testapi.FindingData, scanPa
 		formattedMessage := c.formattedMessageMarkdown(severity, attrs.Title, attrs.Description, cwes)
 
 		issues = append(issues, &snyk.Issue{
-			ID:               ruleID,
-			Severity:         severity,
-			IssueType:        types.SecretsIssue,
-			IsIgnored:        isIgnored,
-			IgnoreDetails:    ignoreDetails,
-			Range:            issueRange,
-			Message:          message,
-			FormattedMessage: formattedMessage,
-			AffectedFilePath: affectedFilePath,
-			ContentRoot:      folderPath,
-			Product:          product.ProductSecrets,
-			CWEs:             cwes,
+			ID:                  ruleID,
+			IssueDescriptionURL: secretsDocsLink,
+			Severity:            severity,
+			IssueType:           types.SecretsIssue,
+			IsIgnored:           isIgnored,
+			IgnoreDetails:       ignoreDetails,
+			Range:               issueRange,
+			Message:             message,
+			FormattedMessage:    formattedMessage,
+			AffectedFilePath:    affectedFilePath,
+			ContentRoot:         folderPath,
+			Product:             product.ProductSecrets,
+			CWEs:                cwes,
 			// FindingId is the durable grouping key: the stable rule identity (rule
 			// id, falling back to rule name), never attrs.Key. attrs.Key is a
 			// per-scan UUID, so folding it in made the same finding change identity

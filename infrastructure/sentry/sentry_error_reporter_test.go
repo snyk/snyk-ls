@@ -25,6 +25,7 @@ import (
 
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
@@ -162,5 +163,6 @@ func TestErrorReporting_CaptureErrorAndReportAsIssue(t *testing.T) {
 	assert.Equal(t, text, diagnosticsParams.Diagnostics[0].Message)
 	assert.Equal(t, types.DiagnosticsSeverityWarning, diagnosticsParams.Diagnostics[0].Severity)
 	assert.Equal(t, diagnosticsParams.URI, uri.PathToUri(path))
-	assert.Equal(t, diagnosticsParams.Diagnostics[0].CodeDescription.Href, types.Uri("https://snyk.io/user-hub"))
+	require.NotNil(t, diagnosticsParams.Diagnostics[0].CodeDescription)
+	assert.Equal(t, types.Uri("https://snyk.io/user-hub"), diagnosticsParams.Diagnostics[0].CodeDescription.Href)
 }
