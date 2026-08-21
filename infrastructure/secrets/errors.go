@@ -21,6 +21,8 @@ import (
 	"fmt"
 
 	"github.com/rs/zerolog"
+
+	"github.com/snyk/error-catalog-golang-public/errorcodes"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
 	"github.com/snyk/snyk-ls/infrastructure/utils"
@@ -32,11 +34,11 @@ import (
 // Scans that hit these codes return early without touching the issue cache so that
 // previously discovered findings remain visible in the IDE.
 //
-// SNYK-CLI-0016 (FeatureNotEnabled) is intentionally excluded: it signals an
-// org-level state change and should surface as a real error rather than silently
-// clearing cached findings.
+// FeatureNotEnabled is intentionally excluded: it signals an org-level state
+// change and should surface as a real error rather than silently clearing
+// cached findings.
 var ignorableSecretsErrorCodes = map[string]bool{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
-	"SNYK-CLI-0008": true, // NoSupportedFilesFound: file ignored or unsupported type
+	errorcodes.CLI.NoSupportedFilesFoundError: true,
 }
 
 // isIgnorableError returns true when err is a snyk catalog error whose code is
@@ -48,7 +50,7 @@ func isIgnorableError(err error) bool {
 
 func isSecretsNotEnabledError(err error) bool {
 	var snykErr snyk_errors.Error
-	return stderrors.As(err, &snykErr) && snykErr.ErrorCode == "SNYK-CLI-0016"
+	return stderrors.As(err, &snykErr) && snykErr.ErrorCode == errorcodes.CLI.FeatureNotEnabledError
 }
 
 // handleSecretsInvokeError processes a non-nil error from engine.InvokeWithConfig.
