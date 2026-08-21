@@ -792,7 +792,7 @@ func (f *Folder) filterIssuesWithConfig(
 
 	if len(filterReasonCounts) > 0 {
 		logger.Debug().
-			Interface("filterReasons", filterReasonCounts).
+			Any("filterReasons", filterReasonCounts).
 			Bool("deltaEnabled", deltaEnabled).
 			Msgf("%d issue(s) filtered", lo.Sum(lo.Values(filterReasonCounts)))
 	} else {
