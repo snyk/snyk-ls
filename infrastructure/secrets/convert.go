@@ -39,7 +39,7 @@ const secretsDocsUrl = "https://docs.snyk.io/scan-fix-and-prevent/scan-with-snyk
 
 // secretsDocsLink is parsed once and shared by every issue found by the Secrets scanner.
 // Consumers only read it, so the same pointer is safe to hand out.
-var secretsDocsLink, _ = url.Parse(secretsDocsUrl)
+var secretsDocsLink, _ = url.Parse(secretsDocsUrl) //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 
 // FindingsConverter converts unified API findings into internal Issue types.
 type FindingsConverter struct {
