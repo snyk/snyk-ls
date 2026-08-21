@@ -53,11 +53,16 @@ func LoggerWithProductScanFields(
 }
 
 // RequireProductEnabled returns an error when the product is not enabled for the folder.
-func RequireProductEnabled(enabled bool, errNotEnabledForFolder string) error {
-	if !enabled {
-		return errors.New(errNotEnabledForFolder)
+// Reference scans start only after real-folder enablement, so we can skip checking
+// for reference scans.
+func RequireProductEnabled(ctx context.Context, enabled bool, errNotEnabledForFolder string) error {
+	if enabled {
+		return nil
 	}
-	return nil
+	if scanType, ok := ctx2.DeltaScanTypeFromContext(ctx); ok && scanType == ctx2.Reference {
+		return nil
+	}
+	return errors.New(errNotEnabledForFolder)
 }
 
 // RequireAuthToken logs and returns an error when no CLI/API token is configured.

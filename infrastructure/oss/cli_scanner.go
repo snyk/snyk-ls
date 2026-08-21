@@ -187,6 +187,7 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePat
 	logger.Debug().Msg("OSS scanner: starting scan")
 
 	if err = scannercommon.RequireProductEnabled(
+		ctx,
 		cliScanner.getConfigResolver(ctx).IsProductEnabledForFolder(product.ProductOpenSource, workspaceFolderConfig),
 		utils.ErrSnykOssNotEnabledForFolder,
 	); err != nil {
