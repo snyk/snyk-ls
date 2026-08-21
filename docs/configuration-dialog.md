@@ -195,10 +195,9 @@ persisting a value merely by rendering the dialog.
 
 The VS Code bridge maps these LS machine-scope values to window-scoped VS Code
 settings; neither value belongs in `folderConfigs`. The Secure At Inception section Reset action
-sets the form values to `false` and `Manual`. Its visibility is independent of
-the Secrets feature flag. JetBrains, Eclipse, Visual Studio, and integrations
-with a blank name intentionally do not render the section because their
-configuration bridges do not persist these values.
+sets the form values to `false` and `Manual`. JetBrains, Eclipse, Visual Studio,
+and integrations with a blank name intentionally do not render the Secure At Inception
+section because their configuration bridges do not persist these values.
 
 ### 5. Authentication Flow
 

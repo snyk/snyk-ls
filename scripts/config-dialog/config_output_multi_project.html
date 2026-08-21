@@ -1136,7 +1136,6 @@ button.secondary[disabled] {
                                             <span class="source-indicator" data-toggle="tooltip" title="Set by you at project defaults level">👤</span>
                                         </label>
                                     </div>
-                                    
                                     <div class="override-indicator-wrapper ">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="snyk_secrets_enabled" >
@@ -1145,7 +1144,6 @@ button.secondary[disabled] {
                                             
                                         </label>
                                     </div>
-                                    
                                 </div>
                             </div>
 
@@ -1335,7 +1333,13 @@ button.secondary[disabled] {
                                             
                                         </label>
                                     </div>
-                                    
+                                    <div class="override-indicator-wrapper ">
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" name="folder_0_snyk_secrets_enabled" data-setting="snyk_secrets_enabled"  >
+                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code.">Snyk Secrets</span>
+                                            
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1626,7 +1630,6 @@ button.secondary[disabled] {
                                             <span class="source-indicator" data-toggle="tooltip" title="Set by your organization settings">🏢</span>
                                         </label>
                                     </div>
-                                    
                                     <div class="override-indicator-wrapper source-org">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="folder_1_snyk_secrets_enabled" data-setting="snyk_secrets_enabled" checked >
@@ -1634,7 +1637,6 @@ button.secondary[disabled] {
                                             <span class="source-indicator" data-toggle="tooltip" title="Set by your organization settings">🏢</span>
                                         </label>
                                     </div>
-                                    
                                 </div>
                             </div>
 
@@ -1925,7 +1927,13 @@ button.secondary[disabled] {
                                             <span class="source-indicator" data-toggle="tooltip" title="Locked due to organization settings">🏢🔒</span>
                                         </label>
                                     </div>
-                                    
+                                    <div class="override-indicator-wrapper source-org-locked">
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" name="folder_2_snyk_secrets_enabled" data-setting="snyk_secrets_enabled" checked disabled>
+                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code.">Snyk Secrets</span>
+                                            <span class="source-indicator" data-toggle="tooltip" title="Locked due to organization settings">🏢🔒</span>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
 
@@ -2216,7 +2224,13 @@ button.secondary[disabled] {
                                             <span class="source-indicator" data-toggle="tooltip" title="Set by you at project level">👤</span>
                                         </label>
                                     </div>
-                                    
+                                    <div class="override-indicator-wrapper source-user-override">
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" name="folder_3_snyk_secrets_enabled" data-setting="snyk_secrets_enabled"  >
+                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code.">Snyk Secrets</span>
+                                            <span class="source-indicator" data-toggle="tooltip" title="Set by you at project level">👤</span>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
 

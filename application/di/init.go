@@ -160,7 +160,7 @@ func Init(engine workflow.Engine, tokenService types.TokenService) Dependencies 
 	localOpenSourceScanner := oss.NewCLIScanner(engine, localInstrumentor, localErrorReporter, localSnykCli, localLearnService, localNotifier, localConfigResolver, progressTracker)
 	localScanNotifier, _ := appNotification.NewScanNotifier(localNotifier, localConfigResolver)
 	localSnykCodeScanner := code.New(engine, localInstrumentor, localSnykApiClient, localCodeErrorReporter, localLearnService, localFeatureFlagService, localNotifier, localCodeInstrumentor, localCodeErrorReporter, code.CreateCodeScanner, localConfigResolver, progressTracker)
-	localSecretsScanner := secrets.New(conf, engine, logger, localInstrumentor, localSnykApiClient, localFeatureFlagService, localNotifier, localConfigResolver)
+	localSecretsScanner := secrets.New(conf, engine, logger, localInstrumentor, localSnykApiClient, localNotifier, localConfigResolver)
 
 	localCLIInitializer := cli.NewInitializer(conf, logger, localErrorReporter, localInstaller, localNotifier, localSnykCli, localConfigResolver)
 	localAuthInitializer := authentication.NewInitializer(conf, logger, localAuthenticationService, localErrorReporter, localNotifier, localConfigResolver)
