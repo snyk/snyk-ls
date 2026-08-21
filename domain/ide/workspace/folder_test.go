@@ -765,6 +765,62 @@ func Test_FilterIssues_CombinedFiltering(t *testing.T) {
 	assert.NotContains(t, filteredIssues[filePath], ignoredIssue, "Ignored issue should be filtered (issue view options)")
 }
 
+// Test_FilterIssues_DeltaDisabled_KeepsNonNewIssue verifies a non-new issue still reaches
+// diagnostics when delta filtering is disabled.
+func Test_FilterIssues_DeltaDisabled_KeepsNonNewIssue(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	folderPath := types.FilePath(t.TempDir())
+	resolver := defaultResolver(engine)
+	folderConfig := &types.FolderConfig{
+		FolderPath:     folderPath,
+		ConfigResolver: resolver,
+	}
+
+	sc := scanner.NewTestScanner()
+	folder := NewFolder(engine.GetConfiguration(), engine.GetLogger(), folderPath, "test-folder", sc, hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(), persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(), featureflag.NewFakeService(), resolver, engine)
+
+	filePath := types.FilePath(filepath.Join(string(folderPath), "test.go"))
+	notNewIssue := &snyk.Issue{
+		ID:               "not-new",
+		AffectedFilePath: filePath,
+		Severity:         types.High,
+		Product:          product.ProductOpenSource,
+		IsNew:            false,
+	}
+	issuesByFile := snyk.IssuesByFile{filePath: {notNewIssue}}
+	supportedIssueTypes := map[product.FilterableIssueType]bool{
+		product.FilterableIssueTypeOpenSource: true,
+	}
+
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), false)
+
+	filtered := folder.filterIssuesWithConfig(issuesByFile, supportedIssueTypes, folderConfig)
+
+	assert.Contains(t, filtered[filePath], notNewIssue, "the issue must pass through when delta filtering is disabled")
+}
+
+func Test_filterByIsNew(t *testing.T) {
+	filePath := types.FilePath("/test/test.go")
+
+	newIssue := &snyk.Issue{ID: "new", IsNew: true}
+	oldIssue := &snyk.Issue{ID: "old", IsNew: false}
+
+	t.Run("returns only new issues and counts the rest as dropped", func(t *testing.T) {
+		filtered, dropped := filterByIsNew(snyk.IssuesByFile{filePath: {newIssue, oldIssue}})
+
+		assert.Equal(t, []types.Issue{newIssue}, filtered[filePath])
+		assert.Equal(t, 1, dropped)
+	})
+
+	t.Run("nil issues are skipped without being counted as dropped", func(t *testing.T) {
+		filtered, dropped := filterByIsNew(snyk.IssuesByFile{filePath: {newIssue, nil, oldIssue}})
+
+		assert.Equal(t, []types.Issue{newIssue}, filtered[filePath])
+		assert.Equal(t, 1, dropped, "a nil entry must not be counted as a not-net-new drop")
+	})
+}
+
 func Test_ClearDiagnosticsByIssueType(t *testing.T) {
 	// Arrange
 	engine := testutil.UnitTest(t)
