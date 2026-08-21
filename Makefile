@@ -28,7 +28,7 @@ LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/application/config.Development=true'
 
 TOOLS_BIN := $(shell pwd)/.bin
 
-OVERRIDE_GOCI_LINT_V := v2.10.1
+OVERRIDE_GOCI_LINT_V := v2.12.2
 GOLICENSES_V := v1.6.0
 PACT_V := 2.4.2
 
@@ -92,6 +92,13 @@ test: test-js
 	 [ -n "$(INTEG_TESTS)" ] && stages="$$stages test-integ" || true; \
 	 [ -n "$(SMOKE_TESTS)" ] && stages="$$stages test-smoke" || true; \
 	 for s in $$stages; do $(MAKE) --no-print-directory _save-test-hash STAGE=$$s; done
+
+## test-live: Run tests printing each failure as it happens, not at the end (local dev).
+## Usage: make test-live PKG=./application/server/ ARGS="-race"
+.PHONY: test-live
+test-live: PKG ?= ./...
+test-live:
+	@scripts/test-live.sh $(PKG) $(TIMEOUT) $(ARGS)
 
 ## test-integ: Run integration tests (alias for INTEG_TESTS=1 make test).
 .PHONY: test-integ
@@ -222,7 +229,7 @@ tree-view-fixture:
 config-dialog-fixture:
 	@echo "==> Generating config dialog HTML fixture..."
 	@mkdir -p js-tests/fixtures
-	@go run scripts/config-dialog/main.go --dummy-data -no-panel > js-tests/fixtures/config-page.html
+	@go run scripts/config-dialog/main.go --dummy-data --integration VS_CODE -no-panel > js-tests/fixtures/config-page.html
 	@echo "    Written to js-tests/fixtures/config-page.html"
 
 ## settings-fallback-fixture: Regenerate settings fallback HTML fixtures used by JS tests.

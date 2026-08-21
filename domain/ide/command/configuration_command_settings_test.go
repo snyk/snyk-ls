@@ -28,6 +28,8 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 	conf.Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), true)
 	conf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
 	conf.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingAutoConfigureMcpServer), true)
+	conf.Set(configresolver.UserGlobalKey(types.SettingSecureAtInceptionExecutionFreq), "Smart Scan")
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.TokenAuthentication))
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingProxyInsecure), true)
@@ -51,6 +53,8 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 	t.Run("Scan Settings", func(t *testing.T) {
 		assert.IsType(t, true, settings[types.SettingScanAutomatic])
 		assert.Equal(t, true, settings[types.SettingScanNetNew])
+		assert.Equal(t, true, settings[types.SettingAutoConfigureMcpServer])
+		assert.Equal(t, "Smart Scan", settings[types.SettingSecureAtInceptionExecutionFreq])
 	})
 
 	t.Run("Severity Filter", func(t *testing.T) {
@@ -82,6 +86,32 @@ func TestConstructSettingsFromConfig_AllFieldsPopulated(t *testing.T) {
 	t.Run("Folder Configs", func(t *testing.T) {
 		require.NotNil(t, folderConfigs)
 	})
+}
+
+func TestConstructSettingsFromConfig_SecureAtInceptionFrequencyPreserved(t *testing.T) {
+	for _, frequency := range []string{"On Code Generation", "Smart Scan", "Manual"} {
+		t.Run(frequency, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			engine.GetConfiguration().Set(
+				configresolver.UserGlobalKey(types.SettingSecureAtInceptionExecutionFreq),
+				frequency,
+			)
+
+			settings, _ := ConstructSettingsFromConfig(engine, testutil.DefaultConfigResolver(engine))
+
+			assert.Equal(t, frequency, settings[types.SettingSecureAtInceptionExecutionFreq])
+		})
+	}
+}
+
+func TestConstructSettingsFromConfig_SecureAtInceptionDefaults(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	settings, folderConfigs := ConstructSettingsFromConfig(engine, testutil.DefaultConfigResolver(engine))
+
+	assert.Equal(t, false, settings[types.SettingAutoConfigureMcpServer])
+	assert.Equal(t, "Manual", settings[types.SettingSecureAtInceptionExecutionFreq])
+	assert.Empty(t, folderConfigs)
 }
 
 // TestConstructSettingsFromConfig_FolderConfigs verifies folder configs initialization

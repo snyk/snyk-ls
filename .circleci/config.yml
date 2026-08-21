@@ -7,11 +7,12 @@ jobs:
   security-scans:
     resource_class: small
     docker:
-      - image: cimg/go:1.26.4
+      - image: cimg/go:1.26.5
     steps:
       - checkout
       - prodsec/security_scans:
           mode: auto
+          open-source-agentic-fix-enabled: true
           open-source-additional-arguments: --exclude=testdata
           iac-scan: disabled
 

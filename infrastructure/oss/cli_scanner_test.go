@@ -38,9 +38,11 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/scans"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -550,6 +552,44 @@ func Test_shouldUseLegacyScan(t *testing.T) {
 		useLegacy, _ := shouldUseLegacyScan(fc, []string{"snyk", "test", "--print-graph"})
 		assert.True(t, useLegacy)
 	})
+}
+
+// Test_NewCLIScanner_ProgressChannelIsolation verifies that the tracker created
+// during scanInternal writes to the channel passed to NewCLIScanner() and to no
+// other scanner's channel (IDE-2036).
+func Test_NewCLIScanner_ProgressChannelIsolation(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	learnMock := mock_learn.NewMockService(ctrl)
+	learnMock.EXPECT().GetAllLessons().Return([]learn.Lesson{{}}, nil).AnyTimes()
+	learnMock.EXPECT().GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(&learn.Lesson{}, nil).AnyTimes()
+
+	newScanner := func(progressCh chan types.ProgressParams) types.ProductScanner {
+		return NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine),
+			cli.NewTestExecutor(engine), learnMock, notification.NewMockNotifier(),
+			defaultResolver(t, engine), progress.NewTrackerWithChannel(progressCh, engine.GetLogger()))
+	}
+
+	// Both scanners and both channels exist before any scan runs, so an empty
+	// siblingCh afterwards is an observation rather than a tautology.
+	scannerCh := make(chan types.ProgressParams, 100)
+	siblingCh := make(chan types.ProgressParams, 100)
+	scanner := newScanner(scannerCh)
+	_ = newScanner(siblingCh)
+
+	ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfigWithFlags(nil))
+
+	// package.json is a supported manifest, so the scan reaches scanInternal and
+	// fires the progress tracker. The scan itself may fail (fake CLI) — irrelevant.
+	_, _ = scanner.Scan(ctx, "package.json")
+
+	assert.NotEmpty(t, scannerCh,
+		"progress events must be routed to the channel passed to NewCLIScanner()")
+	assert.Empty(t, siblingCh,
+		"another scanner's channel must not receive events from this scanner")
 }
 
 func TestCLIScanner_updateArgs_folderAdditionalEnv(t *testing.T) {

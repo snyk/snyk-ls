@@ -226,8 +226,8 @@ test("folder selection activates pane and updates UI", async () => {
 	if (dropdownLabel) {
 		const nameSpan = firstFolderItem.querySelector('.folder-item-name');
 		const folderName = nameSpan ? nameSpan.textContent : '';
-		const expectedLabel = folderName ? folderName + ' - Solution' : 'Solution';
-		assert.equal(dropdownLabel.textContent, expectedLabel, "dropdown label should be 'FolderName - Solution'");
+		const expectedLabel = folderName ? folderName + ' - Project' : 'Project';
+		assert.equal(dropdownLabel.textContent, expectedLabel, "dropdown label should be 'FolderName - Project'");
 	}
 });
 

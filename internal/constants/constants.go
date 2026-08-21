@@ -18,5 +18,9 @@
 package constants
 
 const (
-	DataHome = "SNYKLS_INTERNAL_DATAHOME"
+	DataHome                    = "SNYKLS_INTERNAL_DATAHOME"
+	IntegrationNameVSCode       = "VS_CODE"
+	IntegrationNameEclipse      = "ECLIPSE"
+	IntegrationNameVisualStudio = "VISUAL_STUDIO"
+	IntegrationNameJetBrains    = "JETBRAINS_IDE"
 )

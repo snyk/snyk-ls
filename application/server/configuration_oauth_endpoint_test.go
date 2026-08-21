@@ -47,7 +47,7 @@ import (
 // via extractAudHost.
 
 // oauthEndpointNotifications is a thread-safe collector for notifications
-// emitted on di.Notifier() during an Authenticate call.
+// emitted on the notifier during an Authenticate call.
 type oauthEndpointNotifications struct {
 	mu                   sync.Mutex
 	authParams           []types.AuthenticationParams
@@ -109,8 +109,8 @@ func setupOAuthEndpointTest(t *testing.T, customUrl string, tokenToReturn string
 	testutil.DisableOutboundAnalyticsForTest(t, engine)
 
 	notes := &oauthEndpointNotifications{}
-	di.Notifier().CreateListener(notes.record)
-	t.Cleanup(func() { di.Notifier().DisposeListener() })
+	deps.Notifier.CreateListener(notes.record)
+	t.Cleanup(func() { deps.Notifier.DisposeListener() })
 
 	provider := &authentication.FakeAuthenticationProvider{
 		Engine:        engine,

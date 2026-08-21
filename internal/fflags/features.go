@@ -31,8 +31,8 @@ var (
 	//go:embed features.json
 	featuresEmbed []byte
 
-	once      sync.Once
-	cached    FeatureFlag
+	once      sync.Once   //nolint:gochecknoglobals // legacy process-global state
+	cached    FeatureFlag //nolint:gochecknoglobals // legacy process-global state
 	errCached error
 )
 
