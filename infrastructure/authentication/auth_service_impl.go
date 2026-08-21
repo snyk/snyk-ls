@@ -59,6 +59,11 @@ type credentialUpdate struct {
 	token            string
 	sendNotification bool
 	updateApiUrl     bool
+	// generation is the value of syncGeneration at enqueue time. The worker
+	// discards updates whose generation is older than the current syncGeneration,
+	// preventing a stale async clear from overwriting a token set by a later
+	// synchronous UpdateCredentials call.
+	generation uint64
 }
 
 type AuthenticationServiceImpl struct {
@@ -97,6 +102,21 @@ type AuthenticationServiceImpl struct {
 	credentialUpdateChan chan credentialUpdate
 	// credentialUpdateCancel cancels the credential update worker on shutdown.
 	credentialUpdateCancel context.CancelFunc
+	// syncGeneration is a monotonic counter used to detect stale async credential
+	// updates. QueueCredentialUpdate captures it at enqueue time; the worker
+	// discards any update whose generation is older than the current value,
+	// preventing a stale OAuth-bridge clear from overwriting a token that was
+	// synchronously set by a later applyToken / IDE configuration change.
+	//
+	// Invariant: syncGeneration is incremented ONLY inside updateCredentials,
+	// which is always called while a.m is held (by UpdateCredentials, Authenticate,
+	// and Logout). The worker reads it under a.m as well, giving a proper
+	// happens-before guarantee. Any new code that increments syncGeneration MUST
+	// also hold a.m; failing to do so breaks the stale-discard guarantee and is
+	// a data race. Reads/writes use atomic operations to satisfy the race detector
+	// across the lock boundary (worker acquires a.m before the load, but
+	// QueueCredentialUpdate reads without the lock).
+	syncGeneration uint64
 	// writingToken holds a pointer to the token string that the credentialUpdateWorker
 	// is currently writing to conf via updateCredentials → tokenService.SetToken →
 	// WriteTokenToConfig → conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, …).  When the conf key
@@ -143,29 +163,66 @@ func (a *AuthenticationServiceImpl) AuthURL(ctx context.Context) string {
 
 // credentialUpdateWorker processes credential updates sequentially from the channel.
 // This prevents race conditions where older tokens overwrite newer ones during rapid rotations.
+//
+// Lock-scope discipline: a.m is held ONLY for the minimal critical section — the
+// generation check and the token mutation. It is released BEFORE running
+// post-mutation effects (postCredentialUpdateHook, GetGlobalOrganization prime,
+// notification send). This ensures that a hook that calls back into any
+// a.m-locking method (e.g. UpdateCredentials, Logout) does NOT deadlock the
+// worker goroutine. sync.RWMutex is not reentrant, so holding a.m across an
+// arbitrary caller-supplied hook was a latent deadlock surface.
+//
+// The worker acquires a.m before checking the generation counter so that any
+// concurrent synchronous credential write — which increments syncGeneration
+// under a.m — has already finished by the time the worker evaluates the
+// generation, giving a proper happens-before guarantee.
 func (a *AuthenticationServiceImpl) credentialUpdateWorker(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case update := <-a.credentialUpdateChan:
+			// Critical section: generation check + token mutation only.
+			a.m.Lock()
+			if update.generation < atomic.LoadUint64(&a.syncGeneration) {
+				a.engine.GetLogger().Debug().
+					Uint64("update_generation", update.generation).
+					Uint64("current_generation", atomic.LoadUint64(&a.syncGeneration)).
+					Bool("token_empty", update.token == "").
+					Msg("credential update worker: discarding stale async update superseded by synchronous credential write")
+				a.m.Unlock()
+				continue
+			}
 			// Advertise which token we are about to write so QueueCredentialUpdate can
 			// recognize and drop the re-entrant callback that fires when
 			// WriteTokenToConfig calls conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, …) and
 			// the key is persisted in storage (which triggers the bridge callback again).
-			// The clear is deferred so it always runs even if updateCredentials panics,
-			// preventing the guard from staying permanently armed for that token string.
+			// The clear is deferred so it always runs even if applyTokenMutationLocked
+			// panics, preventing the guard from staying permanently armed for that token
+			// string.
+			var applied bool
 			func() {
 				a.writingToken.Store(&update.token)
 				defer a.writingToken.Store(nil)
-				a.updateCredentials(update.token, update.sendNotification, update.updateApiUrl)
+				applied = a.applyTokenMutationLocked(update.token, update.updateApiUrl)
 			}()
+			a.m.Unlock()
+
+			// Post-mutation effects run WITHOUT a.m so that hooks which call
+			// back into UpdateCredentials / Logout do not self-deadlock.
+			if applied {
+				a.runPostMutationEffects(update.token, update.sendNotification, update.updateApiUrl)
+			}
 		}
 	}
 }
 
 // QueueCredentialUpdate queues a credential update for sequential processing.
 // This is used by the OAuth storage bridge callback to serialize updates.
+//
+// The current syncGeneration is captured at enqueue time; the worker discards
+// the update if a later synchronous UpdateCredentials call has already incremented
+// the generation past the captured value.
 //
 // Re-entrancy guard: when WriteTokenToConfig calls conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, …)
 // and the key is persisted in storage, the storage fires the bridge callback again with the
@@ -185,11 +242,13 @@ func (a *AuthenticationServiceImpl) QueueCredentialUpdate(token string, sendNoti
 			Msg("dropping duplicate credential update for token already being written")
 		return
 	}
+	gen := atomic.LoadUint64(&a.syncGeneration)
 	select {
 	case a.credentialUpdateChan <- credentialUpdate{
 		token:            token,
 		sendNotification: sendNotification,
 		updateApiUrl:     updateApiUrl,
+		generation:       gen,
 	}:
 	default:
 		a.engine.GetLogger().Warn().
@@ -350,7 +409,7 @@ func (a *AuthenticationServiceImpl) finishAuthenticate(provider AuthenticationPr
 		config.UpdateApiEndpointsOnConfig(a.engine.GetConfiguration(), prioritizedUrl)
 	}
 
-	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification)
+	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification, true)
 	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())
 	a.sendAuthenticationAnalytics()
 	return token, err
@@ -610,21 +669,70 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 	a.m.Lock()
 	defer a.m.Unlock()
 
-	a.updateCredentials(newToken, sendNotification, updateApiUrl)
+	a.updateCredentials(newToken, sendNotification, updateApiUrl, true)
 }
 
-func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool, updateApiUrl bool) {
+// updateCredentials is the combined credential-write path for callers that
+// already hold a.m (Authenticate, Logout, UpdateCredentials). It increments
+// syncGeneration so that any async update queued at the previous generation is
+// considered stale by the credentialUpdateWorker, then applies the token
+// mutation and runs the post-mutation effects (hook, GlobalOrg prime,
+// notifier).
+//
+// releaseLock controls whether a.m is released around the post-mutation
+// effects, mirroring the credentialUpdateWorker's lock-scope discipline (see
+// its doc comment): the hook must not run while a.m is held, or a hook that
+// calls back into an a.m-locking method (e.g. UpdateCredentials, Provider)
+// would deadlock this goroutine, since sync.RWMutex is not reentrant.
+//   - true:  a.m.Unlock() before runPostMutationEffects, a.m.Lock() after, so
+//     the caller's own deferred a.m.Unlock() still balances correctly. Used by
+//     callers that hold a.m.Lock() (write lock): UpdateCredentials,
+//     finishAuthenticate, and logout(ctx, true) (from public Logout).
+//   - false: runPostMutationEffects runs inline, touching a.m not at all. Used
+//     by the one caller that can be reached while only a.m.RLock() is held
+//     (IsAuthenticated -> ... -> handleEmptyUser -> logout(ctx, false)): a
+//     read lock cannot be released with a.m.Unlock() (sync.RWMutex has no
+//     reentrant upgrade and no way to introspect which lock mode is held), so
+//     the hook still runs under the lock on that path — this is a
+//     pre-existing, deliberately untouched hazard on that specific call chain.
+func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool, updateApiUrl bool, releaseLock bool) {
+	// Increment syncGeneration BEFORE the token write, while holding a.m.
+	// This supersedes any async update that was enqueued at the previous
+	// generation: when the worker acquires a.m, it will see
+	// update.generation < syncGeneration and discard the stale update.
+	// Applies to all three callers: UpdateCredentials, authenticate, logout.
+	atomic.AddUint64(&a.syncGeneration, 1)
+
+	if !a.applyTokenMutationLocked(newToken, updateApiUrl) {
+		return
+	}
+
+	if releaseLock {
+		a.m.Unlock()
+		a.runPostMutationEffects(newToken, sendNotification, updateApiUrl)
+		a.m.Lock()
+		return
+	}
+
+	a.runPostMutationEffects(newToken, sendNotification, updateApiUrl)
+}
+
+// applyTokenMutationLocked performs the lock-critical part of a credential
+// update: token write, cache invalidation, and notifDedup reset. It MUST be
+// called with a.m held (either a.m.Lock from a synchronous caller, or from
+// the worker's critical section). Returns true if the mutation was applied
+// (token changed or updateApiUrl forced a refresh), false if nothing changed.
+func (a *AuthenticationServiceImpl) applyTokenMutationLocked(newToken string, updateApiUrl bool) bool {
 	conf := a.engine.GetConfiguration()
 	oldToken := config.GetToken(conf)
 	if oldToken == newToken && !updateApiUrl {
-		return
+		return false
 	}
 
 	a.engine.GetLogger().Debug().
 		Str("method", "AuthenticationService.updateCredentials").
 		Bool("old_token_empty", oldToken == "").
 		Bool("new_token_empty", newToken == "").
-		Bool("send_notification", sendNotification).
 		Bool("update_api_url", updateApiUrl).
 		Str("authentication_method", string(config.GetAuthenticationMethodFromConfig(conf))).
 		Msg("auth credentials update requested")
@@ -641,7 +749,7 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 				Bool("current_token_empty", config.GetToken(conf) == "").
 				Str("authentication_method", string(config.GetAuthenticationMethodFromConfig(conf))).
 				Msg("auth credentials update skipped because token was not applied")
-			return
+			return false
 		}
 		// Reset the notification cooldown so the user gets immediate feedback after changing credentials
 		a.notifDedup.Lock()
@@ -650,6 +758,21 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		a.notifDedup.Unlock()
 	}
 
+	return true
+}
+
+// runPostMutationEffects runs the post-credential-write effects: the
+// postCredentialUpdateHook, the GlobalOrg prime, and the notification send.
+// This is always called with a.m NOT held, EXCEPT for the one call chain that
+// only ever holds a.m.RLock() (IsAuthenticated -> ... -> handleEmptyUser ->
+// logout(ctx, false) -> updateCredentials(..., releaseLock=false)), where a.m
+// cannot be safely released first (see updateCredentials' doc comment). In
+// every other case — the credentialUpdateWorker, and the synchronous callers
+// UpdateCredentials / finishAuthenticate / logout(ctx, true) — the caller has
+// released a.m before reaching here, so a hook that calls back into any
+// a.m-locking method (UpdateCredentials, Logout, Provider, …) does not
+// deadlock.
+func (a *AuthenticationServiceImpl) runPostMutationEffects(newToken string, sendNotification bool, updateApiUrl bool) {
 	a.postCredentialUpdateHookMu.RLock()
 	postCredentialUpdateHook := a.postCredentialUpdateHook
 	a.postCredentialUpdateHookMu.RUnlock()
@@ -670,6 +793,7 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 	}
 
 	if sendNotification {
+		conf := a.engine.GetConfiguration()
 		apiUrl := ""
 		if updateApiUrl {
 			apiUrl = a.configResolver.GetString(types.SettingApiEndpoint, nil)
@@ -695,7 +819,7 @@ func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
 	a.m.Lock()
 	defer a.m.Unlock()
 
-	a.logout(ctx)
+	a.logout(ctx, true)
 }
 
 func (a *AuthenticationServiceImpl) CancelOngoingAuth() {
@@ -706,7 +830,12 @@ func (a *AuthenticationServiceImpl) CancelOngoingAuth() {
 	a.previousAuthCtxCancelFuncMu.Unlock()
 }
 
-func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
+// logout clears authentication state. releaseLock is forwarded to
+// updateCredentials unchanged: pass true when the caller holds a.m.Lock()
+// (write lock, safe to release/reacquire around the hook), false when the
+// caller only holds a.m.RLock() (read lock — see updateCredentials' doc
+// comment for why it cannot be released here).
+func (a *AuthenticationServiceImpl) logout(ctx context.Context, releaseLock bool) {
 	a.engine.GetConfiguration().ClearCache()
 	a.engine.GetLogger().Info().
 		Str("method", "AuthenticationService.logout").
@@ -721,7 +850,7 @@ func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 			a.errorReporter.CaptureError(err)
 		}
 	}
-	a.updateCredentials("", true, false)
+	a.updateCredentials("", true, false, releaseLock)
 	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())
 
 	a.lastUsedTokenMu.Lock()
@@ -948,7 +1077,11 @@ func isPermanentOAuthRefreshError(errMsg string) bool {
 func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLegacyToken bool, invalidToken oauth2.Token) {
 	logger.Info().Msg("could not authenticate user with current credentials, API returned empty user object")
 	logger.Info().Msg("logging out, empty user response")
-	a.logout(context.Background())
+	// This is reached from IsAuthenticated() -> isAuthenticated() -> doAuthCheck() with only
+	// a.m.RLock() held (not the write lock): releaseLock=false, since a read lock cannot be
+	// released via a.m.Unlock() (sync.RWMutex has no reentrant upgrade and no way to
+	// introspect which lock mode is currently held).
+	a.logout(context.Background(), false)
 
 	// determine the right error message
 	if !isLegacyToken {
@@ -1027,7 +1160,23 @@ func (a *AuthenticationServiceImpl) configureProviders(conf configuration.Config
 		subLogger.Info().
 			Str("provider_type", fmt.Sprintf("%T", a.provider())).
 			Msg("configured auth method does not match current token; clearing credentials")
-		a.logout(context.Background())
+		// releaseLock=false here, NOT because this call chain only ever holds a.m.RLock() (it
+		// doesn't — see below), but to preserve this call site's pre-existing behavior (hook runs
+		// inline, a.m untouched) unconditionally, because it is genuinely reachable under BOTH
+		// lock modes depending on caller and a single literal cannot be correct for both:
+		//   - finishAuthenticate / public ConfigureProviders: reached with a.m.Lock() (write
+		//     lock) held. releaseLock=true would be correct and desirable here (matches the other
+		//     write-lock call sites), but is not required by this fix's scope.
+		//   - handleProviderInconsistencies -> configureProviders: also reachable with only
+		//     a.m.RLock() held, via IsAuthenticated -> isAuthenticated -> doAuthCheck ->
+		//     handleProviderInconsistencies (called before the auth check, unconditionally) ->
+		//     configureProviders -> this branch, if the auth provider's type doesn't match the
+		//     token's method. releaseLock=true on THIS path would panic exactly like
+		//     UpdateCredentials did before this fix ("Unlock of unlocked RWMutex").
+		// This is a pre-existing, deliberately untouched hazard for the write-lock case above,
+		// out of scope for the reviewed finding (which only concerned updateCredentials' direct
+		// callers: UpdateCredentials, Authenticate, Logout).
+		a.logout(context.Background(), false)
 		if authMethodChanged {
 			subLogger.Info().Msg("detected auth provider change, logging out and sending re-auth message")
 			a.sendAuthenticationRequest(MethodChangedMessage, "Re-authenticate")
