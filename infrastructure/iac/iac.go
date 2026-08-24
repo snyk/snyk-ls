@@ -130,12 +130,10 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 
 	logger.Debug().Msg("IAC scanner: starting scan")
 
-	if err = scannercommon.RequireProductEnabled(
-		ctx,
-		iac.getConfigResolver(ctx).IsProductEnabledForFolder(product.ProductInfrastructureAsCode, workspaceFolderConfig),
-		utils.ErrSnykIacNotEnabledForFolder,
-	); err != nil {
-		return nil, err
+	if !scannercommon.IsProductEnabledForScan(
+		ctx, iac.getConfigResolver(ctx), product.ProductInfrastructureAsCode, workspaceFolderConfig,
+	) {
+		return nil, errors.New(utils.ErrSnykIacNotEnabledForFolder)
 	}
 
 	if err = scannercommon.RequireAuthToken(iac.conf, logger); err != nil {
