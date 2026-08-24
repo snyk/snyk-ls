@@ -18,6 +18,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -52,12 +53,20 @@ func LoggerWithProductScanFields(
 		Logger()
 }
 
-// RequireProductEnabled returns an error when the product is not enabled for the folder.
-func RequireProductEnabled(enabled bool, errNotEnabledForFolder string) error {
-	if !enabled {
-		return errors.New(errNotEnabledForFolder)
+// IsProductEnabledForScan reports whether p is enabled for this scan.
+// Reference scans start only after real-folder enablement, so we can skip checking
+// for reference scans.
+func IsProductEnabledForScan(
+	ctx context.Context,
+	resolver types.ConfigResolverInterface,
+	p product.Product,
+	folderConfig *types.FolderConfig,
+) bool {
+	if resolver.IsProductEnabledForFolder(p, folderConfig) {
+		return true
 	}
-	return nil
+	scanType, ok := ctx2.DeltaScanTypeFromContext(ctx)
+	return ok && scanType == ctx2.Reference
 }
 
 // RequireAuthToken logs and returns an error when no CLI/API token is configured.

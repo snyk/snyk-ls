@@ -19,6 +19,7 @@ package secrets
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -180,11 +181,8 @@ func (sc *Scanner) checkPreconditions(ctx context.Context, pathToScan types.File
 	l := scannercommon.LoggerWithProductScanFields(sc.logger, "secrets.Scan", pathToScan, workspaceFolder, scanType)
 	ctxLogger := &l
 
-	if err = scannercommon.RequireProductEnabled(
-		sc.getConfigResolver(ctx).IsProductEnabledForFolder(sc.Product(), workspaceFolderConfig),
-		utils.ErrSnykSecretsNotEnabledForFolder,
-	); err != nil {
-		return workspaceFolderConfig, ctxLogger, false, err
+	if !scannercommon.IsProductEnabledForScan(ctx, sc.getConfigResolver(ctx), sc.Product(), workspaceFolderConfig) {
+		return workspaceFolderConfig, ctxLogger, false, errors.New(utils.ErrSnykSecretsNotEnabledForFolder)
 	}
 
 	if err = scannercommon.RequireAuthToken(sc.conf, *ctxLogger); err != nil {
