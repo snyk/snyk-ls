@@ -173,8 +173,15 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		aiFixErr = aiFixDiffErr.Error()
 	}
 
+	aiFixDiffResult := renderer.AiFixHandler.GetAiFixDiffResult()
+	for i := range aiFixDiffResult {
+		if aiFixDiffResult[i].Explanation == "" {
+			logger.Debug().Msgf("autofix suggestion %s has no explanation", aiFixDiffResult[i].FixId)
+		}
+	}
+
 	aiFixResult := "{}"
-	aiFixSerialized, err := json.Marshal(renderer.AiFixHandler.GetAiFixDiffResult())
+	aiFixSerialized, err := json.Marshal(aiFixDiffResult)
 	if err == nil && string(aiFixSerialized) != "null" {
 		aiFixResult = string(aiFixSerialized)
 	}

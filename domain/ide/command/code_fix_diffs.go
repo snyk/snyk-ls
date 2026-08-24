@@ -20,8 +20,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/rs/zerolog"
-	"github.com/snyk/code-client-go/llm"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -95,16 +93,5 @@ func (cmd *codeFixDiffs) handleResponse(ctx context.Context, engine workflow.Eng
 		aiFixHandler.SetAiFixDiffState(code.AiFixError, nil, err, setStateCallback)
 		return
 	}
-	warnOnMissingExplanations(logger, suggestions)
 	aiFixHandler.SetAiFixDiffState(code.AiFixSuccess, suggestions, nil, setStateCallback)
-}
-
-// warnOnMissingExplanations logs a warning for any suggestion missing its passthrough
-// explanation from code-client-go, without treating it as a fix failure.
-func warnOnMissingExplanations(logger zerolog.Logger, suggestions []llm.AutofixUnifiedDiffSuggestion) {
-	for i := range suggestions {
-		if suggestions[i].Explanation == "" {
-			logger.Warn().Msgf("autofix suggestion %s has no explanation", suggestions[i].FixId)
-		}
-	}
 }
