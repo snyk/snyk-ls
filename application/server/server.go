@@ -1508,7 +1508,8 @@ func noOpHandler() jrpc2.Handler {
 
 func workspaceDiagnosticHandler(conf configuration.Configuration) jrpc2.Handler {
 	// Always returns full results; previousResultIds is not used.
-	return handler.New(func(_ context.Context, _ types.WorkspaceDiagnosticParams) (any, error) {
+	return handler.New(func(ctx context.Context, _ types.WorkspaceDiagnosticParams) (any, error) {
+		logger := ctx2.LoggerFromContext(ctx)
 		reports := []types.WorkspaceDocumentDiagnosticReport{}
 		for _, folder := range config.GetWorkspace(conf).Folders() {
 			if !folder.IsTrusted() {
@@ -1524,7 +1525,7 @@ func workspaceDiagnosticHandler(conf configuration.Configuration) jrpc2.Handler 
 					Kind:    "full",
 					URI:     uri.PathToUri(filePath),
 					Version: nil,
-					Items:   converter.ToDiagnosticsForFolder(issues, folder.Path(), nil),
+					Items:   converter.ToDiagnosticsForFolder(issues, folder.Path(), logger),
 				})
 			}
 		}
@@ -1533,7 +1534,8 @@ func workspaceDiagnosticHandler(conf configuration.Configuration) jrpc2.Handler 
 }
 
 func textDocumentDiagnosticHandler(conf configuration.Configuration) jrpc2.Handler {
-	return handler.New(func(_ context.Context, params types.DocumentDiagnosticParams) (any, error) {
+	return handler.New(func(ctx context.Context, params types.DocumentDiagnosticParams) (any, error) {
+		logger := ctx2.LoggerFromContext(ctx)
 		report := types.RelatedFullDocumentDiagnosticReport{Kind: "full", Items: []types.Diagnostic{}}
 		filePath := uri.PathFromUri(params.TextDocument.URI)
 		folder := config.GetWorkspace(conf).GetFolderContaining(filePath)
@@ -1545,7 +1547,7 @@ func textDocumentDiagnosticHandler(conf configuration.Configuration) jrpc2.Handl
 			return report, nil
 		}
 		filtered := fip.FilterIssues(fip.Issues(), folder.DisplayableIssueTypes())
-		report.Items = converter.ToDiagnosticsForFolder(filtered[filePath], folder.Path(), nil)
+		report.Items = converter.ToDiagnosticsForFolder(filtered[filePath], folder.Path(), logger)
 		return report, nil
 	})
 }

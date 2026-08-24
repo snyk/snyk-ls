@@ -17,7 +17,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -232,93 +231,61 @@ func TestConfigHtmlRenderer_LdxSyncConfigAlwaysRendered(t *testing.T) {
 	assert.Contains(t, html, "Filters and views")
 }
 
-func TestConfigHtmlRenderer_SecretsHiddenWhenFeatureFlagOff(t *testing.T) {
-	engine := testutil.UnitTest(t)
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockWorkspace := mock_types.NewMockWorkspace(ctrl)
-	mockFolder := mock_types.NewMockFolder(ctrl)
-
-	folderPath := types.FilePath("/path/to/a_folder")
-	mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
-	mockFolder.EXPECT().Name().Return("a_folder").AnyTimes()
-	mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
-	mockWorkspace.EXPECT().GetFolderContaining(folderPath).Return(mockFolder).AnyTimes()
-
-	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
-
-	// Feature flag NOT set — Snyk Secrets should be hidden
-	resolver := testutil.DefaultConfigResolver(engine)
-	fc := types.FolderConfig{
-		FolderPath:     folderPath,
-		ConfigResolver: resolver,
-		EffectiveConfig: map[string]types.EffectiveValue{
-			"snyk_secrets_enabled": {Value: true, Source: "ldx-sync"},
-		},
+func TestConfigHtmlRenderer_SecretsAlwaysRendered(t *testing.T) {
+	tests := []struct {
+		name               string
+		legacyFlagMetadata bool
+	}{
+		{name: "without historical feature flag metadata"},
+		{name: "with historical feature flag metadata", legacyFlagMetadata: true},
 	}
 
-	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
-	assert.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
 
-	settings := map[string]any{
-		types.SettingSnykSecretsEnabled: true,
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+			mockFolder := mock_types.NewMockFolder(ctrl)
+
+			folderPath := types.FilePath("/path/to/a_folder")
+			mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
+			mockFolder.EXPECT().Name().Return("a_folder").AnyTimes()
+			mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
+			mockWorkspace.EXPECT().GetFolderContaining(folderPath).Return(mockFolder).AnyTimes()
+
+			config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
+			if tt.legacyFlagMetadata {
+				legacyFlagKey := configresolver.FolderMetadataKey(
+					string(types.PathKey(folderPath)),
+					types.FeatureFlagPrefix+"isSecretsEnabled",
+				)
+				engine.GetConfiguration().Set(legacyFlagKey, true)
+			}
+
+			resolver := testutil.DefaultConfigResolver(engine)
+			folderConfigs := []types.FolderConfig{{
+				FolderPath:     folderPath,
+				ConfigResolver: resolver,
+				EffectiveConfig: map[string]types.EffectiveValue{
+					"snyk_secrets_enabled": {Value: true, Source: "ldx-sync"},
+				},
+			}}
+			renderer, err := NewConfigHtmlRenderer(engine, resolver)
+			require.NoError(t, err)
+
+			html := renderer.GetConfigHtml(map[string]any{
+				types.SettingSnykSecretsEnabled: true,
+			}, folderConfigs)
+
+			assert.Contains(t, html, `name="snyk_secrets_enabled"`,
+				"global Snyk Secrets checkbox should always appear")
+			assert.Contains(t, html, `data-setting="snyk_secrets_enabled"`,
+				"per-folder Snyk Secrets override should always appear")
+		})
 	}
-	folderConfigs := []types.FolderConfig{fc}
-
-	html := renderer.GetConfigHtml(settings, folderConfigs)
-
-	// Global Snyk Secrets checkbox should NOT appear when feature flag is off
-	assert.NotContains(t, html, `name="snyk_secrets_enabled"`)
-	// Per-folder Snyk Secrets override should NOT appear
-	assert.NotContains(t, html, `data-setting="snyk_secrets_enabled"`)
-}
-
-func TestConfigHtmlRenderer_SecretsShownWhenFeatureFlagOn(t *testing.T) {
-	engine := testutil.UnitTest(t)
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockWorkspace := mock_types.NewMockWorkspace(ctrl)
-	mockFolder := mock_types.NewMockFolder(ctrl)
-
-	folderPath := types.FilePath("/path/to/a_folder")
-	mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
-	mockFolder.EXPECT().Name().Return("a_folder").AnyTimes()
-	mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
-	mockWorkspace.EXPECT().GetFolderContaining(folderPath).Return(mockFolder).AnyTimes()
-
-	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
-
-	// Set the feature flag ON for this folder
-	resolver := testutil.DefaultConfigResolver(engine)
-	fc := types.FolderConfig{
-		FolderPath:     folderPath,
-		ConfigResolver: resolver,
-		EffectiveConfig: map[string]types.EffectiveValue{
-			"snyk_secrets_enabled": {Value: true, Source: "ldx-sync"},
-		},
-	}
-	// Write the feature flag into configuration
-	ffKey := configresolver.FolderMetadataKey(string(types.PathKey(folderPath)), types.FeatureFlagPrefix+featureflag.SnykSecretsEnabled)
-	engine.GetConfiguration().Set(ffKey, true)
-
-	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
-	assert.NoError(t, err)
-
-	settings := map[string]any{
-		types.SettingSnykSecretsEnabled: true,
-	}
-	folderConfigs := []types.FolderConfig{fc}
-
-	html := renderer.GetConfigHtml(settings, folderConfigs)
-
-	// Global Snyk Secrets checkbox SHOULD appear when feature flag is on
-	assert.Contains(t, html, `name="snyk_secrets_enabled"`)
-	// Per-folder Snyk Secrets override SHOULD appear
-	assert.Contains(t, html, `data-setting="snyk_secrets_enabled"`)
 }
 
 func TestConfigHtmlRenderer_NoFoldersShowsDisabledTab(t *testing.T) {

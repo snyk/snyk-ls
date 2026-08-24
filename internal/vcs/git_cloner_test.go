@@ -272,7 +272,7 @@ func TestLocalRepoHasChanges_DifferentBranchNames_Clone(t *testing.T) {
 	wt, err := repo.Worktree()
 	assert.NoError(t, err)
 	err = wt.Checkout(&git.CheckoutOptions{
-		Branch: "feat/new",
+		Branch: plumbing.NewBranchReferenceName("feat/new"),
 		Create: true,
 	})
 	assert.NoError(t, err)

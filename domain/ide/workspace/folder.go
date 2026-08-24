@@ -625,7 +625,8 @@ func (f *Folder) FilterAndPublishDiagnostics(p product.Product) {
 // Issues are enriched with IsNew at scan time via enrichCachedIssuesWithDelta
 func (f *Folder) GetDelta(p product.Product) snyk.IssuesByFile {
 	issueByFile := f.IssuesByProduct()[p]
-	return f.filterByIsNew(issueByFile)
+	filtered, _ := f.filterByIsNew(issueByFile)
+	return filtered
 }
 
 // IsBaselineAvailable returns whether a delta baseline has been recorded for the given
@@ -736,11 +737,10 @@ func getFlatIssueList(issueByFile snyk.IssuesByFile) []types.Issue {
 	return currentFlatIssueList
 }
 
-// filterByIsNew keeps an issue when it is newly introduced, or when its product has
-// no available baseline yet - a product without a baseline fails open rather than
-// hiding every finding behind an IsNew flag that was never computed.
-func (f *Folder) filterByIsNew(issues snyk.IssuesByFile) snyk.IssuesByFile {
+// filterByIsNew returns only new issues (or all issues when no baseline exists), plus how many were dropped.
+func (f *Folder) filterByIsNew(issues snyk.IssuesByFile) (snyk.IssuesByFile, int) {
 	filtered := snyk.IssuesByFile{}
+	dropped := 0
 	for path, issueSlice := range issues {
 		for _, issue := range issueSlice {
 			if issue == nil {
@@ -748,10 +748,12 @@ func (f *Folder) filterByIsNew(issues snyk.IssuesByFile) snyk.IssuesByFile {
 			}
 			if issue.GetIsNew() || !f.IsBaselineAvailable(issue.GetProduct()) {
 				filtered[path] = append(filtered[path], issue)
+			} else {
+				dropped++
 			}
 		}
 	}
-	return filtered
+	return filtered, dropped
 }
 
 func (f *Folder) filterDiagnostics(issues snyk.IssuesByFile) snyk.IssuesByFile {
@@ -766,6 +768,7 @@ type FilterReason string
 
 const (
 	FilterReasonNotFiltered      FilterReason = ""
+	FilterReasonNotNetNew        FilterReason = "not net new (delta filtering)"
 	FilterReasonUnsupportedType  FilterReason = "unsupported issue type"
 	FilterReasonSeverity         FilterReason = "severity filter"
 	FilterReasonRiskScore        FilterReason = "risk score threshold"
@@ -814,8 +817,13 @@ func (f *Folder) filterIssuesWithConfig(
 	filteredIssues := snyk.IssuesByFile{}
 	filterReasonCounts := make(map[FilterReason]int)
 
-	if f.isDeltaFindingsEnabledForFolder(folderConfig) {
-		issues = f.filterByIsNew(issues)
+	deltaEnabled := f.isDeltaFindingsEnabledForFolder(folderConfig)
+	if deltaEnabled {
+		var droppedNotNetNew int
+		issues, droppedNotNetNew = f.filterByIsNew(issues)
+		if droppedNotNetNew > 0 {
+			filterReasonCounts[FilterReasonNotNetNew] = droppedNotNetNew
+		}
 	}
 
 	fCtx := f.buildFilterContext(folderConfig)
@@ -836,9 +844,14 @@ func (f *Folder) filterIssuesWithConfig(
 	}
 
 	if len(filterReasonCounts) > 0 {
-		logger.Debug().Interface("filterReasons", filterReasonCounts).Msgf("%d issue(s) filtered", lo.Sum(lo.Values(filterReasonCounts)))
+		logger.Debug().
+			Any("filterReasons", filterReasonCounts).
+			Bool("deltaEnabled", deltaEnabled).
+			Msgf("%d issue(s) filtered", lo.Sum(lo.Values(filterReasonCounts)))
 	} else {
-		logger.Debug().Msg("No issues were filtered out")
+		logger.Debug().
+			Bool("deltaEnabled", deltaEnabled).
+			Msg("No issues were filtered out")
 	}
 
 	return filteredIssues
