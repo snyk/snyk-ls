@@ -1561,19 +1561,42 @@ func TestBuildTree_DisabledScanner_TooltipVariesByReason(t *testing.T) {
 	})
 
 	t.Run("disabled at the organization", func(t *testing.T) {
-		builder := newBuilderWithCompletedScans()
-		builder.SetProductScanErrors(map[types.FilePath]map[product.Product]string{
-			"/project": {product.ProductCode: utils.ErrSnykCodeNotEnabled},
-		})
-		data := builder.BuildTreeFromFolderData([]FolderData{{
-			FolderPath: "/project", FolderName: "project",
-			SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true},
-		}})
+		tests := []struct {
+			name           string
+			product        product.Product
+			issueType      product.FilterableIssueType
+			disabledErrMsg string
+		}{
+			{
+				name:           "Code",
+				product:        product.ProductCode,
+				issueType:      product.FilterableIssueTypeCodeSecurity,
+				disabledErrMsg: utils.ErrSnykCodeNotEnabled,
+			},
+			{
+				name:           "Secrets",
+				product:        product.ProductSecrets,
+				issueType:      product.FilterableIssueTypeSecrets,
+				disabledErrMsg: utils.ErrSnykSecretsNotEnabled,
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				builder := newBuilderWithCompletedScans()
+				builder.SetProductScanErrors(map[types.FilePath]map[product.Product]string{
+					"/project": {tt.product: tt.disabledErrMsg},
+				})
+				data := builder.BuildTreeFromFolderData([]FolderData{{
+					FolderPath: "/project", FolderName: "project",
+					SupportedIssueTypes: map[product.FilterableIssueType]bool{tt.issueType: true},
+				}})
 
-		codeNode := findChildByProduct(data.Nodes, product.ProductCode)
-		require.NotNil(t, codeNode)
-		assert.Contains(t, codeNode.Tooltip, "disabled for your Snyk organization")
-		assert.Contains(t, codeNode.Tooltip, "org admin")
+				productNode := findChildByProduct(data.Nodes, tt.product)
+				require.NotNil(t, productNode)
+				assert.Contains(t, productNode.Tooltip, "disabled for your Snyk organization")
+				assert.Contains(t, productNode.Tooltip, "org admin")
+			})
+		}
 	})
 
 	t.Run("disabled for this folder reuses the settings message", func(t *testing.T) {
@@ -1615,29 +1638,32 @@ func TestBuildTree_ProductNode_ScanError_UsesErrorCatalogTreeSuffix(t *testing.T
 	cases := []struct {
 		errMsg     string
 		wantInDesc string
+		product    product.Product
+		issueType  product.FilterableIssueType
 	}{
-		{utils.ErrSnykCodeNotEnabled, "(disabled at Snyk)"},
-		{utils.ErrNoReferenceBranch, "(no reference branch)"},
-		{utils.ErrNoRepo, "(repository not found)"},
+		{utils.ErrSnykCodeNotEnabled, "(disabled at Snyk)", product.ProductOpenSource, product.FilterableIssueTypeOpenSource},
+		{utils.ErrSnykSecretsNotEnabled, "(disabled at Snyk)", product.ProductSecrets, product.FilterableIssueTypeSecrets},
+		{utils.ErrNoReferenceBranch, "(no reference branch)", product.ProductOpenSource, product.FilterableIssueTypeOpenSource},
+		{utils.ErrNoRepo, "(repository not found)", product.ProductOpenSource, product.FilterableIssueTypeOpenSource},
 	}
 	for _, tc := range cases {
 		t.Run(tc.errMsg, func(t *testing.T) {
 			builder := newBuilderWithCompletedScans()
 			builder.SetProductScanErrors(map[types.FilePath]map[product.Product]string{
-				"/project": {product.ProductOpenSource: tc.errMsg},
+				"/project": {tc.product: tc.errMsg},
 			})
 
 			data := builder.BuildTreeFromFolderData([]FolderData{{
 				FolderPath: "/project", FolderName: "project",
-				SupportedIssueTypes: map[product.FilterableIssueType]bool{product.FilterableIssueTypeOpenSource: true},
+				SupportedIssueTypes: map[product.FilterableIssueType]bool{tc.issueType: true},
 				AllIssues:           nil, FilteredIssues: nil,
 			}})
 
-			ossNode := findChildByProduct(data.Nodes, product.ProductOpenSource)
-			require.NotNil(t, ossNode)
-			assert.Contains(t, ossNode.Description, tc.wantInDesc)
-			assert.NotContains(t, ossNode.Description, "(scan failed)", "catalogued errors should not use generic scan failed label")
-			assert.Equal(t, tc.errMsg, ossNode.ErrorMessage)
+			productNode := findChildByProduct(data.Nodes, tc.product)
+			require.NotNil(t, productNode)
+			assert.Contains(t, productNode.Description, tc.wantInDesc)
+			assert.NotContains(t, productNode.Description, "(scan failed)", "catalogued errors should not use generic scan failed label")
+			assert.Equal(t, tc.errMsg, productNode.ErrorMessage)
 		})
 	}
 }
