@@ -267,6 +267,42 @@ func Test_IsAvailableCliNotification(t *testing.T) {
 	)
 }
 
+func Test_AiFixNotification(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService)
+
+	_, err := loc.Client.Call(t.Context(), "initialize", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var expected = types.AiFixNotification{
+		IssueId: "issue-1",
+		Status:  "SUCCESS",
+		Fixes:   []types.AiFixResult{{FixId: "fix-1", FilePath: "main.go"}},
+	}
+	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
+	deps.Notifier.Send(expected)
+	assert.Eventually(
+		t,
+		func() bool {
+			notifications := jsonRPCRecorder.FindNotificationsByMethod("$/snyk.aiFix")
+			if len(notifications) < 1 {
+				return false
+			}
+			for _, n := range notifications {
+				var actual = types.AiFixNotification{}
+				_ = n.UnmarshalParams(&actual)
+				if reflect.DeepEqual(expected, actual) {
+					return true
+				}
+			}
+			return false
+		},
+		2*time.Second,
+		time.Millisecond,
+	)
+}
+
 func TestShowMessageRequest(t *testing.T) {
 	t.Run("should send request to client", func(t *testing.T) {
 		engine, tokenService := testutil.UnitTestWithEngine(t)

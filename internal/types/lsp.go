@@ -669,6 +669,21 @@ type ScanSummary struct {
 	ScanSummary string `json:"scanSummary"`
 }
 
+// AiFixResult identifies one computed fix suggestion for a single file.
+type AiFixResult struct {
+	FixId    string `json:"fixId"`
+	FilePath string `json:"filePath"`
+}
+
+// AiFixNotification is the payload for the $/snyk.aiFix notification, sent whenever
+// a single-issue Code AI Fix's diff computation state changes, so clients can obtain
+// structured fixId/filePath data without scraping the window/showDocument HTML payload.
+type AiFixNotification struct {
+	IssueId string        `json:"issueId"`
+	Status  string        `json:"status"`
+	Fixes   []AiFixResult `json:"fixes"`
+}
+
 type ProgressToken string
 
 type ProgressParams struct {
@@ -1127,6 +1142,15 @@ type SnykScanParams struct {
 	FolderPath FilePath `json:"folderPath"`
 	// PresentableError structured error object for displaying it to the user
 	PresentableError *PresentableError `json:"presentableError,omitempty"`
+	// Delta reports the requested/applied state of delta (net-new) findings for this scan
+	Delta DeltaStatus `json:"delta,omitempty"`
+}
+
+// DeltaStatus reports whether delta (net-new) findings were requested for a scan
+// and whether they could actually be applied (i.e. a baseline was available).
+type DeltaStatus struct {
+	Requested bool `json:"requested"`
+	Applied   bool `json:"applied"`
 }
 
 type ScanIssue struct { // TODO - convert this to a generic type

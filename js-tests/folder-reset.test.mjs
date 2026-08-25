@@ -1,14 +1,15 @@
 // ABOUTME: Tests for the per-folder "Reset overrides" flow (form-handler + reset-handler).
-// ABOUTME: Verifies resets are keyed by folderPath, emit 17 flat nulls, and survive compaction.
+// ABOUTME: Verifies resets are keyed by folderPath, emit 18 flat nulls, and survive compaction.
 
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildDom } from "./helpers.mjs";
 
-// The 17 folder fields a reset must clear (mirrors FOLDER_RESET_FIELDS in form-handler.js).
+// The 18 folder fields a reset must clear (mirrors FOLDER_RESET_FIELDS in form-handler.js).
 const RESET_FIELDS = [
 	"scan_automatic",
 	"scan_net_new",
+	"ambient_canary_autonomy",
 	"severity_filter_critical",
 	"severity_filter_high",
 	"severity_filter_medium",
@@ -79,7 +80,7 @@ test("markFolderForReset ignores empty/missing folderPath", async () => {
 	assert.equal(fh.isFolderMarkedForReset(undefined), false, "undefined path must not mark");
 });
 
-test("applyFolderResets sets all 17 fields to null on an existing edited folder, preserving folderPath", async () => {
+test("applyFolderResets sets all 18 fields to null on an existing edited folder, preserving folderPath", async () => {
 	const win = await buildDom();
 	const fh = win.ConfigApp.formHandler;
 
@@ -168,7 +169,7 @@ test("applyFolderResets clears window.ConfigApp.folderResets after applying", as
 	assert.equal(fh.isFolderMarkedForReset(PATH_A), false, "no longer marked");
 });
 
-test("DOM-driven: clicking .reset-overrides-btn produces 17 nulls for that folderPath in the save payload", async () => {
+test("DOM-driven: clicking .reset-overrides-btn produces 18 nulls for that folderPath in the save payload", async () => {
 	const win = await buildDom();
 	const doc = win.document;
 	const calls = spySave(win);
