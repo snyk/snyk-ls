@@ -45,6 +45,8 @@ var allSettings = []string{
 	SettingCliReleaseChannel,
 	SettingOrganization,
 	SettingAutomaticAuthentication,
+	SettingLlmProvider,
+	SettingLlmBaseUrl,
 
 	SettingFormat,
 	SettingDeviceId,
@@ -93,6 +95,7 @@ var allSettings = []string{
 	SettingOrgSetByUser,
 	SettingScanCommandConfig,
 	SettingSastSettings,
+	SettingAmbientCanaryAutonomy,
 }
 
 var machineScope = string(configresolver.MachineScope)
@@ -152,9 +155,12 @@ var expectedAnnotations = map[string]struct {
 	SettingOrgSetByUser:               {folderScope, "", "Organization Set By User", "orgSetByUser", false},
 	SettingScanCommandConfig:          {folderScope, "", "Scan Command Config", "scanCommandConfig", false},
 	SettingSastSettings:               {folderScope, "", "SAST Settings", "", false},
+	SettingAmbientCanaryAutonomy:      {folderScope, "ambient_canary_autonomy", "Ambient Canary Autonomy", "", false},
 	// Machine-scope (continued)
 	SettingOrganization:            {machineScope, "", "Organization", "organization", false},
 	SettingAutomaticAuthentication: {machineScope, "", "Automatic Authentication", "automaticAuthentication", false},
+	SettingLlmProvider:             {machineScope, "", "LLM Provider", "llmProvider", false},
+	SettingLlmBaseUrl:              {machineScope, "", "Custom API Endpoint", "llmBaseUrl", false},
 
 	SettingFormat:                         {machineScope, "", "Output Format", "", false},
 	SettingDeviceId:                       {machineScope, "", "Device ID", "", false},
@@ -182,7 +188,7 @@ func TestRegisterAllConfigurations_FC048_ProducesFlagsWithCorrectAnnotations(t *
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	RegisterAllConfigurations(fs)
 
-	assert.Len(t, allSettings, 61, "allSettings should have 61 entries (28 machine + 5 write-only + 16 org + 12 folder)")
+	assert.Len(t, allSettings, 64, "allSettings should have 64 entries (30 machine + 5 write-only + 16 org + 13 folder)")
 
 	for _, name := range allSettings {
 		t.Run(name, func(t *testing.T) {
@@ -322,6 +328,27 @@ func TestIsFolderScopedSetting(t *testing.T) {
 	assert.False(t, IsFolderScopedSetting(fm, SettingCliPath))
 }
 
+// TestRegisterAllConfigurations_LlmSettingsAreMachineScope guards that the LLM
+// provider and custom endpoint settings are machine-scope (one choice for the
+// whole daemon, not per folder/repo) and carry no LDX-Sync remote key (this is
+// a local-only, non-synced setting).
+func TestRegisterAllConfigurations_LlmSettingsAreMachineScope(t *testing.T) {
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	RegisterAllConfigurations(fs)
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
+
+	for _, name := range []string{SettingLlmProvider, SettingLlmBaseUrl} {
+		t.Run(name, func(t *testing.T) {
+			assert.True(t, IsMachineWideSetting(fm, name), "%q must be machine-scope", name)
+
+			flag := fs.Lookup(name)
+			require.NotNil(t, flag, "flag %q should exist", name)
+			_, hasRemoteKey := flag.Annotations[configresolver.AnnotationRemoteKey]
+			assert.False(t, hasRemoteKey, "%q must not have an LDX-Sync remote key", name)
+		})
+	}
+}
+
 func TestIsWriteOnlySetting(t *testing.T) {
 	fm := fmFromFlags(t)
 	for _, name := range []string{
@@ -333,4 +360,39 @@ func TestIsWriteOnlySetting(t *testing.T) {
 	}
 	assert.False(t, IsWriteOnlySetting(fm, SettingSnykCodeEnabled))
 	assert.False(t, IsWriteOnlySetting(nil, SettingToken))
+}
+
+// Test_RegisterAmbientCanaryAutonomy_IsFolderScopedAndEmitted must go RED if the folder-scope
+// annotation on ambient_canary_autonomy is ever dropped, since that annotation is what makes the
+// setting appear in the per-folder $/snyk.configuration push at all.
+func Test_RegisterAmbientCanaryAutonomy_IsFolderScopedAndEmitted(t *testing.T) {
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	RegisterAllConfigurations(fs)
+	fm := workflow.ConfigurationOptionsFromFlagset(fs)
+
+	flag := fs.Lookup(SettingAmbientCanaryAutonomy)
+	require.NotNil(t, flag, "ambient_canary_autonomy flag must be registered")
+
+	scopeVals, ok := flag.Annotations[configresolver.AnnotationScope]
+	require.True(t, ok, "ambient_canary_autonomy must have a config.scope annotation")
+	require.Len(t, scopeVals, 1)
+	assert.Equal(t, folderScope, scopeVals[0], "ambient_canary_autonomy must be folder-scoped, not machine-scoped")
+
+	assert.Equal(t, configresolver.FolderScope, GetSettingScope(fm, SettingAmbientCanaryAutonomy))
+	assert.True(t, IsFolderScopedSetting(fm, SettingAmbientCanaryAutonomy))
+}
+
+// Test_AmbientCanaryAutonomy_DefaultsToUnsetAndIsOmittedFromWire guards against registering the
+// default as "notify_only", which would emit that value for every folder and defeat
+// ambient-canary's --autonomy-level governing any folder with no explicit per-folder choice.
+func Test_AmbientCanaryAutonomy_DefaultsToUnsetAndIsOmittedFromWire(t *testing.T) {
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	RegisterAllConfigurations(fs)
+
+	flag := fs.Lookup(SettingAmbientCanaryAutonomy)
+	require.NotNil(t, flag)
+	assert.Equal(t, "", flag.DefValue, "registered default must be empty string, not notify_only or autonomous_fixes")
+
+	assert.Nil(t, flag.Annotations[AnnotationAlwaysSend],
+		"ambient_canary_autonomy must not use AnnotationAlwaysSend, or the empty default would always be sent")
 }
