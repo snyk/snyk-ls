@@ -60,6 +60,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	er "github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -3813,6 +3814,8 @@ func TestApplyLlmProviderConfig_AbsentSettingsLeaveConfigAndEnvUntouched(t *test
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
 
+	// Setenv first to ensure it's set in the test's environment, then Unsetenv
+	// to prove the production code doesn't re-set it on unrelated config changes.
 	t.Setenv("ANTHROPIC_BASE_URL", "")
 	require.NoError(t, os.Unsetenv("ANTHROPIC_BASE_URL"))
 
@@ -4173,7 +4176,7 @@ func TestApplyLlmProviderConfig_SettingsSaveDoesNotBlockOnInFlightRemyInvocation
 		"a settings save must return promptly even while a Remy fix invocation is in flight")
 
 	close(proceed)
-	<-fixDone
+	testsupport.RequireEventuallyClosed(t, fixDone, 5*time.Second, 10*time.Millisecond, "fix workflow did not complete in time")
 
 	assert.Equal(t, "https://a.example", observed["start"])
 	assert.Equal(t, "https://a.example", observed["end"],
@@ -4238,7 +4241,7 @@ func TestApplyLlmProviderConfig_MultipleSavesDuringInFlightInvocation_ConvergeTo
 	}
 
 	close(proceed)
-	<-fixDone
+	testsupport.RequireEventuallyClosed(t, fixDone, 5*time.Second, 10*time.Millisecond, "fix workflow did not complete in time")
 
 	assert.Equal(t, "https://a.example", observed["start"])
 	assert.Equal(t, "https://a.example", observed["end"])
@@ -4248,9 +4251,9 @@ func TestApplyLlmProviderConfig_MultipleSavesDuringInFlightInvocation_ConvergeTo
 		return os.Getenv("ANTHROPIC_BASE_URL") == latest
 	}, 2*time.Second, 10*time.Millisecond, "env must converge to the last persisted value, not an earlier queued one")
 
-	time.Sleep(50 * time.Millisecond)
-	assert.Equal(t, latest, os.Getenv("ANTHROPIC_BASE_URL"),
-		"env must not flap back to a stale queued value after convergence")
+	require.Never(t, func() bool {
+		return os.Getenv("ANTHROPIC_BASE_URL") != latest
+	}, 50*time.Millisecond, 5*time.Millisecond, "env must not flap back to a stale queued value after convergence")
 }
 
 // resetLlmProviderEnvStateForTest clears the process-global record of which
