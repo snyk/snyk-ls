@@ -19,7 +19,9 @@ package command
 import (
 	"context"
 	"errors"
+	"slices"
 	"sort"
+	"strings"
 
 	"github.com/snyk/code-client-go/llm"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -111,7 +113,11 @@ func (cmd *codeFixDiffs) sendAiFixNotification(aiFixHandler *code.AiFixHandler, 
 }
 
 func aiFixResultsFrom(suggestions []llm.AutofixUnifiedDiffSuggestion) []types.AiFixResult {
-	sort.Slice(suggestions, func(i, j int) bool { return suggestions[i].FixId < suggestions[j].FixId })
+	// Clone before sorting: GetAiFixDiffResult returns AiFixHandler's internal slice, and sorting it
+	// in place would race with concurrent readers such as AiFixHandler.GetResults.
+	suggestions = slices.SortedFunc(slices.Values(suggestions), func(a, b llm.AutofixUnifiedDiffSuggestion) int {
+		return strings.Compare(a.FixId, b.FixId)
+	})
 	fixes := make([]types.AiFixResult, 0, len(suggestions))
 	for _, suggestion := range suggestions {
 		filePaths := make([]string, 0, len(suggestion.UnifiedDiffsPerFile))
