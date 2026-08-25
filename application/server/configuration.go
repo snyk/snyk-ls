@@ -27,8 +27,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
-	"sync/atomic"
 
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/handler"
@@ -44,7 +42,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/scanstates"
-	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
@@ -1362,143 +1359,15 @@ func applyCliReleaseChannel(conf configuration.Configuration, settings map[strin
 	}
 }
 
-// llmProviderBaseUrlEnvVar maps an LLM provider to the environment variable the
-// Snyk Remediation Agent's CLI extension reads its custom base URL from. openai
-// intentionally has no entry: the CLI extension has no base-URL env var for it, so
-// a custom endpoint chosen with the openai provider is persisted and echoed back in
-// the dialog but never exported to the process environment.
-var llmProviderBaseUrlEnvVar = map[string]string{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
-	"anthropic": "ANTHROPIC_BASE_URL",
-	"vertex":    "VERTEX_BASE_URL",
-	"litellm":   "LITELLM_BASE_URL",
-	"ollama":    "OLLAMA_HOST",
-}
-
-// llmSettingsMu serializes the provider/baseUrl/model persist step against
-// other concurrent settings saves. It is independent of the remediation
-// package's LLM provider env lock: persisting is fast and must never wait
-// behind an in-flight Remy invocation, which can hold that lock for minutes.
-var llmSettingsMu sync.Mutex //nolint:gochecknoglobals // required guard for mutable package state
-
-// appliedLlmEnvVar is the base-URL env var this process itself last applied
-// via reconcileLlmProviderEnv, or "" if none. The environment is
-// process-global, so this must be too: deriving "did we set this" from the
-// persisted provider setting would be wrong once persisting and env
-// reconciliation can happen at different times - config may already hold a
-// newer provider than what this process has actually applied to the
-// environment. Guarded by the remediation package's LLM provider env lock.
-var appliedLlmEnvVar string //nolint:gochecknoglobals // process-global env reconciliation state
-
-// llmEnvReconcilePending coalesces concurrent reconciliation requests into a
-// single background worker, so a burst of settings saves arriving while a
-// Remy invocation holds the read lock queues at most one goroutine rather
-// than one per save.
-var llmEnvReconcilePending atomic.Bool //nolint:gochecknoglobals // coalesces concurrent reconciliation requests
-
-// osSetenv and osUnsetenv are indirections over os.Setenv/os.Unsetenv so tests
-// can exercise applyLlmProviderEnvLocked's failure handling.
-var (
-	osSetenv   = os.Setenv   //nolint:gochecknoglobals // test indirection over os.Setenv
-	osUnsetenv = os.Unsetenv //nolint:gochecknoglobals // test indirection over os.Unsetenv
-)
+// llmEnvMgr is a singleton managing the LLM provider environment variable state.
+// The environment is process-global, so this must be too - see llmProviderEnvManager's
+// appliedEnvVar field doc for why.
+var llmEnvMgr = newLlmProviderEnvManager() //nolint:gochecknoglobals // singleton for LLM env management
 
 // applyLlmProviderConfig persists the developer's chosen LLM provider, model and
-// custom API endpoint for autonomous remediation. It never touches the API key -
-// that continues to come only from the developer's own process environment.
-//
-// The model goes through the identical persist path as provider and base URL -
-// ollama and litellm have no default model in remy-cli-extension, so without it
-// those two providers would be unusable. Unlike base URL, the model has no
-// environment-variable side effect here: buildRemyFixConfig reads it and sets it
-// as a GAF config key at fix time, the same lever used for provider.
-//
-// It never unsets an environment variable it did not itself previously set.
+// custom API endpoint for autonomous remediation. It delegates to the singleton manager.
 func applyLlmProviderConfig(conf configuration.Configuration, logger *zerolog.Logger, settings map[string]*types.ConfigSetting) {
-	provider, providerOk := settingStr(settings, types.SettingLlmProvider)
-	baseUrl, baseUrlOk := settingStr(settings, types.SettingLlmBaseUrl)
-	model, modelOk := settingStr(settings, types.SettingLlmModel)
-	if !providerOk && !baseUrlOk && !modelOk {
-		return
-	}
-
-	llmSettingsMu.Lock()
-	if providerOk {
-		types.SetGlobalUser(conf, types.SettingLlmProvider, provider)
-	}
-	if baseUrlOk {
-		types.SetGlobalUser(conf, types.SettingLlmBaseUrl, baseUrl)
-	}
-	if modelOk {
-		types.SetGlobalUser(conf, types.SettingLlmModel, model)
-	}
-	llmSettingsMu.Unlock()
-
-	reconcileLlmProviderEnv(conf, logger)
-}
-
-// reconcileLlmProviderEnv syncs the process env vars with the currently
-// persisted LLM provider/base URL. gafRunner's Remy invocation holds the
-// remediation package's LLM provider env lock for reading for its whole
-// (potentially minutes-long) run, so this never blocks the caller on that: it
-// applies synchronously when the lock is free, otherwise defers to a single
-// coalesced background worker and returns immediately. The worker always
-// re-reads live config at the moment it finally acquires the lock, so it
-// converges on whatever is latest then - never a stale snapshot from when it
-// was scheduled.
-func reconcileLlmProviderEnv(conf configuration.Configuration, logger *zerolog.Logger) {
-	applied := remediation.TryWithLLMProviderEnvLock(func() {
-		applyLlmProviderEnvLocked(conf, logger)
-	})
-	if applied {
-		return
-	}
-
-	if !llmEnvReconcilePending.CompareAndSwap(false, true) {
-		return
-	}
-	go func() {
-		remediation.WithLLMProviderEnvLock(func() {
-			llmEnvReconcilePending.Store(false)
-			applyLlmProviderEnvLocked(conf, logger)
-		})
-	}()
-}
-
-// llmProviderSettingsSnapshot reads provider and baseUrl as one pair under
-// llmSettingsMu, the same lock the persist step uses. Reading them
-// independently would risk a torn pair: a concurrent persist call could land
-// between the two reads and pair one call's provider with another call's
-// baseUrl.
-func llmProviderSettingsSnapshot(conf configuration.Configuration) (provider, baseUrl string) {
-	llmSettingsMu.Lock()
-	defer llmSettingsMu.Unlock()
-	return types.GetGlobalString(conf, types.SettingLlmProvider), types.GetGlobalString(conf, types.SettingLlmBaseUrl)
-}
-
-// applyLlmProviderEnvLocked must be called with the remediation package's LLM
-// provider env lock held for writing (see remediation.TryWithLLMProviderEnvLock /
-// remediation.WithLLMProviderEnvLock). It never unsets appliedLlmEnvVar unless
-// this process itself previously set it - a provider recorded in conf that this process
-// never applied (e.g. loaded from disk before this function ever ran) must
-// never justify clearing a developer's own environment variable.
-func applyLlmProviderEnvLocked(conf configuration.Configuration, logger *zerolog.Logger) {
-	provider, baseUrl := llmProviderSettingsSnapshot(conf)
-	newEnvVar, newHasEnvVar := llmProviderBaseUrlEnvVar[provider]
-
-	if appliedLlmEnvVar != "" && (!newHasEnvVar || newEnvVar != appliedLlmEnvVar || baseUrl == "") {
-		if err := osUnsetenv(appliedLlmEnvVar); err != nil {
-			logger.Err(err).Msgf("couldn't unset env variable %s", appliedLlmEnvVar)
-		} else {
-			appliedLlmEnvVar = ""
-		}
-	}
-	if newHasEnvVar && baseUrl != "" {
-		if err := osSetenv(newEnvVar, baseUrl); err != nil {
-			logger.Err(err).Msgf("couldn't set env variable %s", newEnvVar)
-		} else {
-			appliedLlmEnvVar = newEnvVar
-		}
-	}
+	llmEnvMgr.ApplyConfig(conf, logger, settings)
 }
 
 func buildIncomingLspConfigMap(folderConfigs []types.LspFolderConfig) map[types.FilePath]types.LspFolderConfig {

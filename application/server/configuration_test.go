@@ -3711,59 +3711,6 @@ func Test_ProcessConfigSettings_GlobalReset(t *testing.T) {
 	})
 }
 
-// TestUpdateSettings_LlmProviderRoundTripsToConfigDialog exercises the real
-// UpdateSettings -> ConstructSettingsFromConfig -> ConfigHtmlRenderer chain,
-// nothing mocked, proving the provider and endpoint a developer saves come
-// back selected in the re-rendered dialog HTML.
-func TestUpdateSettings_LlmProviderRoundTripsToConfigDialog(t *testing.T) {
-	engine, tokenService := testutil.UnitTestWithEngine(t)
-	conf := engine.GetConfiguration()
-	cr := testutil.DefaultConfigResolver(engine)
-	ctx := testCtx(t, t.Context(), engine, tokenService)
-
-	settings := map[string]*types.ConfigSetting{
-		types.SettingLlmProvider: {Value: "ollama", Changed: true},
-		types.SettingLlmBaseUrl:  {Value: "http://localhost:11434", Changed: true},
-	}
-	UpdateSettings(ctx, conf, engine, engine.GetLogger(), settings, nil, analytics.TriggerSourceTest, cr)
-
-	m, folderConfigs := command.ConstructSettingsFromConfig(engine, cr)
-	assert.Equal(t, "ollama", m[types.SettingLlmProvider])
-	assert.Equal(t, "http://localhost:11434", m[types.SettingLlmBaseUrl])
-
-	renderer, err := infraconfig.NewConfigHtmlRenderer(engine, cr)
-	require.NoError(t, err)
-	html := renderer.GetConfigHtml(m, folderConfigs)
-	require.NotEmpty(t, html)
-	assert.Contains(t, html, `value="ollama" selected`, "the saved provider must come back selected in the re-rendered dialog")
-	assert.Contains(t, html, "http://localhost:11434", "the saved endpoint must come back in the re-rendered dialog")
-}
-
-// TestUpdateSettings_LlmModelRoundTripsToConfigDialog covers the model field:
-// ollama and litellm have no default model in remy-cli-extension, so a saved
-// model must survive reopening the dialog exactly like provider and endpoint do.
-func TestUpdateSettings_LlmModelRoundTripsToConfigDialog(t *testing.T) {
-	engine, tokenService := testutil.UnitTestWithEngine(t)
-	conf := engine.GetConfiguration()
-	cr := testutil.DefaultConfigResolver(engine)
-	ctx := testCtx(t, t.Context(), engine, tokenService)
-
-	settings := map[string]*types.ConfigSetting{
-		types.SettingLlmProvider: {Value: "ollama", Changed: true},
-		types.SettingLlmModel:    {Value: "llama3.1", Changed: true},
-	}
-	UpdateSettings(ctx, conf, engine, engine.GetLogger(), settings, nil, analytics.TriggerSourceTest, cr)
-
-	m, folderConfigs := command.ConstructSettingsFromConfig(engine, cr)
-	assert.Equal(t, "llama3.1", m[types.SettingLlmModel])
-
-	renderer, err := infraconfig.NewConfigHtmlRenderer(engine, cr)
-	require.NoError(t, err)
-	html := renderer.GetConfigHtml(m, folderConfigs)
-	require.NotEmpty(t, html)
-	assert.Contains(t, html, "llama3.1", "the saved model must come back in the re-rendered dialog")
-}
-
 func TestApplyLlmProviderConfig_PersistsProviderAndBaseUrl(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
@@ -3797,6 +3744,7 @@ func TestApplyLlmProviderConfig_PersistsModel(t *testing.T) {
 // TestApplyLlmProviderConfig_ModelOnlySaveIsNotSwallowedByM5Guard proves the
 // M5 "nothing touched" guard checks all three fields, not just provider and
 // base URL - a save that only changes the model must not be dropped.
+// See "IDE-2274-M5" in features/llm-provider-setting.feature for the mapped requirement.
 func TestApplyLlmProviderConfig_ModelOnlySaveIsNotSwallowedByM5Guard(t *testing.T) {
 	engine, _ := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
@@ -3956,20 +3904,18 @@ func TestApplyLlmProviderEnvLocked_SetenvFailure_DoesNotUpdateAppliedEnvVar(t *t
 	engine, _ := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
-	resetLlmProviderEnvStateForTest(t)
 
 	types.SetGlobalUser(conf, types.SettingLlmProvider, "anthropic")
 	types.SetGlobalUser(conf, types.SettingLlmBaseUrl, "https://example.internal")
 
-	origSetenv := osSetenv
-	osSetenv = func(_, _ string) error { return errors.New("boom") }
-	defer func() { osSetenv = origSetenv }()
+	mgr := newLlmProviderEnvManager()
+	mgr.setenv = func(_, _ string) error { return errors.New("boom") }
 
 	remediation.WithLLMProviderEnvLock(func() {
-		applyLlmProviderEnvLocked(conf, logger)
+		mgr.applyEnvLocked(conf, logger)
 	})
 
-	assert.Equal(t, "", appliedLlmEnvVar, "a failed Setenv must not be recorded as applied")
+	assert.Equal(t, "", mgr.GetAppliedEnvVar(), "a failed Setenv must not be recorded as applied")
 }
 
 // TestApplyLlmProviderEnvLocked_UnsetenvFailure_DoesNotClearAppliedEnvVar is the
@@ -3979,23 +3925,20 @@ func TestApplyLlmProviderEnvLocked_UnsetenvFailure_DoesNotClearAppliedEnvVar(t *
 	engine, _ := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
-	resetLlmProviderEnvStateForTest(t)
-	remediation.WithLLMProviderEnvLock(func() {
-		appliedLlmEnvVar = "ANTHROPIC_BASE_URL"
-	})
+
+	mgr := newLlmProviderEnvManager()
+	mgr.SetAppliedEnvVar("ANTHROPIC_BASE_URL")
 
 	types.SetGlobalUser(conf, types.SettingLlmProvider, "openai")
 	types.SetGlobalUser(conf, types.SettingLlmBaseUrl, "https://example.internal")
 
-	origUnsetenv := osUnsetenv
-	osUnsetenv = func(_ string) error { return errors.New("boom") }
-	defer func() { osUnsetenv = origUnsetenv }()
+	mgr.unsetenv = func(_ string) error { return errors.New("boom") }
 
 	remediation.WithLLMProviderEnvLock(func() {
-		applyLlmProviderEnvLocked(conf, logger)
+		mgr.applyEnvLocked(conf, logger)
 	})
 
-	assert.Equal(t, "ANTHROPIC_BASE_URL", appliedLlmEnvVar, "a failed Unsetenv must not be recorded as cleared")
+	assert.Equal(t, "ANTHROPIC_BASE_URL", mgr.GetAppliedEnvVar(), "a failed Unsetenv must not be recorded as cleared")
 }
 
 // TestApplyLlmProviderConfig_ConcurrentUpdatesAreSerialized guards against the
@@ -4264,7 +4207,7 @@ func TestApplyLlmProviderConfig_MultipleSavesDuringInFlightInvocation_ConvergeTo
 func resetLlmProviderEnvStateForTest(t *testing.T) {
 	t.Helper()
 	remediation.WithLLMProviderEnvLock(func() {
-		appliedLlmEnvVar = ""
+		llmEnvMgr.SetAppliedEnvVar("")
 	})
 }
 
@@ -4293,4 +4236,57 @@ func TestApplyLlmProviderConfig_ProcessNeverAppliedEnv_DoesNotUnsetDeveloperValu
 	assert.Equal(t, "developer-own-value", os.Getenv("ANTHROPIC_BASE_URL"),
 		"a config-scoped 'old provider' must never be trusted to unset an env var this process didn't itself set")
 	assert.Equal(t, "https://vertex.example", os.Getenv("VERTEX_BASE_URL"))
+}
+
+// TestUpdateSettings_LlmProviderRoundTripsToConfigDialog exercises the real
+// UpdateSettings -> ConstructSettingsFromConfig -> ConfigHtmlRenderer chain,
+// nothing mocked, proving the provider and endpoint a developer saves come
+// back selected in the re-rendered dialog HTML.
+func TestUpdateSettings_LlmProviderRoundTripsToConfigDialog(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	cr := testutil.DefaultConfigResolver(engine)
+	ctx := testCtx(t, t.Context(), engine, tokenService)
+
+	settings := map[string]*types.ConfigSetting{
+		types.SettingLlmProvider: {Value: "ollama", Changed: true},
+		types.SettingLlmBaseUrl:  {Value: "http://localhost:11434", Changed: true},
+	}
+	UpdateSettings(ctx, conf, engine, engine.GetLogger(), settings, nil, analytics.TriggerSourceTest, cr)
+
+	m, folderConfigs := command.ConstructSettingsFromConfig(engine, cr)
+	assert.Equal(t, "ollama", m[types.SettingLlmProvider])
+	assert.Equal(t, "http://localhost:11434", m[types.SettingLlmBaseUrl])
+
+	renderer, err := infraconfig.NewConfigHtmlRenderer(engine, cr)
+	require.NoError(t, err)
+	html := renderer.GetConfigHtml(m, folderConfigs)
+	require.NotEmpty(t, html)
+	assert.Contains(t, html, `value="ollama" selected`, "the saved provider must come back selected in the re-rendered dialog")
+	assert.Contains(t, html, "http://localhost:11434", "the saved endpoint must come back in the re-rendered dialog")
+}
+
+// TestUpdateSettings_LlmModelRoundTripsToConfigDialog covers the model field:
+// ollama and litellm have no default model in remy-cli-extension, so a saved
+// model must survive reopening the dialog exactly like provider and endpoint do.
+func TestUpdateSettings_LlmModelRoundTripsToConfigDialog(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	cr := testutil.DefaultConfigResolver(engine)
+	ctx := testCtx(t, t.Context(), engine, tokenService)
+
+	settings := map[string]*types.ConfigSetting{
+		types.SettingLlmProvider: {Value: "ollama", Changed: true},
+		types.SettingLlmModel:    {Value: "llama3.1", Changed: true},
+	}
+	UpdateSettings(ctx, conf, engine, engine.GetLogger(), settings, nil, analytics.TriggerSourceTest, cr)
+
+	m, folderConfigs := command.ConstructSettingsFromConfig(engine, cr)
+	assert.Equal(t, "llama3.1", m[types.SettingLlmModel])
+
+	renderer, err := infraconfig.NewConfigHtmlRenderer(engine, cr)
+	require.NoError(t, err)
+	html := renderer.GetConfigHtml(m, folderConfigs)
+	require.NotEmpty(t, html)
+	assert.Contains(t, html, "llama3.1", "the saved model must come back in the re-rendered dialog")
 }
