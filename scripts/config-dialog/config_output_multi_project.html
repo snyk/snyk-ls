@@ -1060,24 +1060,30 @@ button.secondary[disabled] {
                                 <button type="button" class="reset-section-btn" data-section="autonomousRemediation" title="Reset this section to defaults">Reset</button>
                             </div>
 
-                            <div class="form-group half-width">
-                                <label for="llm_provider"><span data-toggle="tooltip" title="Which LLM backend the Snyk Remediation Agent (Remy) uses to generate fixes. Automatic lets Snyk choose.">LLM provider</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="llm_provider"></span></label>
-                                <select id="llm_provider" name="llm_provider">
-                                    <option value="" >Automatic</option>
-                                    <option value="anthropic" >Anthropic</option>
-                                    <option value="openai" >OpenAI</option>
-                                    <option value="ollama" >Ollama</option>
-                                    <option value="vertex" >Vertex AI</option>
-                                    <option value="litellm" >LiteLLM</option>
-                                </select>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="llm_provider"><span data-toggle="tooltip" title="Which LLM backend the Snyk Remediation Agent uses to generate fixes. Automatic lets Snyk choose.">LLM provider</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="llm_provider"></span></label>
+                                        <select id="llm_provider" name="llm_provider">
+                                            <option value="" >Automatic</option>
+                                            <option value="anthropic" >Anthropic</option>
+                                            <option value="openai" >OpenAI</option>
+                                            <option value="ollama" >Ollama</option>
+                                            <option value="vertex" >Vertex AI</option>
+                                            <option value="litellm" >LiteLLM</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="llm_model"><span data-toggle="tooltip" title="Model id. Required for Ollama and LiteLLM; an optional override for the other providers.">Model</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="llm_model"></span></label>
+                                        <input type="text" id="llm_model" name="llm_model" value="" placeholder="e.g. llama3.1">
+                                    </div>
+                                </div>
                             </div>
 
-                            <div class="form-group half-width">
-                                <label for="llm_model"><span data-toggle="tooltip" title="Model id. Required for Ollama and LiteLLM; an optional override for the other providers.">Model</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="llm_model"></span></label>
-                                <input type="text" id="llm_model" name="llm_model" value="" placeholder="e.g. llama3.1">
-                            </div>
-
-                            <div class="form-group half-width">
+                            <div class="form-group">
                                 <label for="llm_base_url"><span data-toggle="tooltip" title="Point the selected LLM provider at a self-hosted or gateway endpoint. Note: OpenAI has no custom-endpoint environment variable, so this value is saved and shown here but not applied.">Custom API endpoint</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="llm_base_url"></span></label>
                                 <input type="text" id="llm_base_url" name="llm_base_url" value="" placeholder="https://llm-gateway.internal">
                             </div>
