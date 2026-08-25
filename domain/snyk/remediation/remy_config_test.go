@@ -88,16 +88,16 @@ func TestBuildRemyFixConfig_ProviderWithoutModel(t *testing.T) {
 	assert.False(t, conf.IsSet("model"), "model must not be set when the developer never chose one")
 }
 
-// TestBuildRemyFixConfig_ModelWithoutProvider covers the (unlikely but
-// possible) case of a persisted model with no provider selected: the model
-// key must still be forwarded on its own, with no invented provider.
+// TestBuildRemyFixConfig_ModelWithoutProvider covers the edge case of a
+// persisted model with no provider selected: the model key must still be
+// forwarded on its own, with no invented provider.
 func TestBuildRemyFixConfig_ModelWithoutProvider(t *testing.T) {
 	base := configuration.NewWithOpts()
 	types.SetGlobalUser(base, types.SettingLlmModel, "llama3.1")
 
 	conf := buildRemyFixConfig(base, "/work/repo-root")
 
-	assert.False(t, conf.IsSet("provider"), "provider must not be set when the developer never chose one")
+	assert.False(t, conf.IsSet(remyProviderConfigKey), "provider must not be set when the developer never chose one")
 	assert.Equal(t, "llama3.1", conf.GetString("model"))
 }
 
