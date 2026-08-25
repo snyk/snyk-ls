@@ -173,11 +173,8 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 	logger.Debug().Msg("Code scanner: starting scan")
 
 	//returning nil, when no scan has executed. Will return []types.Issue{} when a scan has executed, but no issues were found.
-	if err = scannercommon.RequireProductEnabled(
-		sc.getConfigResolver(ctx).IsProductEnabledForFolder(product.ProductCode, workspaceFolderConfig),
-		utils.ErrSnykCodeNotEnabledForFolder,
-	); err != nil {
-		return nil, err
+	if !scannercommon.IsProductEnabledForScan(ctx, sc.getConfigResolver(ctx), product.ProductCode, workspaceFolderConfig) {
+		return nil, errors.New(utils.ErrSnykCodeNotEnabledForFolder)
 	}
 
 	if err = scannercommon.RequireAuthToken(sc.engine.GetConfiguration(), logger); err != nil {
