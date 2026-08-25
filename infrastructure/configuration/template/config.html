@@ -334,6 +334,17 @@
                                 </div>
                             </div>
 
+                            <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "ambient_canary_autonomy"}}">
+                                <div class="form-group half-width">
+                                    <label for="ambient_canary_autonomy"><span data-toggle="tooltip" title="Choose whether Ambient Canary may apply fixes automatically, or only notify you.">Ambient Canary autonomy</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="ambient_canary_autonomy"></span> {{sourceIndicator .DefaultsScopes "ambient_canary_autonomy"}}</label>
+                                    <select id="ambient_canary_autonomy" name="ambient_canary_autonomy">
+                                        <option value="" {{if eq (index .Settings "ambient_canary_autonomy") ""}}selected{{end}}>Not set</option>
+                                        <option value="notify_only" {{if eq (index .Settings "ambient_canary_autonomy") "notify_only"}}selected{{end}}>Notify only</option>
+                                        <option value="autonomous_fixes" {{if eq (index .Settings "ambient_canary_autonomy") "autonomous_fixes"}}selected{{end}}>Allow autonomous fixes</option>
+                                    </select>
+                                </div>
+                            </div>
+
                             <div class="override-indicator-wrapper {{getSourceClass .DefaultsScopes "organization"}}">
                                 <div class="form-group half-width">
                                     <label for="organization"><span data-toggle="tooltip" title="<p>Specify the organization (ID or name) for Snyk to run scans against.</p><p>Organization selection follows this order:</p><ol><li>Project-specific settings (if configured)</li><li>This global setting (if the project-specific setting is empty)</li><li>Your web account's preferred organization (if both above are empty)</li></ol>">Organization</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="organization"></span> {{sourceIndicator .DefaultsScopes "organization"}}</label>

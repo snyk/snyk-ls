@@ -1,6 +1,7 @@
 {
   "additional_environment": "",
   "additional_parameters": "",
+  "ambient_canary_autonomy": "",
   "api_endpoint": "https://api.snyk.io",
   "authentication_method": "oauth",
   "auto_configure_mcp_server": true,
