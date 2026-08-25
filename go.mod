@@ -33,9 +33,9 @@ require (
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/snyk/cli-extension-os-flows v0.0.0-20260625140351-2bb6cb470073
 	github.com/snyk/cli-extension-secrets v0.0.0-20260811115637-ee872c26b0cd
-	github.com/snyk/code-client-go v1.31.3
+	github.com/snyk/code-client-go v1.31.9-0.20260825130945-da249134b0f6
 	github.com/snyk/error-catalog-golang-public v0.0.0-20260806122555-28dc45bbbde6
-	github.com/snyk/go-application-framework v0.14.1
+	github.com/snyk/go-application-framework v0.18.2-0.20260825125146-df40372f0509
 	github.com/snyk/studio-mcp v1.6.1
 	github.com/sourcegraph/go-lsp v0.0.0-20240223163137-f80c5dd31dfd
 	github.com/spf13/pflag v1.0.10
