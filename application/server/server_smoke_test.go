@@ -18,12 +18,15 @@ package server
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"runtime/pprof"
 	"strconv"
@@ -1030,12 +1033,23 @@ func checkAutofixDiffs(t *testing.T, engine workflow.Engine, issueList []types.S
 			continue
 		}
 		waitForNetwork(engine)
+
+		// Setup: prime AiFixHandler.currentIssueId for this issue before triggering the
+		// async fix (see resetAiFixCacheIfDifferent in infrastructure/code/ai_fix_handler.go).
 		_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
+			Command:   types.GenerateIssueDescriptionCommand,
+			Arguments: []any{issue.Id},
+		})
+		require.NoError(t, err)
+
+		// Trigger the async autofix.
+		_, err = loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 			Command:   types.CodeFixDiffsCommand,
 			Arguments: []any{issue.Id},
 		})
 		assert.NoError(t, err)
-		// don't check for all issues, just the first
+
+		// Assert: don't check for all issues, just the first.
 		assert.Eventuallyf(t, func() bool {
 			notifications := recorder.FindCallbacksByMethod("window/showDocument")
 			for _, notification := range notifications {
@@ -1046,54 +1060,167 @@ func checkAutofixDiffs(t *testing.T, engine workflow.Engine, issueList []types.S
 			return false
 		}, 30*time.Second, time.Millisecond, "failed to get autofix diffs")
 
-		// The explanation comes as a passthrough field on the autofix response (via
-		// code-client-go). Assert we actually get a real, non-empty explanation back.
-		checkAutofixExplanation(t, engine, issue.Id)
+		// Assert the explanation passthrough from code-client-go reaches the client.
+		checkAutofixExplanation(t, engine, loc, issue.Id)
 		break
 	}
 }
 
-// checkAutofixExplanation polls AiFixHandler directly — the same object
-// CodeFixDiffsCommand's handleResponse writes to — rather than round-tripping through
-// rendered HTML. This avoids coupling the assertion to html/template's escaping and to
-// the ambiguous window/showDocument callback, which fires on IN_PROGRESS too, not just
-// on the terminal state.
-func checkAutofixExplanation(t *testing.T, engine workflow.Engine, issueId string) {
+// sectionShown reports whether the named section's outer tag carries a "show" class,
+// i.e. the template rendered it visible rather than "hidden" - the same signal the
+// client's own CSS relies on to reveal a section.
+func sectionShown(htmlContent, sectionID string) bool {
+	re := regexp.MustCompile(`id="` + regexp.QuoteMeta(sectionID) + `"[^>]*class="[^"]*\bshow\b[^"]*"`)
+	return re.MatchString(htmlContent)
+}
+
+// sectionTagPresent reports whether the named section's opening tag carries the
+// show/hidden toggle class sectionShown depends on - checking for either token, not
+// just "show", since the section is still hidden at preflight time. Used as a preflight
+// check so a template markup change fails fast with a clear message instead of a
+// misleading timeout.
+func sectionTagPresent(htmlContent, sectionID string) bool {
+	re := regexp.MustCompile(`id="` + regexp.QuoteMeta(sectionID) + `"[^>]*class="[^"]*\b(show|hidden)\b[^"]*"`)
+	return re.MatchString(htmlContent)
+}
+
+// autofixSuggestionsFromHtml extracts the JSON blob the AI-fix panel embeds for the
+// client-side JS to consume (see details.html's #suggestionDiv), decoding it into just
+// the field this test cares about. This is the same wire content the client receives -
+// no internal Go types are involved.
+func autofixSuggestionsFromHtml(t *testing.T, htmlContent string) []struct {
+	Explanation string `json:"explanation"`
+} {
 	t.Helper()
-	// Safe to pass a nil featureFlagService here: GetHTMLRenderer only needs a real one
-	// on first construction, and CodeFixDiffsCommand.Execute already primed the
-	// process-wide singleton for this engine (with a real service) before this is called.
+	const marker = `id="suggestionDiv" class="hidden">`
+	start := strings.Index(htmlContent, marker)
+	require.NotEqualf(t, -1, start, "suggestionDiv not found in issue description HTML")
+	rest := htmlContent[start+len(marker):]
+	end := strings.Index(rest, "</div>")
+	require.NotEqualf(t, -1, end, "suggestionDiv not closed in issue description HTML")
+	blob := strings.TrimSpace(html.UnescapeString(rest[:end]))
+
+	var suggestions []struct {
+		Explanation string `json:"explanation"`
+	}
+	if blob == "{}" {
+		// No suggestions were generated for this issue - a legitimate outcome, distinct
+		// from whether the explanation passthrough works.
+		return suggestions
+	}
+	require.NoErrorf(t, json.Unmarshal([]byte(blob), &suggestions), "failed to decode autofix suggestions from issue description HTML")
+	return suggestions
+}
+
+// fetchIssueDescriptionHtml fetches the rendered issue description HTML via the same
+// workspace/executeCommand call the client makes.
+func fetchIssueDescriptionHtml(t *testing.T, ctx context.Context, loc server.Local, issueId string) (string, error) {
+	t.Helper()
+	resp, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		Command:   types.GenerateIssueDescriptionCommand,
+		Arguments: []any{issueId},
+	})
+	if err != nil {
+		return "", err
+	}
+	var htmlContent string
+	if err = resp.UnmarshalResult(&htmlContent); err != nil {
+		return "", err
+	}
+	return htmlContent, nil
+}
+
+// pollForAutofixTerminalHtml polls the rendered issue description HTML until the
+// success or error section becomes visible, or the timeout elapses.
+func pollForAutofixTerminalHtml(t *testing.T, loc server.Local, issueId string) string {
+	t.Helper()
+
+	// Using a context timeout instead of assert.Eventually: Eventually spawns a new
+	// goroutine per tick without waiting for the previous one to finish, so a slow tick
+	// (a real LSP round-trip can outlast the tick interval) can leave a goroutine
+	// calling t.Logf/t.Helper() after the test has already finished, which panics.
+	// Polling in a single goroutine also means latestHtml/lastErr below need no
+	// synchronization.
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
+	defer cancel()
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	var latestHtml string
+	var lastErr error
+	poll := func() bool {
+		pageHtml, err := fetchIssueDescriptionHtml(t, ctx, loc, issueId)
+		if err != nil {
+			if lastErr == nil || err.Error() != lastErr.Error() {
+				t.Logf("checkAutofixExplanation: poll error for issue %s (will keep retrying): %v", issueId, err)
+			}
+			lastErr = err
+			return false
+		}
+		latestHtml = pageHtml
+		return sectionShown(pageHtml, "fixes-section") || sectionShown(pageHtml, "fixes-error-section")
+	}
+
+	if poll() {
+		return latestHtml
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("autofix for issue %s never reached a terminal state (last poll error: %v)", issueId, lastErr)
+		case <-ticker.C:
+			if poll() {
+				return latestHtml
+			}
+		}
+	}
+}
+
+// checkAutofixExplanation asserts the AI explanation reaches the client via the
+// rendered issue description HTML, and cross-checks AiFixHandler's internal state for a
+// real error message if autofix failed.
+func checkAutofixExplanation(t *testing.T, engine workflow.Engine, loc server.Local, issueId string) {
+	t.Helper()
+
+	// Setup: fail fast if the template markup this test depends on has changed shape,
+	// rather than hitting the misleading 5-minute timeout below. Bounded so a hung
+	// call fails fast too, instead of running out the default go test timeout.
+	preflightCtx, preflightCancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer preflightCancel()
+	preflightHtml, err := fetchIssueDescriptionHtml(t, preflightCtx, loc, issueId)
+	require.NoErrorf(t, err, "failed to fetch issue description HTML for issue %s", issueId)
+	require.Truef(t, sectionTagPresent(preflightHtml, "fixes-section"), "template markup changed: fixes-section id/class structure not found")
+	require.Truef(t, sectionTagPresent(preflightHtml, "fixes-error-section"), "template markup changed: fixes-error-section id/class structure not found")
+
+	// Poll until autofix reaches a terminal state.
+	latestHtml := pollForAutofixTerminalHtml(t, loc, issueId)
+
+	// Assert against AiFixHandler's internal state first, since it carries the real
+	// error text if autofix failed.
+	// Safe to pass nil for featureFlagService: the priming calls in checkAutofixDiffs
+	// (via GenerateIssueDescriptionCommand) already construct the singleton with a real
+	// service before this is called.
 	htmlRenderer, err := code.GetHTMLRenderer(engine, nil)
 	require.NoError(t, err)
 	aiFixHandler := htmlRenderer.AiFixHandler
-
-	// Give the test a margin over autofix.go's own 4-minute backend poll timeout, so a
-	// genuine backend timeout surfaces via the GetAiFixDiffError() check below instead
-	// of the less informative "never reached a terminal state" message.
-	require.Eventuallyf(t, func() bool {
-		status := aiFixHandler.GetAiFixDiffStatus()
-		return status == code.AiFixSuccess || status == code.AiFixError
-	}, 5*time.Minute, 100*time.Millisecond, "autofix for issue %s never reached a terminal state", issueId)
-
 	require.NoErrorf(t, aiFixHandler.GetAiFixDiffError(), "autofix failed for issue %s", issueId)
 
-	suggestions := aiFixHandler.GetAiFixDiffResult()
-	if len(suggestions) == 0 {
+	// Assert the client-visible HTML also shows no failure.
+	require.Falsef(t, sectionShown(latestHtml, "fixes-error-section"), "autofix failed for issue %s", issueId)
+
+	internalSuggestions := aiFixHandler.GetAiFixDiffResult()
+	if len(internalSuggestions) == 0 {
 		// A legitimate outcome (codeFixDiffs.handleResponse treats "no good fix found"
-		// as AiFixSuccess with no suggestions) — unrelated to whether the explanation
+		// as AiFixSuccess with no suggestions) - unrelated to whether the explanation
 		// passthrough works, so there's nothing to assert here.
 		t.Logf("autofix for issue %s completed successfully but produced no suggestions", issueId)
 		return
 	}
 
-	hasRealExplanation := false
-	for _, suggestion := range suggestions {
-		if suggestion.Explanation != "" {
-			hasRealExplanation = true
-			break
-		}
-	}
-	assert.True(t, hasRealExplanation, "expected at least one autofix suggestion to carry a non-empty AI explanation from code-client-go")
+	htmlSuggestions := autofixSuggestionsFromHtml(t, latestHtml)
+	require.NotEmptyf(t, htmlSuggestions, "internal state has %d suggestion(s) but none reached the rendered HTML", len(internalSuggestions))
+	assert.NotEmptyf(t, internalSuggestions[0].Explanation, "autofix suggestion %s has no explanation in AiFixHandler's internal state", internalSuggestions[0].FixId)
+	assert.NotEmptyf(t, htmlSuggestions[0].Explanation, "autofix suggestion %s has no explanation in the client-visible HTML", internalSuggestions[0].FixId)
 }
 
 func isNotStandardRegion(engine workflow.Engine) bool {

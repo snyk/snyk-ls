@@ -93,5 +93,6 @@ func (cmd *codeFixDiffs) handleResponse(ctx context.Context, engine workflow.Eng
 		aiFixHandler.SetAiFixDiffState(code.AiFixError, nil, err, setStateCallback)
 		return
 	}
+	// Explanations come from code-client-go.
 	aiFixHandler.SetAiFixDiffState(code.AiFixSuccess, suggestions, nil, setStateCallback)
 }
