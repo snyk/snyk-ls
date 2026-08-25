@@ -18,10 +18,14 @@ package command
 
 import (
 	"runtime"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
+	"github.com/snyk/code-client-go/llm"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -87,5 +91,95 @@ func Test_codeFixDiffs_Execute(t *testing.T) {
 
 		require.Emptyf(t, suggestions, "suggestions should be empty")
 		require.Error(t, err)
+	})
+}
+
+// Test_codeFixDiffs_Execute_SendsAiFixNotification proves that triggering a fix diff via the
+// real production entrypoint (Execute -> handleResponse -> the real AiFixHandler state machine)
+// results in a $/snyk.aiFix notification being sent on the real Notifier, with a payload that
+// reflects the real AiFixHandler state. GetAutofixDiffs is driven to its deterministic,
+// network-free error branch (no bundle hash registered for the issue's content root).
+func Test_codeFixDiffs_Execute_SendsAiFixNotification(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	t.Cleanup(code.ResetHTMLRenderer)
+	ctrl := gomock.NewController(t)
+	server := mock_types.NewMockServer(ctrl)
+	server.EXPECT().Callback(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	instrumentor := performance.NewInstrumentor()
+	snykApiClient := &snyk_api.FakeApiClient{CodeEnabled: true}
+	codeErrorReporter := code.NewCodeErrorReporter(error_reporting.NewTestErrorReporter(engine))
+	codeScanner := code.New(engine, instrumentor, snykApiClient, codeErrorReporter, nil, featureflag.NewFakeService(), notification.NewNotifier(), code.NewCodeInstrumentor(), codeErrorReporter, code.NewFakeCodeScannerClient, testutil.DefaultConfigResolver(engine), testutil.NewDrainedProgressTracker())
+
+	realNotifier := notification.NewNotifier()
+	var mu sync.Mutex
+	var received []types.AiFixNotification
+	realNotifier.CreateListener(func(params any) {
+		aiFix, ok := params.(types.AiFixNotification)
+		if !ok {
+			return
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		received = append(received, aiFix)
+	})
+	t.Cleanup(realNotifier.DisposeListener)
+
+	issueProvider := mock_snyk.NewMockIssueProvider(ctrl)
+	issueKey := uuid.NewString()
+	issue := snyk.Issue{
+		ID:             uuid.NewString(),
+		AdditionalData: snyk.CodeIssueData{Key: issueKey},
+	}
+	issueProvider.EXPECT().Issue(gomock.Any()).Return(&issue)
+
+	cut := codeFixDiffs{
+		notifier:           realNotifier,
+		codeScanner:        codeScanner,
+		engine:             engine,
+		srv:                server,
+		featureFlagService: featureflag.NewFakeService(),
+		issueProvider:      issueProvider,
+		command:            types.CommandData{Arguments: []any{issue.ID}},
+	}
+
+	_, err := cut.Execute(t.Context())
+	require.NoError(t, err)
+
+	assert.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, n := range received {
+			if n.IssueId == issueKey && n.Status == string(code.AiFixError) {
+				return len(n.Fixes) == 0
+			}
+		}
+		return false
+	}, 2*time.Second, time.Millisecond, "expected a $/snyk.aiFix ERROR notification for issue key %s", issueKey)
+}
+
+func Test_aiFixResultsFrom(t *testing.T) {
+	t.Run("no suggestions yields no fixes", func(t *testing.T) {
+		assert.Empty(t, aiFixResultsFrom(nil))
+	})
+
+	t.Run("single suggestion with a single file", func(t *testing.T) {
+		suggestions := []llm.AutofixUnifiedDiffSuggestion{
+			{FixId: "fix-1", UnifiedDiffsPerFile: map[string]string{"main.go": "diff"}},
+		}
+
+		assert.Equal(t, []types.AiFixResult{{FixId: "fix-1", FilePath: "main.go"}}, aiFixResultsFrom(suggestions))
+	})
+
+	t.Run("multiple suggestions, one spanning multiple files, sorted deterministically", func(t *testing.T) {
+		suggestions := []llm.AutofixUnifiedDiffSuggestion{
+			{FixId: "fix-1", UnifiedDiffsPerFile: map[string]string{"b.go": "diff-b", "a.go": "diff-a"}},
+			{FixId: "fix-2", UnifiedDiffsPerFile: map[string]string{"c.go": "diff-c"}},
+		}
+
+		assert.Equal(t, []types.AiFixResult{
+			{FixId: "fix-1", FilePath: "a.go"},
+			{FixId: "fix-1", FilePath: "b.go"},
+			{FixId: "fix-2", FilePath: "c.go"},
+		}, aiFixResultsFrom(suggestions))
 	})
 }
