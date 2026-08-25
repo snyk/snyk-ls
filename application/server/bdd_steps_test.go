@@ -35,6 +35,9 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
+	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -113,6 +116,15 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	})
 	sc.Then(`^the editor is notified of the security issue$`, func() error {
 		return s.runOnScenarioGoroutine(s.editorIsNotifiedOfTheSecurityIssue)
+	})
+	sc.Given(`^the developer has a Code issue found by Snyk$`, func() error {
+		return s.runOnScenarioGoroutine(s.developerHasACodeIssueFoundBySnyk)
+	})
+	sc.When(`^the developer asks Snyk to fix the issue with AI$`, func(ctx context.Context) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperAsksSnykToFixTheIssueWithAi(ctx) })
+	})
+	sc.Then(`^the editor receives a structured AI fix result for the issue$`, func() error {
+		return s.runOnScenarioGoroutine(s.theEditorReceivesAStructuredAiFixResultForTheIssue)
 	})
 	sc.When(`^the editor asks for diagnostics for the whole workspace$`, func(ctx context.Context) error {
 		return s.runOnScenarioGoroutine(func() error { return s.editorAsksForWorkspaceDiagnostics(ctx) })
@@ -305,7 +317,8 @@ func (s *bddSteps) aRunningLanguageServer() error {
 	// (nil, nil) for every command - so workspace/executeCommand(snyk.getTreeView)
 	// never reaches the real getTreeViewCommand. Swap in the real service, now that
 	// deps (and the workspace registered via config.SetWorkspace) are available.
-	issueProvider, ok := config.GetWorkspace(engine.GetConfiguration()).(snyk.IssueProvider)
+	realWorkspace := config.GetWorkspace(engine.GetConfiguration())
+	issueProvider, ok := realWorkspace.(snyk.IssueProvider)
 	if !ok {
 		return fmt.Errorf("workspace does not implement snyk.IssueProvider")
 	}
@@ -317,13 +330,30 @@ func (s *bddSteps) aRunningLanguageServer() error {
 	if !ok {
 		return fmt.Errorf("remediation.NewRemyProvider did not return a FolderRemediator")
 	}
+	// A real *code.Scanner (built the same way domain/ide/command/code_fix_diffs_test.go
+	// builds one) so snyk.code.fixDiffs scenarios exercise the real command ->
+	// AiFixHandler -> GetAutofixDiffs wiring instead of failing on a nil scanner.
+	codeErrorReporter := code.NewCodeErrorReporter(error_reporting.NewTestErrorReporter(engine))
+	fixDiffsCodeScanner := code.New(
+		engine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, codeErrorReporter, nil,
+		baseDeps.FeatureFlagService, baseDeps.Notifier, code.NewCodeInstrumentor(), codeErrorReporter,
+		code.NewFakeCodeScannerClient, resolver, testutil.NewDrainedProgressTracker(),
+	)
 	baseDeps.CommandService = command.NewService(
 		engine, engine.GetLogger(), baseDeps.AuthenticationService, baseDeps.FeatureFlagService, baseDeps.Notifier,
-		baseDeps.LearnService, issueProvider, nil, nil, baseDeps.LdxSyncService,
+		baseDeps.LearnService, issueProvider, fixDiffsCodeScanner, nil, baseDeps.LdxSyncService,
 		baseDeps.ConfigResolver, baseDeps.ScanStateAggregator.StateSnapshot, folderRemediator, baseDeps.ScanCtx,
 	)
 
 	loc, jsonRPCRecorder, deps := setupServer(s.scenarioT, engine, tokenService, WithDeps(baseDeps))
+	// setupServer's own di.TestInit call unconditionally builds and registers a
+	// second, empty workspace (config.SetWorkspace has no override option), which
+	// would silently orphan the issueProvider baked into baseDeps.CommandService
+	// above. Nothing has added a folder yet at this point, so restoring
+	// realWorkspace here is safe and keeps every later config.GetWorkspace call
+	// (folder registration, and the CommandService's own issue lookups)
+	// consistent with the same workspace instance.
+	config.SetWorkspace(engine.GetConfiguration(), realWorkspace)
 	s.engine = engine
 	s.loc = loc
 	s.jsonRPCRecorder = jsonRPCRecorder
@@ -694,6 +724,73 @@ func (s *bddSteps) editorIsNotifiedOfTheSecurityIssue() error {
 	return nil
 }
 
+// theDeveloperAsksSnykToFixTheIssueWithAi drives the real snyk.code.fixDiffs command end
+// to end: real LSP request -> real command dispatch -> the real codeFixDiffs command ->
+// the real AiFixHandler state machine -> the real Notifier. GetAutofixDiffs is driven to
+// its deterministic, network-free error branch (no bundle hash registered for the issue's
+// content root), the same way domain/ide/command/code_fix_diffs_test.go's
+// Test_codeFixDiffs_Execute_SendsAiFixNotification does, so the scenario is fast and
+// reliable without a real Code Scanner backend.
+func (s *bddSteps) theDeveloperAsksSnykToFixTheIssueWithAi(ctx context.Context) error {
+	s.scenarioT.Cleanup(code.ResetHTMLRenderer)
+
+	diagnostics, found := s.awaitPublishedDiagnostics(s.deltaFilePath)
+	if !found || len(diagnostics) == 0 {
+		return fmt.Errorf("expected the editor to have been notified of the security issue, got no diagnostics published for %s", s.deltaFilePath)
+	}
+	// Diagnostic.Data.Id carries the same occurrence-unique key
+	// (AdditionalData.Key) that the workspace's IssueProvider looks issues up
+	// by (see Folder.Issue) - so the fix command must be addressed by that key.
+	issueID := diagnostics[0].Data.Id
+	if issueID == "" {
+		return fmt.Errorf("expected the scanned issue's diagnostic to carry a non-empty id, got none")
+	}
+
+	s.jsonRPCRecorder.ClearNotifications()
+	if _, err := s.loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		Command:   types.CodeFixDiffsCommand,
+		Arguments: []any{issueID},
+	}); err != nil {
+		return fmt.Errorf("workspace/executeCommand(%s) call failed: %w", types.CodeFixDiffsCommand, err)
+	}
+	return nil
+}
+
+// waitForAiFixNotification polls for the $/snyk.aiFix notification the codeFixDiffs
+// command sends once its (synchronous, in this deterministic-error scenario) background
+// fix attempt finishes.
+func (s *bddSteps) waitForAiFixNotification() (types.AiFixNotification, error) {
+	var aiFix types.AiFixNotification
+	found := s.awaitCondition(func() bool {
+		notifications := s.jsonRPCRecorder.FindNotificationsByMethod("$/snyk.aiFix")
+		if len(notifications) == 0 {
+			return false
+		}
+		return notifications[len(notifications)-1].UnmarshalParams(&aiFix) == nil
+	})
+	if !found {
+		return types.AiFixNotification{}, fmt.Errorf("no $/snyk.aiFix notification received within timeout")
+	}
+	return aiFix, nil
+}
+
+func (s *bddSteps) theEditorReceivesAStructuredAiFixResultForTheIssue() error {
+	aiFix, err := s.waitForAiFixNotification()
+	if err != nil {
+		return err
+	}
+	if aiFix.IssueId == "" {
+		return fmt.Errorf("expected the $/snyk.aiFix notification to identify the issue, got an empty issue id")
+	}
+	if aiFix.Status == "" {
+		return fmt.Errorf("expected the $/snyk.aiFix notification to carry a fix status, got an empty status")
+	}
+	if aiFix.Fixes == nil {
+		return fmt.Errorf("expected the $/snyk.aiFix notification to carry a fix results list, got none")
+	}
+	return nil
+}
+
 // awaitCondition polls condition until it returns true or 5 seconds elapse.
 // It never calls t.Fatal/FailNow - callers turn a timeout into their own
 // descriptive error, so a failing scenario reports what was actually wrong
@@ -886,6 +983,32 @@ func (s *bddSteps) developerSavesFileWithNewIssueAlongsideKnown() error {
 	}
 	return s.runScanWithFakeScanner(&bddFakeScanner{scans: []types.ScanData{
 		{Product: product.ProductCode, Issues: []types.Issue{newIssue, knownIssue}},
+	}})
+}
+
+// developerHasACodeIssueFoundBySnyk seeds a real Code issue into a real Folder via the
+// existing fake-scanner harness (runScanWithFakeScanner/bddFakeScanner) rather than driving
+// the real Code scanner's full didSave pipeline: that pipeline's background
+// reference-branch scan (DelegatingConcurrentScanner.Scan's scanBaseBranch) races the
+// freshly-cached issue and can clear it before this scenario's fix command runs, since
+// code.TempWorkdirWithIssues's throwaway git repo has no commits for the base scan to
+// check out.
+func (s *bddSteps) developerHasACodeIssueFoundBySnyk() error {
+	fileDir := types.FilePath(s.scenarioT.TempDir())
+	filePath := types.FilePath(filepath.Join(string(fileDir), "app.go"))
+	s.deltaFileDir = fileDir
+	s.deltaFilePath = filePath
+
+	issue := &snyk.Issue{
+		ID:               "code-issue-ai-fix",
+		AffectedFilePath: filePath,
+		Severity:         types.High,
+		Product:          product.ProductCode,
+		Message:          "a code security issue",
+		AdditionalData:   snyk.CodeIssueData{Key: "key-ai-fix"},
+	}
+	return s.runScanWithFakeScanner(&bddFakeScanner{scans: []types.ScanData{
+		{Product: product.ProductCode, Issues: []types.Issue{issue}},
 	}})
 }
 

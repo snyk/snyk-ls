@@ -210,7 +210,7 @@ func issueTitle(issue types.Issue) string {
 	return issue.GetID()
 }
 
-func issueId(issue types.Issue) string {
+func IssueId(issue types.Issue) string {
 	if issue.GetAdditionalData() == nil {
 		return issue.GetID()
 	}
@@ -230,7 +230,7 @@ func SnykMagnetUri(issue types.Issue, ideAction string) (string, error) {
 	u := &url.URL{
 		Scheme:   "snyk",
 		Path:     string(issue.GetAffectedFilePath()),
-		RawQuery: fmt.Sprintf("product=%s&issueId=%s&action=%s", url.QueryEscape(string(issue.GetProduct())), url.QueryEscape(issueId(issue)), ideAction),
+		RawQuery: fmt.Sprintf("product=%s&issueId=%s&action=%s", url.QueryEscape(string(issue.GetProduct())), url.QueryEscape(IssueId(issue)), ideAction),
 	}
 
 	return u.String(), nil

@@ -233,7 +233,7 @@ func TestIssueId(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := issueId(tc.issue)
+			result := IssueId(tc.issue)
 			if result != tc.expected {
 				t.Errorf("Expected %s, got %s", tc.expected, result)
 			}

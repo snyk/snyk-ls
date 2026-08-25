@@ -19,7 +19,11 @@ package command
 import (
 	"context"
 	"errors"
+	"slices"
+	"sort"
+	"strings"
 
+	"github.com/snyk/code-client-go/llm"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -78,7 +82,10 @@ func (cmd *codeFixDiffs) handleResponse(ctx context.Context, engine workflow.Eng
 	logger := engine.GetLogger().With().Str("method", "codeFixDiffs.handleResponse").Logger()
 	aiFixHandler := htmlRenderer.AiFixHandler
 
-	setStateCallback := func() { SendShowDocumentRequest(ctx, logger, issue, cmd.srv) }
+	setStateCallback := func() {
+		SendShowDocumentRequest(ctx, logger, issue, cmd.srv)
+		cmd.sendAiFixNotification(aiFixHandler, issue)
+	}
 
 	aiFixHandler.SetAiFixDiffState(code.AiFixInProgress, nil, nil, setStateCallback)
 
@@ -95,4 +102,32 @@ func (cmd *codeFixDiffs) handleResponse(ctx context.Context, engine workflow.Eng
 	}
 	aiFixHandler.EnrichWithExplain(ctx, engine, issue, suggestions)
 	aiFixHandler.SetAiFixDiffState(code.AiFixSuccess, suggestions, nil, setStateCallback)
+}
+
+func (cmd *codeFixDiffs) sendAiFixNotification(aiFixHandler *code.AiFixHandler, issue types.Issue) {
+	cmd.notifier.Send(types.AiFixNotification{
+		IssueId: code.IssueId(issue),
+		Status:  string(aiFixHandler.GetAiFixDiffStatus()),
+		Fixes:   aiFixResultsFrom(aiFixHandler.GetAiFixDiffResult()),
+	})
+}
+
+func aiFixResultsFrom(suggestions []llm.AutofixUnifiedDiffSuggestion) []types.AiFixResult {
+	// Clone before sorting: GetAiFixDiffResult returns AiFixHandler's internal slice, and sorting it
+	// in place would race with concurrent readers such as AiFixHandler.GetResults.
+	suggestions = slices.SortedFunc(slices.Values(suggestions), func(a, b llm.AutofixUnifiedDiffSuggestion) int {
+		return strings.Compare(a.FixId, b.FixId)
+	})
+	fixes := make([]types.AiFixResult, 0, len(suggestions))
+	for _, suggestion := range suggestions {
+		filePaths := make([]string, 0, len(suggestion.UnifiedDiffsPerFile))
+		for filePath := range suggestion.UnifiedDiffsPerFile {
+			filePaths = append(filePaths, filePath)
+		}
+		sort.Strings(filePaths)
+		for _, filePath := range filePaths {
+			fixes = append(fixes, types.AiFixResult{FixId: suggestion.FixId, FilePath: filePath})
+		}
+	}
+	return fixes
 }
