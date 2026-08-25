@@ -76,10 +76,16 @@ func runDispatch(t *testing.T, sc *Scanner, root types.FilePath) []string {
 // Flag values live in configuration keyed by folder path, so any folder config for root sees them.
 func stageFilterFlags(t *testing.T, sc *Scanner, root types.FilePath, trackedFiles, metacharFix bool) {
 	t.Helper()
+	stageAllFilterFlags(t, sc, root, trackedFiles, metacharFix, false)
+}
+
+func stageAllFilterFlags(t *testing.T, sc *Scanner, root types.FilePath, trackedFiles, metacharFix, skipSymlinks bool) {
+	t.Helper()
 
 	folderConfig := config.GetFolderConfigFromEngine(sc.engine, sc.configResolver, root, sc.logger)
 	folderConfig.SetFeatureFlag(gafUtils.FF_GITIGNORE_RESPECT_TRACKED_FILES, trackedFiles)
 	folderConfig.SetFeatureFlag(gafUtils.FF_FILE_FILTER_METACHARACTER_FIX, metacharFix)
+	folderConfig.SetFeatureFlag(gafUtils.FF_FILE_FILTER_SKIP_SYMLINKS, skipSymlinks)
 }
 
 // filterFixture describes a folder to scan. nestedDir puts the scan root under an extra path
@@ -669,4 +675,36 @@ func Test_filteredFiles_defaultRulesDoNotAliasAcrossFolders(t *testing.T) {
 	gotB := runDispatch(t, sc, rootB)
 	assert.ElementsMatch(t, []string{neverIgnoredFile, "gitignored_in_folder_a_only.txt"}, gotB,
 		"folder A's own-file exclusion rule must not leak into folder B scanned afterwards by the same scanner")
+}
+
+func Test_filteredFiles_skipsSymlinksWhenFlagEnabled(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation may require elevated privileges on Windows")
+	}
+
+	sc, _ := setupTestScanner(t)
+
+	root := t.TempDir()
+	writeFixtureFile(t, filepath.Join(root, neverIgnoredFile), "console.log('app');\n")
+
+	outsideDir := t.TempDir()
+	outsideFile := filepath.Join(outsideDir, "secret.js")
+	writeFixtureFile(t, outsideFile, "module.exports = 'leaked';\n")
+
+	require.NoError(t, os.Symlink(outsideFile, filepath.Join(root, "link_to_outside.js")))
+
+	rootPath := types.FilePath(root)
+
+	t.Run("symlink included when flag is off", func(t *testing.T) {
+		stageAllFilterFlags(t, sc, rootPath, true, false, false)
+		got := runDispatch(t, sc, rootPath)
+		assert.Contains(t, got, "link_to_outside.js")
+	})
+
+	t.Run("symlink skipped when flag is on", func(t *testing.T) {
+		stageAllFilterFlags(t, sc, rootPath, true, false, true)
+		got := runDispatch(t, sc, rootPath)
+		assert.NotContains(t, got, "link_to_outside.js")
+		assert.Contains(t, got, neverIgnoredFile)
+	})
 }

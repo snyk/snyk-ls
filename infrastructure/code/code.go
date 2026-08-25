@@ -327,6 +327,8 @@ func (sc *Scanner) newFilteredFiles(folderConfig *types.FolderConfig, logger zer
 	conf.Set(gafUtils.FF_GITIGNORE_RESPECT_TRACKED_FILES, true)
 	conf.Set(gafUtils.FF_FILE_FILTER_METACHARACTER_FIX,
 		folderConfig.GetFeatureFlag(gafUtils.FF_FILE_FILTER_METACHARACTER_FIX))
+	conf.Set(gafUtils.FF_FILE_FILTER_SKIP_SYMLINKS,
+		folderConfig.GetFeatureFlag(gafUtils.FF_FILE_FILTER_SKIP_SYMLINKS))
 
 	fileFilter := gafUtils.NewFileFilter(string(folderConfig.FolderPath), &logger,
 		gafUtils.WithConfig(conf),
