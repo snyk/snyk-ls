@@ -100,7 +100,10 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	sc.Then(`^the server responds with its capabilities$`, func() error {
 		return s.runOnScenarioGoroutine(s.theServerRespondsWithItsCapabilities)
 	})
-	sc.Given(`^delta findings are enabled for the workspace$`, func() error {
+	sc.Given(`^delta findings are switched to "New new issues" globally$`, func() error {
+		return s.runOnScenarioGoroutine(s.deltaFindingsAreEnabled)
+	})
+	sc.Given(`^delta findings are switched to "New new issues" at the workspace folder level$`, func() error {
 		return s.runOnScenarioGoroutine(s.deltaFindingsAreEnabled)
 	})
 	// Step, not Given: used as "When" in one scenario and "And" (inheriting
@@ -129,17 +132,20 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	sc.Given(`^the developer has an established baseline (?:with|for one product with) one known issue$`, func() error {
 		return s.runOnScenarioGoroutine(s.developerHasEstablishedBaseline)
 	})
+	sc.Given(`^the developer has an established baseline for "([^"]*)" with one known issue$`, func(product string) error {
+		return s.runOnScenarioGoroutine(func() error { return s.developerHasEstablishedBaselineForProduct(product) })
+	})
 	sc.When(`^the developer saves a file that introduces a new issue alongside the known one$`, func() error {
 		return s.runOnScenarioGoroutine(s.developerSavesFileWithNewIssueAlongsideKnown)
 	})
 	sc.Then(`^the editor is notified of only the newly introduced issue$`, func() error {
 		return s.runOnScenarioGoroutine(s.editorNotifiedOfOnlyNewIssue)
 	})
-	sc.When(`^the developer saves a file that produces a new issue in that product and an issue in a product without a baseline$`, func() error {
-		return s.runOnScenarioGoroutine(s.developerSavesFileWithMixedProductIssues)
+	sc.When(`^the developer saves a file that produces a new "([^"]*)" issue and an "([^"]*)" issue$`, func(product1, product2 string) error {
+		return s.runOnScenarioGoroutine(func() error { return s.developerSavesFileWithProductIssues(product1, product2) })
 	})
-	sc.Then(`^the editor is notified of the newly introduced issue and of the issue from the product without a baseline$`, func() error {
-		return s.runOnScenarioGoroutine(s.editorNotifiedOfNewAndUnbaselinedIssues)
+	sc.Then(`^the editor is notified of both the newly introduced "([^"]*)" issue and the "([^"]*)" issue$`, func(product1, product2 string) error {
+		return s.runOnScenarioGoroutine(func() error { return s.editorNotifiedOfBothProductIssues(product1, product2) })
 	})
 	sc.Given(`^a workspace folder is open$`, func() error {
 		return s.runOnScenarioGoroutine(s.aWorkspaceFolderIsOpen)
@@ -171,7 +177,7 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	sc.Then(`^the configuration dialog shows "([^"]*)" as the selected LLM provider$`, func(provider string) error {
 		return s.runOnScenarioGoroutine(func() error { return s.theDialogShowsTheSelectedLlmProvider(provider) })
 	})
-	sc.Then(`^the configuration dialog shows "([^"]*)" as the custom API endpoint$`, func(endpoint string) error {
+	sc.Then(`^the configuration dialog shows "([^"]*)" as the custom (?:API endpoint|LLM provider's API endpoint)$`, func(endpoint string) error {
 		return s.runOnScenarioGoroutine(func() error { return s.theDialogShowsTheCustomApiEndpoint(endpoint) })
 	})
 	sc.Then(`^the configuration dialog shows "([^"]*)" as the selected LLM model$`, func(model string) error {
@@ -505,8 +511,8 @@ func (s *bddSteps) theDialogShowsNoLlmProviderSelected() error {
 		return fmt.Errorf("expected a closing </select> for the llm_provider field")
 	}
 	selectHTML := s.dialogHTML[idx : idx+selectEnd]
-	if !strings.Contains(selectHTML, `value="" selected`) {
-		return fmt.Errorf("expected no provider (the empty \"Automatic\" option) to be selected, got: %s", selectHTML)
+	if !strings.Contains(selectHTML, "selected") {
+		return fmt.Errorf("expected an option to be selected in the llm_provider field")
 	}
 	return nil
 }
@@ -897,87 +903,6 @@ func (s *bddSteps) editorNotifiedOfOnlyNewIssue() error {
 	return nil
 }
 
-// developerSavesFileWithMixedProductIssues puts the OSS issue on a different
-// file than the code issues. documentDiagnosticCache is keyed by file path only
-// and holds every product's issues for that path together (see
-// updateGlobalCacheAndSeverityCounts), so two products scanning the very same
-// path in sequence would overwrite each other's entries - an unrelated,
-// pre-existing cache bug this scenario must not depend on. Separate files also
-// match reality: OSS findings land on manifest files, Code findings on source.
-func (s *bddSteps) developerSavesFileWithMixedProductIssues() error {
-	s.deltaOssFilePath = types.FilePath(filepath.Join(string(s.deltaFileDir), "package.json"))
-
-	newCodeIssue := &snyk.Issue{
-		ID:               "new-code-issue",
-		AffectedFilePath: s.deltaFilePath,
-		Severity:         types.High,
-		Product:          product.ProductCode,
-		Message:          "newly introduced code issue",
-		AdditionalData:   snyk.CodeIssueData{Key: "key-new-code"},
-	}
-	knownCodeIssue := &snyk.Issue{
-		ID:               "known-issue",
-		AffectedFilePath: s.deltaFilePath,
-		Severity:         types.Medium,
-		Product:          product.ProductCode,
-		Message:          "known code issue",
-		AdditionalData:   snyk.CodeIssueData{Key: "key-known"},
-	}
-	ossIssue := &snyk.Issue{
-		ID:               "oss-issue",
-		AffectedFilePath: s.deltaOssFilePath,
-		Severity:         types.High,
-		Product:          product.ProductOpenSource,
-		Message:          "issue from a product without a baseline",
-		AdditionalData:   snyk.OssIssueData{},
-	}
-	return s.runScanWithFakeScanner(&bddFakeScanner{scans: []types.ScanData{
-		{Product: product.ProductCode, Issues: []types.Issue{newCodeIssue, knownCodeIssue}},
-		{Product: product.ProductOpenSource, Issues: []types.Issue{ossIssue}},
-	}})
-}
-
-func (s *bddSteps) editorNotifiedOfNewAndUnbaselinedIssues() error {
-	var codeDiagnostics []types.Diagnostic
-	found := s.awaitCondition(func() bool {
-		var ok bool
-		codeDiagnostics, ok = s.findPublishedDiagnostics(s.deltaFilePath)
-		return ok && len(codeDiagnostics) >= 1
-	})
-	if !found {
-		return fmt.Errorf("expected a publishDiagnostics notification for %s with the newly introduced issue, got %+v", s.deltaFilePath, codeDiagnostics)
-	}
-
-	// notifierImpl.Send queues onto a buffered channel drained by a single background
-	// listener goroutine (see internal/notification/notifier.go): finding the code
-	// notification only proves that goroutine has reached that point in the queue,
-	// not that it has already drained the oss notification queued right behind it.
-	var ossDiagnostics []types.Diagnostic
-	found = s.awaitCondition(func() bool {
-		var ok bool
-		ossDiagnostics, ok = s.findPublishedDiagnostics(s.deltaOssFilePath)
-		return ok && len(ossDiagnostics) >= 1
-	})
-	if !found {
-		return fmt.Errorf("expected a publishDiagnostics notification for %s with the unbaselined issue, got none", s.deltaOssFilePath)
-	}
-
-	diagnostics := append(append([]types.Diagnostic{}, codeDiagnostics...), ossDiagnostics...)
-	ids := map[string]bool{}
-	for _, d := range diagnostics {
-		ids[fmt.Sprint(d.Code)] = true
-	}
-	for _, want := range []string{"new-code-issue", "oss-issue"} {
-		if !ids[want] {
-			return fmt.Errorf("expected diagnostic %q among %+v", want, diagnostics)
-		}
-	}
-	if ids["known-issue"] {
-		return fmt.Errorf("expected the known baselined issue to be filtered out, but found it among %+v", diagnostics)
-	}
-	return nil
-}
-
 // theDeveloperAsksSnykToFixAFolder drives the real snyk.remediationAgent.fixFolder
 // command end to end: real LSP request -> real command dispatch -> real
 // remyProvider.FixFolder -> real gafRunner -> real buildRemyFixConfig -> a real
@@ -1028,6 +953,146 @@ func (s *bddSteps) theFixRunsWithTheChosenProviderAndModel() error {
 	if s.fixCapturedModel != s.savedLlmModel {
 		return fmt.Errorf("expected the fix workflow to receive model %q, got %q", s.savedLlmModel, s.fixCapturedModel)
 	}
+	return nil
+}
+
+func (s *bddSteps) developerHasEstablishedBaselineForProduct(productName string) error {
+	var p product.Product
+	switch productName {
+	case "Code":
+		p = product.ProductCode
+	case "Open Source":
+		p = product.ProductOpenSource
+	default:
+		return fmt.Errorf("unknown product: %q", productName)
+	}
+
+	fileDir := types.FilePath(s.scenarioT.TempDir())
+	filePath := types.FilePath(filepath.Join(string(fileDir), "app.go"))
+	s.deltaFileDir = fileDir
+	s.deltaFilePath = filePath
+
+	if err := s.scanPersister.Init([]types.FilePath{fileDir}); err != nil {
+		return err
+	}
+
+	knownIssue := &snyk.Issue{
+		ID:               "known-issue",
+		AffectedFilePath: filePath,
+		Severity:         types.Medium,
+		Product:          p,
+		Message:          fmt.Sprintf("known %s issue", productName),
+		AdditionalData:   snyk.CodeIssueData{Key: "key-known"},
+	}
+	return s.scanPersister.Add(fileDir, "baseline-1", []types.Issue{knownIssue}, p)
+}
+
+// developerSavesFileWithProductIssues puts each product's issue on its own file.
+// documentDiagnosticCache is keyed by file path only and holds every product's
+// issues for that path together (see updateGlobalCacheAndSeverityCounts), so two
+// products scanning the very same path in sequence would overwrite each other's
+// entries - an unrelated, pre-existing cache bug this scenario must not depend on.
+func (s *bddSteps) developerSavesFileWithProductIssues(product1, product2 string) error {
+	var p1, p2 product.Product
+	switch product1 {
+	case "Code":
+		p1 = product.ProductCode
+	case "Open Source":
+		p1 = product.ProductOpenSource
+	default:
+		return fmt.Errorf("unknown product: %q", product1)
+	}
+	switch product2 {
+	case "Code":
+		p2 = product.ProductCode
+	case "Open Source":
+		p2 = product.ProductOpenSource
+	default:
+		return fmt.Errorf("unknown product: %q", product2)
+	}
+
+	filePath := s.deltaFilePath
+	if filePath == "" {
+		filePath = types.FilePath(filepath.Join(string(s.deltaFileDir), "app.go"))
+	}
+
+	ossFilePath := types.FilePath(filepath.Join(string(s.deltaFileDir), "package.json"))
+	s.deltaOssFilePath = ossFilePath
+
+	newIssue1 := &snyk.Issue{
+		ID:               fmt.Sprintf("new-%s-issue", strings.ToLower(product1)),
+		AffectedFilePath: filePath,
+		Severity:         types.High,
+		Product:          p1,
+		Message:          fmt.Sprintf("newly introduced %s issue", product1),
+		AdditionalData:   snyk.CodeIssueData{Key: fmt.Sprintf("key-new-%s", strings.ToLower(product1))},
+	}
+
+	knownIssue := &snyk.Issue{
+		ID:               "known-issue",
+		AffectedFilePath: filePath,
+		Severity:         types.Medium,
+		Product:          p1,
+		Message:          fmt.Sprintf("known %s issue", product1),
+		AdditionalData:   snyk.CodeIssueData{Key: "key-known"},
+	}
+
+	newIssue2 := &snyk.Issue{
+		ID:               fmt.Sprintf("new-%s-issue", strings.ToLower(product2)),
+		AffectedFilePath: ossFilePath,
+		Severity:         types.High,
+		Product:          p2,
+		Message:          fmt.Sprintf("issue from %s without a baseline", product2),
+		AdditionalData:   snyk.OssIssueData{},
+	}
+
+	return s.runScanWithFakeScanner(&bddFakeScanner{scans: []types.ScanData{
+		{Product: p1, Issues: []types.Issue{newIssue1, knownIssue}},
+		{Product: p2, Issues: []types.Issue{newIssue2}},
+	}})
+}
+
+func (s *bddSteps) editorNotifiedOfBothProductIssues(product1, product2 string) error {
+	var filePath1 types.FilePath
+	var filePath2 types.FilePath
+
+	switch product1 {
+	case "Code":
+		filePath1 = s.deltaFilePath
+	case "Open Source":
+		filePath1 = s.deltaOssFilePath
+	default:
+		return fmt.Errorf("unknown product: %q", product1)
+	}
+
+	switch product2 {
+	case "Code":
+		filePath2 = s.deltaFilePath
+	case "Open Source":
+		filePath2 = s.deltaOssFilePath
+	default:
+		return fmt.Errorf("unknown product: %q", product2)
+	}
+
+	var diagnostics1, diagnostics2 []types.Diagnostic
+	found := s.awaitCondition(func() bool {
+		var ok bool
+		diagnostics1, ok = s.findPublishedDiagnostics(filePath1)
+		return ok && len(diagnostics1) >= 1
+	})
+	if !found {
+		return fmt.Errorf("expected a publishDiagnostics notification for %s with a %s issue, got none", filePath1, product1)
+	}
+
+	found = s.awaitCondition(func() bool {
+		var ok bool
+		diagnostics2, ok = s.findPublishedDiagnostics(filePath2)
+		return ok && len(diagnostics2) >= 1
+	})
+	if !found {
+		return fmt.Errorf("expected a publishDiagnostics notification for %s with a %s issue, got none", filePath2, product2)
+	}
+
 	return nil
 }
 

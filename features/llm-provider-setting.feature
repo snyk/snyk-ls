@@ -10,7 +10,7 @@ Feature: Choose the LLM provider used by autonomous remediation
     When a developer saves "ollama" as the LLM provider with custom API endpoint "http://localhost:11434"
     And the developer reopens the Snyk configuration dialog
     Then the configuration dialog shows "ollama" as the selected LLM provider
-    And the configuration dialog shows "http://localhost:11434" as the custom API endpoint
+    And the configuration dialog shows "http://localhost:11434" as the custom LLM provider's API endpoint
 
   # maps: IDE-2274-M5
   Scenario: A developer who has never chosen a provider sees no forced default
