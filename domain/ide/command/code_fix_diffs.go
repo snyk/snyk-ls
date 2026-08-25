@@ -100,7 +100,7 @@ func (cmd *codeFixDiffs) handleResponse(ctx context.Context, engine workflow.Eng
 		aiFixHandler.SetAiFixDiffState(code.AiFixError, nil, err, setStateCallback)
 		return
 	}
-	aiFixHandler.EnrichWithExplain(ctx, engine, issue, suggestions)
+	// Explanations come from code-client-go.
 	aiFixHandler.SetAiFixDiffState(code.AiFixSuccess, suggestions, nil, setStateCallback)
 }
 

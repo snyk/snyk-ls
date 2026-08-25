@@ -19,7 +19,6 @@ require (
 	github.com/gomarkdown/markdown v0.0.0-20260417124207-7d523f7318df
 	github.com/google/uuid v1.6.0
 	github.com/gosimple/hashdir v1.0.2
-	github.com/hexops/gotextdiff v1.0.3
 	github.com/muesli/termenv v0.16.0
 	github.com/otiai10/copy v1.14.1
 	github.com/pact-foundation/pact-go v1.10.0
@@ -33,7 +32,7 @@ require (
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/snyk/cli-extension-os-flows v0.0.0-20260625140351-2bb6cb470073
 	github.com/snyk/cli-extension-secrets v0.0.0-20260811115637-ee872c26b0cd
-	github.com/snyk/code-client-go v1.31.3
+	github.com/snyk/code-client-go v1.31.7
 	github.com/snyk/error-catalog-golang-public v0.0.0-20260806122555-28dc45bbbde6
 	github.com/snyk/go-application-framework v0.14.1
 	github.com/snyk/studio-mcp v1.6.1
@@ -95,6 +94,7 @@ require (
 	github.com/hashicorp/go-version v1.7.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/hashicorp/logutils v1.0.0 // indirect
+	github.com/hexops/gotextdiff v1.0.3 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
