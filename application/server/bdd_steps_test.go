@@ -4,17 +4,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/creachadair/jrpc2/server"
 	"github.com/cucumber/godog"
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/filemode"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
@@ -59,6 +64,7 @@ type bddSteps struct {
 	stepResult   chan error
 
 	engine              workflow.Engine
+	tokenService        types.TokenService
 	loc                 server.Local
 	jsonRPCRecorder     *testsupport.JsonRPCRecorder
 	deps                di.Dependencies
@@ -75,6 +81,9 @@ type bddSteps struct {
 	deltaOssFilePath types.FilePath
 	lastDiagnostics  []types.Diagnostic
 	lastTreeViewHTML string
+	// expectedNewIssueCode is the diagnostic code editorNotifiedOfOnlyNewIssue
+	// requires; scenarios set it to the finding they deliberately introduced.
+	expectedNewIssueCode string
 
 	savedLlmProvider    string
 	savedLlmModel       string
@@ -92,7 +101,12 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	sc.Before(s.beforeScenario)
 	sc.After(s.afterScenario)
 	sc.Given(`^a running language server$`, func() error {
-		return s.runOnScenarioGoroutine(s.aRunningLanguageServer)
+		return s.runOnScenarioGoroutine(func() error { return s.startLanguageServer() })
+	})
+	sc.Given(`^a running language server that finds one issue in every source file$`, func() error {
+		return s.runOnScenarioGoroutine(func() error {
+			return s.startLanguageServer(WithProductScanners(bddPerFileScanner{}))
+		})
 	})
 	// Step, not When: this step is reused as "And" (inheriting Given) in the
 	// delta-fail-open scenarios, and Given/When/Then in godog match only their
@@ -158,6 +172,12 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	})
 	sc.Then(`^the editor is notified of both the newly introduced "([^"]*)" issue and the "([^"]*)" issue$`, func(product1, product2 string) error {
 		return s.runOnScenarioGoroutine(func() error { return s.editorNotifiedOfBothProductIssues(product1, product2) })
+	})
+	sc.Given(`^the developer opens a repository whose base branch carries a file named after a Windows device$`, func() error {
+		return s.runOnScenarioGoroutine(s.developerOpensRepositoryWithDeviceFileNameOnBaseBranch)
+	})
+	sc.When(`^the developer scans the whole repository$`, func(ctx context.Context) error {
+		return s.runOnScenarioGoroutine(func() error { return s.developerScansTheWholeRepository(ctx) })
 	})
 	sc.Given(`^a workspace folder is open$`, func() error {
 		return s.runOnScenarioGoroutine(s.aWorkspaceFolderIsOpen)
@@ -290,7 +310,7 @@ func (s *bddSteps) runOnScenarioGoroutine(fn func() error) error {
 	}
 }
 
-func (s *bddSteps) aRunningLanguageServer() error {
+func (s *bddSteps) startLanguageServer(serverOpts ...ServerTestOption) error {
 	engine, tokenService := testutil.UnitTestWithEngine(s.scenarioT)
 	// A real GitPersistenceProvider (rather than the NopScanPersister default) so
 	// baseline-availability scenarios can exercise ErrBaselineDoesntExist and Add()
@@ -345,7 +365,7 @@ func (s *bddSteps) aRunningLanguageServer() error {
 		baseDeps.ConfigResolver, baseDeps.ScanStateAggregator.StateSnapshot, folderRemediator, baseDeps.ScanCtx,
 	)
 
-	loc, jsonRPCRecorder, deps := setupServer(s.scenarioT, engine, tokenService, WithDeps(baseDeps))
+	loc, jsonRPCRecorder, deps := setupServer(s.scenarioT, engine, tokenService, append([]ServerTestOption{WithDeps(baseDeps)}, serverOpts...)...)
 	// setupServer's own di.TestInit call unconditionally builds and registers a
 	// second, empty workspace (config.SetWorkspace has no override option), which
 	// would silently orphan the issueProvider baked into baseDeps.CommandService
@@ -355,6 +375,7 @@ func (s *bddSteps) aRunningLanguageServer() error {
 	// consistent with the same workspace instance.
 	config.SetWorkspace(engine.GetConfiguration(), realWorkspace)
 	s.engine = engine
+	s.tokenService = tokenService
 	s.loc = loc
 	s.jsonRPCRecorder = jsonRPCRecorder
 	s.deps = deps
@@ -550,6 +571,157 @@ func (s *bddSteps) theDialogShowsNoLlmProviderSelected() error {
 func (s *bddSteps) theDialogContainsNoLlmApiKeyField() error {
 	if strings.Contains(strings.ToLower(s.dialogHTML), "llm_api_key") {
 		return fmt.Errorf("configuration dialog must never contain an LLM API key field")
+	}
+	return nil
+}
+
+// developerOpensRepositoryWithDeviceFileNameOnBaseBranch builds the customer's
+// repository: master carries the reserved device name plus a file with an
+// already-known finding, and the checked-out feature branch drops the reserved
+// name and adds a file with a new finding. Nothing writes a reserved device
+// name to disk, so this runs on every platform.
+func (s *bddSteps) developerOpensRepositoryWithDeviceFileNameOnBaseBranch() error {
+	repoPath := s.newScenarioRepoPath()
+	repo := testutil.InitGitRepo(s.scenarioT, repoPath)
+	storer := repo.Storer
+
+	knownBlob := testutil.WriteGitBlob(s.scenarioT, storer, bddDummySource)
+	buildTree := testutil.WriteGitTree(s.scenarioT, storer, []object.TreeEntry{
+		{Name: "prn.sh", Mode: filemode.Regular, Hash: testutil.WriteGitBlob(s.scenarioT, storer, bddBuildScriptSource)},
+	})
+	scriptsTree := testutil.WriteGitTree(s.scenarioT, storer, []object.TreeEntry{
+		{Name: "build", Mode: filemode.Dir, Hash: buildTree},
+	})
+	masterCommit := testutil.CommitGitTree(s.scenarioT, repo, testutil.WriteGitTree(s.scenarioT, storer, []object.TreeEntry{
+		{Name: bddKnownFindingFile, Mode: filemode.Regular, Hash: knownBlob},
+		{Name: "scripts", Mode: filemode.Dir, Hash: scriptsTree},
+	}))
+
+	featureTree := testutil.WriteGitTree(s.scenarioT, storer, []object.TreeEntry{
+		{Name: bddKnownFindingFile, Mode: filemode.Regular, Hash: knownBlob},
+		{Name: bddNewFindingFile, Mode: filemode.Regular, Hash: testutil.WriteGitBlob(s.scenarioT, storer, bddDummySource)},
+	})
+	testutil.CommitGitTreeOnBranch(s.scenarioT, repo, plumbing.NewBranchReferenceName("feature"), featureTree, masterCommit)
+
+	// Checking out the feature branch is just writing its two files.
+	for _, name := range []string{bddKnownFindingFile, bddNewFindingFile} {
+		if err := writeScenarioFile(repoPath, name, bddDummySource); err != nil {
+			return err
+		}
+	}
+
+	s.deltaFileDir = repoPath
+	s.deltaFilePath = types.FilePath(filepath.Join(string(repoPath), bddNewFindingFile))
+	s.expectedNewIssueCode = bddNewFindingFile
+	return s.openScenarioRepo(repoPath)
+}
+
+const (
+	bddDummySource       = "public class Dummy {}\n"
+	bddBuildScriptSource = "#!/bin/sh\necho build\n"
+	// One finding per source file, named after it, so the delta between the base
+	// branch and the working tree is exactly the file the feature branch added.
+	bddKnownFindingFile = "Known.java"
+	bddNewFindingFile   = "New.java"
+)
+
+// bddPerFileScanner reports one finding per .java file it finds under the path
+// it is handed. Only the product scanner is substituted: the real
+// DelegatingConcurrentScanner still clones the base branch and diffs against it,
+// which is the code this scenario exists to exercise.
+type bddPerFileScanner struct{}
+
+func (bddPerFileScanner) Product() product.Product { return product.ProductCode }
+
+func (bddPerFileScanner) IsEnabledForFolder(*types.FolderConfig) bool { return true }
+
+func (bddPerFileScanner) Scan(_ context.Context, pathToScan types.FilePath) ([]types.Issue, error) {
+	var issues []types.Issue
+	err := filepath.WalkDir(string(pathToScan), func(p string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() || filepath.Ext(p) != code.FakeFileExtension {
+			return nil //nolint:nilerr // an unreadable entry is simply not a finding
+		}
+		issues = append(issues, &snyk.Issue{
+			ID:               filepath.Base(p),
+			AffectedFilePath: types.FilePath(p),
+			ContentRoot:      pathToScan,
+			Severity:         types.High,
+			Product:          product.ProductCode,
+			Message:          "finding in " + filepath.Base(p),
+			AdditionalData:   snyk.CodeIssueData{Key: "key-" + filepath.Base(p)},
+		})
+		return nil
+	})
+	return issues, err
+}
+
+func (s *bddSteps) newScenarioRepoPath() types.FilePath {
+	repoPath := types.FilePath(s.scenarioT.TempDir())
+	if canonical, err := filepath.EvalSymlinks(string(repoPath)); err == nil {
+		repoPath = types.FilePath(canonical)
+	}
+	return repoPath
+}
+
+func writeScenarioFile(repoPath types.FilePath, name, content string) error {
+	onDisk := filepath.Join(string(repoPath), filepath.FromSlash(name))
+	if err := os.MkdirAll(filepath.Dir(onDisk), 0o755); err != nil {
+		return fmt.Errorf("creating %s failed: %w", filepath.Dir(onDisk), err)
+	}
+	if err := os.WriteFile(onDisk, []byte(content), 0o600); err != nil {
+		return fmt.Errorf("writing %s failed: %w", onDisk, err)
+	}
+	return nil
+}
+
+// openScenarioRepo opens repoPath the way an editor does: initialize carrying
+// the workspace folder, initialized, then the base branch over the settings
+// channel. The server builds the folder and its scanner itself, so registration
+// (including the persister's cache directory) runs for real.
+func (s *bddSteps) openScenarioRepo(repoPath types.FilePath) error {
+	ctx := s.scenarioT.Context()
+	initParams := types.InitializeParams{
+		WorkspaceFolders: []types.WorkspaceFolder{
+			{Uri: uri.PathToUri(repoPath), Name: "bdd-device-name-repo"},
+		},
+	}
+	if _, err := s.loc.Client.Call(ctx, "initialize", initParams); err != nil {
+		return fmt.Errorf("initialize call failed: %w", err)
+	}
+	// Simulates an org policy locking auto-scan off, so the scan this scenario
+	// triggers explicitly is the only one running.
+	disableAutoScan(s.scenarioT, s.engine.GetConfiguration())
+	if _, err := s.loc.Client.Call(ctx, "initialized", types.InitializedParams{}); err != nil {
+		return fmt.Errorf("initialized call failed: %w", err)
+	}
+	types.WaitForLspInitialized(s.engine.GetConfiguration())
+
+	settings := types.DidChangeConfigurationParams{
+		Settings: types.LspConfigurationParam{
+			FolderConfigs: []types.LspFolderConfig{
+				{
+					FolderPath: repoPath,
+					Settings: map[string]*types.ConfigSetting{
+						types.SettingBaseBranch:      {Value: "master", Changed: true},
+						types.SettingReferenceBranch: {Value: "master", Changed: true},
+					},
+				},
+			},
+		},
+	}
+	if _, err := s.loc.Client.Call(ctx, "workspace/didChangeConfiguration", settings); err != nil {
+		return fmt.Errorf("workspace/didChangeConfiguration call failed: %w", err)
+	}
+
+	s.folderPath = repoPath
+	return nil
+}
+
+func (s *bddSteps) developerScansTheWholeRepository(ctx context.Context) error {
+	if _, err := s.loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		Command: types.WorkspaceScanCommand,
+	}); err != nil {
+		return fmt.Errorf("workspace/executeCommand(%s) call failed: %w", types.WorkspaceScanCommand, err)
 	}
 	return nil
 }
@@ -973,6 +1145,7 @@ func (s *bddSteps) developerSavesFileWithNewIssueAlongsideKnown() error {
 		Message:          "newly introduced code issue",
 		AdditionalData:   snyk.CodeIssueData{Key: "key-new"},
 	}
+	s.expectedNewIssueCode = "new-issue"
 	knownIssue := &snyk.Issue{
 		ID:               "known-issue",
 		AffectedFilePath: s.deltaFilePath,
@@ -1012,18 +1185,62 @@ func (s *bddSteps) developerHasACodeIssueFoundBySnyk() error {
 	}})
 }
 
+// editorNotifiedOfOnlyNewIssue asserts across every file the editor was told
+// about, not just deltaFilePath: with the pre-existing and the new finding in
+// different files, a per-file check would pass even when no baseline exists at
+// all and delta fails open, because the new file has one finding either way.
 func (s *bddSteps) editorNotifiedOfOnlyNewIssue() error {
-	diagnostics, found := s.awaitPublishedDiagnostics(s.deltaFilePath)
-	if !found {
+	if _, found := s.awaitPublishedDiagnostics(s.deltaFilePath); !found {
 		return fmt.Errorf("expected a textDocument/publishDiagnostics notification for %s, got none", s.deltaFilePath)
 	}
-	if len(diagnostics) != 1 {
-		return fmt.Errorf("expected exactly one diagnostic (only the newly introduced issue), got %d: %+v", len(diagnostics), diagnostics)
+
+	// A base branch scan runs after the working scan has already published, so
+	// the delta-filtered republish arrives later; poll for the settled state.
+	var withFindings []string
+	var total int
+	settled := s.awaitCondition(func() bool {
+		withFindings, total = s.filesWithFindings()
+		return total == 1
+	})
+	if !settled {
+		return fmt.Errorf("expected exactly one diagnostic in the whole workspace (only the newly introduced issue), got %d across %v", total, withFindings)
 	}
-	if diagnostics[0].Code != "new-issue" {
-		return fmt.Errorf("expected the newly introduced issue %q, got %q", "new-issue", diagnostics[0].Code)
+
+	diagnostics := s.latestDiagnosticsByFile()[string(uri.PathToUri(s.deltaFilePath))]
+	if len(diagnostics) != 1 {
+		return fmt.Errorf("expected the one remaining diagnostic to be on %s, it was on %v", s.deltaFilePath, withFindings)
+	}
+	if diagnostics[0].Code != s.expectedNewIssueCode {
+		return fmt.Errorf("expected the newly introduced issue %q, got %q", s.expectedNewIssueCode, diagnostics[0].Code)
 	}
 	return nil
+}
+
+// filesWithFindings returns the files the editor currently shows findings for,
+// and how many diagnostics that is in total.
+func (s *bddSteps) filesWithFindings() (files []string, total int) {
+	for path, diagnostics := range s.latestDiagnosticsByFile() {
+		if len(diagnostics) > 0 {
+			files = append(files, path)
+			total += len(diagnostics)
+		}
+	}
+	sort.Strings(files)
+	return files, total
+}
+
+// latestDiagnosticsByFile returns the most recent publishDiagnostics payload per
+// URI. A folder republishes per product, so only the last one per file counts.
+func (s *bddSteps) latestDiagnosticsByFile() map[string][]types.Diagnostic {
+	latest := map[string][]types.Diagnostic{}
+	for _, n := range s.jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics") {
+		var params types.PublishDiagnosticsParams
+		if err := n.UnmarshalParams(&params); err != nil {
+			continue
+		}
+		latest[string(params.URI)] = params.Diagnostics
+	}
+	return latest
 }
 
 // theDeveloperAsksSnykToFixAFolder drives the real snyk.remediationAgent.fixFolder
@@ -1271,7 +1488,7 @@ func Test_BDDSteps_PerScenarioCleanup(t *testing.T) {
 
 	ctx, err := s.beforeScenario(ctx, &godog.Scenario{Name: "scenario one"})
 	require.NoError(t, err)
-	require.NoError(t, s.aRunningLanguageServer())
+	require.NoError(t, s.startLanguageServer())
 	firstClient := s.loc.Client
 
 	_, err = s.afterScenario(ctx, &godog.Scenario{Name: "scenario one"}, nil)
@@ -1281,7 +1498,7 @@ func Test_BDDSteps_PerScenarioCleanup(t *testing.T) {
 
 	ctx, err = s.beforeScenario(ctx, &godog.Scenario{Name: "scenario two"})
 	require.NoError(t, err)
-	require.NoError(t, s.aRunningLanguageServer())
+	require.NoError(t, s.startLanguageServer())
 	secondClient := s.loc.Client
 
 	assert.False(t, secondClient.IsStopped(), "expected scenario two's own server to still be running, independently of scenario one's teardown")

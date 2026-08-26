@@ -29,7 +29,7 @@ import (
 
 func TestGitRepoRoot_AtRepoRoot(t *testing.T) {
 	repoPath := types.FilePath(t.TempDir())
-	initGitRepo(t, repoPath, false)
+	initWorktreeRepo(t, repoPath, false)
 
 	root, err := GitRepoRoot(repoPath)
 
@@ -39,7 +39,7 @@ func TestGitRepoRoot_AtRepoRoot(t *testing.T) {
 
 func TestGitRepoRoot_FromSubfolder(t *testing.T) {
 	repoPath := types.FilePath(t.TempDir())
-	initGitRepo(t, repoPath, false)
+	initWorktreeRepo(t, repoPath, false)
 
 	subfolder := filepath.Join(string(repoPath), "some", "nested", "subfolder")
 	require.NoError(t, os.MkdirAll(subfolder, 0o755))

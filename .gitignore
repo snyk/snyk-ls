@@ -117,6 +117,7 @@ brain/
 .verify-oracle-scope.txt
 .verify-oracle.pid
 .verify-lang-skill
+.verify-lang-go-marker
 .verify-chunk-diff
 .verify-triage.json
 .verify-source-map.json

@@ -35,6 +35,8 @@ type CheckoutHandler struct {
 	baseFolderPath types.FilePath
 	repository     *git.Repository
 	cleanupFunc    func()
+	attempted      bool
+	attemptErr     error
 	mutex          sync.Mutex
 	conf           configuration.Configuration
 }
@@ -49,6 +51,11 @@ func (ch *CheckoutHandler) BaseFolderPath() types.FilePath {
 	return ch.baseFolderPath
 }
 
+// Repo returns the base branch clone. Its worktree is written directly rather
+// than checked out, so no index describes it: every file reads as both
+// deleted-from-index and untracked, and `git ls-files` is empty. On the
+// detached-HEAD fallback the index is worse than empty - it is the source
+// repository's, copied along with .git and never reset.
 func (ch *CheckoutHandler) Repo() *git.Repository {
 	return ch.repository
 }
@@ -60,11 +67,20 @@ func (ch *CheckoutHandler) CleanupFunc() func() {
 func (ch *CheckoutHandler) CheckoutBaseBranch(logger *zerolog.Logger, folderConfig *types.FolderConfig) error {
 	ch.mutex.Lock()
 	defer ch.mutex.Unlock()
-	folderPath := folderConfig.FolderPath
 
-	if ch.baseFolderPath != "" && ch.repository != nil && ch.cleanupFunc != nil {
-		return nil
+	// Memoize the attempt, not just success. This handler is per scan and every
+	// product scanner calls it, so a failure would otherwise be repeated N times,
+	// each retry now also paying for its own cleanup inside this lock.
+	if ch.attempted {
+		return ch.attemptErr
 	}
+	ch.attempted = true
+	ch.attemptErr = ch.checkoutBaseBranch(logger, folderConfig)
+	return ch.attemptErr
+}
+
+func (ch *CheckoutHandler) checkoutBaseBranch(logger *zerolog.Logger, folderConfig *types.FolderConfig) error {
+	folderPath := folderConfig.FolderPath
 
 	baseBranchName := GetBaseBranchName(ch.conf, folderPath, logger)
 
@@ -82,23 +98,26 @@ func (ch *CheckoutHandler) CheckoutBaseBranch(logger *zerolog.Logger, folderConf
 		return err
 	}
 
-	repo, err := Clone(logger, folderPath, types.FilePath(baseBranchFolderPath), baseBranchName)
-
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to clone base branch")
-		return err
-	}
-
 	cleanupFunc := func() {
 		if baseBranchFolderPath == "" {
 			return
 		}
-		err = os.RemoveAll(baseBranchFolderPath)
 		logger.Info().Msg("removing base branch tmp dir " + baseBranchFolderPath)
-
-		if err != nil {
-			logger.Error().Err(err).Msg("couldn't remove tmp dir " + baseBranchFolderPath)
+		// Through OSPath because that is how the clone's files were created; a
+		// reserved device name is not reachable by any other spelling.
+		if removeErr := os.RemoveAll(OSPath(baseBranchFolderPath)); removeErr != nil {
+			logger.Error().Err(removeErr).Msg("couldn't remove tmp dir " + baseBranchFolderPath)
 		}
+	}
+
+	repo, err := Clone(logger, folderPath, types.FilePath(baseBranchFolderPath), baseBranchName)
+
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to clone base branch")
+		// A failed clone can still have written a partial worktree, and every
+		// product scanner retries this, so each attempt would leak its own copy.
+		cleanupFunc()
+		return err
 	}
 
 	ch.baseFolderPath = types.FilePath(baseBranchFolderPath)

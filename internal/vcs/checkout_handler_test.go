@@ -17,9 +17,13 @@
 package vcs
 
 import (
+	"os"
 	"testing"
 
+	"github.com/go-git/go-git/v5/plumbing/filemode"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -28,7 +32,7 @@ import (
 func TestCheckoutHandler_ShouldCheckout(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	repoPath := types.FilePath(t.TempDir())
-	_, _ = initGitRepo(t, repoPath, false)
+	_, _ = initWorktreeRepo(t, repoPath, false)
 	ch := NewCheckoutHandler(engine.GetConfiguration())
 
 	err := ch.CheckoutBaseBranch(engine.GetLogger(), getFolderConfig(repoPath))
@@ -55,7 +59,7 @@ func TestCheckoutHandler_InvalidGitRepo(t *testing.T) {
 func TestCheckoutHandler_AlreadyCreated(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	repoPath := types.FilePath(t.TempDir())
-	_, _ = initGitRepo(t, repoPath, false)
+	_, _ = initWorktreeRepo(t, repoPath, false)
 
 	ch := NewCheckoutHandler(engine.GetConfiguration())
 
@@ -77,6 +81,34 @@ func TestCheckoutHandler_AlreadyCreated(t *testing.T) {
 	assert.Equal(t, firstRunRepo, ch.Repo())
 	assert.Equal(t, firstRunPath, ch.BaseFolderPath())
 	ch.CleanupFunc()()
+}
+
+// TestCheckoutHandler_RemovesTempDirWhenCloneFails covers a clone that fails
+// after PlainClone succeeded, so the orphan holds a partial worktree, and every
+// product scanner retries the checkout and would leak one directory each.
+func TestCheckoutHandler_RemovesTempDirWhenCloneFails(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	repoPath := types.FilePath(t.TempDir())
+	repo := testutil.InitGitRepo(t, repoPath)
+	testutil.CommitGitTree(t, repo, testutil.WriteGitTree(t, repo.Storer, []object.TreeEntry{
+		{Name: "git~1", Mode: filemode.Regular, Hash: testutil.WriteGitBlob(t, repo.Storer, "payload")},
+	}))
+
+	// A private temp root, so the assertion cannot see directories other tests
+	// create concurrently: t.TempDir names are ordinals like "002", so the
+	// handler's "<folder>_<branch>" prefix is not unique across packages.
+	tempRoot := t.TempDir()
+	t.Setenv("TMPDIR", tempRoot)
+	t.Setenv("TMP", tempRoot)
+	t.Setenv("TEMP", tempRoot)
+
+	ch := NewCheckoutHandler(engine.GetConfiguration())
+	err := ch.CheckoutBaseBranch(engine.GetLogger(), getFolderConfig(repoPath))
+
+	require.Error(t, err)
+	entries, readErr := os.ReadDir(tempRoot)
+	require.NoError(t, readErr)
+	assert.Empty(t, entries, "a failed clone must not leave its temp directory behind")
 }
 
 func getFolderConfig(path types.FilePath) *types.FolderConfig {

@@ -101,6 +101,7 @@ type serverTestConfig struct {
 	apiEndpoint     string
 	concurrency     int
 	scannerOverride scanner.Scanner
+	diTestOptions   []di.TestOption
 }
 
 func WithRealDI() ServerTestOption {
@@ -141,6 +142,15 @@ func WithAPIEndpoint(endpoint string) ServerTestOption {
 func WithScanner(s scanner.Scanner) ServerTestOption {
 	return func(cfg *serverTestConfig) {
 		cfg.scannerOverride = s
+	}
+}
+
+// WithProductScanners replaces the product scanners the server's real delegating
+// scanner is built from, so a test can substitute the Snyk API surface at startup
+// and still let initialize drive the real folder registration.
+func WithProductScanners(scanners ...types.ProductScanner) ServerTestOption {
+	return func(cfg *serverTestConfig) {
+		cfg.diTestOptions = append(cfg.diTestOptions, di.WithProductScanners(scanners...))
 	}
 }
 
@@ -194,7 +204,7 @@ func setupServer(
 		t.Cleanup(deps.TreeEmitter.Dispose)
 		t.Cleanup(deps.ScanCancel)
 	} else {
-		deps = di.TestInit(t, engine, tokenService, cfg.overrideDeps)
+		deps = di.TestInit(t, engine, tokenService, cfg.overrideDeps, cfg.diTestOptions...)
 
 		// Merge WithDeps overrides into deps struct for fields that are not handled by TestInit,
 		// i.e. InlineValueProvider.

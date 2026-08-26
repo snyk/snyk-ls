@@ -18,6 +18,8 @@ package scanner
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -33,6 +35,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
+	"github.com/snyk/snyk-ls/internal/vcs"
 )
 
 func TestScanBaseBranch_AllProducts_ReceiveCorrectPathAndFolderPath(t *testing.T) {
@@ -239,6 +242,50 @@ func TestScanBaseBranch_AllProducts_UseCorrectOrgFromFolderConfig(t *testing.T) 
 			require.NoError(t, err)
 		})
 	}
+}
+
+func TestScanBaseBranch_ClonesRepositoryHoldingAWindowsDeviceFileName(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	repoPath := types.FilePath(t.TempDir())
+	testutil.InitGitRepoWithFiles(t, repoPath, map[string]string{
+		"app.go":               "package main\n",
+		"scripts/build/prn.sh": "#!/bin/sh\necho build\n",
+	})
+
+	folderConfig := &types.FolderConfig{FolderPath: repoPath}
+	syncFolderToConfig(t, engine, folderConfig, &syncFolderOpts{BaseBranch: "master"})
+
+	var scannedPath types.FilePath
+	mockScanner := mock_types.NewMockProductScanner(ctrl)
+	mockScanner.EXPECT().Product().Return(product.ProductCode).AnyTimes()
+	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
+	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, path types.FilePath) ([]types.Issue, error) {
+			scannedPath = path
+			return []types.Issue{}, nil
+		}).Times(1)
+
+	dcs := setupScannerWithMock(t, engine, tokenService, mockScanner)
+	checkoutHandler := vcs.NewCheckoutHandler(engine.GetConfiguration())
+	t.Cleanup(func() {
+		if cleanup := checkoutHandler.CleanupFunc(); cleanup != nil {
+			cleanup()
+		}
+	})
+
+	err := dcs.scanBaseBranch(t.Context(), mockScanner, folderConfig, checkoutHandler)
+
+	require.NoError(t, err)
+	require.NotEmpty(t, scannedPath)
+	// Read through vcs.OSPath: on Windows a plain open of a reserved device name
+	// resolves to the device, so a bare FileExists could pass having proved nothing.
+	reserved, err := os.ReadFile(vcs.OSPath(filepath.Join(string(scannedPath), "scripts", "build", "prn.sh")))
+	require.NoError(t, err)
+	assert.Equal(t, "#!/bin/sh\necho build\n", string(reserved))
+	assert.FileExists(t, filepath.Join(string(scannedPath), "app.go"))
 }
 
 // setupScannerWithMock creates a scanner with a mock ProductScanner for testing

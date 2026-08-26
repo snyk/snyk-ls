@@ -17,6 +17,7 @@
 package vcs
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -30,6 +31,12 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+// Clone copies targetBranchName of srcRepoPath into destinationPath, which must
+// be an empty absolute directory. The worktree is written directly rather than
+// checked out, so the clone carries no index describing it: git plumbing there
+// sees every file as both deleted-from-index and untracked, and `git ls-files`
+// is empty. Only read the clone as a directory of files - note that the
+// pre-scan command runs an arbitrary user command inside it.
 func Clone(logger *zerolog.Logger, srcRepoPath types.FilePath, destinationPath types.FilePath, targetBranchName string) (*git.Repository, error) {
 	// Resolve the git root in case srcRepoPath is a subfolder of the actual repository
 	resolvedRoot, err := GitRepoRoot(srcRepoPath)
@@ -50,6 +57,7 @@ func Clone(logger *zerolog.Logger, srcRepoPath types.FilePath, destinationPath t
 		ReferenceName: targetBranchReferenceName,
 		SingleBranch:  true,
 		Depth:         1,
+		NoCheckout:    true,
 	})
 
 	if err != nil {
@@ -60,11 +68,24 @@ func Clone(logger *zerolog.Logger, srcRepoPath types.FilePath, destinationPath t
 		}
 		// Repository might be in a detached head state.
 		logger.Debug().Msg("Clone operation failed. Maybe repo is in detached HEAD state?")
-		targetRepo := cloneRepoWithFsCopy(logger, resolvedRoot, destinationPath, targetBranchReferenceName)
-		if targetRepo == nil {
-			return nil, err
+		targetRepo, fsCopyErr := cloneRepoWithFsCopy(logger, resolvedRoot, destinationPath, targetBranchReferenceName)
+		if fsCopyErr != nil {
+			logger.Error().Err(fsCopyErr).Msgf("Could not clone base branch %s into %s via FS copy", targetBranchReferenceName, destinationPath)
+			return nil, fsCopyErr
 		}
 		return targetRepo, nil
+	}
+
+	clonedHead, err := clonedRepo.Head()
+	if err != nil {
+		logger.Error().Err(err).Msgf("Could not resolve HEAD in cloned repo: %s", destinationPath)
+		return nil, err
+	}
+
+	err = materializeWorktree(logger, clonedRepo, string(destinationPath), clonedHead.Hash())
+	if err != nil {
+		logger.Error().Err(err).Msgf("Could not write base branch files into cloned repo: %s", destinationPath)
+		return nil, err
 	}
 
 	// Patch Origin Remote for the cloned repo. This is only necessary if we use checkout since the remote origin URL will be the srcRepoPath
@@ -127,36 +148,33 @@ func patchClonedRepoRemoteOrigin(logger *zerolog.Logger, srcRepoPath types.FileP
 	return nil
 }
 
-func cloneRepoWithFsCopy(logger *zerolog.Logger, srcRepoPath types.FilePath, destinationRepoPath types.FilePath, targetBranchReferenceName plumbing.ReferenceName) *git.Repository {
+func cloneRepoWithFsCopy(logger *zerolog.Logger, srcRepoPath types.FilePath, destinationRepoPath types.FilePath, targetBranchReferenceName plumbing.ReferenceName) (*git.Repository, error) {
 	repo, err := git.PlainOpenWithOptions(string(srcRepoPath), &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	branchExists := targetBranchExists(targetBranchReferenceName, repo)
 	if !branchExists {
-		logger.Debug().Msgf("Branch %s does not exist in repo %s. Exiting", targetBranchReferenceName.Short(), srcRepoPath)
-		return nil
+		return nil, fmt.Errorf("branch %s does not exist in repo %s", targetBranchReferenceName.Short(), srcRepoPath)
 	}
 	var gitSrcRepoPath = filepath.Join(string(srcRepoPath), ".git")
 	gitDestRepoPath := filepath.Join(string(destinationRepoPath), ".git")
 	logger.Debug().Msgf("Attemping to copy repo .git folder from: %s to: %s ", gitSrcRepoPath, gitDestRepoPath)
 	err = copy.Copy(gitSrcRepoPath, gitDestRepoPath)
 	if err != nil {
-		logger.Debug().Err(err).Msgf("Copy operation failed. Exiting")
-		return nil
+		return nil, fmt.Errorf("copying %s to %s failed: %w", gitSrcRepoPath, gitDestRepoPath, err)
 	}
 	logger.Debug().Msg("Copy operation succeeded")
-	targetRepo, checkOutErr := resetAndCheckoutRepo(string(destinationRepoPath), targetBranchReferenceName)
+	targetRepo, checkOutErr := materializeBranchWorktree(logger, string(destinationRepoPath), targetBranchReferenceName)
 	if checkOutErr != nil {
-		logger.Debug().Err(checkOutErr).Msgf("Could not checkout target branch %s. Exiting", targetBranchReferenceName.Short())
-		return nil
+		return nil, fmt.Errorf("checking out %s in %s failed: %w", targetBranchReferenceName.Short(), destinationRepoPath, checkOutErr)
 	}
 
 	logger.Debug().
 		Str("branch", targetBranchReferenceName.Short()).
 		Msg("successfully cloned base branch via FS copy")
 
-	return targetRepo
+	return targetRepo, nil
 }
 
 func LocalRepoHasChanges(conf configuration.Configuration, logger *zerolog.Logger, repoPath types.FilePath) (bool, error) {

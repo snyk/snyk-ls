@@ -25,10 +25,12 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -36,7 +38,7 @@ import (
 func TestClone_ShouldClone(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	repoPath := types.FilePath(t.TempDir())
-	initGitRepo(t, repoPath, false)
+	initWorktreeRepo(t, repoPath, false)
 
 	tmpFolderPath := types.FilePath(t.TempDir())
 	cloneTargetBranchName := "master"
@@ -49,7 +51,7 @@ func TestClone_ShouldClone(t *testing.T) {
 func TestClone_ShouldClone_SameOriginRemoteUrl(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	repoPath := types.FilePath(t.TempDir())
-	srcRepo, _ := initGitRepo(t, repoPath, false)
+	srcRepo, _ := initWorktreeRepo(t, repoPath, false)
 
 	tmpFolderPath := types.FilePath(t.TempDir())
 	cloneTargetBranchName := "master"
@@ -74,7 +76,7 @@ func TestClone_ShouldClone_SameOriginRemoteUrl(t *testing.T) {
 func TestClone_InvalidBranchName(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	repoPath := types.FilePath(t.TempDir())
-	initGitRepo(t, repoPath, false)
+	initWorktreeRepo(t, repoPath, false)
 
 	tmpFolderPath := types.FilePath(t.TempDir())
 	cloneTargetBranchName := "foobar"
@@ -87,8 +89,8 @@ func TestClone_InvalidBranchName(t *testing.T) {
 func TestClone_DetachedHead_TargetBranchExists(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	repoPath := types.FilePath(t.TempDir())
-	destinationPath := types.FilePath(t.TempDir())
-	repo, currentHead := initGitRepo(t, repoPath, true)
+	destinationPath := types.FilePath(newWorktreeDir(t))
+	repo, currentHead := initWorktreeRepo(t, repoPath, true)
 	worktree, err := repo.Worktree()
 	assert.NoError(t, err)
 	_, err = worktree.Commit("testCommit", &git.CommitOptions{
@@ -109,8 +111,8 @@ func TestClone_DetachedHead_TargetBranchExists(t *testing.T) {
 func TestClone_DetachedHead_TargetBranchExists_SameOriginRemoteUrl(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	repoPath := types.FilePath(t.TempDir())
-	destinationPath := types.FilePath(t.TempDir())
-	srcRepo, currentHead := initGitRepo(t, repoPath, true)
+	destinationPath := types.FilePath(newWorktreeDir(t))
+	srcRepo, currentHead := initWorktreeRepo(t, repoPath, true)
 	worktree, err := srcRepo.Worktree()
 	assert.NoError(t, err)
 	_, err = worktree.Commit("testCommit", &git.CommitOptions{
@@ -143,8 +145,8 @@ func TestClone_DetachedHead_TargetBranchExists_SameOriginRemoteUrl(t *testing.T)
 func TestClone_DetachedHead_TargetBranchDoesNotExists(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	repoPath := types.FilePath(t.TempDir())
-	destinationPath := types.FilePath(t.TempDir())
-	repo, currentHead := initGitRepo(t, repoPath, true)
+	destinationPath := types.FilePath(newWorktreeDir(t))
+	repo, currentHead := initWorktreeRepo(t, repoPath, true)
 	worktree, err := repo.Worktree()
 	assert.NoError(t, err)
 	_, err = worktree.Commit("testCommit", &git.CommitOptions{
@@ -165,8 +167,8 @@ func TestClone_DetachedHead_TargetBranchDoesNotExists(t *testing.T) {
 func TestClone_DetachedHead_TargetBranchExists_OpenChanges(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	repoPath := types.FilePath(t.TempDir())
-	destinationPath := types.FilePath(t.TempDir())
-	repo, currentHead := initGitRepo(t, repoPath, true)
+	destinationPath := types.FilePath(newWorktreeDir(t))
+	repo, currentHead := initWorktreeRepo(t, repoPath, true)
 	worktree, err := repo.Worktree()
 	assert.NoError(t, err)
 	_, err = worktree.Commit("testCommit", &git.CommitOptions{
@@ -205,7 +207,7 @@ func TestClone_InvalidGitRepo(t *testing.T) {
 func TestClone_ShouldShallowClone(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	repoPath := types.FilePath(t.TempDir())
-	initGitRepoWithHistory(t, repoPath, 10)
+	initWorktreeRepoWithHistory(t, repoPath, 10)
 
 	tmpFolderPath := types.FilePath(t.TempDir())
 	repo, err := Clone(engine.GetLogger(), repoPath, tmpFolderPath, "master")
@@ -229,7 +231,7 @@ func TestClone_ShouldShallowClone(t *testing.T) {
 func TestClone_FromSubfolder_ShouldClone(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	repoPath := types.FilePath(t.TempDir())
-	initGitRepo(t, repoPath, false)
+	initWorktreeRepo(t, repoPath, false)
 
 	// Create a subfolder inside the git repo
 	subfolder := filepath.Join(string(repoPath), "subproject")
@@ -245,10 +247,336 @@ func TestClone_FromSubfolder_ShouldClone(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestClone_MaterializesNestedWindowsDeviceFileName(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	repoPath := types.FilePath(t.TempDir())
+	testutil.InitGitRepoWithFiles(t, repoPath, map[string]string{
+		"testFile.txt":         "testData",
+		"scripts/build/prn.sh": "#!/bin/sh\necho build\n",
+	})
+
+	destinationPath := types.FilePath(newWorktreeDir(t))
+	repo, err := Clone(engine.GetLogger(), repoPath, destinationPath, "master")
+
+	require.NoError(t, err)
+	require.NotNil(t, repo)
+	requireFileContent(t, filepath.Join(string(destinationPath), "testFile.txt"), "testData")
+	requireFileContent(t, filepath.Join(string(destinationPath), "scripts", "build", "prn.sh"), "#!/bin/sh\necho build\n")
+}
+
+func TestClone_MaterializesWindowsReservedDeviceNames(t *testing.T) {
+	testCases := []struct {
+		name     string
+		filePath string
+	}{
+		{name: "CON", filePath: "con.go"},
+		{name: "NUL", filePath: "NUL.md"},
+		{name: "AUX as directory", filePath: "aux/x.txt"},
+		{name: "COM1", filePath: "com1.txt"},
+		{name: "LPT9", filePath: "lpt9.js"},
+		{name: "CONIN$", filePath: "conin$.sh"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			repoPath := types.FilePath(t.TempDir())
+			testutil.InitGitRepoWithFiles(t, repoPath, map[string]string{tc.filePath: "content"})
+
+			destinationPath := types.FilePath(newWorktreeDir(t))
+			repo, err := Clone(engine.GetLogger(), repoPath, destinationPath, "master")
+
+			require.NoError(t, err)
+			require.NotNil(t, repo)
+			requireFileContent(t, filepath.Join(string(destinationPath), filepath.FromSlash(tc.filePath)), "content")
+		})
+	}
+}
+
+// TestClone_MaterializesBackslashInFileName guards a name that is ordinary on
+// POSIX filesystems and that real git does commit, against the separator check
+// materializeTree applies to entry names.
+func TestClone_MaterializesBackslashInFileName(t *testing.T) {
+	testsupport.NotOnWindows(t, `a backslash is a path separator on Windows, so no such file can exist there`)
+	engine := testutil.UnitTest(t)
+	repoPath := types.FilePath(t.TempDir())
+	testutil.InitGitRepoWithFiles(t, repoPath, map[string]string{`weird\name.txt`: "content"})
+
+	destinationPath := types.FilePath(newWorktreeDir(t))
+	repo, err := Clone(engine.GetLogger(), repoPath, destinationPath, "master")
+
+	require.NoError(t, err)
+	require.NotNil(t, repo)
+	requireFileContent(t, filepath.Join(string(destinationPath), `weird\name.txt`), "content")
+}
+
+func TestClone_DetachedHead_MaterializesWindowsDeviceFileName(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	repoPath := types.FilePath(t.TempDir())
+	srcRepo := testutil.InitGitRepoWithFiles(t, repoPath, map[string]string{
+		"testFile.txt":         "testData",
+		"scripts/build/prn.sh": "#!/bin/sh\necho build\n",
+	})
+	testutil.DetachGitRepoHeadBehindMaster(t, srcRepo)
+
+	destinationPath := types.FilePath(newWorktreeDir(t))
+	repo, err := Clone(engine.GetLogger(), repoPath, destinationPath, "master")
+
+	require.NoError(t, err)
+	require.NotNil(t, repo)
+	requireFileContent(t, filepath.Join(string(destinationPath), "testFile.txt"), "testData")
+	requireFileContent(t, filepath.Join(string(destinationPath), "scripts", "build", "prn.sh"), "#!/bin/sh\necho build\n")
+}
+
+func TestClone_MaterializesExecutablesAndSymlinks(t *testing.T) {
+	testsupport.NotOnWindows(t, "symlink creation needs elevated privileges on Windows")
+	engine := testutil.UnitTest(t)
+	repoPath := types.FilePath(t.TempDir())
+	testutil.InitGitRepoWithEntries(t, repoPath, map[string]testutil.GitFixtureFile{
+		"plain.txt":  {Content: "plain", Mode: filemode.Regular},
+		"run.sh":     {Content: "#!/bin/sh\n", Mode: filemode.Executable},
+		"link-to-me": {Content: "plain.txt", Mode: filemode.Symlink},
+	})
+
+	destinationPath := types.FilePath(newWorktreeDir(t))
+	repo, err := Clone(engine.GetLogger(), repoPath, destinationPath, "master")
+	require.NoError(t, err)
+	require.NotNil(t, repo)
+
+	executable, err := os.Stat(OSPath(filepath.Join(string(destinationPath), "run.sh")))
+	require.NoError(t, err)
+	assert.NotZero(t, executable.Mode()&0100, "executable bit should survive materialization")
+
+	linkPath := OSPath(filepath.Join(string(destinationPath), "link-to-me"))
+	link, err := os.Lstat(linkPath)
+	require.NoError(t, err)
+	assert.NotZero(t, link.Mode()&os.ModeSymlink, "symlink should be written as a symlink")
+	linkTarget, err := os.Readlink(linkPath)
+	require.NoError(t, err)
+	assert.Equal(t, "plain.txt", linkTarget)
+}
+
+// TestMaterializeWorktree_ReportsUnreadableSubtree pins that a subtree go-git
+// cannot load is an error rather than a short worktree reported as complete: a
+// partial baseline gets persisted against the real commit hash, and the
+// snapshot-exists check then suppresses every later scan.
+//
+// It drives materializeWorktree rather than Clone because a commit referencing
+// a missing object cannot be served by upload-pack at all, so a Clone-level
+// test would fail during the fetch and prove nothing about the walk.
+func TestMaterializeWorktree_ReportsUnreadableSubtree(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	repoPath := types.FilePath(t.TempDir())
+	repo := testutil.InitGitRepo(t, repoPath)
+
+	// A root tree naming a subtree whose object was never written, alongside a
+	// file sorting after it that a truncating walk would silently drop.
+	missingSubtree := plumbing.NewHash("1111111111111111111111111111111111111111")
+	commitHash := testutil.CommitGitTree(t, repo, testutil.WriteGitTree(t, repo.Storer, []object.TreeEntry{
+		{Name: "gone", Mode: filemode.Dir, Hash: missingSubtree},
+		{Name: "zz-last.txt", Mode: filemode.Regular, Hash: testutil.WriteGitBlob(t, repo.Storer, "kept")},
+	}))
+
+	destinationPath := t.TempDir()
+	err := materializeWorktree(engine.GetLogger(), repo, destinationPath, commitHash)
+
+	require.Error(t, err, "an unreadable subtree must fail, not truncate the worktree")
+	assert.NoFileExists(t, OSPath(filepath.Join(destinationPath, "zz-last.txt")))
+}
+
+func TestClone_DoesNotWriteThroughSymlinkedTreeEntries(t *testing.T) {
+	testsupport.NotOnWindows(t, "symlink creation needs elevated privileges on Windows")
+	engine := testutil.UnitTest(t)
+	repoPath := types.FilePath(t.TempDir())
+	outsidePath := t.TempDir()
+	repo := testutil.InitGitRepo(t, repoPath)
+
+	// "EVIL" twice: a symlink out of the worktree, then the directory holding
+	// "payload". Git orders "EVIL" before "EVIL/", so a materializer that creates
+	// symlinks as it walks has the link in place before it writes the file.
+	innerTree := testutil.WriteGitTree(t, repo.Storer, []object.TreeEntry{
+		{Name: "payload", Mode: filemode.Regular, Hash: testutil.WriteGitBlob(t, repo.Storer, "owned")},
+	})
+	testutil.CommitGitTree(t, repo, testutil.WriteGitTree(t, repo.Storer, []object.TreeEntry{
+		{Name: "EVIL", Mode: filemode.Symlink, Hash: testutil.WriteGitBlob(t, repo.Storer, outsidePath)},
+		{Name: "EVIL", Mode: filemode.Dir, Hash: innerTree},
+	}))
+
+	destinationPath := types.FilePath(newWorktreeDir(t))
+	_, err := Clone(engine.GetLogger(), repoPath, destinationPath, "master")
+	require.NoError(t, err)
+
+	entries, err := os.ReadDir(outsidePath)
+	require.NoError(t, err)
+	assert.Empty(t, entries, "materialization must not write through a symlink named by the tree")
+	assert.FileExists(t, filepath.Join(string(destinationPath), "EVIL", "payload"))
+}
+
+func TestClone_DoesNotWriteThroughSymlinkNamedByAnotherSymlink(t *testing.T) {
+	testsupport.NotOnWindows(t, "symlink creation needs elevated privileges on Windows")
+	engine := testutil.UnitTest(t)
+	repoPath := types.FilePath(t.TempDir())
+	outsidePath := t.TempDir()
+	repo := testutil.InitGitRepo(t, repoPath)
+
+	// "a" points out of the worktree and "a/b" carries a slash in its name, which
+	// go-git's decoder accepts. Both defer to the symlink pass, "a" sorts first,
+	// so creating "a/b" resolves its parent through the link.
+	testutil.CommitGitTree(t, repo, testutil.WriteGitTree(t, repo.Storer, []object.TreeEntry{
+		{Name: "a", Mode: filemode.Symlink, Hash: testutil.WriteGitBlob(t, repo.Storer, outsidePath)},
+		{Name: "a/b", Mode: filemode.Symlink, Hash: testutil.WriteGitBlob(t, repo.Storer, "payload")},
+	}))
+
+	destinationPath := types.FilePath(newWorktreeDir(t))
+	_, cloneErr := Clone(engine.GetLogger(), repoPath, destinationPath, "master")
+
+	entries, err := os.ReadDir(outsidePath)
+	require.NoError(t, err)
+	assert.Empty(t, entries, "materialization must not write through a symlink it created itself")
+
+	require.ErrorIs(t, cloneErr, ErrInvalidTreeEntryName,
+		"a tree entry name git could not have produced must abort the clone")
+}
+
+func TestClone_RejectsDotGitDisguisedTreeEntries(t *testing.T) {
+	testCases := []struct {
+		name     string
+		filePath string
+	}{
+		{name: "NTFS short name", filePath: "git~1"},
+		{name: "trailing space", filePath: ".git "},
+		{name: "nested trailing dot", filePath: "nested/.git./config"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			repoPath := types.FilePath(t.TempDir())
+			testutil.InitGitRepoWithFiles(t, repoPath, map[string]string{tc.filePath: "payload"})
+
+			destinationPath := types.FilePath(newWorktreeDir(t))
+			repo, err := Clone(engine.GetLogger(), repoPath, destinationPath, "master")
+
+			require.Error(t, err)
+			assert.Nil(t, repo)
+			// Must be go-git's ValidTreePath, the guard the materializer rests on
+			// for .git safety, and not our own separator check.
+			require.ErrorIs(t, err, ErrRejectedTreeEntryPath)
+			require.NotErrorIs(t, err, ErrInvalidTreeEntryName)
+			assert.NoFileExists(t, OSPath(filepath.Join(string(destinationPath), filepath.FromSlash(tc.filePath))))
+		})
+	}
+}
+
+// requireFileContent reads through OSPath, because a plain Lstat of a reserved
+// device name on Windows resolves to the device instead of what we wrote.
+func requireFileContent(t *testing.T, path, want string) {
+	t.Helper()
+	content, err := os.ReadFile(OSPath(path)) //nolint:gosec // test-controlled path
+	require.NoError(t, err)
+	assert.Equal(t, want, string(content))
+}
+
+// TestClone_MaterializesCollidingEntries covers two legal tree entries that land
+// on one path. One of them has to lose, but losing the whole baseline is this
+// ticket's own bug, so the clone must still succeed and later entries must still
+// be written.
+//
+// Only the duplicate-name case collides on a case-sensitive filesystem, so it is
+// the one that actually exercises the tolerance here; the case-differing pair is
+// the shape real repositories have, and collides on APFS and NTFS.
+func TestClone_MaterializesCollidingEntries(t *testing.T) {
+	testCases := []struct {
+		name  string
+		first string
+		last  string
+	}{
+		{name: "duplicate names", first: "dup.txt", last: "dup.txt"},
+		{name: "names differing only in case", first: "A.txt", last: "a.txt"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			repoPath := types.FilePath(t.TempDir())
+			repo := testutil.InitGitRepo(t, repoPath)
+			blob := testutil.WriteGitBlob(t, repo.Storer, "content")
+			testutil.CommitGitTree(t, repo, testutil.WriteGitTree(t, repo.Storer, []object.TreeEntry{
+				{Name: tc.first, Mode: filemode.Regular, Hash: blob},
+				{Name: tc.last, Mode: filemode.Regular, Hash: blob},
+				{Name: "zz-sibling.txt", Mode: filemode.Regular, Hash: testutil.WriteGitBlob(t, repo.Storer, "after")},
+			}))
+
+			destinationPath := types.FilePath(newWorktreeDir(t))
+			cloned, err := Clone(engine.GetLogger(), repoPath, destinationPath, "master")
+
+			require.NoError(t, err, "a colliding entry must not cost the whole baseline")
+			require.NotNil(t, cloned)
+			assert.FileExists(t, filepath.Join(string(destinationPath), tc.first))
+			// The entry sorting after the collision still has to be written; an
+			// abort would silently truncate the baseline right here.
+			requireFileContent(t, filepath.Join(string(destinationPath), "zz-sibling.txt"), "after")
+		})
+	}
+}
+
+// TestClone_RejectsGitmodulesSymlinks pins go-git's validSymlinkName, upstream
+// git's CVE-2018-11235 mitigation, which ValidTreePath does not cover.
+func TestClone_RejectsGitmodulesSymlinks(t *testing.T) {
+	testCases := []struct {
+		name  string
+		entry string
+	}{
+		{name: "at the root", entry: ".gitmodules"},
+		{name: "in a subdirectory", entry: "sub/.gitmodules"},
+		{name: "case insensitively", entry: ".GitModules"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			repoPath := types.FilePath(t.TempDir())
+			testutil.InitGitRepoWithEntries(t, repoPath, map[string]testutil.GitFixtureFile{
+				tc.entry: {Content: "../outside/evil", Mode: filemode.Symlink},
+			})
+
+			destinationPath := types.FilePath(newWorktreeDir(t))
+			_, err := Clone(engine.GetLogger(), repoPath, destinationPath, "master")
+
+			require.ErrorIs(t, err, ErrGitModulesSymlink)
+			assert.NoFileExists(t, filepath.Join(string(destinationPath), filepath.FromSlash(tc.entry)))
+		})
+	}
+}
+
+func TestMaterializeWorktree_RejectsRelativeRoot(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	repoPath := types.FilePath(t.TempDir())
+	repo := testutil.InitGitRepoWithFiles(t, repoPath, map[string]string{"a.txt": "content"})
+	master, err := repo.Reference(plumbing.Master, true)
+	require.NoError(t, err)
+
+	err = materializeWorktree(engine.GetLogger(), repo, "relative/destination", master.Hash())
+
+	require.ErrorIs(t, err, ErrRelativeWorktreeRoot)
+}
+
+// newWorktreeDir returns an empty directory whose cleanup goes through OSPath.
+// t.TempDir's own cleanup uses an unprefixed RemoveAll and calls t.Errorf when
+// it fails, which on Windows is every directory holding a reserved device name.
+func newWorktreeDir(t *testing.T) string {
+	t.Helper()
+	//nolint:usetesting // t.TempDir cleans up with an unprefixed RemoveAll, which cannot delete a reserved device name on Windows
+	dir, err := os.MkdirTemp("", "snyk-ls-worktree")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.RemoveAll(OSPath(dir)) })
+	return dir
+}
+
 func TestLocalRepoHasChanges_SameBranchNames_NoModification_SkipClone(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	repoPath := types.FilePath(t.TempDir())
-	initGitRepo(t, repoPath, false)
+	initWorktreeRepo(t, repoPath, false)
 	shouldclone, err := LocalRepoHasChanges(engine.GetConfiguration(), engine.GetLogger(), repoPath)
 
 	assert.NoError(t, err)
@@ -258,7 +586,7 @@ func TestLocalRepoHasChanges_SameBranchNames_NoModification_SkipClone(t *testing
 func TestLocalRepoHasChanges_SameBranchNames_WithModification_Clone(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	repoPath := types.FilePath(t.TempDir())
-	initGitRepo(t, repoPath, true)
+	initWorktreeRepo(t, repoPath, true)
 	shouldclone, err := LocalRepoHasChanges(engine.GetConfiguration(), engine.GetLogger(), repoPath)
 
 	assert.NoError(t, err)
@@ -268,7 +596,7 @@ func TestLocalRepoHasChanges_SameBranchNames_WithModification_Clone(t *testing.T
 func TestLocalRepoHasChanges_DifferentBranchNames_Clone(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	repoPath := types.FilePath(t.TempDir())
-	repo, _ := initGitRepo(t, repoPath, true)
+	repo, _ := initWorktreeRepo(t, repoPath, true)
 	wt, err := repo.Worktree()
 	assert.NoError(t, err)
 	err = wt.Checkout(&git.CheckoutOptions{
@@ -284,7 +612,7 @@ func TestLocalRepoHasChanges_DifferentBranchNames_Clone(t *testing.T) {
 }
 
 func TestLocalRepoHasChanges_HasUncommittedChanges(t *testing.T) {
-	repo, _ := initGitRepo(t, types.FilePath(t.TempDir()), true)
+	repo, _ := initWorktreeRepo(t, types.FilePath(t.TempDir()), true)
 
 	hasChanges := hasUncommitedChanges(repo)
 
@@ -292,14 +620,14 @@ func TestLocalRepoHasChanges_HasUncommittedChanges(t *testing.T) {
 }
 
 func TestLocalRepoHasChanges_HasCommittedChanges(t *testing.T) {
-	repo, _ := initGitRepo(t, types.FilePath(t.TempDir()), false)
+	repo, _ := initWorktreeRepo(t, types.FilePath(t.TempDir()), false)
 
 	hasChanges := hasUncommitedChanges(repo)
 
 	assert.False(t, hasChanges)
 }
 
-func initGitRepoWithHistory(t *testing.T, repoPath types.FilePath, commits int) *git.Repository {
+func initWorktreeRepoWithHistory(t *testing.T, repoPath types.FilePath, commits int) *git.Repository {
 	t.Helper()
 	repo, err := git.PlainInit(string(repoPath), false)
 	require.NoError(t, err)
@@ -328,7 +656,7 @@ func initGitRepoWithHistory(t *testing.T, repoPath types.FilePath, commits int) 
 	return repo
 }
 
-func initGitRepo(t *testing.T, repoPath types.FilePath, isModified bool) (*git.Repository, *plumbing.Reference) {
+func initWorktreeRepo(t *testing.T, repoPath types.FilePath, isModified bool) (*git.Repository, *plumbing.Reference) {
 	t.Helper()
 	repoPathAsString := string(repoPath)
 	repo, err := git.PlainInit(repoPathAsString, false)

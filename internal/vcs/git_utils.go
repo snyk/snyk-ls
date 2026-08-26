@@ -143,22 +143,23 @@ func targetBranchExists(branchName plumbing.ReferenceName, repo *git.Repository)
 	return branchExists
 }
 
-func resetAndCheckoutRepo(repoPath string, branchName plumbing.ReferenceName) (*git.Repository, error) {
+func materializeBranchWorktree(logger *zerolog.Logger, repoPath string, branchName plumbing.ReferenceName) (*git.Repository, error) {
 	repo, err := git.PlainOpenWithOptions(repoPath, &git.PlainOpenOptions{DetectDotGit: true})
 	if err != nil {
 		return nil, err
 	}
-	workTree, err := repo.Worktree()
+
+	branchRef, err := repo.Reference(branchName, true)
 	if err != nil {
 		return nil, err
 	}
 
-	err = workTree.Reset(&git.ResetOptions{Mode: git.HardReset})
+	err = repo.Storer.SetReference(plumbing.NewSymbolicReference(plumbing.HEAD, branchName))
 	if err != nil {
 		return nil, err
 	}
 
-	err = workTree.Checkout(&git.CheckoutOptions{Force: true, Branch: branchName})
+	err = materializeWorktree(logger, repo, repoPath, branchRef.Hash())
 	if err != nil {
 		return nil, err
 	}
