@@ -32,6 +32,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -72,7 +73,7 @@ func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
 		{"commit", "-m", "initial"},
 	}
 	for _, args := range gitCmds {
-		cmd := exec.Command("git", args...)
+		cmd := exec.Command("git", testsupport.GitUnsigned(args...)...)
 		cmd.Dir = workspaceDir
 		out, err := cmd.CombinedOutput()
 		require.NoError(t, err, "git %v: %s", args, out)

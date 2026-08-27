@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -46,7 +47,7 @@ func setupLocalBareRepo(t *testing.T) localRepo {
 		{"config", "user.email", "test@example.com"},
 		{"config", "user.name", "Test"},
 	} {
-		cmd := exec.Command("git", args...)
+		cmd := exec.Command("git", testsupport.GitUnsigned(args...)...)
 		cmd.Dir = dir
 		require.NoError(t, cmd.Run(), "git %v", args)
 	}
@@ -57,7 +58,7 @@ func setupLocalBareRepo(t *testing.T) localRepo {
 		{"add", "."},
 		{"commit", "-m", "initial"},
 	} {
-		cmd := exec.Command("git", args...)
+		cmd := exec.Command("git", testsupport.GitUnsigned(args...)...)
 		cmd.Dir = dir
 		require.NoError(t, cmd.Run(), "git %v", args)
 	}

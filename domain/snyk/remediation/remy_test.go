@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/snyk/remediation"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -51,7 +52,7 @@ func initGitRepo(t *testing.T) string {
 
 	run := func(args ...string) {
 		t.Helper()
-		cmd := exec.Command("git", args...)
+		cmd := exec.Command("git", testsupport.GitUnsigned(args...)...)
 		cmd.Dir = dir
 		out, err := cmd.CombinedOutput()
 		require.NoError(t, err, "git %v: %s", args, string(out))
@@ -794,7 +795,7 @@ func initGitRepoInDir(t *testing.T, dir string) {
 	t.Helper()
 	run := func(args ...string) {
 		t.Helper()
-		cmd := exec.Command("git", args...)
+		cmd := exec.Command("git", testsupport.GitUnsigned(args...)...)
 		cmd.Dir = dir
 		out, err := cmd.CombinedOutput()
 		require.NoError(t, err, "git %v: %s", args, string(out))
@@ -820,7 +821,7 @@ func commitFileInDir(t *testing.T, dir, relPath, content string) {
 		t.Helper()
 		const maxRetries = 8
 		for attempt := 0; attempt < maxRetries; attempt++ {
-			cmd := exec.Command("git", args...)
+			cmd := exec.Command("git", testsupport.GitUnsigned(args...)...)
 			cmd.Dir = dir
 			out, err := cmd.CombinedOutput()
 			if err == nil {

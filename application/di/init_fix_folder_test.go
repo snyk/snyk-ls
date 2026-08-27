@@ -29,6 +29,7 @@ import (
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/snyk/remediation"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -119,7 +120,7 @@ func initGitRepoForDI(t *testing.T) string {
 	dir := t.TempDir()
 	run := func(args ...string) {
 		t.Helper()
-		cmd := exec.Command("git", args...)
+		cmd := exec.Command("git", testsupport.GitUnsigned(args...)...)
 		cmd.Dir = dir
 		out, err := cmd.CombinedOutput()
 		require.NoError(t, err, "git %v: %s", args, string(out))
