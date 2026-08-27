@@ -1,6 +1,6 @@
 ## Project Overview
 
-**snyk-ls** (`snyk/snyk-ls`) is the Snyk Language Server — a Go implementation of the Language Server Protocol (LSP) that IDE plugins (vscode-extension, snyk-intellij-plugin, snyk-eclipse-plugin, snyk-visual-studio-plugin) embed via stdio/JSON-RPC to run Snyk scans. It integrates Snyk Open Source (SCA), Snyk Code (SAST), Snyk Infrastructure as Code (IaC), and Snyk Secrets. OSS and IaC use the Snyk CLI as a data provider; Code uses the Snyk Code API. It also exposes an MCP server (`mcp_extension/`) and a go-application-framework workflow (`ls_extension/`) that lets the Snyk CLI invoke the language server as an extension.
+**snyk-ls** (`snyk/snyk-ls`) is the Snyk Language Server, a Go implementation of the Language Server Protocol (LSP) that IDE plugins (vscode-extension, snyk-intellij-plugin, snyk-eclipse-plugin, snyk-visual-studio-plugin) embed via stdio/JSON-RPC to run Snyk scans. It integrates Snyk Open Source (SCA), Snyk Code (SAST), Snyk Infrastructure as Code (IaC), and Snyk Secrets. OSS and IaC use the Snyk CLI as a data provider; Code uses the Snyk Code API. It also exposes an MCP server (`mcp_extension/`) and a go-application-framework workflow (`ls_extension/`) that lets the Snyk CLI invoke the language server as an extension.
 
 ## Build & Development Commands
 
@@ -24,14 +24,14 @@ Tests use `testify` with a table-driven style (`tests := []struct{...}`). `INTEG
 
 ## Architecture
 
-- `main.go` — entry point: parses flags, initializes the go-application-framework engine/config, calls `server.Start(engine, ts)`.
-- `application/` — process wiring: `application/server` (LSP/JSON-RPC handlers), `application/di` (dependency injection), `application/config`, `application/codeaction`, `application/watcher`, `application/entrypoint`.
-- `domain/` — core business logic: `domain/ide` (workspace, hover, codelens, treeview, initialize — LSP-facing) and `domain/snyk` (scanner, persistence, remediation, delta — scan orchestration).
-- `infrastructure/` — product/backend integrations: `code`, `oss`, `iac`, `secrets`, `cli` (Snyk CLI executor), `authentication`, `learn`, `analytics`, `snyk_api`, `featureflag`, `filesystem`, `sentry`.
-- `internal/` — shared utilities: `types` (core interfaces/mocks), `product` (product enum), `uri`, `progress`, `notification`, `logging`, `mcp`, `storage`, `vcs`, `fflags`, `testsupport`/`testutil`.
-- `ast/` — lightweight source parsing (e.g. `ast/maven/parser.go`) used for range/dependency resolution.
-- `ls_extension/` — go-application-framework workflow letting the Snyk CLI invoke the LS as an extension (`WORKFLOWID_LS`).
-- `mcp_extension/` — MCP server extension exposing Snyk scanning to MCP clients.
+- `main.go` is the entry point: it parses flags, initializes the go-application-framework engine/config, and calls `server.Start(engine, ts)`.
+- `application/` handles process wiring: `application/server` (LSP/JSON-RPC handlers), `application/di` (dependency injection), `application/config`, `application/codeaction`, `application/watcher`, `application/entrypoint`.
+- `domain/` holds core business logic: `domain/ide` (workspace, hover, codelens, treeview, initialize, all LSP-facing) and `domain/snyk` (scanner, persistence, remediation, delta, for scan orchestration).
+- `infrastructure/` contains product/backend integrations: `code`, `oss`, `iac`, `secrets`, `cli` (Snyk CLI executor), `authentication`, `learn`, `analytics`, `snyk_api`, `featureflag`, `filesystem`, `sentry`.
+- `internal/` holds shared utilities: `types` (core interfaces/mocks), `product` (product enum), `uri`, `progress`, `notification`, `logging`, `mcp`, `storage`, `vcs`, `fflags`, `testsupport`/`testutil`.
+- `ast/` does lightweight source parsing (e.g. `ast/maven/parser.go`) used for range/dependency resolution.
+- `ls_extension/` is a go-application-framework workflow letting the Snyk CLI invoke the LS as an extension (`WORKFLOWID_LS`).
+- `mcp_extension/` is an MCP server extension exposing Snyk scanning to MCP clients.
 
 ## Conventions
 
@@ -44,11 +44,9 @@ Tests use `testify` with a table-driven style (`tests := []struct{...}`). `INTEG
 ## Development Workflow
 
 - Read the Jira issue description/acceptance criteria before starting non-trivial work; update the ticket with a progress comment as you go.
-- Use TDD: write/update tests before implementation, iterate until green.
-- For non-trivial work, write an implementation plan first (planning → implementation → review phases with a progress checklist) and get confirmation before starting; never commit the plan or its diagrams.
-- Make the minimum change needed — don't refactor or optimize beyond the stated goal. Comment on *why*, not *what*.
+- Never commit an implementation plan or its diagrams to the repo.
 - Use gomock for mocking (never hand-written mocks) and reuse existing mocks.
-- Run `make lint-fix` and `make generate` (regenerates mocks), then `make test`, before committing; check coverage on changed code (`make test-coverage`, target 80%+). Never disable a linter or a test to get past this — only a human may do that.
+- Run `make lint-fix` and `make generate` (regenerates mocks), then `make test`, before committing; check coverage on changed code (`make test-coverage`, target 80%+).
 - Run Snyk SCA/Code scans (`snyk_sca_scan`, `snyk_code_scan`) against the project's absolute path before committing and after `go.mod` changes; fix real findings, don't touch test fixtures.
 - Never use `--no-verify` or otherwise skip commit hooks. Use atomic, conventional-commit-style commits; if a Jira ID (`XXX-XXXX`) appears in the branch name, append it to the subject.
 - Never push without asking first, and never force-push. Regularly fetch `main` and offer to merge it into the working branch.
