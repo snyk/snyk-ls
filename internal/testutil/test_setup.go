@@ -105,6 +105,11 @@ func SmokeTestWithEngine(t *testing.T, tokenSecretName string, shardEnvVar strin
 	return prepareTestHelper(t, testsupport.SmokeTestEnvVar, tokenSecretName)
 }
 
+// unitTestAPIURL points unit tests at a closed port. A unit test must not
+// depend on the network: reaching the real API makes the result vary with
+// whatever credentials the host or its proxy supplies.
+const unitTestAPIURL = "http://127.0.0.1:1"
+
 func UnitTest(t *testing.T) workflow.Engine {
 	t.Helper()
 	engine, _ := UnitTestWithEngine(t)
@@ -140,6 +145,7 @@ func UnitTestWithEngine(t *testing.T) (workflow.Engine, *config.TokenServiceImpl
 	}
 
 	config.SetupLogging(engine, ts, nil)
+	config.UpdateApiEndpointsOnConfig(conf, unitTestAPIURL)
 	ts.SetToken(conf, "00000000-0000-0000-0000-000000000001")
 	types.SetGlobalUser(conf, types.SettingTrustEnabled, false)
 	types.SetGlobalUser(conf, types.SettingAutomaticAuthentication, false)
