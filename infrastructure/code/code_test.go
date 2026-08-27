@@ -35,6 +35,7 @@ import (
 	codeClient "github.com/snyk/code-client-go"
 	"github.com/snyk/code-client-go/pkg/code"
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
+	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/mocks"
@@ -367,10 +368,20 @@ func Test_Scan(t *testing.T) {
 			realConfig.Set(configresolver.UserGlobalKey(types.SettingToken), "test-token")
 			mockEngine.EXPECT().GetConfiguration().Return(realConfig).AnyTimes()
 			mockEngine.EXPECT().GetLogger().Return(engine.GetLogger()).AnyTimes()
+			mockEngine.EXPECT().GetAnalytics().Return(analytics.New()).AnyTimes()
 
 			fakeFeatureFlagService := featureflag.NewFakeService()
-			fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = tc.cciEnabled
 			fakeFeatureFlagService.SastSettings = &sast_contract.SastResponse{SastEnabled: true}
+
+			var codeScannerClient *FakeCodeScannerClient
+			codeScannerFactory := func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error) {
+				client, err := NewFakeCodeScannerClient(sc, folderConfig)
+				if err != nil {
+					return nil, err
+				}
+				codeScannerClient, _ = client.(*FakeCodeScannerClient)
+				return client, nil
+			}
 
 			scanner := New(
 				mockEngine,
@@ -382,16 +393,23 @@ func Test_Scan(t *testing.T) {
 				notification.NewNotifier(),
 				NewCodeInstrumentor(),
 				newTestCodeErrorReporter(),
-				NewFakeCodeScannerClient,
+				codeScannerFactory,
 				defaultResolver(mockEngine),
 				testutil.NewDrainedProgressTracker(),
 			)
 			tempDir, _, _ := setupIgnoreWorkspace(t)
 
-			ctx := ctx2.NewContextWithFolderConfig(t.Context(), getTestFolderConfig(mockEngine, tempDir))
+			folderConfig := getTestFolderConfig(mockEngine, tempDir)
+			folderConfig.SetFeatureFlag(featureflag.SnykCodeConsistentIgnores, tc.cciEnabled)
+
+			ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
 			issues, err := scanner.Scan(ctx, "")
 			assert.Nil(t, err)
 			assert.NotNil(t, issues)
+
+			require.NotNil(t, codeScannerClient, "the scan must have built a code scanner")
+			assert.Equal(t, tc.createBundleCalled, codeScannerClient.LegacyUploadWasCalled,
+				"the consistent ignores flag on the folder config decides which upload path the scan takes")
 		})
 	}
 }
@@ -804,6 +822,9 @@ func setupMockConfigWithStorage(mockEngine *mocks.MockEngine, enableConsistentIg
 
 	mockEngine.EXPECT().GetConfiguration().Return(realConfig).AnyTimes()
 	mockEngine.EXPECT().GetLogger().Return(logger).AnyTimes()
+
+	// newFilteredFiles hands the engine's analytics to the file filter.
+	mockEngine.EXPECT().GetAnalytics().Return(analytics.New()).AnyTimes()
 
 	fakeFeatureFlagService := featureflag.NewFakeService()
 	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = enableConsistentIgnores

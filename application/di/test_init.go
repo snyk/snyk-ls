@@ -131,7 +131,12 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 		localLearnService = learnMock
 	}
 
-	localScanPersister := persistence.NopScanPersister{}
+	var localScanPersister persistence.ScanSnapshotPersister
+	if overrideDeps != nil && overrideDeps.ScanPersister != nil {
+		localScanPersister = overrideDeps.ScanPersister
+	} else {
+		localScanPersister = persistence.NopScanPersister{}
+	}
 	var localScanStateAggregator scanstates.Aggregator
 	if overrideDeps != nil && overrideDeps.ScanStateAggregator != nil {
 		localScanStateAggregator = overrideDeps.ScanStateAggregator

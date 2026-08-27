@@ -1056,6 +1056,48 @@ button.secondary[disabled] {
                     <div class="col-md-12">
                         <div class="section">
                             <div class="section-header">
+                                <h2>Autonomous remediation</h2>
+                                <button type="button" class="reset-section-btn" data-section="autonomousRemediation" title="Reset this section to defaults">Reset</button>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="llm_provider"><span data-toggle="tooltip" title="Which LLM backend the Snyk Remediation Agent uses to generate fixes. Automatic lets Snyk choose.">LLM provider</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="llm_provider"></span></label>
+                                        <select id="llm_provider" name="llm_provider">
+                                            <option value="" >Automatic</option>
+                                            <option value="anthropic" >Anthropic</option>
+                                            <option value="openai" >OpenAI</option>
+                                            <option value="ollama" >Ollama</option>
+                                            <option value="vertex" >Vertex AI</option>
+                                            <option value="litellm" >LiteLLM</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="llm_model"><span data-toggle="tooltip" title="Model id. Required for Ollama and LiteLLM; an optional override for the other providers.">Model</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="llm_model"></span></label>
+                                        <input type="text" id="llm_model" name="llm_model" value="" placeholder="e.g. llama3.1">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="llm_base_url"><span data-toggle="tooltip" title="Point the selected LLM provider at a self-hosted or gateway endpoint. Note: OpenAI has no custom-endpoint environment variable, so this value is saved and shown here but not applied.">Custom API endpoint</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="llm_base_url"></span></label>
+                                <input type="text" id="llm_base_url" name="llm_base_url" value="" placeholder="https://llm-gateway.internal">
+                            </div>
+
+                            <p class="form-note">Your LLM API key is never stored or sent by Snyk — it is always read directly from your own environment (e.g. <code>ANTHROPIC_API_KEY</code>, <code>OPENAI_API_KEY</code>).</p>
+                        </div>
+                    </div>
+                </div>
+
+                
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="section">
+                            <div class="section-header">
                                 <h2>Trust settings</h2>
                                 <button type="button" class="reset-section-btn" data-section="permissions" title="Reset this section to defaults">Reset</button>
                             </div>
@@ -1136,7 +1178,6 @@ button.secondary[disabled] {
                                             <span class="source-indicator" data-toggle="tooltip" title="Set by you at project defaults level">👤</span>
                                         </label>
                                     </div>
-                                    
                                     <div class="override-indicator-wrapper ">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="snyk_secrets_enabled" >
@@ -1145,7 +1186,6 @@ button.secondary[disabled] {
                                             
                                         </label>
                                     </div>
-                                    
                                 </div>
                             </div>
 
@@ -1155,6 +1195,17 @@ button.secondary[disabled] {
                                     <select id="scan_automatic" name="scan_automatic" data-bool="1">
                                         <option value="true" selected>Auto</option>
                                         <option value="false" >Manual</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="override-indicator-wrapper ">
+                                <div class="form-group half-width">
+                                    <label for="ambient_canary_autonomy"><span data-toggle="tooltip" title="Choose whether Ambient Canary may apply fixes automatically, or only notify you.">Ambient Canary autonomy</span> <span class="config-scope-slot" data-config-scope-slot="true" data-setting-key="ambient_canary_autonomy"></span> </label>
+                                    <select id="ambient_canary_autonomy" name="ambient_canary_autonomy">
+                                        <option value="" >Not set</option>
+                                        <option value="notify_only" >Notify only</option>
+                                        <option value="autonomous_fixes" >Allow autonomous fixes</option>
                                     </select>
                                 </div>
                             </div>
@@ -1335,7 +1386,13 @@ button.secondary[disabled] {
                                             
                                         </label>
                                     </div>
-                                    
+                                    <div class="override-indicator-wrapper ">
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" name="folder_0_snyk_secrets_enabled" data-setting="snyk_secrets_enabled"  >
+                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code.">Snyk Secrets</span>
+                                            
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1349,6 +1406,20 @@ button.secondary[disabled] {
                                     <select id="folder_0_scan_automatic" name="folder_0_scan_automatic" data-setting="scan_automatic" data-bool="1" >
                                         <option value="true"  selected>Auto</option>
                                         <option value="false" >Manual</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="override-indicator-wrapper ">
+                                <div class="form-group half-width">
+                                    <label for="folder_0_ambient_canary_autonomy">
+                                        <span data-toggle="tooltip" title="Choose whether Ambient Canary may apply fixes automatically for this folder, or only notify you.">Ambient Canary autonomy</span>
+                                        
+                                    </label>
+                                    
+                                    <select id="folder_0_ambient_canary_autonomy" name="folder_0_ambient_canary_autonomy" data-setting="ambient_canary_autonomy" >
+                                        <option value="notify_only" >Notify only</option>
+                                        <option value="autonomous_fixes" >Allow autonomous fixes</option>
                                     </select>
                                 </div>
                             </div>
@@ -1626,7 +1697,6 @@ button.secondary[disabled] {
                                             <span class="source-indicator" data-toggle="tooltip" title="Set by your organization settings">🏢</span>
                                         </label>
                                     </div>
-                                    
                                     <div class="override-indicator-wrapper source-org">
                                         <label class="checkbox-label">
                                             <input type="checkbox" name="folder_1_snyk_secrets_enabled" data-setting="snyk_secrets_enabled" checked >
@@ -1634,7 +1704,6 @@ button.secondary[disabled] {
                                             <span class="source-indicator" data-toggle="tooltip" title="Set by your organization settings">🏢</span>
                                         </label>
                                     </div>
-                                    
                                 </div>
                             </div>
 
@@ -1648,6 +1717,20 @@ button.secondary[disabled] {
                                     <select id="folder_1_scan_automatic" name="folder_1_scan_automatic" data-setting="scan_automatic" data-bool="1" >
                                         <option value="true"  selected>Auto</option>
                                         <option value="false" >Manual</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="override-indicator-wrapper ">
+                                <div class="form-group half-width">
+                                    <label for="folder_1_ambient_canary_autonomy">
+                                        <span data-toggle="tooltip" title="Choose whether Ambient Canary may apply fixes automatically for this folder, or only notify you.">Ambient Canary autonomy</span>
+                                        
+                                    </label>
+                                    
+                                    <select id="folder_1_ambient_canary_autonomy" name="folder_1_ambient_canary_autonomy" data-setting="ambient_canary_autonomy" >
+                                        <option value="notify_only" >Notify only</option>
+                                        <option value="autonomous_fixes" >Allow autonomous fixes</option>
                                     </select>
                                 </div>
                             </div>
@@ -1925,7 +2008,13 @@ button.secondary[disabled] {
                                             <span class="source-indicator" data-toggle="tooltip" title="Locked due to organization settings">🏢🔒</span>
                                         </label>
                                     </div>
-                                    
+                                    <div class="override-indicator-wrapper source-org-locked">
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" name="folder_2_snyk_secrets_enabled" data-setting="snyk_secrets_enabled" checked disabled>
+                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code.">Snyk Secrets</span>
+                                            <span class="source-indicator" data-toggle="tooltip" title="Locked due to organization settings">🏢🔒</span>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1939,6 +2028,20 @@ button.secondary[disabled] {
                                     <select id="folder_2_scan_automatic" name="folder_2_scan_automatic" data-setting="scan_automatic" data-bool="1" disabled>
                                         <option value="true"  selected>Auto</option>
                                         <option value="false" >Manual</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="override-indicator-wrapper ">
+                                <div class="form-group half-width">
+                                    <label for="folder_2_ambient_canary_autonomy">
+                                        <span data-toggle="tooltip" title="Choose whether Ambient Canary may apply fixes automatically for this folder, or only notify you.">Ambient Canary autonomy</span>
+                                        
+                                    </label>
+                                    
+                                    <select id="folder_2_ambient_canary_autonomy" name="folder_2_ambient_canary_autonomy" data-setting="ambient_canary_autonomy" >
+                                        <option value="notify_only" >Notify only</option>
+                                        <option value="autonomous_fixes" >Allow autonomous fixes</option>
                                     </select>
                                 </div>
                             </div>
@@ -2216,7 +2319,13 @@ button.secondary[disabled] {
                                             <span class="source-indicator" data-toggle="tooltip" title="Set by you at project level">👤</span>
                                         </label>
                                     </div>
-                                    
+                                    <div class="override-indicator-wrapper source-user-override">
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" name="folder_3_snyk_secrets_enabled" data-setting="snyk_secrets_enabled"  >
+                                            <span data-toggle="tooltip" title="Detect and prevent secrets from being exposed in your code.">Snyk Secrets</span>
+                                            <span class="source-indicator" data-toggle="tooltip" title="Set by you at project level">👤</span>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
 
@@ -2230,6 +2339,20 @@ button.secondary[disabled] {
                                     <select id="folder_3_scan_automatic" name="folder_3_scan_automatic" data-setting="scan_automatic" data-bool="1" >
                                         <option value="true"  selected>Auto</option>
                                         <option value="false" >Manual</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="override-indicator-wrapper ">
+                                <div class="form-group half-width">
+                                    <label for="folder_3_ambient_canary_autonomy">
+                                        <span data-toggle="tooltip" title="Choose whether Ambient Canary may apply fixes automatically for this folder, or only notify you.">Ambient Canary autonomy</span>
+                                        
+                                    </label>
+                                    
+                                    <select id="folder_3_ambient_canary_autonomy" name="folder_3_ambient_canary_autonomy" data-setting="ambient_canary_autonomy" >
+                                        <option value="notify_only" >Notify only</option>
+                                        <option value="autonomous_fixes" >Allow autonomous fixes</option>
                                     </select>
                                 </div>
                             </div>
@@ -3580,6 +3703,7 @@ if (window.cssVars) {
 	var FOLDER_RESET_FIELDS = [
 		"scan_automatic",
 		"scan_net_new",
+		"ambient_canary_autonomy",
 		"severity_filter_critical",
 		"severity_filter_high",
 		"severity_filter_medium",
@@ -3767,6 +3891,11 @@ if (window.cssVars) {
 		},
 		permissions: {
 			trusted_folders: []
+		},
+		autonomousRemediation: {
+			llm_provider: "",
+			llm_model: "",
+			llm_base_url: ""
 		}
 	};
 

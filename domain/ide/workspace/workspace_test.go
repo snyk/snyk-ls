@@ -25,6 +25,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 
 	"github.com/snyk/snyk-ls/domain/scanstates"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/domain/snyk/scanner"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 
@@ -49,11 +50,11 @@ func Test_GetFolderTrust_shouldReturnTrustedAndUntrustedFolders(t *testing.T) {
 
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
-	w := New(conf, logger, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine)
+	w := New(conf, logger, performance.NewInstrumentor(), sc, nil, nil, notifier, persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine)
 	conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
 	conf.Set(configresolver.UserGlobalKey(types.SettingTrustedFolders), []types.FilePath{trustedDummy})
-	w.AddFolder(NewFolder(conf, logger, trustedDummy, string(trustedDummy), sc, nil, scanNotifier, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine))
-	w.AddFolder(NewFolder(conf, logger, untrustedDummy, string(untrustedDummy), sc, nil, scanNotifier, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine))
+	w.AddFolder(NewFolder(conf, logger, trustedDummy, string(trustedDummy), sc, nil, scanNotifier, notifier, persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine))
+	w.AddFolder(NewFolder(conf, logger, untrustedDummy, string(untrustedDummy), sc, nil, scanNotifier, notifier, persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine))
 
 	trusted, untrusted := w.GetFolderTrust()
 
@@ -71,11 +72,11 @@ func Test_TrustFoldersAndScan_shouldAddFoldersToTrustedFoldersAndTriggerScan(t *
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
-	w := New(conf, logger, performance.NewInstrumentor(), sc, nil, nil, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine)
+	w := New(conf, logger, performance.NewInstrumentor(), sc, nil, nil, notifier, persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine)
 	conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
-	trustedFolder := NewFolder(conf, logger, types.PathKey(trustedDummy), trustedDummy, sc, nil, scanNotifier, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine)
+	trustedFolder := NewFolder(conf, logger, types.PathKey(trustedDummy), trustedDummy, sc, nil, scanNotifier, notifier, persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine)
 	w.AddFolder(trustedFolder)
-	untrustedFolder := NewFolder(conf, logger, types.PathKey(untrustedDummy), untrustedDummy, sc, nil, scanNotifier, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine)
+	untrustedFolder := NewFolder(conf, logger, types.PathKey(untrustedDummy), untrustedDummy, sc, nil, scanNotifier, notifier, persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine)
 	w.AddFolder(untrustedFolder)
 
 	w.TrustFoldersAndScan(t.Context(), []types.Folder{trustedFolder})
@@ -107,10 +108,10 @@ func TestTrustFoldersAndScan_ConcurrentCalls_BothFoldersTrusted(t *testing.T) {
 
 	conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
 
-	w := New(conf, logger, performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewNotifier(), nil, scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
+	w := New(conf, logger, performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewNotifier(), persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
 
-	f1 := NewFolder(conf, logger, types.PathKey("folder-one"), "folder-one", sc, nil, scanNotifier, notification.NewNotifier(), nil, scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
-	f2 := NewFolder(conf, logger, types.PathKey("folder-two"), "folder-two", sc, nil, scanNotifier, notification.NewNotifier(), nil, scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
+	f1 := NewFolder(conf, logger, types.PathKey("folder-one"), "folder-one", sc, nil, scanNotifier, notification.NewNotifier(), persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
+	f2 := NewFolder(conf, logger, types.PathKey("folder-two"), "folder-two", sc, nil, scanNotifier, notification.NewNotifier(), persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
 	w.AddFolder(f1)
 	w.AddFolder(f2)
 
@@ -153,8 +154,8 @@ func Test_AddAndRemoveFoldersAndReturnFolderList(t *testing.T) {
 	scanNotifier := scanner.NewMockScanNotifier()
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
-	w := New(conf, logger, performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewNotifier(), nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine)
-	toBeRemovedFolder := NewFolder(conf, logger, toBeRemovedAbsolutePathAfterConversions, toBeRemoved, sc, nil, scanNotifier, notification.NewNotifier(), nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine)
+	w := New(conf, logger, performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewNotifier(), persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine)
+	toBeRemovedFolder := NewFolder(conf, logger, toBeRemovedAbsolutePathAfterConversions, toBeRemoved, sc, nil, scanNotifier, notification.NewNotifier(), persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine)
 	w.AddFolder(toBeRemovedFolder)
 
 	conf.Set(configresolver.UserGlobalKey(types.SettingTrustEnabled), true)
@@ -201,10 +202,10 @@ func TestGetFolderTrust_ConcurrentAddFolder_NoDataRace(t *testing.T) {
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
 	resolver := defaultResolver(engine)
 
-	w := New(conf, logger, performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewNotifier(), nil, scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
+	w := New(conf, logger, performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewNotifier(), persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
 
 	// Pre-populate so GetFolderTrust has something to iterate over.
-	existing := NewFolder(conf, logger, types.PathKey("existing-folder"), "existing-folder", sc, nil, scanNotifier, notification.NewNotifier(), nil, scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
+	existing := NewFolder(conf, logger, types.PathKey("existing-folder"), "existing-folder", sc, nil, scanNotifier, notification.NewNotifier(), persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
 	w.AddFolder(existing)
 
 	for i := 0; i < 200; i++ {
@@ -215,7 +216,7 @@ func TestGetFolderTrust_ConcurrentAddFolder_NoDataRace(t *testing.T) {
 		// window open for only the first iteration.
 		name := fmt.Sprintf("dynamic-folder-%d", i)
 		folderKey := types.PathKey(types.FilePath(name))
-		newF := NewFolder(conf, logger, folderKey, name, sc, nil, scanNotifier, notification.NewNotifier(), nil, scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
+		newF := NewFolder(conf, logger, folderKey, name, sc, nil, scanNotifier, notification.NewNotifier(), persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
 
 		// Race: GetFolderTrust reads w.folders while AddFolder writes it.
 		// Without w.mutex.RLock in GetFolderTrust the race detector reports a
@@ -260,7 +261,7 @@ func Test_Folders_ReturnsSortedOrder(t *testing.T) {
 	notifier := notification.NewNotifier()
 	scanStateAggregator := scanstates.NewNoopStateAggregator()
 
-	w := New(conf, logger, performance.NewInstrumentor(), sc, nil, scanNotifier, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine)
+	w := New(conf, logger, performance.NewInstrumentor(), sc, nil, scanNotifier, notifier, persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine)
 
 	// Insert paths in intentionally non-sorted order so randomized map iteration is likely to
 	// expose a different ordering on repeated calls if the source is not sorted.
@@ -275,7 +276,7 @@ func Test_Folders_ReturnsSortedOrder(t *testing.T) {
 		"/workspace/d",
 	}
 	for _, p := range paths {
-		w.AddFolder(NewFolder(conf, logger, p, string(p), sc, nil, scanNotifier, notifier, nil, scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine))
+		w.AddFolder(NewFolder(conf, logger, p, string(p), sc, nil, scanNotifier, notifier, persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), defaultResolver(engine), engine))
 	}
 
 	first := w.Folders()

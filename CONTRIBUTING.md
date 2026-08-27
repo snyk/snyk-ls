@@ -46,6 +46,19 @@ with the following layers:
 Current domain is depicted in the following diagram:
 ![Domain C4-L3](./docs/images/domain.png)
 
+## BDD acceptance tests
+
+Acceptance-level behaviour is described in Gherkin feature files under [`features/`](features), run by
+[godog](https://github.com/cucumber/godog) via `go test` in `application/server` (see `bdd_test.go`).
+
+- Each scenario that covers a tracked requirement carries a `# maps: <requirement-id>` comment directly above its
+  `Scenario:` line (e.g. `# maps: M1`). A lint test (`bdd_lint_test.go`) fails the build if a scenario is missing
+  its anchor or a tracked requirement isn't covered by any scenario.
+- Step definitions live in `application/server/bdd_steps_test.go` and reuse the same unexported test harness as the
+  plain Go acceptance tests in that package (`setupServer`, `testsupport.JsonRPCRecorder`) rather than a second,
+  divergent one.
+- Run the suite with `make test-bdd`.
+
 # Contributing new Snyk products
 
 To integrate a new product, the language server provides

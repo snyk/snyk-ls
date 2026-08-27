@@ -1,6 +1,7 @@
 {
   "additional_environment": "",
   "additional_parameters": "",
+  "ambient_canary_autonomy": "",
   "api_endpoint": "https://api.snyk.io",
   "authentication_method": "oauth",
   "auto_configure_mcp_server": true,
@@ -12,6 +13,7 @@
     {
       "additional_environment": "",
       "additional_parameters": [],
+      "ambient_canary_autonomy": "notify_only",
       "folderPath": "/Users/username/workspace/defaults-project",
       "issue_view_ignored_issues": false,
       "issue_view_open_issues": true,
@@ -45,11 +47,13 @@
       "severity_filter_medium": true,
       "snyk_code_enabled": true,
       "snyk_iac_enabled": true,
-      "snyk_oss_enabled": true
+      "snyk_oss_enabled": true,
+      "snyk_secrets_enabled": false
     },
     {
       "additional_environment": "",
       "additional_parameters": [],
+      "ambient_canary_autonomy": "notify_only",
       "folderPath": "/Users/username/workspace/org-set-project",
       "issue_view_ignored_issues": true,
       "issue_view_open_issues": false,
@@ -83,11 +87,13 @@
       "severity_filter_medium": false,
       "snyk_code_enabled": true,
       "snyk_iac_enabled": true,
-      "snyk_oss_enabled": false
+      "snyk_oss_enabled": false,
+      "snyk_secrets_enabled": true
     },
     {
       "additional_environment": "",
       "additional_parameters": [],
+      "ambient_canary_autonomy": "notify_only",
       "folderPath": "/Users/username/workspace/org-locked-project",
       "issue_view_ignored_issues": false,
       "issue_view_open_issues": true,
@@ -121,11 +127,13 @@
       "severity_filter_medium": true,
       "snyk_code_enabled": false,
       "snyk_iac_enabled": false,
-      "snyk_oss_enabled": true
+      "snyk_oss_enabled": true,
+      "snyk_secrets_enabled": true
     },
     {
       "additional_environment": "",
       "additional_parameters": [],
+      "ambient_canary_autonomy": "notify_only",
       "folderPath": "/Users/username/workspace/user-override-project",
       "issue_view_ignored_issues": false,
       "issue_view_open_issues": true,
@@ -160,11 +168,15 @@
       "severity_filter_medium": false,
       "snyk_code_enabled": true,
       "snyk_iac_enabled": false,
-      "snyk_oss_enabled": true
+      "snyk_oss_enabled": true,
+      "snyk_secrets_enabled": false
     }
   ],
   "issue_view_ignored_issues": true,
   "issue_view_open_issues": true,
+  "llm_base_url": "",
+  "llm_model": "",
+  "llm_provider": "",
   "organization": "manual-org-uuid-global",
   "proxy_insecure": false,
   "risk_score_threshold": null,
@@ -178,6 +190,7 @@
   "snyk_code_enabled": true,
   "snyk_iac_enabled": false,
   "snyk_oss_enabled": true,
+  "snyk_secrets_enabled": false,
   "token": "",
   "trusted_folders": [
     "/Users/username/workspace/defaults-project",
