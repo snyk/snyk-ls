@@ -397,18 +397,127 @@ func getSarifResponseJson2(filePath string) string {
 `, DontUsePrintStackTrace, CatchingInterruptedExceptionWithoutInterrupt, filePath)
 }
 
+// buildMultiFileSarifResponse returns one security-categorized finding per file, with the
+// ruleId set to the file's base name. The delta fuzzy matcher requires equal ruleIds before it
+// will compare two findings at all, so per-file ruleIds keep findings in different files from
+// ever being mistaken for each other while still letting the same file match across scans.
+func buildMultiFileSarifResponse(relativePaths []string) codeClientSarif.SarifResponse {
+	var rules []codeClientSarif.Rule
+	var results []codeClientSarif.Result
+
+	for _, relativePath := range relativePaths {
+		ruleID := filepath.Base(relativePath)
+		escapedPath := strings.ReplaceAll(relativePath, `\`, `\\`)
+
+		rules = append(rules, codeClientSarif.Rule{
+			ID:               ruleID,
+			Name:             ruleID,
+			ShortDescription: codeClientSarif.ShortDescription{Text: ruleID},
+			DefaultConfiguration: codeClientSarif.DefaultConfiguration{
+				Level: "warning",
+			},
+			Properties: codeClientSarif.RuleProperties{
+				Categories: []string{"Security"},
+				Precision:  "very-high",
+			},
+		})
+
+		results = append(results, codeClientSarif.Result{
+			RuleID: ruleID,
+			Level:  "warning",
+			Message: codeClientSarif.ResultMessage{
+				Text: fmt.Sprintf("Test finding for %s", ruleID),
+			},
+			Locations: []codeClientSarif.Location{
+				{
+					PhysicalLocation: codeClientSarif.PhysicalLocation{
+						ArtifactLocation: codeClientSarif.ArtifactLocation{
+							URI:       escapedPath,
+							URIBaseID: "dummy",
+						},
+						Region: codeClientSarif.Region{
+							StartLine:   6,
+							EndLine:     6,
+							StartColumn: 7,
+							EndColumn:   7,
+						},
+					},
+				},
+			},
+			Fingerprints: codeClientSarif.Fingerprints{
+				Num1: relativePath,
+			},
+		})
+	}
+
+	return codeClientSarif.SarifResponse{
+		Type:     "sarif",
+		Progress: 1,
+		Status:   "COMPLETE",
+		Sarif: codeClientSarif.SarifDocument{
+			Schema:  "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+			Version: "2.1.0",
+			Runs: []codeClientSarif.Run{
+				{
+					Tool: codeClientSarif.Tool{
+						Driver: codeClientSarif.Driver{
+							Name:            "SnykCode",
+							SemanticVersion: "1.0.0",
+							Version:         "1.0.0",
+							Rules:           rules,
+						},
+					},
+					Results: results,
+				},
+			},
+		},
+	}
+}
+
 func (f *FakeCodeScannerClient) UploadAndAnalyze(
 	_ context.Context,
 	_ string,
-	_ scan.Target,
+	target scan.Target,
 	files <-chan string,
 	_ map[string]bool,
 ) (*codeClientSarif.SarifResponse, string, error) {
+	var filePaths []string
+	for filePath := range files {
+		filePaths = append(filePaths, filePath)
+	}
+
 	var analysisResponse codeClientSarif.SarifResponse
-	responseJson := getSarifResponseJson2(filepath.Base(<-files))
-	err := json.Unmarshal([]byte(responseJson), &analysisResponse)
+
+	// At most one file can never collide with another file, so keep returning the original
+	// fixed two-finding fixture callers already depend on (exact ruleIds, ignore/suppression
+	// data) - including when the channel yields nothing, which existing callers rely on to
+	// still produce the fixture. Cross-file collisions are only possible with more than one file.
+	if len(filePaths) <= 1 {
+		var firstFile string
+		if len(filePaths) == 1 {
+			firstFile = filePaths[0]
+		}
+		responseJson := getSarifResponseJson2(filepath.Base(firstFile))
+		err := json.Unmarshal([]byte(responseJson), &analysisResponse)
+		f.UploadAndAnalyzeWasCalled = true
+		return &analysisResponse, "", err
+	}
+
+	// The caller always scans from the same folder root it built target from, so that root -
+	// not a heuristic over the file list - is what artifact URIs must be relative to.
+	scanRoot := target.GetPath()
+	relativePaths := make([]string, 0, len(filePaths))
+	for _, fp := range filePaths {
+		relPath, err := filepath.Rel(scanRoot, fp)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to make %s relative to scan root %s: %w", fp, scanRoot, err)
+		}
+		relativePaths = append(relativePaths, relPath)
+	}
+
+	analysisResponse = buildMultiFileSarifResponse(relativePaths)
 	f.UploadAndAnalyzeWasCalled = true
-	return &analysisResponse, "", err
+	return &analysisResponse, "", nil
 }
 
 func (f *FakeCodeScannerClient) Upload(context.Context, string, scan.Target, <-chan string, map[string]bool) (bundle.Bundle, error) {

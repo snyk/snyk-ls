@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/creachadair/jrpc2/server"
 	"github.com/cucumber/godog"
+	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/object"
@@ -85,6 +85,11 @@ type bddSteps struct {
 	// requires; scenarios set it to the finding they deliberately introduced.
 	expectedNewIssueCode string
 
+	reservedDeviceRepoPath   types.FilePath
+	reservedDeviceRepo       *git.Repository
+	reservedDeviceBaseCommit plumbing.Hash
+	reservedDeviceKnownBlob  plumbing.Hash
+
 	savedLlmProvider    string
 	savedLlmModel       string
 	fixCapturedProvider string
@@ -102,11 +107,6 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	sc.After(s.afterScenario)
 	sc.Given(`^a running language server$`, func() error {
 		return s.runOnScenarioGoroutine(func() error { return s.startLanguageServer() })
-	})
-	sc.Given(`^a running language server that finds one issue in every source file$`, func() error {
-		return s.runOnScenarioGoroutine(func() error {
-			return s.startLanguageServer(WithProductScanners(bddPerFileScanner{}))
-		})
 	})
 	// Step, not When: this step is reused as "And" (inheriting Given) in the
 	// delta-fail-open scenarios, and Given/When/Then in godog match only their
@@ -173,8 +173,18 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	sc.Then(`^the editor is notified of both the newly introduced "([^"]*)" issue and the "([^"]*)" issue$`, func(product1, product2 string) error {
 		return s.runOnScenarioGoroutine(func() error { return s.editorNotifiedOfBothProductIssues(product1, product2) })
 	})
-	sc.Given(`^the developer opens a repository whose base branch carries a file named after a Windows device$`, func() error {
-		return s.runOnScenarioGoroutine(s.developerOpensRepositoryWithDeviceFileNameOnBaseBranch)
+	sc.Given(`^the developer opens a repository whose base branch carries a file named "([^"]*)"$`, func(deviceName string) error {
+		return s.runOnScenarioGoroutine(func() error {
+			return s.developerOpensRepositoryOnBaseBranchWithDeviceFile(deviceName)
+		})
+	})
+	sc.Given(`^the developer has a file named "([^"]*)" checked out in their working tree$`, func(deviceName string) error {
+		return s.runOnScenarioGoroutine(func() error {
+			return s.developerHasDeviceFileCheckedOutInWorkingTree(deviceName)
+		})
+	})
+	sc.Given(`^their feature branch adds a finding the base branch does not have$`, func() error {
+		return s.runOnScenarioGoroutine(s.featureBranchAddsNewFinding)
 	})
 	sc.When(`^the developer scans the whole repository$`, func(ctx context.Context) error {
 		return s.runOnScenarioGoroutine(func() error { return s.developerScansTheWholeRepository(ctx) })
@@ -283,7 +293,8 @@ func (s *bddSteps) runStep(fn func() error) {
 	}()
 	err := fn()
 	reported = true
-	if err != nil && s.scenarioT != nil {
+	// ErrSkip is godog's signal to skip the rest of the scenario, not a failure.
+	if err != nil && !errors.Is(err, godog.ErrSkip) && s.scenarioT != nil {
 		s.scenarioT.Fail()
 	}
 	s.stepResult <- err
@@ -575,45 +586,76 @@ func (s *bddSteps) theDialogContainsNoLlmApiKeyField() error {
 	return nil
 }
 
-// developerOpensRepositoryWithDeviceFileNameOnBaseBranch builds the customer's
-// repository: master carries the reserved device name plus a file with an
-// already-known finding, and the checked-out feature branch drops the reserved
-// name and adds a file with a new finding. Nothing writes a reserved device
+// developerOpensRepositoryOnBaseBranchWithDeviceFile builds the base branch:
+// a file with an already-known finding plus the reserved device name tucked
+// inside scripts/build. featureBranchAddsNewFinding commits and checks out
+// the feature branch on top of it. Nothing here writes the reserved device
 // name to disk, so this runs on every platform.
-func (s *bddSteps) developerOpensRepositoryWithDeviceFileNameOnBaseBranch() error {
+func (s *bddSteps) developerOpensRepositoryOnBaseBranchWithDeviceFile(deviceName string) error {
 	repoPath := s.newScenarioRepoPath()
 	repo := testutil.InitGitRepo(s.scenarioT, repoPath)
 	storer := repo.Storer
 
 	knownBlob := testutil.WriteGitBlob(s.scenarioT, storer, bddDummySource)
 	buildTree := testutil.WriteGitTree(s.scenarioT, storer, []object.TreeEntry{
-		{Name: "prn.sh", Mode: filemode.Regular, Hash: testutil.WriteGitBlob(s.scenarioT, storer, bddBuildScriptSource)},
+		{Name: deviceName, Mode: filemode.Regular, Hash: testutil.WriteGitBlob(s.scenarioT, storer, bddBuildScriptSource)},
 	})
 	scriptsTree := testutil.WriteGitTree(s.scenarioT, storer, []object.TreeEntry{
 		{Name: "build", Mode: filemode.Dir, Hash: buildTree},
 	})
-	masterCommit := testutil.CommitGitTree(s.scenarioT, repo, testutil.WriteGitTree(s.scenarioT, storer, []object.TreeEntry{
+	baseCommit := testutil.CommitGitTreeOnBranch(s.scenarioT, repo, plumbing.NewBranchReferenceName(bddBaseBranch), testutil.WriteGitTree(s.scenarioT, storer, []object.TreeEntry{
 		{Name: bddKnownFindingFile, Mode: filemode.Regular, Hash: knownBlob},
 		{Name: "scripts", Mode: filemode.Dir, Hash: scriptsTree},
 	}))
 
+	s.reservedDeviceRepoPath = repoPath
+	s.reservedDeviceRepo = repo
+	s.reservedDeviceBaseCommit = baseCommit
+	s.reservedDeviceKnownBlob = knownBlob
+	return nil
+}
+
+// developerHasDeviceFileCheckedOutInWorkingTree matches the customer's actual
+// configuration: the device name is a real file on disk, not only a git tree
+// entry. Git itself refuses to check such a file out on Windows, so that
+// state cannot exist there; the step reports ErrSkip instead of attempting
+// the write and failing on the OS's own rejection.
+func (s *bddSteps) developerHasDeviceFileCheckedOutInWorkingTree(deviceName string) error {
+	if runtime.GOOS == "windows" {
+		return godog.ErrSkip
+	}
+	if err := s.developerOpensRepositoryOnBaseBranchWithDeviceFile(deviceName); err != nil {
+		return err
+	}
+	return writeScenarioFile(s.reservedDeviceRepoPath, deviceName, bddBuildScriptSource)
+}
+
+// featureBranchAddsNewFinding commits the feature branch on top of the base
+// branch built by developerOpensRepositoryOnBaseBranchWithDeviceFile, checks
+// it out by writing its files to disk, and opens the repository - the point
+// at which both scenarios trigger the base-branch clone.
+func (s *bddSteps) featureBranchAddsNewFinding() error {
+	repo := s.reservedDeviceRepo
+	storer := repo.Storer
+	newFile := bddNewFindingFile
+
 	featureTree := testutil.WriteGitTree(s.scenarioT, storer, []object.TreeEntry{
-		{Name: bddKnownFindingFile, Mode: filemode.Regular, Hash: knownBlob},
-		{Name: bddNewFindingFile, Mode: filemode.Regular, Hash: testutil.WriteGitBlob(s.scenarioT, storer, bddDummySource)},
+		{Name: bddKnownFindingFile, Mode: filemode.Regular, Hash: s.reservedDeviceKnownBlob},
+		{Name: newFile, Mode: filemode.Regular, Hash: testutil.WriteGitBlob(s.scenarioT, storer, bddDummySource)},
 	})
-	testutil.CommitGitTreeOnBranch(s.scenarioT, repo, plumbing.NewBranchReferenceName("feature"), featureTree, masterCommit)
+	testutil.CommitGitTreeOnBranch(s.scenarioT, repo, plumbing.NewBranchReferenceName(bddFeatureBranch), featureTree, s.reservedDeviceBaseCommit)
 
 	// Checking out the feature branch is just writing its two files.
-	for _, name := range []string{bddKnownFindingFile, bddNewFindingFile} {
-		if err := writeScenarioFile(repoPath, name, bddDummySource); err != nil {
+	for _, name := range []string{bddKnownFindingFile, newFile} {
+		if err := writeScenarioFile(s.reservedDeviceRepoPath, name, bddDummySource); err != nil {
 			return err
 		}
 	}
 
-	s.deltaFileDir = repoPath
-	s.deltaFilePath = types.FilePath(filepath.Join(string(repoPath), bddNewFindingFile))
-	s.expectedNewIssueCode = bddNewFindingFile
-	return s.openScenarioRepo(repoPath)
+	s.deltaFileDir = s.reservedDeviceRepoPath
+	s.deltaFilePath = types.FilePath(filepath.Join(string(s.reservedDeviceRepoPath), newFile))
+	s.expectedNewIssueCode = newFile
+	return s.openScenarioRepo(s.reservedDeviceRepoPath, bddBaseBranch)
 }
 
 const (
@@ -623,37 +665,9 @@ const (
 	// branch and the working tree is exactly the file the feature branch added.
 	bddKnownFindingFile = "Known.java"
 	bddNewFindingFile   = "New.java"
+	bddBaseBranch       = "master"
+	bddFeatureBranch    = "feature"
 )
-
-// bddPerFileScanner reports one finding per .java file it finds under the path
-// it is handed. Only the product scanner is substituted: the real
-// DelegatingConcurrentScanner still clones the base branch and diffs against it,
-// which is the code this scenario exists to exercise.
-type bddPerFileScanner struct{}
-
-func (bddPerFileScanner) Product() product.Product { return product.ProductCode }
-
-func (bddPerFileScanner) IsEnabledForFolder(*types.FolderConfig) bool { return true }
-
-func (bddPerFileScanner) Scan(_ context.Context, pathToScan types.FilePath) ([]types.Issue, error) {
-	var issues []types.Issue
-	err := filepath.WalkDir(string(pathToScan), func(p string, entry fs.DirEntry, err error) error {
-		if err != nil || entry.IsDir() || filepath.Ext(p) != code.FakeFileExtension {
-			return nil //nolint:nilerr // an unreadable entry is simply not a finding
-		}
-		issues = append(issues, &snyk.Issue{
-			ID:               filepath.Base(p),
-			AffectedFilePath: types.FilePath(p),
-			ContentRoot:      pathToScan,
-			Severity:         types.High,
-			Product:          product.ProductCode,
-			Message:          "finding in " + filepath.Base(p),
-			AdditionalData:   snyk.CodeIssueData{Key: "key-" + filepath.Base(p)},
-		})
-		return nil
-	})
-	return issues, err
-}
 
 func (s *bddSteps) newScenarioRepoPath() types.FilePath {
 	repoPath := types.FilePath(s.scenarioT.TempDir())
@@ -678,7 +692,7 @@ func writeScenarioFile(repoPath types.FilePath, name, content string) error {
 // the workspace folder, initialized, then the base branch over the settings
 // channel. The server builds the folder and its scanner itself, so registration
 // (including the persister's cache directory) runs for real.
-func (s *bddSteps) openScenarioRepo(repoPath types.FilePath) error {
+func (s *bddSteps) openScenarioRepo(repoPath types.FilePath, baseBranch string) error {
 	ctx := s.scenarioT.Context()
 	initParams := types.InitializeParams{
 		WorkspaceFolders: []types.WorkspaceFolder{
@@ -702,8 +716,8 @@ func (s *bddSteps) openScenarioRepo(repoPath types.FilePath) error {
 				{
 					FolderPath: repoPath,
 					Settings: map[string]*types.ConfigSetting{
-						types.SettingBaseBranch:      {Value: "master", Changed: true},
-						types.SettingReferenceBranch: {Value: "master", Changed: true},
+						types.SettingBaseBranch:      {Value: baseBranch, Changed: true},
+						types.SettingReferenceBranch: {Value: baseBranch, Changed: true},
 					},
 				},
 			},
@@ -1217,12 +1231,21 @@ func (s *bddSteps) editorNotifiedOfOnlyNewIssue() error {
 }
 
 // filesWithFindings returns the files the editor currently shows findings for,
-// and how many diagnostics that is in total.
+// and how many diagnostics that is in total. This feature drives OSS and IaC
+// alongside Code, so a scan failure in either can publish a folder-level "Snyk
+// Error" diagnostic that has nothing to do with the new-issue assertion here.
 func (s *bddSteps) filesWithFindings() (files []string, total int) {
 	for path, diagnostics := range s.latestDiagnosticsByFile() {
-		if len(diagnostics) > 0 {
+		count := 0
+		for _, diagnostic := range diagnostics {
+			if diagnostic.Code == "Snyk Error" {
+				continue
+			}
+			count++
+		}
+		if count > 0 {
 			files = append(files, path)
-			total += len(diagnostics)
+			total += count
 		}
 	}
 	sort.Strings(files)
