@@ -63,12 +63,8 @@ import (
 //   - types.SetGlobalSystemDefault — stores into the per-engine configuration.
 //
 //nolint:gocyclo // high branching is inherent: one nil-check per overrideable dependency
-func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenService, overrideDeps *Dependencies, opts ...TestOption) Dependencies {
+func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenService, overrideDeps *Dependencies) Dependencies {
 	t.Helper()
-	var options testOptions
-	for _, opt := range opts {
-		opt(&options)
-	}
 	gafConfiguration := engine.GetConfiguration()
 	types.SetGlobalSystemDefault(gafConfiguration, types.SettingCliPath, filepath.Join(t.TempDir(), "fake-cli"))
 
@@ -165,11 +161,7 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 	localSnykCodeScanner := code.New(engine, localInstrumentor, localSnykApiClient, localCodeErrorReporter, localLearnService, localFeatureFlagService, localNotifier, localCodeInstrumentor, localCodeErrorReporter, code.NewFakeCodeScannerClient, localConfigResolver, localProgressTracker)
 	localOpenSourceScanner := oss.NewCLIScanner(engine, localInstrumentor, localErrorReporter, localSnykCli, localLearnService, localNotifier, localConfigResolver, localProgressTracker)
 	localIaCScanner := iac.New(gafConfiguration, logger, localInstrumentor, localErrorReporter, localSnykCli, localConfigResolver, localProgressTracker)
-	productScanners := []types.ProductScanner{localSnykCodeScanner, localIaCScanner, localOpenSourceScanner}
-	if len(options.productScanners) > 0 {
-		productScanners = options.productScanners
-	}
-	localScanner := scanner2.NewDelegatingScanner(engine, tokenService, localScanInitializer, localInstrumentor, localScanNotifier, localSnykApiClient, localAuthenticationService, localNotifier, localScanPersister, localScanStateAggregator, localConfigResolver, productScanners...)
+	localScanner := scanner2.NewDelegatingScanner(engine, tokenService, localScanInitializer, localInstrumentor, localScanNotifier, localSnykApiClient, localAuthenticationService, localNotifier, localScanPersister, localScanStateAggregator, localConfigResolver, localSnykCodeScanner, localIaCScanner, localOpenSourceScanner)
 
 	var localHoverService hover.Service
 	if overrideDeps != nil && overrideDeps.HoverService != nil {
@@ -230,20 +222,4 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 		ScanCtx:               localScanCtx,
 		ScanCancel:            localScanCancel,
 	}
-}
-
-// TestOption customizes what TestInit builds. Variadic so existing callers are
-// unaffected.
-type TestOption func(*testOptions)
-
-type testOptions struct {
-	productScanners []types.ProductScanner
-}
-
-// WithProductScanners replaces the product scanners the delegating scanner is
-// built from. It exists so a test can substitute the Snyk API surface at
-// startup while leaving the real scanner, folder and registration assembly in
-// place, rather than hand-building a folder and reaching around registration.
-func WithProductScanners(scanners ...types.ProductScanner) TestOption {
-	return func(o *testOptions) { o.productScanners = scanners }
 }
