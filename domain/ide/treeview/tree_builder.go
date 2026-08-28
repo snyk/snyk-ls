@@ -181,7 +181,7 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 
 // untrustedFolderRationale is the banner copy explaining why a folder must be
 // trusted before it is scanned. (IDE-1882)
-const untrustedFolderRationale = "When scanning for issues, Snyk may automatically execute code such as " +
+const untrustedFolderRationale = "When scanning for issues, Snyk may automatically execute code and configuration, such as " +
 	"invoking the package manager to get dependency information. You should only scan folders you trust."
 
 // buildUntrustedFolderBanner builds the workspace-trust info banner node listing
