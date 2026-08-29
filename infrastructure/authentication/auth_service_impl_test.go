@@ -739,6 +739,77 @@ func Test_ConfigureProviders_CredentialMismatch_CallsClearAuthentication(t *test
 	assert.Empty(t, config.GetToken(conf), "mismatched token must be cleared from memory")
 }
 
+func Test_ConfigureProviders_CredentialMismatch_ReleasesWriteLockDuringLogout(t *testing.T) {
+	t.Parallel()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+	ts.SetToken(conf, "00000000-0000-0000-0000-000000000002")
+
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine, Method: types.OAuthAuthentication}
+	lockProbe := make(chan struct{}, 1)
+	var service AuthenticationService
+	notifier := &authNotificationProbeNotifier{
+		onAuthNotification: func() {
+			// logout's updateCredentials must release a.m before runPostMutationEffects;
+			// otherwise IsAuthenticated()'s a.m.RLock deadlocks on this goroutine's write lock.
+			_ = service.IsAuthenticated()
+			select {
+			case lockProbe <- struct{}{}:
+			default:
+			}
+		},
+	}
+	service = NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notifier, testutil.DefaultConfigResolver(engine))
+
+	done := make(chan struct{})
+	go func() {
+		service.ConfigureProviders(conf, engine.GetLogger())
+		close(done)
+	}()
+
+	select {
+	case <-lockProbe:
+	case <-time.After(5 * time.Second):
+		t.Fatal("ConfigureProviders did not release a.m during logout credential clear")
+	}
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("ConfigureProviders did not return: a.m was not correctly re-acquired after logout")
+	}
+}
+
+// authNotificationProbeNotifier forwards auth-credential notifications to a test hook.
+type authNotificationProbeNotifier struct {
+	onAuthNotification func()
+}
+
+func (n *authNotificationProbeNotifier) Receive() (payload any, stop bool) {
+	panic("implement me")
+}
+
+func (n *authNotificationProbeNotifier) CreateListener(_ func(params any)) {
+	panic("implement me")
+}
+
+func (n *authNotificationProbeNotifier) DisposeListener() {
+	panic("implement me")
+}
+
+func (n *authNotificationProbeNotifier) SendShowMessage(_ sglsp.MessageType, _ string) {}
+
+func (n *authNotificationProbeNotifier) Send(msg any) {
+	if _, ok := msg.(types.AuthenticationParams); ok && n.onAuthNotification != nil {
+		n.onAuthNotification()
+	}
+}
+
+func (n *authNotificationProbeNotifier) SendError(_ error) {}
+
+func (n *authNotificationProbeNotifier) SendErrorDiagnostic(_ types.FilePath, _ error) {}
+
 func TestAuthenticate_CancellationPreservesExistingToken(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()

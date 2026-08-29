@@ -410,7 +410,7 @@ func (a *AuthenticationServiceImpl) finishAuthenticate(provider AuthenticationPr
 	}
 
 	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification, true)
-	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())
+	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger(), true)
 	a.sendAuthenticationAnalytics()
 	return token, err
 }
@@ -851,7 +851,7 @@ func (a *AuthenticationServiceImpl) logout(ctx context.Context, releaseLock bool
 		}
 	}
 	a.updateCredentials("", true, false, releaseLock)
-	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())
+	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger(), releaseLock)
 
 	a.lastUsedTokenMu.Lock()
 	a.lastUsedToken = ""
@@ -991,7 +991,7 @@ func (a *AuthenticationServiceImpl) handleProviderInconsistencies() {
 	}
 	if !ok {
 		a.engine.GetLogger().Warn().Msg(msg)
-		a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())
+		a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger(), false)
 	}
 }
 
@@ -1118,10 +1118,10 @@ func (a *AuthenticationServiceImpl) ConfigureProviders(conf configuration.Config
 	a.m.Lock()
 	defer a.m.Unlock()
 
-	a.configureProviders(conf, logger)
+	a.configureProviders(conf, logger, true)
 }
 
-func (a *AuthenticationServiceImpl) configureProviders(conf configuration.Configuration, logger *zerolog.Logger) {
+func (a *AuthenticationServiceImpl) configureProviders(conf configuration.Configuration, logger *zerolog.Logger, releaseLockOnLogout bool) {
 	authMethod := config.GetAuthenticationMethodFromConfig(conf)
 	subLogger := logger.With().
 		Str("method", "configureProviders").
@@ -1160,23 +1160,7 @@ func (a *AuthenticationServiceImpl) configureProviders(conf configuration.Config
 		subLogger.Info().
 			Str("provider_type", fmt.Sprintf("%T", a.provider())).
 			Msg("configured auth method does not match current token; clearing credentials")
-		// releaseLock=false here, NOT because this call chain only ever holds a.m.RLock() (it
-		// doesn't — see below), but to preserve this call site's pre-existing behavior (hook runs
-		// inline, a.m untouched) unconditionally, because it is genuinely reachable under BOTH
-		// lock modes depending on caller and a single literal cannot be correct for both:
-		//   - finishAuthenticate / public ConfigureProviders: reached with a.m.Lock() (write
-		//     lock) held. releaseLock=true would be correct and desirable here (matches the other
-		//     write-lock call sites), but is not required by this fix's scope.
-		//   - handleProviderInconsistencies -> configureProviders: also reachable with only
-		//     a.m.RLock() held, via IsAuthenticated -> isAuthenticated -> doAuthCheck ->
-		//     handleProviderInconsistencies (called before the auth check, unconditionally) ->
-		//     configureProviders -> this branch, if the auth provider's type doesn't match the
-		//     token's method. releaseLock=true on THIS path would panic exactly like
-		//     UpdateCredentials did before this fix ("Unlock of unlocked RWMutex").
-		// This is a pre-existing, deliberately untouched hazard for the write-lock case above,
-		// out of scope for the reviewed finding (which only concerned updateCredentials' direct
-		// callers: UpdateCredentials, Authenticate, Logout).
-		a.logout(context.Background(), false)
+		a.logout(context.Background(), releaseLockOnLogout)
 		if authMethodChanged {
 			subLogger.Info().Msg("detected auth provider change, logging out and sending re-auth message")
 			a.sendAuthenticationRequest(MethodChangedMessage, "Re-authenticate")
