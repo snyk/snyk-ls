@@ -113,10 +113,10 @@ type AuthenticationServiceImpl struct {
 	// and Logout). The worker reads it under a.m as well, giving a proper
 	// happens-before guarantee. Any new code that increments syncGeneration MUST
 	// also hold a.m; failing to do so breaks the stale-discard guarantee and is
-	// a data race. Reads/writes use atomic operations to satisfy the race detector
+	// a data race. Reads/writes use atomic.Uint64 methods to satisfy the race detector
 	// across the lock boundary (worker acquires a.m before the load, but
 	// QueueCredentialUpdate reads without the lock).
-	syncGeneration uint64
+	syncGeneration atomic.Uint64
 	// writingToken holds a pointer to the token string that the credentialUpdateWorker
 	// is currently writing to conf via updateCredentials → tokenService.SetToken →
 	// WriteTokenToConfig → conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, …).  When the conf key
@@ -184,15 +184,18 @@ func (a *AuthenticationServiceImpl) credentialUpdateWorker(ctx context.Context) 
 		case update := <-a.credentialUpdateChan:
 			// Critical section: generation check + token mutation only.
 			a.m.Lock()
-			if update.generation < atomic.LoadUint64(&a.syncGeneration) {
+			if update.generation < a.syncGeneration.Load() {
 				a.engine.GetLogger().Debug().
 					Uint64("update_generation", update.generation).
-					Uint64("current_generation", atomic.LoadUint64(&a.syncGeneration)).
+					Uint64("current_generation", a.syncGeneration.Load()).
 					Bool("token_empty", update.token == "").
 					Msg("credential update worker: discarding stale async update superseded by synchronous credential write")
 				a.m.Unlock()
 				continue
 			}
+			// Capture the generation before releasing the lock, so we can pass it to
+			// runPostMutationEffects to detect if a concurrent write has superseded this one.
+			generation := a.syncGeneration.Load()
 			// Advertise which token we are about to write so QueueCredentialUpdate can
 			// recognize and drop the re-entrant callback that fires when
 			// WriteTokenToConfig calls conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, …) and
@@ -211,7 +214,7 @@ func (a *AuthenticationServiceImpl) credentialUpdateWorker(ctx context.Context) 
 			// Post-mutation effects run WITHOUT a.m so that hooks which call
 			// back into UpdateCredentials / Logout do not self-deadlock.
 			if applied {
-				a.runPostMutationEffects(update.token, update.sendNotification, update.updateApiUrl)
+				a.runPostMutationEffects(update.token, update.sendNotification, update.updateApiUrl, generation)
 			}
 		}
 	}
@@ -242,7 +245,7 @@ func (a *AuthenticationServiceImpl) QueueCredentialUpdate(token string, sendNoti
 			Msg("dropping duplicate credential update for token already being written")
 		return
 	}
-	gen := atomic.LoadUint64(&a.syncGeneration)
+	gen := a.syncGeneration.Load()
 	select {
 	case a.credentialUpdateChan <- credentialUpdate{
 		token:            token,
@@ -701,7 +704,7 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 	// generation: when the worker acquires a.m, it will see
 	// update.generation < syncGeneration and discard the stale update.
 	// Applies to all three callers: UpdateCredentials, authenticate, logout.
-	atomic.AddUint64(&a.syncGeneration, 1)
+	generation := a.syncGeneration.Add(1)
 
 	if !a.applyTokenMutationLocked(newToken, updateApiUrl) {
 		return
@@ -709,12 +712,12 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 
 	if releaseLock {
 		a.m.Unlock()
-		a.runPostMutationEffects(newToken, sendNotification, updateApiUrl)
+		a.runPostMutationEffects(newToken, sendNotification, updateApiUrl, generation)
 		a.m.Lock()
 		return
 	}
 
-	a.runPostMutationEffects(newToken, sendNotification, updateApiUrl)
+	a.runPostMutationEffects(newToken, sendNotification, updateApiUrl, generation)
 }
 
 // applyTokenMutationLocked performs the lock-critical part of a credential
@@ -772,7 +775,7 @@ func (a *AuthenticationServiceImpl) applyTokenMutationLocked(newToken string, up
 // released a.m before reaching here, so a hook that calls back into any
 // a.m-locking method (UpdateCredentials, Logout, Provider, …) does not
 // deadlock.
-func (a *AuthenticationServiceImpl) runPostMutationEffects(newToken string, sendNotification bool, updateApiUrl bool) {
+func (a *AuthenticationServiceImpl) runPostMutationEffects(newToken string, sendNotification bool, updateApiUrl bool, generation uint64) {
 	a.postCredentialUpdateHookMu.RLock()
 	postCredentialUpdateHook := a.postCredentialUpdateHook
 	a.postCredentialUpdateHookMu.RUnlock()
@@ -793,6 +796,16 @@ func (a *AuthenticationServiceImpl) runPostMutationEffects(newToken string, send
 	}
 
 	if sendNotification {
+		// Check if a concurrent write has superseded this one before sending the notification.
+		// If syncGeneration has advanced past the generation we captured, skip sending.
+		if a.syncGeneration.Load() != generation {
+			a.engine.GetLogger().Debug().
+				Uint64("captured_generation", generation).
+				Uint64("current_generation", a.syncGeneration.Load()).
+				Msg("skipping notification for credential update superseded by a newer generation")
+			return
+		}
+
 		conf := a.engine.GetConfiguration()
 		apiUrl := ""
 		if updateApiUrl {

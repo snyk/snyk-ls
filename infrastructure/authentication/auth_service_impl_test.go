@@ -1921,7 +1921,7 @@ func Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterSyncWrite(t *testing.T)
 		token:            "",
 		sendNotification: false,
 		updateApiUrl:     false,
-		generation:       atomic.LoadUint64(&impl.syncGeneration), // 0
+		generation:       impl.syncGeneration.Load(), // 0
 	}
 
 	// Step 3: start UpdateCredentials — it blocks waiting for impl.m.
@@ -1995,7 +1995,7 @@ func Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterAuthenticate(t *testing
 		token:            "",
 		sendNotification: false,
 		updateApiUrl:     false,
-		generation:       atomic.LoadUint64(&impl.syncGeneration), // 0
+		generation:       impl.syncGeneration.Load(), // 0
 	}
 
 	// Step 3: start Authenticate — it blocks waiting for impl.m.
@@ -2067,7 +2067,7 @@ func Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterLogout(t *testing.T) {
 		token:            priorToken, // would restore the cleared token
 		sendNotification: false,
 		updateApiUrl:     false,
-		generation:       atomic.LoadUint64(&impl.syncGeneration), // 1
+		generation:       impl.syncGeneration.Load(), // 1
 	}
 
 	// Step 3: start Logout — it blocks waiting for impl.m.
@@ -2194,6 +2194,69 @@ func Test_UpdateCredentials_HookCanAcquireLock(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("UpdateCredentials did not return: a.m was not correctly re-acquired after the hook")
 	}
+}
+
+// Test_UpdateCredentials_SkipsStaleNotification verifies that when a concurrent
+// credential write advances the generation past the value that this call captured,
+// the notification is suppressed (since it would be stale by the time it sends).
+// This guards against the race where updateCredentials releases a.m, calls
+// runPostMutationEffects (unlocked), and a concurrent write bumps syncGeneration
+// before the notification is actually sent.
+func Test_UpdateCredentials_SkipsStaleNotification(t *testing.T) {
+	t.Parallel()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
+
+	// Subtest 1: stale notification suppression
+	// Hook advances the generation while updateCredentials is in the unlocked window.
+	// The notification should be skipped because by the time it would send,
+	// syncGeneration has moved past what this call captured.
+	t.Run("stale generation suppresses notification", func(t *testing.T) {
+		t.Parallel()
+		mockNotifier := notification.NewMockNotifier()
+		service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+		impl := service.(*AuthenticationServiceImpl)
+
+		hookCalled := make(chan struct{}, 1)
+		service.SetPostCredentialUpdateHook(func() {
+			// Simulate a concurrent synchronous credential write advancing the generation.
+			impl.syncGeneration.Add(1)
+			select {
+			case hookCalled <- struct{}{}:
+			default:
+			}
+		})
+
+		service.UpdateCredentials("token-a", true, false)
+
+		select {
+		case <-hookCalled:
+			// hook ran, generation was advanced concurrently
+		case <-time.After(5 * time.Second):
+			t.Fatal("hook never called")
+		}
+
+		// The notification should have been suppressed because the generation became stale.
+		assert.Equal(t, 0, mockNotifier.SendCount(), "notification should be suppressed for stale generation")
+	})
+
+	// Subtest 2: happy path still sends notification
+	// Without concurrent advancement of syncGeneration, the notification should send normally.
+	t.Run("current generation sends notification", func(t *testing.T) {
+		t.Parallel()
+		mockNotifier := notification.NewMockNotifier()
+		service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+		service.UpdateCredentials("token-b", true, false)
+
+		// The notification should have been sent since no concurrent write advanced the generation.
+		assert.Equal(t, 1, mockNotifier.SendCount(), "notification should send when generation is current")
+		messages := mockNotifier.SentMessages()
+		require.Len(t, messages, 1)
+		authParams, ok := messages[0].(types.AuthenticationParams)
+		require.True(t, ok, "message should be AuthenticationParams")
+		assert.Equal(t, "token-b", authParams.Token)
+	})
 }
 
 // Regression guard that pins the existing semantics of getPrioritizedApiUrl,
