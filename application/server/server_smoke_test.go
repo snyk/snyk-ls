@@ -1629,8 +1629,8 @@ app.get('/unique_subfolder_test', function(req, res) {
 // with parallel shard-1 tests for CLI resources and API bandwidth.
 func Test_SmokeScanUnmanaged(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_1")
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	// OSS-only: unmanaged scan is an OSS-specific path (--unmanaged for C/C++ repos).
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
 	// When scan net-new is on, FilterAndPublishDiagnostics keeps only IsNew issues; enrichment/baseline
@@ -1659,6 +1659,7 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 
 	waitForScan(t, cloneTargetDirString, engine)
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductOpenSource)
+	waitForDeltaScan(t, deps.ScanStateAggregator)
 
 	// Diagnostics can arrive after $/snyk.scan reports Success (same pattern as checkOnlyOneQuickFixCodeAction).
 	var issueList []types.ScanIssue
