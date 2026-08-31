@@ -975,55 +975,36 @@ func Test_resolveOrgToUUID(t *testing.T) {
 		assert.Equal(t, inputUUID, result)
 	})
 
-	t.Run("returns error when slug cannot be resolved to UUID", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		t.Cleanup(ctrl.Finish)
+	for _, tc := range []struct {
+		name  string
+		input string
+	}{
+		{name: "returns error when slug cannot be resolved to UUID", input: "invalid_slug"},
+		{name: "handles empty string", input: ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			t.Cleanup(ctrl.Finish)
 
-		mockEngine := mocks.NewMockEngine(ctrl)
-		mockConfig := mocks.NewMockConfiguration(ctrl)
-		mockLogger := zerolog.New(io.Discard)
+			mockEngine := mocks.NewMockEngine(ctrl)
+			mockConfig := mocks.NewMockConfiguration(ctrl)
+			mockLogger := zerolog.New(io.Discard)
 
-		mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
-		mockEngine.EXPECT().GetLogger().Return(&mockLogger).AnyTimes()
+			mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
+			mockEngine.EXPECT().GetLogger().Return(&mockLogger).AnyTimes()
 
-		inputSlug := "invalid_slug"
+			clonedMockConfig := mocks.NewMockConfiguration(ctrl)
+			mockConfig.EXPECT().Clone().Return(clonedMockConfig)
+			clonedMockConfig.EXPECT().Set(configuration.ORGANIZATION, tc.input)
+			clonedMockConfig.EXPECT().GetString(configuration.ORGANIZATION).Return(tc.input)
 
-		clonedMockConfig := mocks.NewMockConfiguration(ctrl)
-		mockConfig.EXPECT().Clone().Return(clonedMockConfig)
-		clonedMockConfig.EXPECT().Set(configuration.ORGANIZATION, inputSlug)
-		clonedMockConfig.EXPECT().GetString(configuration.ORGANIZATION).Return(inputSlug)
+			result, err := config.ResolveOrgToUUIDWithEngine(mockEngine, tc.input)
 
-		result, err := config.ResolveOrgToUUIDWithEngine(mockEngine, inputSlug)
-
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "could not be resolved to a valid UUID")
-		assert.Empty(t, result)
-	})
-
-	t.Run("handles empty string", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		t.Cleanup(ctrl.Finish)
-
-		mockEngine := mocks.NewMockEngine(ctrl)
-		mockConfig := mocks.NewMockConfiguration(ctrl)
-		mockLogger := zerolog.New(io.Discard)
-
-		mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
-		mockEngine.EXPECT().GetLogger().Return(&mockLogger).AnyTimes()
-
-		inputEmpty := ""
-
-		clonedMockConfig := mocks.NewMockConfiguration(ctrl)
-		mockConfig.EXPECT().Clone().Return(clonedMockConfig)
-		clonedMockConfig.EXPECT().Set(configuration.ORGANIZATION, inputEmpty)
-		clonedMockConfig.EXPECT().GetString(configuration.ORGANIZATION).Return(inputEmpty)
-
-		result, err := config.ResolveOrgToUUIDWithEngine(mockEngine, inputEmpty)
-
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "could not be resolved to a valid UUID")
-		assert.Empty(t, result)
-	})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "could not be resolved to a valid UUID")
+			assert.Empty(t, result)
+		})
+	}
 }
 
 // testCodeConfigUsesFolderOrg is a shared helper function that tests CodeConfig creation
