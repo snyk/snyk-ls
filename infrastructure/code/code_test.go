@@ -18,6 +18,7 @@ package code
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -975,31 +976,51 @@ func Test_resolveOrgToUUID(t *testing.T) {
 	})
 
 	t.Run("returns error when slug cannot be resolved to UUID", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		testutil.SetUpEngineMock(t, engine)
+		ctrl := gomock.NewController(t)
+		t.Cleanup(ctrl.Finish)
+
+		mockEngine := mocks.NewMockEngine(ctrl)
+		mockConfig := mocks.NewMockConfiguration(ctrl)
+		mockLogger := zerolog.New(io.Discard)
+
+		mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
+		mockEngine.EXPECT().GetLogger().Return(&mockLogger).AnyTimes()
 
 		inputSlug := "invalid_slug"
 
-		result, err := config.ResolveOrgToUUIDWithEngine(engine, inputSlug)
+		clonedMockConfig := mocks.NewMockConfiguration(ctrl)
+		mockConfig.EXPECT().Clone().Return(clonedMockConfig)
+		clonedMockConfig.EXPECT().Set(configuration.ORGANIZATION, inputSlug)
+		clonedMockConfig.EXPECT().GetString(configuration.ORGANIZATION).Return(inputSlug)
 
-		// When configuration cannot resolve the slug to a UUID, it will return an empty string or the slug itself
-		// Our function should detect this and return an error
-		assert.Error(t, err)
+		result, err := config.ResolveOrgToUUIDWithEngine(mockEngine, inputSlug)
+
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "could not be resolved to a valid UUID")
 		assert.Empty(t, result)
 	})
 
 	t.Run("handles empty string", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		testutil.SetUpEngineMock(t, engine)
+		ctrl := gomock.NewController(t)
+		t.Cleanup(ctrl.Finish)
+
+		mockEngine := mocks.NewMockEngine(ctrl)
+		mockConfig := mocks.NewMockConfiguration(ctrl)
+		mockLogger := zerolog.New(io.Discard)
+
+		mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
+		mockEngine.EXPECT().GetLogger().Return(&mockLogger).AnyTimes()
 
 		inputEmpty := ""
 
-		result, err := config.ResolveOrgToUUIDWithEngine(engine, inputEmpty)
+		clonedMockConfig := mocks.NewMockConfiguration(ctrl)
+		mockConfig.EXPECT().Clone().Return(clonedMockConfig)
+		clonedMockConfig.EXPECT().Set(configuration.ORGANIZATION, inputEmpty)
+		clonedMockConfig.EXPECT().GetString(configuration.ORGANIZATION).Return(inputEmpty)
 
-		// Empty string is not a UUID, so it will try to resolve
-		// When unauthenticated or unable to resolve, configuration returns empty string
-		assert.Error(t, err)
+		result, err := config.ResolveOrgToUUIDWithEngine(mockEngine, inputEmpty)
+
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "could not be resolved to a valid UUID")
 		assert.Empty(t, result)
 	})

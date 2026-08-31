@@ -923,8 +923,9 @@ func Test_prepareScanCommand(t *testing.T) {
 
 	t.Run("Uses --all-projects by default", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
-		// Clear the default org set by UnitTest to test command without --org parameter.
-		config.SetOrganization(engine.GetConfiguration(), "")
+		knownOrgUUID := "12345678-1234-1234-1234-123456789012"
+		config.SetOrganization(engine.GetConfiguration(), knownOrgUUID)
+
 		scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker()).(*CLIScanner)
 
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"-d"})
@@ -933,7 +934,8 @@ func Test_prepareScanCommand(t *testing.T) {
 		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", folderConfig)
 
 		assert.Contains(t, cmd, "--all-projects")
-		assert.Lenf(t, cmd, 6, "cmd: %v", cmd)
+		assert.Contains(t, cmd, "--org="+knownOrgUUID)
+		assert.Len(t, cmd, 7)
 	})
 }
 
