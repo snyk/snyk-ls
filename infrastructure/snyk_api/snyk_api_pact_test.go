@@ -44,9 +44,9 @@ var client SnykApiClient
 
 func TestSnykApiPact(t *testing.T) {
 	testsupport.NotOnWindows(t, "we don't have a pact cli")
-	engine := testutil.IntegTest(t)
+	engine, ts := testutil.IntegTestWithEngine(t)
 
-	setupPact(engine)
+	setupPact(engine, ts)
 	defer pact.Teardown()
 
 	defer func() {
@@ -141,12 +141,14 @@ func TestSnykApiPact(t *testing.T) {
 	})
 }
 
-func setupPact(engine workflow.Engine) {
+func setupPact(engine workflow.Engine, ts *config.TokenServiceImpl) {
 	pact = dsl.Pact{
 		Consumer: consumer,
 		Provider: pactProvider,
 		PactDir:  pactDir,
 	}
+
+	ts.SetToken(engine.GetConfiguration(), "fc763eba-0905-41c5-a27f-3934ab26786c")
 
 	// Proactively start service to get access to the port
 	pact.Setup(true)
