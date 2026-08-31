@@ -127,6 +127,7 @@ func initGitRepoForDI(t *testing.T) string {
 	run("init")
 	run("config", "user.email", "test@example.com")
 	run("config", "user.name", "Test")
+	run("config", "commit.gpgsign", "false")
 	// overlay-FS write-ordering delays cause git to report "not a valid object" or
 	// false "local changes would be overwritten" errors during rebase/cherry-pick
 	// on this overlay filesystem. core.checkStat=minimal suppresses those

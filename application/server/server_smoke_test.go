@@ -2740,6 +2740,9 @@ func initializeGitRepoForMonorepoBenchmark(t *testing.T, repoDir string) {
 	cmd := gitCommandForMonorepoBenchmark(repoDir, "init", "--initial-branch=main")
 	require.NoError(t, cmd.Run())
 
+	cmd = gitCommandForMonorepoBenchmark(repoDir, "config", "commit.gpgsign", "false")
+	require.NoError(t, cmd.Run())
+
 	cmd = gitCommandForMonorepoBenchmark(repoDir, "add", ".")
 	require.NoError(t, cmd.Run())
 
