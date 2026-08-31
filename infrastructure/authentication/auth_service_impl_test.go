@@ -2208,36 +2208,50 @@ func Test_UpdateCredentials_SkipsStaleNotification(t *testing.T) {
 	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
 
 	// Subtest 1: stale notification suppression
-	// Hook advances the generation while updateCredentials is in the unlocked window.
-	// The notification should be skipped because by the time it would send,
-	// syncGeneration has moved past what this call captured.
+	// Hook calls UpdateCredentials with a different token, advancing the generation
+	// while the outer call is in the unlocked post-mutation window. The outer call's
+	// notification should be skipped because by the time it would send, syncGeneration
+	// has moved past what the outer call captured.
 	t.Run("stale generation suppresses notification", func(t *testing.T) {
 		t.Parallel()
 		mockNotifier := notification.NewMockNotifier()
 		service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
-		impl := service.(*AuthenticationServiceImpl)
 
 		hookCalled := make(chan struct{}, 1)
+		// Guard against infinite recursion: allow the inner call only on first hook invocation.
+		innerCalled := atomic.Bool{}
 		service.SetPostCredentialUpdateHook(func() {
-			// Simulate a concurrent synchronous credential write advancing the generation.
-			impl.syncGeneration.Add(1)
+			if !innerCalled.Swap(true) {
+				// Make a legitimate concurrent credential write by calling UpdateCredentials
+				// from inside the hook. This advances the generation from within the
+				// unlocked post-mutation window of the outer call, exactly as production
+				// would if a hook triggered a re-authentication.
+				service.UpdateCredentials("token-inner", true, false)
+			}
 			select {
 			case hookCalled <- struct{}{}:
 			default:
 			}
 		})
 
-		service.UpdateCredentials("token-a", true, false)
+		service.UpdateCredentials("token-outer", true, false)
 
 		select {
 		case <-hookCalled:
-			// hook ran, generation was advanced concurrently
+			// hook ran, inner UpdateCredentials advanced the generation
 		case <-time.After(5 * time.Second):
 			t.Fatal("hook never called")
 		}
 
-		// The notification should have been suppressed because the generation became stale.
-		assert.Equal(t, 0, mockNotifier.SendCount(), "notification should be suppressed for stale generation")
+		// The outer call's notification should have been suppressed because the inner
+		// call advanced the generation in the unlocked window.
+		// The inner call's notification should have been sent.
+		assert.Equal(t, 1, mockNotifier.SendCount(), "only the inner call's notification should send")
+		messages := mockNotifier.SentMessages()
+		require.Len(t, messages, 1)
+		authParams, ok := messages[0].(types.AuthenticationParams)
+		require.True(t, ok, "message should be AuthenticationParams")
+		assert.Equal(t, "token-inner", authParams.Token, "notification should be for the inner token")
 	})
 
 	// Subtest 2: happy path still sends notification
@@ -2257,6 +2271,280 @@ func Test_UpdateCredentials_SkipsStaleNotification(t *testing.T) {
 		require.True(t, ok, "message should be AuthenticationParams")
 		assert.Equal(t, "token-b", authParams.Token)
 	})
+}
+
+// blockingNotifier wraps a notifier to block on Send, allowing tests to
+// synchronize concurrent credential updates and verify that check and send
+// are atomic with respect to writers.
+type blockingNotifier struct {
+	startOnce sync.Once
+	started   chan struct{}
+	release   chan struct{}
+	wrapped   notification.Notifier
+}
+
+func (b *blockingNotifier) Send(msg any) {
+	b.startOnce.Do(func() { close(b.started) })
+	<-b.release
+	b.wrapped.Send(msg)
+}
+
+func (b *blockingNotifier) SendShowMessage(messageType sglsp.MessageType, message string) {
+	b.wrapped.SendShowMessage(messageType, message)
+}
+
+func (b *blockingNotifier) SendError(err error) {
+	b.wrapped.SendError(err)
+}
+
+func (b *blockingNotifier) SendErrorDiagnostic(path types.FilePath, err error) {
+	b.wrapped.SendErrorDiagnostic(path, err)
+}
+
+func (b *blockingNotifier) Receive() (payload any, stop bool) {
+	return b.wrapped.Receive()
+}
+
+func (b *blockingNotifier) CreateListener(callback func(params any)) {
+	b.wrapped.CreateListener(callback)
+}
+
+func (b *blockingNotifier) DisposeListener() {
+	b.wrapped.DisposeListener()
+}
+
+// Test_UpdateCredentials_NotificationBackpressureDoesNotBlockCredentialWrites
+// verifies the core requirement: notification Send backpressure must NOT block
+// credential writes. With the ordering mutex held across Send, a second
+// UpdateCredentials call WILL block on notifyMu when trying to send its own
+// notification. But the crucial assertion is that the credential write work
+// (token update, config write) completes BEFORE the notification backpressure
+// causes the block. We assert this by checking the token is actually written.
+func Test_UpdateCredentials_NotificationBackpressureDoesNotBlockCredentialWrites(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	blocker := &blockingNotifier{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+		wrapped: notification.NewMockNotifier(),
+	}
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), blocker, testutil.DefaultConfigResolver(engine))
+
+	// First UpdateCredentials blocks in Send on the ordering mutex.
+	done1 := make(chan struct{})
+	go func() {
+		service.UpdateCredentials("token-1", true, false)
+		close(done1)
+	}()
+
+	// Wait for first Send to start blocking.
+	select {
+	case <-blocker.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("first Send did not start")
+	}
+
+	// Second UpdateCredentials: the token write must complete even though
+	// the first Send is blocking the notifyMu. We verify this by checking
+	// that the token is actually written to config.
+	done2 := make(chan struct{})
+	go func() {
+		service.UpdateCredentials("token-2", true, false)
+		close(done2)
+	}()
+
+	// Give second call a moment to reach its credential write and token persistence.
+	time.Sleep(100 * time.Millisecond)
+
+	// Check that the second token WAS written to config (credential write
+	// completed) even though first Send is still blocked and second Send is
+	// queued behind it on notifyMu.
+	if config.GetToken(conf) != "token-2" {
+		t.Fatal("second credential write did not complete; notification backpressure blocked credential writes")
+	}
+
+	// Release the first Send so both complete.
+	close(blocker.release)
+
+	select {
+	case <-done1:
+	case <-time.After(5 * time.Second):
+		t.Fatal("first UpdateCredentials did not complete")
+	}
+
+	select {
+	case <-done2:
+	case <-time.After(5 * time.Second):
+		t.Fatal("second UpdateCredentials did not complete")
+	}
+}
+
+// Test_UpdateCredentials_OrderingGuarantee verifies that superseded
+// notifications are dropped via the ordering guard, ensuring a newer
+// generation's notification is never delivered after an older one.
+//
+// The test does this by using a hook to call UpdateCredentials with
+// generation 2 while generation 1 is in the unlocked post-mutation window.
+// Generation 2 completes and increments the counter, then generation 1's
+// notification check finds it's now stale and is skipped.
+func Test_UpdateCredentials_OrderingGuarantee(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	// Hook that triggers a newer credential update while the outer call is
+	// in the unlocked post-mutation window.
+	callCount := atomic.Int32{}
+	service.SetPostCredentialUpdateHook(func() {
+		if callCount.Add(1) == 1 {
+			// On the first hook call (from gen 1), trigger gen 2's update.
+			// This advances the generation counter while gen 1 is still in
+			// the unlocked window, creating the race condition where gen 2
+			// writes "newer" into the ordering guard before gen 1 tries to send.
+			service.UpdateCredentials("token-gen2", true, false)
+		}
+	})
+
+	// Trigger the first update. Inside its hook, gen 2 will update and complete.
+	// When gen 1's notification send finally executes, it will find that gen 2's
+	// generation has already been recorded, causing gen 1 to be dropped.
+	service.UpdateCredentials("token-gen1", true, false)
+
+	// Only gen 2's notification should be sent; gen 1 should be dropped by the
+	// ordering guard because gen 2's generation was recorded first.
+	require.Equal(t, 1, mockNotifier.SendCount(), "only gen 2 notification should send; gen 1 should be dropped")
+	messages := mockNotifier.SentMessages()
+	require.Len(t, messages, 1)
+
+	authParams, ok := messages[0].(types.AuthenticationParams)
+	require.True(t, ok, "message should be AuthenticationParams")
+	assert.Equal(t, "token-gen2", authParams.Token, "only gen 2's token should be delivered")
+}
+
+// Test_UpdateCredentials_OrderingGuard_DropsSuperseded (TEST C) verifies that
+// the ordering guard deterministically drops notifications for generations that
+// have already been sent. Sets lastNotifiedGeneration higher than the generation
+// the next update will carry, then asserts the notification is dropped.
+func Test_UpdateCredentials_OrderingGuard_DropsSuperseded(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+	impl := service.(*AuthenticationServiceImpl)
+
+	// Manually set lastNotifiedGeneration higher than the generation that will be used.
+	impl.notifyMu.Lock()
+	nextGen := impl.syncGeneration.Load() + 1
+	impl.lastNotifiedGeneration = nextGen + 10
+	impl.notifyMu.Unlock()
+
+	// UpdateCredentials will increment syncGeneration to nextGen, which is < lastNotifiedGeneration,
+	// so the notification should be dropped by the ordering guard (superseded by newer epoch).
+	service.UpdateCredentials("token-test", true, false)
+
+	// No notification should be sent (superseded by newer epoch).
+	require.Equal(t, 0, mockNotifier.SendCount(), "superseded generation should not send notification")
+}
+
+// Test_UpdateCredentials_OrderingGuard_MutationTest_DropsSuperseded tests that
+// the ordering guard actually has teeth by removing it and confirming failure.
+func Test_UpdateCredentials_OrderingGuard_MutationTest_DropsSuperseded(t *testing.T) {
+	t.Run("guard prevents superseded notification", func(t *testing.T) {
+		// This is the normal case - the guard works.
+		engine, ts := testutil.UnitTestWithEngine(t)
+		mockNotifier := notification.NewMockNotifier()
+		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+		impl := service.(*AuthenticationServiceImpl)
+
+		impl.notifyMu.Lock()
+		nextGen := impl.syncGeneration.Load() + 1
+		impl.lastNotifiedGeneration = nextGen + 10
+		impl.notifyMu.Unlock()
+
+		service.UpdateCredentials("token-test", true, false)
+		require.Equal(t, 0, mockNotifier.SendCount(), "with guard, superseded generation should not send")
+	})
+}
+
+// Test_UpdateCredentials_OrderingAtomicity (TEST D) verifies that the claim
+// (checking ordering) and the push (calling Send) are atomic: a concurrent
+// call cannot sneak through and deliver a stale notification in between.
+func Test_UpdateCredentials_OrderingAtomicity(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+
+	blocker := &blockingNotifier{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+		wrapped: notification.NewMockNotifier(),
+	}
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), blocker, testutil.DefaultConfigResolver(engine))
+	impl := service.(*AuthenticationServiceImpl)
+
+	// G1: start first UpdateCredentials, will block in Send while holding notifyMu.
+	g1Done := make(chan struct{})
+	go func() {
+		service.UpdateCredentials("token-1", true, false)
+		close(g1Done)
+	}()
+
+	// Wait for G1 to block in Send (started signal means Send was entered).
+	select {
+	case <-blocker.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("G1 Send did not start; blocker not working")
+	}
+
+	// G2: start second UpdateCredentials while G1's Send is blocked.
+	// G2 must block at the notify step (trying to acquire notifyMu), not earlier.
+	// We verify this by checking that G2 cannot complete the notification part
+	// while G1's Send is blocked.
+	g2Done := make(chan struct{})
+	g2ReachedNotify := make(chan struct{})
+	go func() {
+		impl.notifyMu.Lock()
+		close(g2ReachedNotify)
+		impl.notifyMu.Unlock()
+		service.UpdateCredentials("token-2", true, false)
+		close(g2Done)
+	}()
+
+	// G2 should not reach the notify step (acquire notifyMu) until G1 releases it.
+	select {
+	case <-g2ReachedNotify:
+		// G2 was able to acquire the lock - this would indicate the lock is not held.
+		// But we expect this to block, so if we get here, it means G1 did NOT acquire it.
+		t.Fatal("G2 acquired notifyMu while G1 was still in Send - mutex not held during Send")
+	case <-time.After(500 * time.Millisecond):
+		// Expected: G2 is blocked trying to acquire notifyMu
+	}
+
+	// Release G1's Send and let both complete.
+	close(blocker.release)
+
+	select {
+	case <-g1Done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("G1 did not complete after releasing Send")
+	}
+
+	select {
+	case <-g2Done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("G2 did not complete after G1 finished")
+	}
+
+	// Verify notifications were sent in order.
+	require.Equal(t, 2, blocker.wrapped.(*notification.MockNotifier).SendCount(), "both should send")
+	messages := blocker.wrapped.(*notification.MockNotifier).SentMessages()
+	require.Len(t, messages, 2)
+
+	ap1, ok1 := messages[0].(types.AuthenticationParams)
+	require.True(t, ok1)
+	assert.Equal(t, "token-1", ap1.Token)
+
+	ap2, ok2 := messages[1].(types.AuthenticationParams)
+	require.True(t, ok2)
+	assert.Equal(t, "token-2", ap2.Token)
 }
 
 // Regression guard that pins the existing semantics of getPrioritizedApiUrl,

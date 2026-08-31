@@ -102,21 +102,15 @@ type AuthenticationServiceImpl struct {
 	credentialUpdateChan chan credentialUpdate
 	// credentialUpdateCancel cancels the credential update worker on shutdown.
 	credentialUpdateCancel context.CancelFunc
-	// syncGeneration is a monotonic counter used to detect stale async credential
-	// updates. QueueCredentialUpdate captures it at enqueue time; the worker
-	// discards any update whose generation is older than the current value,
-	// preventing a stale OAuth-bridge clear from overwriting a token that was
-	// synchronously set by a later applyToken / IDE configuration change.
-	//
-	// Invariant: syncGeneration is incremented ONLY inside updateCredentials,
-	// which is always called while a.m is held (by UpdateCredentials, Authenticate,
-	// and Logout). The worker reads it under a.m as well, giving a proper
-	// happens-before guarantee. Any new code that increments syncGeneration MUST
-	// also hold a.m; failing to do so breaks the stale-discard guarantee and is
-	// a data race. Reads/writes use atomic.Uint64 methods to satisfy the race detector
-	// across the lock boundary (worker acquires a.m before the load, but
-	// QueueCredentialUpdate reads without the lock).
+	// syncGeneration is incremented in updateCredentials under a.m, and read by
+	// the worker under a.m and by runPostMutationEffects under notifyMu.
 	syncGeneration atomic.Uint64
+	// notifyMu serializes the ordering claim and the notifier push so a
+	// superseded credential notification can never overtake a newer one.
+	notifyMu sync.Mutex
+	// lastNotifiedGeneration is the highest generation pushed to the notifier,
+	// guarded by notifyMu.
+	lastNotifiedGeneration uint64
 	// writingToken holds a pointer to the token string that the credentialUpdateWorker
 	// is currently writing to conf via updateCredentials → tokenService.SetToken →
 	// WriteTokenToConfig → conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, …).  When the conf key
@@ -796,9 +790,16 @@ func (a *AuthenticationServiceImpl) runPostMutationEffects(newToken string, send
 	}
 
 	if sendNotification {
-		// Check if a concurrent write has superseded this one before sending the notification.
-		// If syncGeneration has advanced past the generation we captured, skip sending.
-		if a.syncGeneration.Load() != generation {
+		conf := a.engine.GetConfiguration()
+		apiUrl := ""
+		if updateApiUrl {
+			apiUrl = a.configResolver.GetString(types.SettingApiEndpoint, nil)
+		}
+
+		a.notifyMu.Lock()
+		defer a.notifyMu.Unlock()
+
+		if generation < a.syncGeneration.Load() {
 			a.engine.GetLogger().Debug().
 				Uint64("captured_generation", generation).
 				Uint64("current_generation", a.syncGeneration.Load()).
@@ -806,11 +807,16 @@ func (a *AuthenticationServiceImpl) runPostMutationEffects(newToken string, send
 			return
 		}
 
-		conf := a.engine.GetConfiguration()
-		apiUrl := ""
-		if updateApiUrl {
-			apiUrl = a.configResolver.GetString(types.SettingApiEndpoint, nil)
+		if generation < a.lastNotifiedGeneration {
+			a.engine.GetLogger().Debug().
+				Uint64("generation", generation).
+				Uint64("last_notified_generation", a.lastNotifiedGeneration).
+				Msg("skipping notification for generation superseded by a newer epoch")
+			return
 		}
+
+		a.lastNotifiedGeneration = generation
+
 		a.engine.GetLogger().Debug().
 			Str("method", "AuthenticationService.updateCredentials").
 			Bool("token_empty", newToken == "").
