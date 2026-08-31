@@ -110,7 +110,22 @@ func TestInitializer_whenNoCli_Installs(t *testing.T) {
 	installer := install.NewFakeInstaller(engine, testutil.DefaultConfigResolver(engine))
 	initializer := SetupInitializerWithInstaller(t, conf, engine.GetLogger(), engine, installer)
 
-	go func() { _ = initializer.Init(t.Context()) }()
+	initDone := make(chan struct{})
+	go func() {
+		defer close(initDone)
+		_ = initializer.Init(t.Context())
+	}()
+	// Registered after t.TempDir() above, so this runs first (t.Cleanup is LIFO):
+	// it waits for Init (and any retries it triggers) to fully finish before the
+	// temp dir backing testCliPath is removed, avoiding a leaked goroutine racing
+	// the cleanup's directory removal.
+	t.Cleanup(func() {
+		select {
+		case <-initDone:
+		case <-time.After(10 * time.Second):
+			t.Error("initializer.Init goroutine did not finish before test cleanup")
+		}
+	})
 
 	assert.Eventually(t, func() bool {
 		return installer.Installs() > 0
@@ -179,7 +194,20 @@ func TestInitializer_whenBinaryUpdatesNotAllowed_DoesNotInstall(t *testing.T) {
 	installer := install.NewFakeInstaller(engine, testutil.DefaultConfigResolver(engine))
 	initializer := SetupInitializerWithInstaller(t, conf, engine.GetLogger(), engine, installer)
 
-	go func() { _ = initializer.Init(t.Context()) }()
+	initDone := make(chan struct{})
+	go func() {
+		defer close(initDone)
+		_ = initializer.Init(t.Context())
+	}()
+	// Wait for the background Init to fully finish so it can't keep running (and
+	// touching shared test state like dummyCLI) after this test function returns.
+	t.Cleanup(func() {
+		select {
+		case <-initDone:
+		case <-time.After(10 * time.Second):
+			t.Error("initializer.Init goroutine did not finish before test cleanup")
+		}
+	})
 
 	require.Never(t, func() bool {
 		return installer.Installs() > 0

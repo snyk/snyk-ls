@@ -80,6 +80,7 @@ const (
 var (
 	Version                        = "SNAPSHOT"                                  //nolint:gochecknoglobals // package-level constant; cannot use const because it is set at link time
 	LsProtocolVersion              = "development"                               //nolint:gochecknoglobals // package-level constant; cannot use const because it is set at link time
+	LsServerName                   = "snyk-ls"                                   //nolint:gochecknoglobals // package-level constant; cannot use const because it is set at link time
 	Development                    = "true"                                      //nolint:gochecknoglobals // package-level constant; cannot use const because it is set at link time
 	LicenseInformation             = "License information\n FILLED DURING BUILD" //nolint:gochecknoglobals // package-level constant; cannot use const because it is set at link time
 	analyticsPermittedEnvironments = map[string]bool{                            //nolint:gochecknoglobals // effectively a package-level constant — immutable after init

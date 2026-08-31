@@ -31,6 +31,7 @@ import (
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 	"github.com/snyk/code-client-go/sarif"
 	"github.com/snyk/code-client-go/scan"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	gafUtils "github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -172,11 +173,8 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 	logger.Debug().Msg("Code scanner: starting scan")
 
 	//returning nil, when no scan has executed. Will return []types.Issue{} when a scan has executed, but no issues were found.
-	if err = scannercommon.RequireProductEnabled(
-		sc.getConfigResolver(ctx).IsProductEnabledForFolder(product.ProductCode, workspaceFolderConfig),
-		utils.ErrSnykCodeNotEnabledForFolder,
-	); err != nil {
-		return nil, err
+	if !scannercommon.IsProductEnabledForScan(ctx, sc.getConfigResolver(ctx), product.ProductCode, workspaceFolderConfig) {
+		return nil, errors.New(utils.ErrSnykCodeNotEnabledForFolder)
 	}
 
 	if err = scannercommon.RequireAuthToken(sc.engine.GetConfiguration(), logger); err != nil {
@@ -271,30 +269,97 @@ func internalScan(ctx context.Context, sc *Scanner, folderPath types.FilePath, l
 	t.BeginWithMessage(string("Snyk Code: scanning "+folderPath), "starting scan")
 	defer t.EndWithMessage(string("Snyk Code: scan of " + folderPath + " done"))
 
+	files, err := sc.filteredFiles(folderConfig, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	if ctx.Err() != nil {
+		return []types.Issue{}, nil
+	}
+
+	codeConsistentIgnoresEnabled := folderConfig.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores)
+	results, err = sc.UploadAndAnalyze(ctx, folderPath, folderConfig, files, filesToBeScanned, codeConsistentIgnoresEnabled, t)
+
+	return results, err
+}
+
+// lsDefaultIgnoredRules keeps version control internals and OS metadata out of every scan.
+var lsDefaultIgnoredRules = []string{"**/.git/**", "**/.svn/**", "**/.hg/**", "**/.bzr/**", "**/.DS_Store/**"} //nolint:gochecknoglobals // a fixed rule set Go cannot express as a const
+
+// filteredFiles picks the file filtering implementation for the folder being scanned based on a FF:
+// newFilteredFiles when it is set for the folder's organization, legacyFilteredFiles when it is not.
+func (sc *Scanner) filteredFiles(folderConfig *types.FolderConfig, logger zerolog.Logger) (chan string, error) {
+	if folderConfig == nil {
+		// Refused rather than defaulted: a missing folder config reads every flag as off, which would
+		// quietly filter the folder as though the rollout had never reached it.
+		return nil, errors.New("cannot filter files without a folder config")
+	}
+
+	if folderConfig.GetFeatureFlag(gafUtils.FF_GITIGNORE_RESPECT_TRACKED_FILES) {
+		return sc.newFilteredFiles(folderConfig, logger)
+	}
+
+	return sc.legacyFilteredFiles(folderConfig.FolderPath, logger)
+}
+
+// newFilteredFiles is the new CLI-1721 file filtering, for those with the tracked files rollout flag.
+// It copies GAF's InvocationContext.GetFileFilter and code-client-go's getFilesForPath as closely as
+// it can, because the language server does not run the workflow that would otherwise provide them:
+// https://github.com/snyk/go-application-framework/blob/b378283eb7c3f05ff3a9b2a959112e0188e29477/pkg/workflow/invocationcontextimpl.go#L117-L124
+// https://github.com/snyk/code-client-go/blob/e316c23ced051fc67a6a6aa6f48b8ce726309169/internal/commands/code_workflow/native_workflow.go#L396-L409
+//
+// TODO(IDE-2475): delete this once the Snyk Code scanner runs the code-client-go workflow, which does
+// this filtering itself.
+func (sc *Scanner) newFilteredFiles(folderConfig *types.FolderConfig, logger zerolog.Logger) (chan string, error) {
+	// The organization is set so that anything the file filter resolves from this configuration answers
+	// for the folder being scanned rather than the global organization. The two flag values are then set
+	// explicitly because they are already known: an explicit value short-circuits GAF's resolver, which
+	// would otherwise re-fetch them over the network on every scan.
+	folderConf := folderConfig.Conf()
+	if folderConf == nil {
+		folderConf = sc.engine.GetConfiguration()
+	}
+
+	conf := sc.engine.GetConfiguration().Clone()
+	conf.Set(configuration.ORGANIZATION,
+		config.FolderOrganizationFromConfig(folderConf, folderConfig.FolderPath, &logger))
+	conf.Set(gafUtils.FF_GITIGNORE_RESPECT_TRACKED_FILES, true)
+	conf.Set(gafUtils.FF_FILE_FILTER_METACHARACTER_FIX,
+		folderConfig.GetFeatureFlag(gafUtils.FF_FILE_FILTER_METACHARACTER_FIX))
+
+	fileFilter := gafUtils.NewFileFilter(string(folderConfig.FolderPath), &logger,
+		gafUtils.WithConfig(conf),
+		gafUtils.WithMetrics(sc.engine.GetAnalytics()),
+		gafUtils.WithThreadNumber(conf.GetInt(configuration.MAX_THREADS)),
+	)
+
+	// Spelled out rather than shared with legacyFilteredFiles so this stays a line-for-line mirror of
+	// the code-client-go function above, which is what makes a future diff against that source honest.
+	rules, err := fileFilter.GetRules([]string{".gitignore", ".dcignore", ".snyk"})
+	if err != nil {
+		return nil, err
+	}
+
+	return fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), append(lsDefaultIgnoredRules, rules...)), nil
+}
+
+// legacyFilteredFiles is the pre-CLI-1721 file filtering, for those without the GitIgnoreRespectTrackedFiles FF.
+func (sc *Scanner) legacyFilteredFiles(folderPath types.FilePath, logger zerolog.Logger) (chan string, error) {
 	fileFilter, _ := sc.fileFilters.Load(string(folderPath))
 	if fileFilter == nil {
 		fileFilter = gafUtils.NewFileFilter(string(folderPath), &logger)
 		sc.fileFilters.Store(string(folderPath), fileFilter)
 	}
 
+	// Locked: this is the control arm of a live rollout, so changing which rule files it reads would
+	// need a feature flag and a rollout of its own.
 	rules, err := fileFilter.GetRules([]string{".gitignore", ".dcignore", ".snyk"})
 	if err != nil {
 		return nil, err
 	}
 
-	defaultGlobs := []string{"**/.git/**", "**/.svn/**", "**/.hg/**", "**/.bzr/**", "**/.DS_Store/**"}
-	rules = append(defaultGlobs, rules...)
-
-	files := fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), rules)
-
-	if ctx.Err() != nil {
-		return []types.Issue{}, nil
-	}
-
-	codeConsistentIgnoresEnabled := sc.featureFlagService.GetFromFolderConfig(folderPath, featureflag.SnykCodeConsistentIgnores)
-	results, err = sc.UploadAndAnalyze(ctx, folderPath, folderConfig, files, filesToBeScanned, codeConsistentIgnoresEnabled, t)
-
-	return results, err
+	return fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), append(lsDefaultIgnoredRules, rules...)), nil
 }
 
 // Populate HTML template

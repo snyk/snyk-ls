@@ -1,14 +1,15 @@
 // ABOUTME: Tests for the per-folder "Reset overrides" flow (form-handler + reset-handler).
-// ABOUTME: Verifies resets are keyed by folderPath, emit 17 flat nulls, and survive compaction.
+// ABOUTME: Verifies resets are keyed by folderPath, emit 18 flat nulls, and survive compaction.
 
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildDom } from "./helpers.mjs";
 
-// The 17 folder fields a reset must clear (mirrors FOLDER_RESET_FIELDS in form-handler.js).
+// The 18 folder fields a reset must clear (mirrors FOLDER_RESET_FIELDS in form-handler.js).
 const RESET_FIELDS = [
 	"scan_automatic",
 	"scan_net_new",
+	"ambient_canary_autonomy",
 	"severity_filter_critical",
 	"severity_filter_high",
 	"severity_filter_medium",
@@ -25,6 +26,10 @@ const RESET_FIELDS = [
 	"additional_environment",
 	"scan_command_config",
 ];
+const SECURE_AT_INCEPTION_FIELDS = [
+	"auto_configure_mcp_server",
+	"secure_at_inception_execution_frequency",
+];
 
 // Folder paths embedded in the dummy-data fixture (js-tests/fixtures/config-page.html).
 const PATH_A = "/Users/username/workspace/defaults-project";
@@ -34,6 +39,16 @@ const PATH_C = "/Users/username/workspace/org-locked-project";
 function assertAllNull(entry, fields) {
 	for (const f of fields) {
 		assert.equal(entry[f], null, `${f} should be null`);
+	}
+}
+
+function assertSecureAtInceptionFieldsAbsent(entry) {
+	for (const field of SECURE_AT_INCEPTION_FIELDS) {
+		assert.equal(
+			Object.prototype.hasOwnProperty.call(entry, field),
+			false,
+			`${field} must be absent from folder reset payload`
+		);
 	}
 }
 
@@ -65,7 +80,7 @@ test("markFolderForReset ignores empty/missing folderPath", async () => {
 	assert.equal(fh.isFolderMarkedForReset(undefined), false, "undefined path must not mark");
 });
 
-test("applyFolderResets sets all 17 fields to null on an existing edited folder, preserving folderPath", async () => {
+test("applyFolderResets sets all 18 fields to null on an existing edited folder, preserving folderPath", async () => {
 	const win = await buildDom();
 	const fh = win.ConfigApp.formHandler;
 
@@ -81,6 +96,7 @@ test("applyFolderResets sets all 17 fields to null on an existing edited folder,
 	assert.ok(entry, "edited folder entry preserved");
 	assert.equal(entry.folderPath, PATH_A, "folderPath preserved");
 	assertAllNull(entry, RESET_FIELDS);
+	assertSecureAtInceptionFieldsAbsent(entry);
 });
 
 test("applyFolderResets emits a reset-only folder absent from data.folderConfigs", async () => {
@@ -96,6 +112,7 @@ test("applyFolderResets emits a reset-only folder absent from data.folderConfigs
 	const entry = data.folderConfigs[0];
 	assert.equal(entry.folderPath, PATH_A, "pushed entry carries folderPath");
 	assertAllNull(entry, RESET_FIELDS);
+	assertSecureAtInceptionFieldsAbsent(entry);
 });
 
 test("applyFolderResets creates folderConfigs array when missing", async () => {
@@ -152,7 +169,7 @@ test("applyFolderResets clears window.ConfigApp.folderResets after applying", as
 	assert.equal(fh.isFolderMarkedForReset(PATH_A), false, "no longer marked");
 });
 
-test("DOM-driven: clicking .reset-overrides-btn produces 17 nulls for that folderPath in the save payload", async () => {
+test("DOM-driven: clicking .reset-overrides-btn produces 18 nulls for that folderPath in the save payload", async () => {
 	const win = await buildDom();
 	const doc = win.document;
 	const calls = spySave(win);
@@ -168,6 +185,7 @@ test("DOM-driven: clicking .reset-overrides-btn produces 17 nulls for that folde
 	const entry = (saved.folderConfigs || []).find((f) => f.folderPath === PATH_B);
 	assert.ok(entry, "outbound payload contains an entry for the reset folderPath");
 	assertAllNull(entry, RESET_FIELDS);
+	assertSecureAtInceptionFieldsAbsent(entry);
 });
 
 test("DOM-driven: reset button click does not require the folder to have other edits", async () => {

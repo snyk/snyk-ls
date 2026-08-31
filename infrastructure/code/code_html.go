@@ -173,8 +173,14 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		aiFixErr = aiFixDiffErr.Error()
 	}
 
+	// Agent Fix only ever produces one suggestion.
+	aiFixDiffResult := renderer.AiFixHandler.GetAiFixDiffResult()
+	if len(aiFixDiffResult) > 0 && aiFixDiffResult[0].Explanation == "" {
+		logger.Warn().Msgf("autofix suggestion %s has no explanation", aiFixDiffResult[0].FixId)
+	}
+
 	aiFixResult := "{}"
-	aiFixSerialized, err := json.Marshal(renderer.AiFixHandler.GetAiFixDiffResult())
+	aiFixSerialized, err := json.Marshal(aiFixDiffResult)
 	if err == nil && string(aiFixSerialized) != "null" {
 		aiFixResult = string(aiFixSerialized)
 	}

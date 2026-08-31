@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
@@ -124,6 +124,38 @@ func TestConfigHtmlRenderer_GetConfigHtml(t *testing.T) {
 	assert.Contains(t, html, "combine with any per-")
 }
 
+func TestConfigHtmlRenderer_IntegrationFolderLabels(t *testing.T) {
+	tests := []struct {
+		integrationName string
+		singular        string
+		plural          string
+	}{
+		{integrationName: constants.IntegrationNameVisualStudio, singular: "Solution", plural: "Solutions"},
+		{integrationName: constants.IntegrationNameVSCode, singular: "Project", plural: "Projects"},
+		{integrationName: constants.IntegrationNameJetBrains, singular: "Project", plural: "Projects"},
+		{integrationName: constants.IntegrationNameEclipse, singular: "Project", plural: "Projects"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.integrationName, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			engine.GetConfiguration().Set(gafconfiguration.INTEGRATION_NAME, tt.integrationName)
+			configResolver := testutil.DefaultConfigResolver(engine)
+			renderer, err := NewConfigHtmlRenderer(engine, configResolver)
+			require.NoError(t, err)
+
+			html := renderer.GetConfigHtml(nil, []types.FolderConfig{
+				{FolderPath: "/workspace/one", ConfigResolver: configResolver},
+				{FolderPath: "/workspace/two", ConfigResolver: configResolver},
+			})
+
+			assert.Contains(t, html, `data-folder-label="`+tt.singular+`"`)
+			assert.Contains(t, html, ">"+tt.singular+" defaults</button>")
+			assert.Contains(t, html, `id="folderDropdownLabel">`+tt.plural+"</span>")
+		})
+	}
+}
+
 func TestConfigHtmlRenderer_ProjectDefaultsAdvancedFieldsRenderValues(t *testing.T) {
 	engine := testutil.UnitTest(t)
 
@@ -199,93 +231,61 @@ func TestConfigHtmlRenderer_LdxSyncConfigAlwaysRendered(t *testing.T) {
 	assert.Contains(t, html, "Filters and views")
 }
 
-func TestConfigHtmlRenderer_SecretsHiddenWhenFeatureFlagOff(t *testing.T) {
-	engine := testutil.UnitTest(t)
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockWorkspace := mock_types.NewMockWorkspace(ctrl)
-	mockFolder := mock_types.NewMockFolder(ctrl)
-
-	folderPath := types.FilePath("/path/to/a_folder")
-	mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
-	mockFolder.EXPECT().Name().Return("a_folder").AnyTimes()
-	mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
-	mockWorkspace.EXPECT().GetFolderContaining(folderPath).Return(mockFolder).AnyTimes()
-
-	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
-
-	// Feature flag NOT set — Snyk Secrets should be hidden
-	resolver := testutil.DefaultConfigResolver(engine)
-	fc := types.FolderConfig{
-		FolderPath:     folderPath,
-		ConfigResolver: resolver,
-		EffectiveConfig: map[string]types.EffectiveValue{
-			"snyk_secrets_enabled": {Value: true, Source: "ldx-sync"},
-		},
+func TestConfigHtmlRenderer_SecretsAlwaysRendered(t *testing.T) {
+	tests := []struct {
+		name               string
+		legacyFlagMetadata bool
+	}{
+		{name: "without historical feature flag metadata"},
+		{name: "with historical feature flag metadata", legacyFlagMetadata: true},
 	}
 
-	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
-	assert.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
 
-	settings := map[string]any{
-		types.SettingSnykSecretsEnabled: true,
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+			mockFolder := mock_types.NewMockFolder(ctrl)
+
+			folderPath := types.FilePath("/path/to/a_folder")
+			mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
+			mockFolder.EXPECT().Name().Return("a_folder").AnyTimes()
+			mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
+			mockWorkspace.EXPECT().GetFolderContaining(folderPath).Return(mockFolder).AnyTimes()
+
+			config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
+			if tt.legacyFlagMetadata {
+				legacyFlagKey := configresolver.FolderMetadataKey(
+					string(types.PathKey(folderPath)),
+					types.FeatureFlagPrefix+"isSecretsEnabled",
+				)
+				engine.GetConfiguration().Set(legacyFlagKey, true)
+			}
+
+			resolver := testutil.DefaultConfigResolver(engine)
+			folderConfigs := []types.FolderConfig{{
+				FolderPath:     folderPath,
+				ConfigResolver: resolver,
+				EffectiveConfig: map[string]types.EffectiveValue{
+					"snyk_secrets_enabled": {Value: true, Source: "ldx-sync"},
+				},
+			}}
+			renderer, err := NewConfigHtmlRenderer(engine, resolver)
+			require.NoError(t, err)
+
+			html := renderer.GetConfigHtml(map[string]any{
+				types.SettingSnykSecretsEnabled: true,
+			}, folderConfigs)
+
+			assert.Contains(t, html, `name="snyk_secrets_enabled"`,
+				"global Snyk Secrets checkbox should always appear")
+			assert.Contains(t, html, `data-setting="snyk_secrets_enabled"`,
+				"per-folder Snyk Secrets override should always appear")
+		})
 	}
-	folderConfigs := []types.FolderConfig{fc}
-
-	html := renderer.GetConfigHtml(settings, folderConfigs)
-
-	// Global Snyk Secrets checkbox should NOT appear when feature flag is off
-	assert.NotContains(t, html, `name="snyk_secrets_enabled"`)
-	// Per-folder Snyk Secrets override should NOT appear
-	assert.NotContains(t, html, `data-setting="snyk_secrets_enabled"`)
-}
-
-func TestConfigHtmlRenderer_SecretsShownWhenFeatureFlagOn(t *testing.T) {
-	engine := testutil.UnitTest(t)
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockWorkspace := mock_types.NewMockWorkspace(ctrl)
-	mockFolder := mock_types.NewMockFolder(ctrl)
-
-	folderPath := types.FilePath("/path/to/a_folder")
-	mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
-	mockFolder.EXPECT().Name().Return("a_folder").AnyTimes()
-	mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
-	mockWorkspace.EXPECT().GetFolderContaining(folderPath).Return(mockFolder).AnyTimes()
-
-	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
-
-	// Set the feature flag ON for this folder
-	resolver := testutil.DefaultConfigResolver(engine)
-	fc := types.FolderConfig{
-		FolderPath:     folderPath,
-		ConfigResolver: resolver,
-		EffectiveConfig: map[string]types.EffectiveValue{
-			"snyk_secrets_enabled": {Value: true, Source: "ldx-sync"},
-		},
-	}
-	// Write the feature flag into configuration
-	ffKey := configresolver.FolderMetadataKey(string(types.PathKey(folderPath)), types.FeatureFlagPrefix+featureflag.SnykSecretsEnabled)
-	engine.GetConfiguration().Set(ffKey, true)
-
-	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
-	assert.NoError(t, err)
-
-	settings := map[string]any{
-		types.SettingSnykSecretsEnabled: true,
-	}
-	folderConfigs := []types.FolderConfig{fc}
-
-	html := renderer.GetConfigHtml(settings, folderConfigs)
-
-	// Global Snyk Secrets checkbox SHOULD appear when feature flag is on
-	assert.Contains(t, html, `name="snyk_secrets_enabled"`)
-	// Per-folder Snyk Secrets override SHOULD appear
-	assert.Contains(t, html, `data-setting="snyk_secrets_enabled"`)
 }
 
 func TestConfigHtmlRenderer_NoFoldersShowsDisabledTab(t *testing.T) {
@@ -581,16 +581,75 @@ func TestConfigHtmlRenderer_EclipsePathField(t *testing.T) {
 	}
 
 	t.Run("ECLIPSE shows path field", func(t *testing.T) {
-		html := renderForIntegration(t, "ECLIPSE")
+		html := renderForIntegration(t, constants.IntegrationNameEclipse)
 		assert.Contains(t, html, `id="user_settings_path"`)
 		assert.Contains(t, html, `/usr/local/bin`)
 	})
 
-	for _, name := range []string{"VS_CODE", "VISUAL_STUDIO", "JETBRAINS_IDE"} {
+	for _, name := range []string{
+		constants.IntegrationNameVSCode,
+		constants.IntegrationNameVisualStudio,
+		constants.IntegrationNameJetBrains,
+	} {
 		t.Run(name+" hides path field", func(t *testing.T) {
 			html := renderForIntegration(t, name)
 			assert.NotContains(t, html, `id="user_settings_path"`)
 		})
+	}
+}
+
+func TestConfigHtmlRenderer_SecureAtInceptionIntegrationGate(t *testing.T) {
+	renderForIntegration := func(t *testing.T, integrationName string, autoConfigure bool, frequency string) string {
+		t.Helper()
+		engine := testutil.UnitTest(t)
+		engine.GetConfiguration().Set(gafconfiguration.INTEGRATION_NAME, integrationName)
+		renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
+		require.NoError(t, err)
+		return renderer.GetConfigHtml(map[string]any{
+			types.SettingAutoConfigureMcpServer:         autoConfigure,
+			types.SettingSecureAtInceptionExecutionFreq: frequency,
+		}, nil)
+	}
+
+	for _, integrationName := range []string{
+		constants.IntegrationNameJetBrains,
+		constants.IntegrationNameEclipse,
+		constants.IntegrationNameVisualStudio,
+		"",
+	} {
+		t.Run(integrationName+" hides section", func(t *testing.T) {
+			html := renderForIntegration(t, integrationName, true, "Smart Scan")
+			assert.NotContains(t, html, "<h2>Secure At Inception</h2>")
+			assert.NotContains(t, html, `name="`+types.SettingAutoConfigureMcpServer+`"`)
+			assert.NotContains(t, html, `name="`+types.SettingSecureAtInceptionExecutionFreq+`"`)
+		})
+	}
+
+	for _, autoConfigure := range []bool{false, true} {
+		for _, frequency := range []string{"On Code Generation", "Smart Scan", "Manual"} {
+			name := fmt.Sprintf("VS_CODE auto=%t frequency=%s", autoConfigure, frequency)
+			t.Run(name, func(t *testing.T) {
+				html := renderForIntegration(t, constants.IntegrationNameVSCode, autoConfigure, frequency)
+				assert.Contains(t, html, "<h2>Secure At Inception</h2>")
+				assert.Contains(t, html, `title="Automatically configure Secure At Inception for supported development environments.">Auto-configure Snyk Studio</span>`)
+				assert.Contains(t, html, `title="Choose when Secure At Inception rules are applied.">Execution frequency</span>`)
+
+				checkbox := testutil.RequireOpeningTagByName(t, html, "input", types.SettingAutoConfigureMcpServer)
+				assert.Equal(t, autoConfigure, strings.Contains(checkbox, "checked"))
+
+				selectMarkup := testutil.RequireElementByName(t, html, "select", types.SettingSecureAtInceptionExecutionFreq)
+				assert.Equal(t, []testutil.SelectOption{
+					{Value: "On Code Generation", Text: "On Code Generation", Selected: frequency == "On Code Generation"},
+					{Value: "Smart Scan", Text: "Smart Scan", Selected: frequency == "Smart Scan"},
+					{Value: "Manual", Text: "Manual", Selected: frequency == "Manual"},
+				}, testutil.ParseSelectOptions(t, selectMarkup))
+
+				assert.Contains(t, html, `data-setting-key="`+types.SettingAutoConfigureMcpServer+`"`)
+				assert.Contains(t, html, `data-setting-key="`+types.SettingSecureAtInceptionExecutionFreq+`"`)
+				assert.NotContains(t, html, "folder_0_"+types.SettingAutoConfigureMcpServer)
+				assert.NotContains(t, html, "folder_0_"+types.SettingSecureAtInceptionExecutionFreq)
+			})
+		}
 	}
 }
 
@@ -971,4 +1030,162 @@ func TestGetCliReleaseChannel(t *testing.T) {
 
 		assert.Equal(t, "v1.1292.0", channel)
 	})
+}
+
+// renderFolderPaneWithEffectiveConfig renders the config dialog for a single folder whose
+// EffectiveConfig is exactly what the test supplies (bypassing computeEffectiveConfig), matching
+// the pattern used by TestConfigHtmlRenderer_SourceIndicatorsInOutput.
+func renderFolderPaneWithEffectiveConfig(t *testing.T, effectiveConfig map[string]types.EffectiveValue) string {
+	t.Helper()
+	engine := testutil.UnitTest(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+	mockFolder := mock_types.NewMockFolder(ctrl)
+
+	folderPath := types.FilePath("/path/to/a_folder")
+	mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
+	mockFolder.EXPECT().Name().Return("a_folder").AnyTimes()
+	mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
+	mockWorkspace.EXPECT().GetFolderContaining(folderPath).Return(mockFolder).AnyTimes()
+	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
+
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
+	require.NoError(t, err)
+
+	folderConfigs := []types.FolderConfig{
+		{
+			FolderPath:      folderPath,
+			ConfigResolver:  testutil.DefaultConfigResolver(engine),
+			EffectiveConfig: effectiveConfig,
+		},
+	}
+
+	return renderer.GetConfigHtml(map[string]any{}, folderConfigs)
+}
+
+func TestConfigHtml_FolderAutonomyRendersTwoOptionsOnly(t *testing.T) {
+	html := renderFolderPaneWithEffectiveConfig(t, map[string]types.EffectiveValue{})
+
+	re := regexp.MustCompile(`(?s)<select id="folder_0_ambient_canary_autonomy".*?</select>`)
+	match := re.FindString(html)
+	require.NotEmpty(t, match, "expected an ambient_canary_autonomy select in the rendered HTML")
+
+	optionCount := strings.Count(match, "<option")
+	assert.Equal(t, 2, optionCount, "control must offer exactly two options, no unset/use-default option")
+	assert.Contains(t, match, `value="notify_only"`)
+	assert.Contains(t, match, `value="autonomous_fixes"`)
+}
+
+func TestConfigHtml_AutonomySelectionPersistsPerFolder(t *testing.T) {
+	html := renderFolderPaneWithEffectiveConfig(t, map[string]types.EffectiveValue{
+		"ambient_canary_autonomy": {Value: "notify_only", Source: "user-override"},
+	})
+
+	re := regexp.MustCompile(`(?s)<select id="folder_0_ambient_canary_autonomy".*?</select>`)
+	match := re.FindString(html)
+	require.NotEmpty(t, match)
+
+	notifyOpt := regexp.MustCompile(`<option value="notify_only"[^>]*>`).FindString(match)
+	autonomousOpt := regexp.MustCompile(`<option value="autonomous_fixes"[^>]*>`).FindString(match)
+	assert.Contains(t, notifyOpt, "selected", "the explicitly-saved choice must still be selected on reopen")
+	assert.NotContains(t, autonomousOpt, "selected")
+}
+
+func TestConfigHtml_ExplicitFolderAutonomyShowsUserOverrideIndicator(t *testing.T) {
+	html := renderFolderPaneWithEffectiveConfig(t, map[string]types.EffectiveValue{
+		"ambient_canary_autonomy": {Value: "notify_only", Source: "user-override"},
+	})
+
+	re := regexp.MustCompile(`(?s)<div class="override-indicator-wrapper[^"]*"[^>]*>\s*<div class="form-group half-width">\s*<label for="folder_0_ambient_canary_autonomy".*?</div>\s*</div>`)
+	block := re.FindString(html)
+	require.NotEmpty(t, block, "expected the ambient_canary_autonomy wrapper block")
+
+	assert.Contains(t, block, "source-user-override", "explicit choice must render the user-override wrapper class")
+	assert.Contains(t, block, "👤", "explicit choice must render the per-project source indicator")
+}
+
+func TestConfigHtml_UnsetFolderAutonomyShowsNoOverrideIndicator(t *testing.T) {
+	html := renderFolderPaneWithEffectiveConfig(t, map[string]types.EffectiveValue{})
+
+	re := regexp.MustCompile(`(?s)<div class="override-indicator-wrapper[^"]*"[^>]*>\s*<div class="form-group half-width">\s*<label for="folder_0_ambient_canary_autonomy".*?</div>\s*</div>`)
+	block := re.FindString(html)
+	require.NotEmpty(t, block, "expected the ambient_canary_autonomy wrapper block")
+
+	assert.NotContains(t, block, "source-user-override")
+	assert.NotContains(t, block, "source-org")
+	assert.NotContains(t, block, "source-indicator", "an untouched folder must show no source indicator at all")
+}
+
+func TestConfigHtml_UnsetFolderAutonomyDoesNotSelectAutonomousFixes(t *testing.T) {
+	html := renderFolderPaneWithEffectiveConfig(t, map[string]types.EffectiveValue{})
+
+	re := regexp.MustCompile(`(?s)<select id="folder_0_ambient_canary_autonomy".*?</select>`)
+	match := re.FindString(html)
+	require.NotEmpty(t, match)
+
+	autonomousOpt := regexp.MustCompile(`<option value="autonomous_fixes"[^>]*>`).FindString(match)
+	assert.NotContains(t, autonomousOpt, "selected", "an unset folder must not render an explicit choice; the registry default is empty, not autonomous_fixes")
+}
+
+func TestConfigHtml_LockedFolderAutonomyIsDisabled(t *testing.T) {
+	html := renderFolderPaneWithEffectiveConfig(t, map[string]types.EffectiveValue{
+		"ambient_canary_autonomy": {Value: "notify_only", Source: "ldx-sync-locked"},
+	})
+
+	re := regexp.MustCompile(`(?s)<select id="folder_0_ambient_canary_autonomy".*?</select>`)
+	match := re.FindString(html)
+	require.NotEmpty(t, match)
+
+	assert.Contains(t, match, "disabled", "org-locked folder autonomy control must be disabled")
+}
+
+// TestConfigHtmlRenderer_RendersLlmProviderSection verifies the "Autonomous
+// remediation" section, all five provider options, the custom-endpoint input,
+// and the "key comes from your environment" note are all present in the
+// rendered dialog.
+func TestConfigHtmlRenderer_RendersLlmProviderSection(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
+	require.NoError(t, err)
+
+	settings := map[string]any{
+		types.SettingLlmProvider: "",
+		types.SettingLlmBaseUrl:  "",
+		types.SettingLlmModel:    "",
+	}
+
+	html := renderer.GetConfigHtml(settings, []types.FolderConfig{})
+
+	assert.Contains(t, html, "Autonomous remediation")
+	assert.Contains(t, html, `id="llm_provider"`)
+	assert.Contains(t, html, `id="llm_base_url"`)
+	assert.Contains(t, html, `id="llm_model"`)
+	for _, option := range []string{"Automatic", "Anthropic", "OpenAI", "Ollama", "Vertex AI", "LiteLLM"} {
+		assert.Contains(t, html, option, "provider option %q must be present", option)
+	}
+	assert.Contains(t, html, "never stored or sent by Snyk", "the API-key-comes-from-your-environment note must be present")
+}
+
+// TestConfigHtmlRenderer_LlmProviderSelectionRoundTrips proves a previously
+// saved provider comes back marked selected in the re-rendered <select>,
+// which is what "the choice survives reopening the dialog" depends on.
+func TestConfigHtmlRenderer_LlmProviderSelectionRoundTrips(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
+	require.NoError(t, err)
+
+	settings := map[string]any{
+		types.SettingLlmProvider: "ollama",
+		types.SettingLlmBaseUrl:  "http://localhost:11434",
+		types.SettingLlmModel:    "llama3.1",
+	}
+
+	html := renderer.GetConfigHtml(settings, []types.FolderConfig{})
+
+	assert.Contains(t, html, `value="ollama" selected`)
+	assert.Contains(t, html, `value="http://localhost:11434"`)
+	assert.Contains(t, html, `value="llama3.1"`)
 }

@@ -105,6 +105,11 @@ test-live:
 test-integ:
 	INTEG_TESTS=1 $(MAKE) test
 
+## test-bdd: Run the godog BDD feature suite (features/*.feature, driven from application/server).
+.PHONY: test-bdd
+test-bdd:
+	go test $(TIMEOUT) -run TestBDD ./application/server/...
+
 ## test-smoke: Run smoke tests (all shards, single go test invocation).
 .PHONY: test-smoke
 test-smoke:
@@ -229,7 +234,7 @@ tree-view-fixture:
 config-dialog-fixture:
 	@echo "==> Generating config dialog HTML fixture..."
 	@mkdir -p js-tests/fixtures
-	@go run scripts/config-dialog/main.go --dummy-data -no-panel > js-tests/fixtures/config-page.html
+	@go run scripts/config-dialog/main.go --dummy-data --integration VS_CODE -no-panel > js-tests/fixtures/config-page.html
 	@echo "    Written to js-tests/fixtures/config-page.html"
 
 ## settings-fallback-fixture: Regenerate settings fallback HTML fixtures used by JS tests.

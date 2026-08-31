@@ -18,10 +18,12 @@ package code
 
 import (
 	"fmt"
+	"html"
 	"regexp"
 	"testing"
 	"time"
 
+	"github.com/snyk/code-client-go/llm"
 	"github.com/stretchr/testify/assert"
 
 	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
@@ -142,6 +144,44 @@ func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
 	assert.Contains(t, codePanelHtml, `✨ Generate AI fix`)
 	assert.Contains(t, codePanelHtml, ` id="no-ai-fix-wrapper"`)
 	assert.Contains(t, codePanelHtml, ` folder-path=""`)
+}
+
+func Test_Code_Html_getCodeDetailsHtml_withAIfix_rendersExplanation(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	issue := &snyk.Issue{
+		Range: getIssueRange(),
+		ID:    "go/NoHardcodedCredentials/test",
+		AdditionalData: snyk.CodeIssueData{
+			Key:      "issue-key-1",
+			HasAIFix: true,
+		},
+	}
+
+	htmlRenderer, err := GetHTMLRenderer(engine, featureflag.NewFakeService())
+	assert.NoError(t, err)
+
+	// Viewing the issue once primes AiFixHandler.currentIssueId for this issue. Without
+	// this, the next GetDetailsHtml call below would look like a switch to a "different"
+	// issue (resetAiFixCacheIfDifferent) and wipe the fix result before it can be read -
+	// this exact ordering is required by real IDE usage: view, then fix, then view again.
+	htmlRenderer.GetDetailsHtml(issue)
+
+	// The explanation is a plain passthrough field on the autofix suggestion,
+	// populated by code-client-go. Includes an apostrophe so the assertion below can't
+	// pass merely because the string happens to need no escaping.
+	const wantExplanation = "this fix adds CSRF protection to the app's express route"
+	htmlRenderer.AiFixHandler.SetAiFixDiffState(AiFixSuccess, []llm.AutofixUnifiedDiffSuggestion{
+		{
+			FixId:               "fix-1",
+			UnifiedDiffsPerFile: map[string]string{"app.js": "--- a/app.js\n+++ b/app.js\n"},
+			Explanation:         wantExplanation,
+		},
+	}, nil, nil)
+
+	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+
+	assert.Contains(t, html.UnescapeString(codePanelHtml), wantExplanation)
 }
 
 func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {

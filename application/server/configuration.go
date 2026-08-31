@@ -450,6 +450,7 @@ func processConfigSettings(ctx context.Context, conf configuration.Configuration
 	applyProxyConfig(conf, settings)
 	applyCodeEndpoint(conf, settings)
 	applyCliReleaseChannel(conf, settings)
+	applyLlmProviderConfig(conf, logger, settings)
 
 	return globalOrgChanged, lockedMachineFields
 }
@@ -1356,6 +1357,17 @@ func applyCliReleaseChannel(conf configuration.Configuration, settings map[strin
 	if v, ok := settingStr(settings, types.SettingCliReleaseChannel); ok && v != "" {
 		types.SetGlobalUser(conf, types.SettingCliReleaseChannel, strings.TrimSpace(v))
 	}
+}
+
+// llmEnvMgr is a singleton managing the LLM provider environment variable state.
+// The environment is process-global, so this must be too - see llmProviderEnvManager's
+// appliedEnvVar field doc for why.
+var llmEnvMgr = newLlmProviderEnvManager() //nolint:gochecknoglobals // singleton for LLM env management
+
+// applyLlmProviderConfig persists the developer's chosen LLM provider, model and
+// custom API endpoint for autonomous remediation. It delegates to the singleton manager.
+func applyLlmProviderConfig(conf configuration.Configuration, logger *zerolog.Logger, settings map[string]*types.ConfigSetting) {
+	llmEnvMgr.ApplyConfig(conf, logger, settings)
 }
 
 func buildIncomingLspConfigMap(folderConfigs []types.LspFolderConfig) map[types.FilePath]types.LspFolderConfig {
