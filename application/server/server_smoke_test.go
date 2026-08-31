@@ -2300,7 +2300,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 				require.False(t, fc.Settings[types.SettingOrgSetByUser].Value.(bool), "OrgSetByUser should be false after user opts-in to auto org selection")
 				// PreferredOrg may be inherited from global org in auto mode
 			},
-		})
+		}, lspFolderConfigRequireSettingValue(types.SettingOrgSetByUser, false))
 		// When OrgSetByUser is false, effective org is AutoDeterminedOrg (if LDX-Sync succeeded) or global org (fallback)
 		// Either way, it should NOT be the user's initialOrg anymore
 		effectiveOrg := config.FolderOrganization(engine.GetConfiguration(), repo, engine.GetLogger())
