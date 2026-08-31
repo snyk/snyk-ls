@@ -1672,6 +1672,13 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 type lspFolderConfigNotifOpts struct {
 	clearNotifications               bool
 	waitForNonEmptyAutoDeterminedOrg bool
+	requireAdditionalParameters      string
+	requireSetting                   *requiredSetting
+}
+
+type requiredSetting struct {
+	name string
+	want any
 }
 
 type lspFolderConfigNotifOption func(*lspFolderConfigNotifOpts)
@@ -1685,6 +1692,16 @@ func lspFolderConfigClearAfter(clearNotifications bool) lspFolderConfigNotifOpti
 // validators (LDX-Sync can populate folder configs before autoDeterminedOrg is ready).
 func lspFolderConfigWaitForAutoDeterminedOrg() lspFolderConfigNotifOption {
 	return func(o *lspFolderConfigNotifOpts) { o.waitForNonEmptyAutoDeterminedOrg = true }
+}
+
+func lspFolderConfigRequireAdditionalParameters(want string) lspFolderConfigNotifOption {
+	return func(o *lspFolderConfigNotifOpts) { o.requireAdditionalParameters = want }
+}
+
+// lspFolderConfigRequireSettingValue gates the wait on a notification that already reflects
+// the change the caller just made, so a notification emitted before it is skipped.
+func lspFolderConfigRequireSettingValue(name string, want any) lspFolderConfigNotifOption {
+	return func(o *lspFolderConfigNotifOpts) { o.requireSetting = &requiredSetting{name: name, want: want} }
 }
 
 func parseLspFolderConfigNotifOpts(opts ...lspFolderConfigNotifOption) lspFolderConfigNotifOpts {
@@ -1779,6 +1796,67 @@ func folderConfigNotificationMatchesValidators(
 	return true
 }
 
+// folderConfigsCarryAdditionalParameters gates a notification on the additional_parameters
+// value the caller's own trigger just sent, so a notification emitted before that trigger
+// is skipped rather than mistaken for the response to it.
+func folderConfigsCarryAdditionalParameters(
+	param types.LspConfigurationParam,
+	validators map[types.FilePath]func(types.LspFolderConfig),
+	want string,
+) bool {
+	if want == "" {
+		return true
+	}
+	for wantPath := range validators {
+		matched := false
+		for _, fc := range param.FolderConfigs {
+			if !folderConfigPathsMatch(fc.FolderPath, wantPath) {
+				continue
+			}
+			setting := fc.Settings[types.SettingAdditionalParameters]
+			if setting == nil {
+				continue
+			}
+			values, ok := setting.Value.([]any)
+			if !ok || len(values) != 1 || values[0] != want {
+				continue
+			}
+			matched = true
+			break
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
+}
+
+func folderConfigsCarrySetting(
+	param types.LspConfigurationParam,
+	validators map[types.FilePath]func(types.LspFolderConfig),
+	want *requiredSetting,
+) bool {
+	if want == nil {
+		return true
+	}
+	for wantPath := range validators {
+		matched := false
+		for _, fc := range param.FolderConfigs {
+			if !folderConfigPathsMatch(fc.FolderPath, wantPath) {
+				continue
+			}
+			if setting := fc.Settings[want.name]; setting != nil && setting.Value == want.want {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
+}
+
 // tryParseLatestMatchingFolderConfig walks notifications newest-first and returns the first
 // $/snyk.configuration payload that satisfies cfg (including optional autoDeterminedOrg wait).
 func tryParseLatestMatchingFolderConfig(
@@ -1798,6 +1876,12 @@ func tryParseLatestMatchingFolderConfig(
 			if !folderConfigsHaveNonEmptyAutoDeterminedOrgForValidators(param, validators) {
 				continue
 			}
+		}
+		if !folderConfigsCarryAdditionalParameters(param, validators, cfg.requireAdditionalParameters) {
+			continue
+		}
+		if !folderConfigsCarrySetting(param, validators, cfg.requireSetting) {
+			continue
 		}
 		return param, true
 	}
