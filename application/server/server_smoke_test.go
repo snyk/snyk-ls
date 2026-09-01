@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"runtime"
 	"runtime/pprof"
@@ -1846,7 +1847,7 @@ func folderConfigsCarrySetting(
 			if !folderConfigPathsMatch(fc.FolderPath, wantPath) {
 				continue
 			}
-			if setting := fc.Settings[want.name]; setting != nil && setting.Value == want.want {
+			if setting := fc.Settings[want.name]; setting != nil && reflect.DeepEqual(setting.Value, want.want) {
 				matched = true
 				break
 			}
