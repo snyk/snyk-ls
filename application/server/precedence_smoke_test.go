@@ -542,7 +542,7 @@ func Test_SmokePrecedence_LoginRefreshesConfig_WithFolderOverridesPreserved(t *t
 // settings through the full LSP pipeline. This tests the reconciliation logic end-to-end.
 func Test_SmokePrecedence_ActivateSnykCodeSecurity_OR_Reconciliation(t *testing.T) {
 	t.Parallel()
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 
 	loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine)
@@ -590,7 +590,7 @@ func Test_SmokePrecedence_ActivateSnykCodeSecurity_OR_Reconciliation(t *testing.
 // default values are used for all settings.
 func Test_SmokePrecedence_DefaultValues_WhenNoUserOrRemoteConfig(t *testing.T) {
 	t.Parallel()
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 
 	loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine)
