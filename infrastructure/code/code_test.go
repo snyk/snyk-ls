@@ -963,12 +963,11 @@ func setupMockLearnServiceNoLessons(t *testing.T) *mock_learn.MockService {
 
 func Test_resolveOrgToUUID(t *testing.T) {
 	t.Run("returns UUID unchanged when input is already a UUID", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		testutil.SetUpEngineMock(t, engine)
+		_, mockEngine, _ := testutil.UnitTestWithMockEngine(t)
 
 		inputUUID := "550e8400-e29b-41d4-a716-446655440000"
 
-		result, err := config.ResolveOrgToUUIDWithEngine(engine, inputUUID)
+		result, err := config.ResolveOrgToUUIDWithEngine(mockEngine, inputUUID)
 
 		assert.NoError(t, err)
 		assert.Equal(t, inputUUID, result)
