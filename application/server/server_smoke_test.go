@@ -1454,7 +1454,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 
 	_ = textDocumentDidSave(t, &loc, testPath)
 
-	assert.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), 2*time.Minute, time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, time.Millisecond)
 	waitForDeltaScan(t, deps.ScanStateAggregator)
 }
 
