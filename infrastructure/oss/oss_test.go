@@ -935,7 +935,7 @@ func Test_prepareScanCommand(t *testing.T) {
 
 		assert.Contains(t, cmd, "--all-projects")
 		assert.Contains(t, cmd, "--org="+knownOrgUUID)
-		assert.Len(t, cmd, 7)
+		assert.Lenf(t, cmd, 7, "Assert the set org passes through as well")
 	})
 }
 

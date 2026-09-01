@@ -110,7 +110,7 @@ func TestPatAuthenticationProvider_ClearAuthentication(t *testing.T) {
 }
 
 func TestPatAuthenticationProvider_GetCheckAuthenticationFunction(t *testing.T) {
-	_, mockEngine, mockConfig, _ := testutil.UnitTestWithMockEngine(t)
+	_, mockEngine, mockConfig := testutil.UnitTestWithMockEngine(t)
 	mockConfig.EXPECT().GetString(gomock.Any()).Return("").AnyTimes()
 	mockConfig.EXPECT().IsSet(gomock.Any()).Return(false).AnyTimes()
 

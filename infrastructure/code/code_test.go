@@ -982,7 +982,7 @@ func Test_resolveOrgToUUID(t *testing.T) {
 		{name: "handles empty string", input: ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ctrl, mockEngine, mockConfig, _ := testutil.UnitTestWithMockEngine(t)
+			ctrl, mockEngine, mockConfig := testutil.UnitTestWithMockEngine(t)
 
 			clonedMockConfig := mocks.NewMockConfiguration(ctrl)
 			mockConfig.EXPECT().Clone().Return(clonedMockConfig)

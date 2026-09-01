@@ -173,7 +173,7 @@ func UnitTestWithCtx(t *testing.T) (workflow.Engine, context.Context) {
 // UnitTestWithMockEngine creates a mock engine with configuration and logger expectations
 // for unit tests that do not need a real workflow engine. Unlike SetUpEngineMock, it does
 // not require an existing engine.
-func UnitTestWithMockEngine(t *testing.T) (*gomock.Controller, *mocks.MockEngine, *mocks.MockConfiguration, *zerolog.Logger) {
+func UnitTestWithMockEngine(t *testing.T) (*gomock.Controller, *mocks.MockEngine, *mocks.MockConfiguration) {
 	t.Helper()
 	ctrl := gomock.NewController(t)
 	t.Cleanup(ctrl.Finish)
@@ -185,7 +185,7 @@ func UnitTestWithMockEngine(t *testing.T) (*gomock.Controller, *mocks.MockEngine
 	mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
 	mockEngine.EXPECT().GetLogger().Return(&logger).AnyTimes()
 
-	return ctrl, mockEngine, mockConfig, &logger
+	return ctrl, mockEngine, mockConfig
 }
 
 func cleanupFakeCliFile(conf configuration.Configuration, logger *zerolog.Logger) {
