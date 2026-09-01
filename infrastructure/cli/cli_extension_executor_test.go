@@ -349,7 +349,7 @@ func (cw *configWrapper) Clone() configuration.Configuration {
 		Configuration: cloned,
 		folderOrgSlug: cw.folderOrgSlug,
 		isCloned:      true,
-		orgSet:        false,
+		orgSet:        cw.orgSet,
 	}
 }
 
