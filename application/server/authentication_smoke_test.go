@@ -65,7 +65,8 @@ func checkInvalidCredentialsMessageRequest(t *testing.T, expected string, tokenS
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
 	srv, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
-	tokenService.SetToken(engine.GetConfiguration(), "00000000-0000-0000-0000-000000000099")
+	types.SetGlobalUser(engine.GetConfiguration(), types.SettingAuthenticationMethod, string(types.OAuthAuthentication))
+	tokenService.SetToken(engine.GetConfiguration(), tokenString)
 	engine.GetConfiguration().Set(types.SettingIsLspInitialized, true)
 
 	clientParams := types.InitializeParams{
