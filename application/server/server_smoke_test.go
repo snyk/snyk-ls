@@ -1454,7 +1454,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 
 	_ = textDocumentDidSave(t, &loc, testPath)
 
-	assert.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), 5*time.Minute, time.Millisecond)
 	waitForDeltaScan(t, deps.ScanStateAggregator)
 }
 
@@ -1895,6 +1895,7 @@ func countValidatedFolderConfigs(
 	validators map[types.FilePath]func(types.LspFolderConfig),
 ) int {
 	validationsCount := 0
+	// Fast path when callers pass exactly one folder config and one validator; not required for correctness.
 	if len(lastConfigParam.FolderConfigs) == 1 && len(validators) == 1 {
 		fc := lastConfigParam.FolderConfigs[0]
 		for wantPath, onlyValidator := range validators {
