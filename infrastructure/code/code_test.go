@@ -18,7 +18,6 @@ package code
 
 import (
 	"context"
-	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -983,15 +982,7 @@ func Test_resolveOrgToUUID(t *testing.T) {
 		{name: "handles empty string", input: ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			t.Cleanup(ctrl.Finish)
-
-			mockEngine := mocks.NewMockEngine(ctrl)
-			mockConfig := mocks.NewMockConfiguration(ctrl)
-			mockLogger := zerolog.New(io.Discard)
-
-			mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
-			mockEngine.EXPECT().GetLogger().Return(&mockLogger).AnyTimes()
+			ctrl, mockEngine, mockConfig, _ := testutil.UnitTestWithMockEngine(t)
 
 			clonedMockConfig := mocks.NewMockConfiguration(ctrl)
 			mockConfig.EXPECT().Clone().Return(clonedMockConfig)

@@ -25,6 +25,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -116,9 +117,8 @@ func TestPatAuthenticationProvider_GetCheckAuthenticationFunction(t *testing.T) 
 	p := &PatAuthenticationProvider{}
 
 	user, err := p.GetCheckAuthenticationFunction()(mockEngine)
-	if assert.Error(t, err) {
-		assert.Contains(t, err.Error(), "failed to get active user:")
-	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to get active user:")
 	assert.Equal(t, "", user)
 }
 
