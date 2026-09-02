@@ -68,6 +68,7 @@ func Test_SmokeSecretsScan_UnsupportedFileDoesNotError(t *testing.T) {
 		{"init"},
 		{"config", "user.email", "test@test.com"},
 		{"config", "user.name", "test"},
+		{"config", "commit.gpgsign", "false"},
 		{"add", "image.bin"},
 		{"commit", "-m", "initial"},
 	}

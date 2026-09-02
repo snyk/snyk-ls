@@ -963,46 +963,38 @@ func setupMockLearnServiceNoLessons(t *testing.T) *mock_learn.MockService {
 
 func Test_resolveOrgToUUID(t *testing.T) {
 	t.Run("returns UUID unchanged when input is already a UUID", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		testutil.SetUpEngineMock(t, engine)
+		_, mockEngine, _ := testutil.UnitTestWithMockEngine(t)
 
 		inputUUID := "550e8400-e29b-41d4-a716-446655440000"
 
-		result, err := config.ResolveOrgToUUIDWithEngine(engine, inputUUID)
+		result, err := config.ResolveOrgToUUIDWithEngine(mockEngine, inputUUID)
 
 		assert.NoError(t, err)
 		assert.Equal(t, inputUUID, result)
 	})
 
-	t.Run("returns error when slug cannot be resolved to UUID", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		testutil.SetUpEngineMock(t, engine)
+	for _, tc := range []struct {
+		name  string
+		input string
+	}{
+		{name: "returns error when slug cannot be resolved to UUID", input: "invalid_slug"},
+		{name: "handles empty string", input: ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl, mockEngine, mockConfig := testutil.UnitTestWithMockEngine(t)
 
-		inputSlug := "invalid_slug"
+			clonedMockConfig := mocks.NewMockConfiguration(ctrl)
+			mockConfig.EXPECT().Clone().Return(clonedMockConfig)
+			clonedMockConfig.EXPECT().Set(configuration.ORGANIZATION, tc.input)
+			clonedMockConfig.EXPECT().GetString(configuration.ORGANIZATION).Return(tc.input)
 
-		result, err := config.ResolveOrgToUUIDWithEngine(engine, inputSlug)
+			result, err := config.ResolveOrgToUUIDWithEngine(mockEngine, tc.input)
 
-		// When configuration cannot resolve the slug to a UUID, it will return an empty string or the slug itself
-		// Our function should detect this and return an error
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "could not be resolved to a valid UUID")
-		assert.Empty(t, result)
-	})
-
-	t.Run("handles empty string", func(t *testing.T) {
-		engine := testutil.UnitTest(t)
-		testutil.SetUpEngineMock(t, engine)
-
-		inputEmpty := ""
-
-		result, err := config.ResolveOrgToUUIDWithEngine(engine, inputEmpty)
-
-		// Empty string is not a UUID, so it will try to resolve
-		// When unauthenticated or unable to resolve, configuration returns empty string
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "could not be resolved to a valid UUID")
-		assert.Empty(t, result)
-	})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "could not be resolved to a valid UUID")
+			assert.Empty(t, result)
+		})
+	}
 }
 
 // testCodeConfigUsesFolderOrg is a shared helper function that tests CodeConfig creation
