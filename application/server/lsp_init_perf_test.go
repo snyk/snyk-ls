@@ -43,6 +43,7 @@ import (
 
 	"github.com/snyk/snyk-ls/application/di"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -85,6 +86,9 @@ func disableAutoScan(t *testing.T, conf interface{ Set(string, any) }) {
 func TestProfileLSPInit(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping profiling test in short mode; run explicitly: go test -run TestProfileLSPInit -v")
+	}
+	if os.Getenv(testsupport.SmokeTestEnvVar) != "" {
+		t.Skip("profiling test is not part of the smoke suite; run explicitly without SMOKE_TESTS")
 	}
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	params := buildInitParams(t, lspInitPerfFolderCount)
@@ -161,6 +165,9 @@ const lspInitRealHTTPMaxDuration = 40 * time.Second
 func Test_LSPInitCompletesWithManyFoldersRealHTTP(t *testing.T) {
 	if testing.Short() {
 		t.Skip("real-HTTP init test skipped in -short mode; run explicitly")
+	}
+	if os.Getenv(testsupport.SmokeTestEnvVar) != "" {
+		t.Skip("real-HTTP init test is not part of the smoke suite; run explicitly without SMOKE_TESTS")
 	}
 
 	engine, tokenService := testutil.UnitTestWithEngine(t)
