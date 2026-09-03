@@ -19,12 +19,16 @@ package code
 import (
 	"fmt"
 	"html"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"testing"
 	"time"
 
 	"github.com/snyk/code-client-go/llm"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
 
@@ -769,4 +773,74 @@ func Test_prepareIgnoreDetailsRow(t *testing.T) {
 			assert.Equal(t, len(tc.expectedValue), len(row))
 		})
 	}
+}
+
+func Test_Code_Html_CreateIgnoreDisabled_whenNotGitRepo(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	issue := &snyk.Issue{
+		ID:          "java/DontUsePrintStackTrace",
+		Severity:    2,
+		ContentRoot: types.FilePath(t.TempDir()),
+		AdditionalData: snyk.CodeIssueData{
+			Title: "Test issue",
+		},
+	}
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
+
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
+	require.NoError(t, err)
+
+	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+
+	assert.Contains(t, codePanelHtml, `id="ignore-create"`)
+	assert.Contains(t, codePanelHtml, `disabled`)
+	assert.Contains(t, codePanelHtml, htmlIgnore.CreateIgnoreUnavailableReason)
+}
+
+func Test_Code_Html_CreateIgnoreEnabled_whenGitRepoWithOrigin(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	repoDir := t.TempDir()
+	initTestGitRepoWithOrigin(t, repoDir)
+
+	issue := &snyk.Issue{
+		ID:          "java/DontUsePrintStackTrace",
+		Severity:    2,
+		ContentRoot: types.FilePath(repoDir),
+		AdditionalData: snyk.CodeIssueData{
+			Title: "Test issue",
+		},
+	}
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
+
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
+	require.NoError(t, err)
+
+	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+
+	assert.Contains(t, codePanelHtml, `id="ignore-create"`)
+	assert.NotContains(t, codePanelHtml, `id="ignore-create" class="ignore-button secondary" disabled`)
+}
+
+func initTestGitRepoWithOrigin(t *testing.T, dir string) {
+	t.Helper()
+	runTestGit(t, dir, "init", "--initial-branch=main")
+	seed := filepath.Join(dir, "seed.txt")
+	require.NoError(t, os.WriteFile(seed, []byte("seed"), 0600))
+	runTestGit(t, dir, "add", "seed.txt")
+	runTestGit(t, dir, "-c", "user.email=test@example.com", "-c", "user.name=Test User", "commit", "-m", "init")
+	runTestGit(t, dir, "remote", "add", "origin", "https://github.com/org/repo.git")
+}
+
+func runTestGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(output))
 }

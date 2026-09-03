@@ -33,6 +33,9 @@ var ignoreCreateButton = document.getElementById('ignore-create');
 if (ignoreFormContainer !== null && ignoreFormContainer !== void 0 && ignoreCreateButton !== null && ignoreCreateButton !== void 0) {
   // Open form button
   ignoreCreateButton.addEventListener('click', function() {
+    if (ignoreCreateButton.disabled) {
+      return;
+    }
     toggleElement(ignoreCreateButton, 'hide');
     toggleElement(ignoreFormContainer, 'show');
     ignoreFormContainer.scrollIntoView();
