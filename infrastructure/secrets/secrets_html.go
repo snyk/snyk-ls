@@ -138,27 +138,32 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		}
 	}
 
+	contentRoot := string(issue.GetContentRoot())
+	canCreateIgnore := htmlIgnore.CanCreateIgnore(contentRoot)
+
 	data := map[string]any{
-		"IssueTitle":       additionalData.Title,
-		"IssueMessage":     additionalData.Message,
-		"SeverityIcon":     html.SeverityIcon(issue),
-		"CWEs":             issue.GetCWEs(),
-		"IsIgnored":        issue.GetIsIgnored(),
-		"IsPending":        isPending,
-		"IgnoreDetails":    ignoreDetailsRow,
-		"IgnoreReason":     ignoreReason,
-		"CCIEnabled":       renderer.cciEnabled,
-		"IgnoreLineAction": getLineToIgnoreAction(issue),
-		"SnykWebUrl":       appLink,
-		"RuleName":         additionalData.RuleName,
-		"Categories":       additionalData.Categories,
-		"FolderPath":       string(folderPath),
-		"FilePath":         string(issue.GetAffectedFilePath()),
-		"IssueId":          issue.GetAdditionalData().GetKey(),
-		"LocationsCount":   additionalData.LocationsCount,
-		"Styles":           template.CSS(panelStylesTemplate + "\n" + htmlIgnore.Styles()),
-		"Scripts":          template.JS(htmlIgnore.Scripts() + "\n" + customScripts),
-		"Nonce":            nonce,
+		"IssueTitle":                    additionalData.Title,
+		"IssueMessage":                  additionalData.Message,
+		"SeverityIcon":                  html.SeverityIcon(issue),
+		"CWEs":                          issue.GetCWEs(),
+		"IsIgnored":                     issue.GetIsIgnored(),
+		"IsPending":                     isPending,
+		"IgnoreDetails":                 ignoreDetailsRow,
+		"IgnoreReason":                  ignoreReason,
+		"CCIEnabled":                    renderer.cciEnabled,
+		"CanCreateIgnore":               canCreateIgnore,
+		"CreateIgnoreUnavailableReason": htmlIgnore.CreateIgnoreUnavailableReason,
+		"IgnoreLineAction":              getLineToIgnoreAction(issue),
+		"SnykWebUrl":                    appLink,
+		"RuleName":                      additionalData.RuleName,
+		"Categories":                    additionalData.Categories,
+		"FolderPath":                    string(folderPath),
+		"FilePath":                      string(issue.GetAffectedFilePath()),
+		"IssueId":                       issue.GetAdditionalData().GetKey(),
+		"LocationsCount":                additionalData.LocationsCount,
+		"Styles":                        template.CSS(panelStylesTemplate + "\n" + htmlIgnore.Styles()),
+		"Scripts":                       template.JS(htmlIgnore.Scripts() + "\n" + customScripts),
+		"Nonce":                         nonce,
 	}
 
 	var buffer bytes.Buffer

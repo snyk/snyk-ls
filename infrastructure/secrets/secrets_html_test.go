@@ -21,14 +21,19 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
+
+const createIgnoreDisabledButtonMarkup = `id="ignore-create" class="ignore-button secondary" disabled`
 
 func Test_Secrets_Html_BasicIssue(t *testing.T) {
 	engine := testutil.UnitTest(t)
@@ -169,8 +174,9 @@ func Test_Secrets_Html_CCIEnabled(t *testing.T) {
 	assert.Contains(t, result, `id="ignore-reason-error"`)
 	assert.Contains(t, result, `id="ignore-form-submit"`)
 
-	// assert "Create ignore" button in footer
-	assert.Contains(t, result, `id="ignore-create"`)
+	// assert "Create ignore" button in footer is disabled without git repo
+	assert.Contains(t, result, createIgnoreDisabledButtonMarkup)
+	assert.Contains(t, result, htmlIgnore.CreateIgnoreUnavailableReason)
 }
 
 func Test_Secrets_Html_hiddenClassIsImportant(t *testing.T) {
@@ -260,4 +266,42 @@ func createBasicSecretIssue() *snyk.Issue {
 			Categories: []string{"Security"},
 		},
 	}
+}
+
+func Test_Secrets_Html_CreateIgnoreDisabled_whenNotGitRepo(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	issue := createBasicSecretIssue()
+	issue.ContentRoot = types.FilePath(t.TempDir())
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
+
+	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
+	require.NoError(t, err)
+
+	result := htmlRenderer.GetDetailsHtml(issue)
+
+	assert.Contains(t, result, createIgnoreDisabledButtonMarkup)
+	assert.Contains(t, result, htmlIgnore.CreateIgnoreUnavailableReason)
+}
+
+func Test_Secrets_Html_CreateIgnoreEnabled_whenGitRepoWithOrigin(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	repoDir := t.TempDir()
+	testsupport.InitTestGitRepoWithOrigin(t, repoDir, "")
+
+	issue := createBasicSecretIssue()
+	issue.ContentRoot = types.FilePath(repoDir)
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
+
+	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
+	require.NoError(t, err)
+
+	result := htmlRenderer.GetDetailsHtml(issue)
+
+	assert.NotContains(t, result, createIgnoreDisabledButtonMarkup)
 }

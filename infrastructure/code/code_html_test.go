@@ -25,6 +25,7 @@ import (
 
 	"github.com/snyk/code-client-go/llm"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
 
@@ -34,9 +35,12 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
+
+const createIgnoreDisabledButtonMarkup = `id="ignore-create" class="ignore-button secondary" disabled`
 
 func Test_Code_Html_getCodeDetailsHtml_WithInlineIgnores_WithoutIAW(t *testing.T) {
 	engine := testutil.UnitTest(t)
@@ -769,4 +773,54 @@ func Test_prepareIgnoreDetailsRow(t *testing.T) {
 			assert.Equal(t, len(tc.expectedValue), len(row))
 		})
 	}
+}
+
+func Test_Code_Html_CreateIgnoreDisabled_whenNotGitRepo(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	issue := &snyk.Issue{
+		ID:          "java/DontUsePrintStackTrace",
+		Severity:    2,
+		ContentRoot: types.FilePath(t.TempDir()),
+		AdditionalData: snyk.CodeIssueData{
+			Title: "Test issue",
+		},
+	}
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
+
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
+	require.NoError(t, err)
+
+	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+
+	assert.Contains(t, codePanelHtml, createIgnoreDisabledButtonMarkup)
+	assert.Contains(t, codePanelHtml, htmlIgnore.CreateIgnoreUnavailableReason)
+}
+
+func Test_Code_Html_CreateIgnoreEnabled_whenGitRepoWithOrigin(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	repoDir := t.TempDir()
+	testsupport.InitTestGitRepoWithOrigin(t, repoDir, "")
+
+	issue := &snyk.Issue{
+		ID:          "java/DontUsePrintStackTrace",
+		Severity:    2,
+		ContentRoot: types.FilePath(repoDir),
+		AdditionalData: snyk.CodeIssueData{
+			Title: "Test issue",
+		},
+	}
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
+
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
+	require.NoError(t, err)
+
+	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+
+	assert.NotContains(t, codePanelHtml, createIgnoreDisabledButtonMarkup)
 }
