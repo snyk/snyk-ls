@@ -38,13 +38,12 @@ TIMEOUT := "-timeout=90m"
 ## tools: Install required tooling.
 .PHONY: tools
 tools: $(TOOLS_BIN)/go-licenses $(TOOLS_BIN)/golangci-lint $(TOOLS_BIN)/pact/bin/pact
-	@command -v pre-commit >/dev/null 2>&1 && { pre-commit install && pre-commit install --hook-type pre-push; } || \
+	@command -v pre-commit >/dev/null 2>&1 && pre-commit install || \
 		echo "⚠️  pre-commit not found — run 'make hooks' after installing pre-commit to enable git hooks"
 
 .PHONY: hooks
 hooks:
 	@pre-commit install
-	@pre-commit install --hook-type pre-push
 
 
 $(TOOLS_BIN)/go-licenses:
