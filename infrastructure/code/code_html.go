@@ -208,10 +208,6 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 
 	contentRoot := string(issue.GetContentRoot())
 	canCreateIgnore := htmlIgnore.CanCreateIgnore(contentRoot)
-	createIgnoreUnavailableReason := ""
-	if !canCreateIgnore {
-		createIgnoreUnavailableReason = htmlIgnore.CreateIgnoreUnavailableReason
-	}
 
 	data := map[string]any{
 		"IssueTitle":                    additionalData.Title,
@@ -226,7 +222,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"IgnoreReason":                  ignoreReason,
 		"CCIEnabled":                    renderer.cciEnabled,
 		"CanCreateIgnore":               canCreateIgnore,
-		"CreateIgnoreUnavailableReason": createIgnoreUnavailableReason,
+		"CreateIgnoreUnavailableReason": htmlIgnore.CreateIgnoreUnavailableReason,
 		"InlineIgnoresEnabled":          renderer.inlineIgnoresEnabled,
 		"DataFlow":                      additionalData.DataFlow,
 		"DataFlowKeys":                  dataFlowKeys,

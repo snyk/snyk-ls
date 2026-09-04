@@ -140,8 +140,8 @@
 }
 
 .ignore-button.secondary:disabled {
-  border-color: var(--disabled-foreground, #808080);
-  color: var(--disabled-foreground, #808080);
+  border-color: var(--disabled-foreground);
+  color: var(--disabled-foreground);
   cursor: not-allowed;
   opacity: 0.6;
 }
@@ -149,7 +149,7 @@
 .ignore-button.secondary:disabled:hover,
 .ignore-button.secondary:disabled:active {
   background: none;
-  color: var(--disabled-foreground, #808080);
+  color: var(--disabled-foreground);
   opacity: 0.6;
 }
 

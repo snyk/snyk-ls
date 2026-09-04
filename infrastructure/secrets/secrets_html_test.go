@@ -31,9 +31,12 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
+
+const createIgnoreDisabledButtonMarkup = `id="ignore-create" class="ignore-button secondary" disabled`
 
 func Test_Secrets_Html_BasicIssue(t *testing.T) {
 	engine := testutil.UnitTest(t)
@@ -175,8 +178,7 @@ func Test_Secrets_Html_CCIEnabled(t *testing.T) {
 	assert.Contains(t, result, `id="ignore-form-submit"`)
 
 	// assert "Create ignore" button in footer is disabled without git repo
-	assert.Contains(t, result, `id="ignore-create"`)
-	assert.Contains(t, result, `disabled`)
+	assert.Contains(t, result, createIgnoreDisabledButtonMarkup)
 	assert.Contains(t, result, htmlIgnore.CreateIgnoreUnavailableReason)
 }
 
@@ -283,8 +285,7 @@ func Test_Secrets_Html_CreateIgnoreDisabled_whenNotGitRepo(t *testing.T) {
 
 	result := htmlRenderer.GetDetailsHtml(issue)
 
-	assert.Contains(t, result, `id="ignore-create"`)
-	assert.Contains(t, result, `disabled`)
+	assert.Contains(t, result, createIgnoreDisabledButtonMarkup)
 	assert.Contains(t, result, htmlIgnore.CreateIgnoreUnavailableReason)
 }
 
@@ -305,24 +306,39 @@ func Test_Secrets_Html_CreateIgnoreEnabled_whenGitRepoWithOrigin(t *testing.T) {
 
 	result := htmlRenderer.GetDetailsHtml(issue)
 
-	assert.Contains(t, result, `id="ignore-create"`)
-	assert.NotContains(t, result, `id="ignore-create" class="ignore-button secondary" disabled`)
+	assert.NotContains(t, result, createIgnoreDisabledButtonMarkup)
 }
 
 func initSecretsTestGitRepoWithOrigin(t *testing.T, dir string) {
 	t.Helper()
 	runSecretsTestGit(t, dir, "init", "--initial-branch=main")
+	runSecretsTestGit(t, dir, "config", "commit.gpgsign", "false")
 	seed := filepath.Join(dir, "seed.txt")
 	require.NoError(t, os.WriteFile(seed, []byte("seed"), 0600))
 	runSecretsTestGit(t, dir, "add", "seed.txt")
-	runSecretsTestGit(t, dir, "-c", "user.email=test@example.com", "-c", "user.name=Test User", "commit", "-m", "init")
+	cmd := runSecretsTestGitCmd(t, dir, "commit", "-m", "init")
+	cmd.Env = append(cmd.Env,
+		"GIT_AUTHOR_NAME=Snyk LS Test",
+		"GIT_AUTHOR_EMAIL=snyk-ls-test@example.invalid",
+		"GIT_COMMITTER_NAME=Snyk LS Test",
+		"GIT_COMMITTER_EMAIL=snyk-ls-test@example.invalid",
+	)
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(output))
 	runSecretsTestGit(t, dir, "remote", "add", "origin", "https://github.com/org/repo.git")
 }
 
 func runSecretsTestGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
+	cmd := runSecretsTestGitCmd(t, dir, args...)
 	output, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(output))
+}
+
+func runSecretsTestGitCmd(t *testing.T, dir string, args ...string) *exec.Cmd {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
+	return cmd
 }

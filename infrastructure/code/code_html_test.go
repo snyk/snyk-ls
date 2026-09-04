@@ -38,9 +38,12 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
+
+const createIgnoreDisabledButtonMarkup = `id="ignore-create" class="ignore-button secondary" disabled`
 
 func Test_Code_Html_getCodeDetailsHtml_WithInlineIgnores_WithoutIAW(t *testing.T) {
 	engine := testutil.UnitTest(t)
@@ -795,8 +798,7 @@ func Test_Code_Html_CreateIgnoreDisabled_whenNotGitRepo(t *testing.T) {
 
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
-	assert.Contains(t, codePanelHtml, `id="ignore-create"`)
-	assert.Contains(t, codePanelHtml, `disabled`)
+	assert.Contains(t, codePanelHtml, createIgnoreDisabledButtonMarkup)
 	assert.Contains(t, codePanelHtml, htmlIgnore.CreateIgnoreUnavailableReason)
 }
 
@@ -823,24 +825,39 @@ func Test_Code_Html_CreateIgnoreEnabled_whenGitRepoWithOrigin(t *testing.T) {
 
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
-	assert.Contains(t, codePanelHtml, `id="ignore-create"`)
-	assert.NotContains(t, codePanelHtml, `id="ignore-create" class="ignore-button secondary" disabled`)
+	assert.NotContains(t, codePanelHtml, createIgnoreDisabledButtonMarkup)
 }
 
 func initTestGitRepoWithOrigin(t *testing.T, dir string) {
 	t.Helper()
 	runTestGit(t, dir, "init", "--initial-branch=main")
+	runTestGit(t, dir, "config", "commit.gpgsign", "false")
 	seed := filepath.Join(dir, "seed.txt")
 	require.NoError(t, os.WriteFile(seed, []byte("seed"), 0600))
 	runTestGit(t, dir, "add", "seed.txt")
-	runTestGit(t, dir, "-c", "user.email=test@example.com", "-c", "user.name=Test User", "commit", "-m", "init")
+	cmd := runTestGitCmd(t, dir, "commit", "-m", "init")
+	cmd.Env = append(cmd.Env,
+		"GIT_AUTHOR_NAME=Snyk LS Test",
+		"GIT_AUTHOR_EMAIL=snyk-ls-test@example.invalid",
+		"GIT_COMMITTER_NAME=Snyk LS Test",
+		"GIT_COMMITTER_EMAIL=snyk-ls-test@example.invalid",
+	)
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(output))
 	runTestGit(t, dir, "remote", "add", "origin", "https://github.com/org/repo.git")
 }
 
 func runTestGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
+	cmd := runTestGitCmd(t, dir, args...)
 	output, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(output))
+}
+
+func runTestGitCmd(t *testing.T, dir string, args ...string) *exec.Cmd {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
+	return cmd
 }

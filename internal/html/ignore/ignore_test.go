@@ -24,6 +24,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/snyk-ls/internal/testsupport"
 )
 
 func TestCanCreateIgnore(t *testing.T) {
@@ -62,16 +64,31 @@ func TestCanCreateIgnore(t *testing.T) {
 func initGitRepo(t *testing.T, dir string) {
 	t.Helper()
 	runGit(t, dir, "init", "--initial-branch=main")
+	runGit(t, dir, "config", "commit.gpgsign", "false")
 	seed := filepath.Join(dir, "seed.txt")
 	require.NoError(t, os.WriteFile(seed, []byte("seed"), 0600))
 	runGit(t, dir, "add", "seed.txt")
-	runGit(t, dir, "-c", "user.email=test@example.com", "-c", "user.name=Test User", "commit", "-m", "init")
+	cmd := gitCommandForTestRepo(dir, "commit", "-m", "init")
+	cmd.Env = append(cmd.Env,
+		"GIT_AUTHOR_NAME=Snyk LS Test",
+		"GIT_AUTHOR_EMAIL=snyk-ls-test@example.invalid",
+		"GIT_COMMITTER_NAME=Snyk LS Test",
+		"GIT_COMMITTER_EMAIL=snyk-ls-test@example.invalid",
+	)
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(output))
 }
 
 func runGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
+	cmd := gitCommandForTestRepo(dir, args...)
 	output, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(output))
+}
+
+func gitCommandForTestRepo(dir string, args ...string) *exec.Cmd {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
+	return cmd
 }
