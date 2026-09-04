@@ -52,3 +52,56 @@ Tests use `testify` with a table-driven style (`tests := []struct{...}`). `INTEG
 - Never push without asking first, and never force-push. Regularly fetch `main` and offer to merge it into the working branch.
 - After pushing, offer to open a draft PR using `.github/pull_request_template.md` (or update the existing PR description) with a title/description generated from the diff against `main`.
 - Keep `./docs` up to date; document tested scenarios and add Mermaid diagrams for new flows.
+
+## Cursor Cloud specific instructions
+
+Durable, non-obvious notes for agents running in the Cursor Cloud Linux VM. The
+update script already runs `go mod download`, so the items below are setup context
+and gotchas rather than install steps to repeat.
+
+- **Pin the exact Go patch version.** `go.mod` needs Go 1.26.x, and with
+  `GOTOOLCHAIN=auto` Go resolves the toolchain from `go.dev`, which is normally
+  outside the egress allowlist. Keep `GOTOOLCHAIN=go1.26.5` set
+  (`go env -w GOTOOLCHAIN=go1.26.5`) so it comes from `proxy.golang.org` instead.
+- **golangci-lint** is installed by the Makefile via a `curl` from
+  `raw.githubusercontent.com`, which is generally reachable here. If that step is
+  ever blocked, install the pinned version from the module proxy into `.bin/`
+  instead — read the version from the Makefile rather than trusting a number
+  written here (it drifts): `grep OVERRIDE_GOCI_LINT_V Makefile`, then
+  `GOBIN=$(pwd)/.bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@<that version>`.
+- **Build and lint:** `make build` produces `build/snyk-ls.linux.amd64` and
+  `make lint` reports `0 issues`. The binary is an **LSP server speaking JSON-RPC
+  over stdio**, so there is no `--help` to inspect: `./build/snyk-ls.linux.amd64 -v`
+  prints the version, and exercising it means writing a framed `initialize` request
+  to stdin, which returns the server capabilities.
+- **Do not run the full `make test` casually.** It carries a ~90 minute timeout, and
+  its integration and smoke suites need `SNYK_TOKEN` plus network access, so they
+  will not pass in a sandboxed VM. For a quick signal run a unit subset such as
+  `go test ./internal/... ./domain/ide/converter/...`. `make test-js` — which
+  regenerates the Go HTML fixtures and then runs mocha — passes and needs Node.
+- **Node comes from nvm, not `/exec-daemon/node`**, which is first on `PATH` but
+  ships no npm. Prepend `PATH="$HOME/.nvm/versions/node/v22.22.3/bin:$PATH"` before
+  `make test-js`; nvm is not auto-sourced in non-interactive shells.
+- **Probe egress instead of trusting a host list.** The allowlist changes between
+  runs, so treat any reachable/blocked list — including in older revisions of this
+  section — as stale. Matching is per hostname, and a bare entry is apex-exact
+  while `*.example.com` covers subdomains only, so an apex host has to be
+  allowlisted in its own right. A block surfaces as a TLS reset mid-handshake
+  rather than a DNS failure, so check a host directly before concluding anything:
+  `timeout 12 openssl s_client -connect go.dev:443 -servername go.dev </dev/null`.
+  The hosts worth probing for this repo are `proxy.golang.org`, `github.com`,
+  `raw.githubusercontent.com` and `registry.npmjs.org`.
+- **Testing a local change from the `cli` repo:** the `go.mod` replace only ever
+  goes in `cli` — none of the IDE plugin repos are Go modules, so there is no
+  `go.mod` to edit in them. Add `replace github.com/snyk/snyk-ls => <path-to-this-checkout>`
+  to `cli`'s `go.mod` (relative to how the two repos are actually checked out —
+  don't copy a literal `../../snyk-ls` without checking the layout matches), then
+  build `cli` normally. To test an IDE plugin against the change, build that
+  patched `cli` binary and point the plugin's normal CLI-path setting at it.
+  **Do not** point a plugin's `cliPath`/LS-path setting at a standalone
+  `snyk-ls` binary built here directly — plugins expect the CLI's LSP framing,
+  and in one observed Cursor Cloud run pointing at a bare LS binary crashed the
+  plugin rather than producing a useful error (root cause not fully confirmed,
+  but the failure was reproducible and the `cli`-replace approach worked
+  cleanly in a later run). Remove the `replace` line before opening a PR in `cli`;
+  it is a local-only development aid.
