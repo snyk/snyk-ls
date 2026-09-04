@@ -65,9 +65,10 @@ and gotchas rather than install steps to repeat.
   (`go env -w GOTOOLCHAIN=go1.26.5`) so it comes from `proxy.golang.org` instead.
 - **golangci-lint** is installed by the Makefile via a `curl` from
   `raw.githubusercontent.com`, which is generally reachable here. If that step is
-  ever blocked, install the pinned version (`OVERRIDE_GOCI_LINT_V`, currently
-  `v2.10.1`) from the module proxy into `.bin/` instead:
-  `GOBIN=$(pwd)/.bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1`.
+  ever blocked, install the pinned version from the module proxy into `.bin/`
+  instead — read the version from the Makefile rather than trusting a number
+  written here (it drifts): `grep OVERRIDE_GOCI_LINT_V Makefile`, then
+  `GOBIN=$(pwd)/.bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@<that version>`.
 - **Build and lint:** `make build` produces `build/snyk-ls.linux.amd64` and
   `make lint` reports `0 issues`. The binary is an **LSP server speaking JSON-RPC
   over stdio**, so there is no `--help` to inspect: `./build/snyk-ls.linux.amd64 -v`
@@ -90,3 +91,17 @@ and gotchas rather than install steps to repeat.
   `timeout 12 openssl s_client -connect go.dev:443 -servername go.dev </dev/null`.
   The hosts worth probing for this repo are `proxy.golang.org`, `github.com`,
   `raw.githubusercontent.com` and `registry.npmjs.org`.
+- **Testing a local change from the `cli` repo:** the `go.mod` replace only ever
+  goes in `cli` — none of the IDE plugin repos are Go modules, so there is no
+  `go.mod` to edit in them. Add `replace github.com/snyk/snyk-ls => <path-to-this-checkout>`
+  to `cli`'s `go.mod` (relative to how the two repos are actually checked out —
+  don't copy a literal `../../snyk-ls` without checking the layout matches), then
+  build `cli` normally. To test an IDE plugin against the change, build that
+  patched `cli` binary and point the plugin's normal CLI-path setting at it.
+  **Do not** point a plugin's `cliPath`/LS-path setting at a standalone
+  `snyk-ls` binary built here directly — plugins expect the CLI's LSP framing,
+  and in one observed Cursor Cloud run pointing at a bare LS binary crashed the
+  plugin rather than producing a useful error (root cause not fully confirmed,
+  but the failure was reproducible and the `cli`-replace approach worked
+  cleanly in a later run). Remove the `replace` line before opening a PR in `cli`;
+  it is a local-only development aid.
