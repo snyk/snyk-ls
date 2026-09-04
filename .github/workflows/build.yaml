@@ -44,6 +44,38 @@ jobs:
       - name: Lint source code
         run: make lint
 
+  bdd:
+    name: bdd
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare git
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.longpaths true
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Setup tools (`make tools`)
+        uses: ./.github/actions/setup-tools
+
+      - name: Run BDD feature suite
+        run: make test-bdd
+
+      - name: "Enforce BDD coverage for feat:/fix: commits"
+        if: github.event_name == 'pull_request'
+        env:
+          BDD_GATE_BASE_REF: origin/${{ github.event.pull_request.base.ref }}
+          BDD_GATE_HEAD_REF: ${{ github.event.pull_request.head.sha }}
+        run: .github/scripts/bdd_coverage_gate.sh
+
   integration-tests:
     name: integration-tests
     needs: []
@@ -83,7 +115,7 @@ jobs:
           SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES}}
           INTEG_TESTS: "true"
         run: |
-          export PATH=$PWD/.bin/pact/bin:$PATH
+          export PATH=$PWD/.bin/$(go env GOOS)-$(go env GOARCH)/pact/bin:$PATH
 
           # this is required to be able to test the clipboard
           export DISPLAY=:99
@@ -100,7 +132,7 @@ jobs:
           SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES}}
           INTEG_TESTS: "true"
         run: |
-          export PATH=$PWD/.bin/pact/bin:$PATH
+          export PATH=$PWD/.bin/$(go env GOOS)-$(go env GOARCH)/pact/bin:$PATH
 
           # this is required to be able to test the clipboard
           export DISPLAY=:99
@@ -202,7 +234,7 @@ jobs:
           # by earlier steps via GITHUB_ENV.
         run: |
           export SMOKE_SHARD_${{ matrix.shard }}=1
-          export PATH="$PWD/.bin/pact/bin:$PATH"
+          export PATH="$PWD/.bin/$(go env GOOS)-$(go env GOARCH)/pact/bin:$PATH"
           if [ ${{ matrix.shard }} == 1 ]; then
             export SNYK_TOKEN=${{ secrets.SNYK_TOKEN }}
           elif [ ${{ matrix.shard }} == 2 ]; then
@@ -250,7 +282,7 @@ jobs:
           SNYK_TOKEN_CONSISTENT_IGNORES: ${{secrets.SNYK_TOKEN_CONSISTENT_IGNORES}}
           INTEG_TESTS: "true"
         run: |
-          export PATH=$PWD/.bin/pact/bin:$PATH
+          export PATH=$PWD/.bin/$(go env GOOS)-$(go env GOARCH)/pact/bin:$PATH
 
           # this is required to be able to test the clipboard
           export DISPLAY=:99

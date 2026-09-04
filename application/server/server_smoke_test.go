@@ -18,12 +18,16 @@ package server
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
+	"regexp"
 	"runtime"
 	"runtime/pprof"
 	"strconv"
@@ -51,6 +55,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
+	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
@@ -61,23 +66,38 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
+// codeAPISem limits the number of tests that concurrently use the Snyk Code API
+// within a single shard. Capacity 1 serializes Code scans within a shard to prevent
+// context cancellation races under high parallel load.
+var codeAPISem = make(chan struct{}, 1)
+
+// acquireCodeAPISlot acquires a slot in the Code API semaphore and releases it
+// via t.Cleanup. Call this at the start of any test that triggers a Snyk Code scan.
+func acquireCodeAPISlot(t *testing.T) {
+	t.Helper()
+	codeAPISem <- struct{}{}
+	t.Cleanup(func() { <-codeAPISem })
+}
+
 func Test_SmokeInstanceTest(t *testing.T) {
+	// Note: t.Parallel() omitted — this test holds the Code API semaphore slot for
+	// up to maxIntegTestDuration while waiting for scans; running it in parallel
+	// starves Test_SmokeUncFilePath on Windows (which also needs the slot).
+	endpoint := os.Getenv("SNYK_API")
+	if endpoint == "" {
+		endpoint = "https://api.snyk.io"
+	}
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	ossFile := "package.json"
 	codeFile := "app.js"
-	testutil.CreateDummyProgressListener(t)
-	endpoint := os.Getenv("SNYK_API")
-	if endpoint == "" {
-		t.Setenv("SNYK_API", "https://api.snyk.io")
-	}
 	runSmokeTest(t, engine, tokenService, testsupport.NodejsGoof, "0336589", ossFile, codeFile, true, endpoint, product.ProductOpenSource, product.ProductCode)
 }
 
 func Test_SmokeWorkspaceScan(t *testing.T) {
+	t.Parallel()
 	ossFile := "package.json"
 	iacFile := "main.tf"
 	codeFile := "app.js"
-	testutil.CreateDummyProgressListener(t)
 
 	type test struct {
 		name                 string
@@ -88,11 +108,6 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 		useConsistentIgnores bool
 		hasVulns             bool
 		products             []product.Product
-	}
-
-	endpoint := os.Getenv("SNYK_API")
-	if endpoint == "" {
-		t.Setenv("SNYK_API", "https://api.snyk.io")
 	}
 
 	tests := []test{
@@ -159,6 +174,7 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			tokenSecretName := ""
 			if tc.useConsistentIgnores {
 				tokenSecretName = "SNYK_TOKEN_CONSISTENT_IGNORES"
@@ -171,7 +187,9 @@ func Test_SmokeWorkspaceScan(t *testing.T) {
 }
 
 func Test_SmokePreScanCommand(t *testing.T) {
+	t.Parallel()
 	t.Run("executes pre scan command if configured", func(t *testing.T) {
+		t.Parallel()
 		testsupport.NotOnWindows(t, "we can enable windows if we have the correct error message")
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 		loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
@@ -226,13 +244,16 @@ func Test_SmokePreScanCommand(t *testing.T) {
 }
 
 func Test_SmokeIssueCaching(t *testing.T) {
+	t.Parallel()
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
 	t.Run("adds issues to cache correctly", func(t *testing.T) {
+		t.Parallel()
+		acquireCodeAPISlot(t)
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_1")
-		loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+		loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 		enableOnlyProducts(t, engine, product.ProductOpenSource, product.ProductCode)
 
-		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
+		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService, deps)
 		cloneTargetDirGoofString := (string)(cloneTargetDirGoof)
 		folderGoof := config.GetWorkspace(engine.GetConfiguration()).GetFolderContaining(cloneTargetDirGoof)
 		folderGoofIssueProvider, ok := folderGoof.(snyk.IssueProvider)
@@ -306,15 +327,17 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		//     just-published issues in the IDE — this is the cross-folder leak we explicitly fixed).
 		checkDiagnosticPublishingForCachingSmokeTest(t, jsonRPCRecorder, 1, 1, engine)
 		checkScanResultsPublishingForCachingSmokeTest(t, jsonRPCRecorder, folderTwo, folderGoof, engine)
-		waitForDeltaScan(t, di.ScanStateAggregator())
+		waitForDeltaScan(t, deps.ScanStateAggregator)
 	})
 
 	t.Run("clears issues from cache correctly", func(t *testing.T) {
+		t.Parallel()
+		acquireCodeAPISlot(t)
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_1")
-		loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+		loc, jsonRPCRecorder, deps2 := setupServer(t, engine, tokenService, WithRealDI())
 		enableOnlyProducts(t, engine, product.ProductOpenSource, product.ProductCode)
 
-		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
+		cloneTargetDirGoof := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService, deps2)
 		folderGoof := config.GetWorkspace(engine.GetConfiguration()).GetFolderContaining(cloneTargetDirGoof)
 		folderGoofIssueProvider, ok := folderGoof.(snyk.IssueProvider)
 		require.Truef(t, ok, "Expected to find snyk issue provider")
@@ -351,17 +374,18 @@ func Test_SmokeIssueCaching(t *testing.T) {
 		var emptyHover hover.Result
 		require.NoError(t, response.UnmarshalResult(&emptyHover))
 		require.Empty(t, emptyHover.Contents.Value)
-		waitForDeltaScan(t, di.ScanStateAggregator())
+		waitForDeltaScan(t, deps2.ScanStateAggregator)
 	})
 }
 
 func Test_SmokeExecuteCLICommand(t *testing.T) {
+	t.Parallel()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
-	loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, _, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
 
-	cloneTargetDirGoof := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, engine, tokenService)
+	cloneTargetDirGoof := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, engine, tokenService, deps)
 	folderGoof := config.GetWorkspace(engine.GetConfiguration()).GetFolderContaining(cloneTargetDirGoof)
 
 	// wait till the whole workspace is scanned
@@ -386,6 +410,7 @@ func Test_SmokeExecuteCLICommand(t *testing.T) {
 }
 
 func Test_SmokeLegacyRoutingUnmanagedWithRiskScore(t *testing.T) {
+	t.Parallel()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretNameForRiskScore, "SMOKE_SHARD_1")
 	loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
@@ -588,14 +613,20 @@ func checkDiagnosticPublishingForCachingSmokeTest(
 
 func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.TokenServiceImpl, repo string, commit string, file1 string, file2 string, hasVulns bool, endpoint string, products ...product.Product) {
 	t.Helper()
-	if endpoint != "" && endpoint != "/v1" {
-		t.Setenv("SNYK_API", endpoint)
-	}
+	acquireCodeAPISlot(t)
 	// Allocate temp dir BEFORE setupServer so t.Cleanup LIFO order ensures
 	// the server shuts down before the temp dir is removed (fixes Windows file locking).
 	// TempDirWithRetry adds retry logic for os.RemoveAll to handle lingering file locks.
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	// Build server options: always use real DI; pass the endpoint directly to the
+	// per-server config via WithAPIEndpoint so parallel tests don't interfere with
+	// each other through os.Setenv. Empty or "/v1" endpoints are no-ops (engine
+	// keeps whatever UpdateApiEndpointsOnConfig set as the default).
+	serverOpts := []ServerTestOption{WithRealDI()}
+	if endpoint != "" && endpoint != "/v1" {
+		serverOpts = append(serverOpts, WithAPIEndpoint(endpoint))
+	}
+	loc, jsonRPCRecorder, smokeDeps := setupServer(t, engine, tokenService, serverOpts...)
 	if len(products) == 0 {
 		// Default mirrors the original all-enabled state. Secrets intentionally excluded:
 		// its registered default is false and no callers in this suite require it.
@@ -603,7 +634,7 @@ func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.Tok
 	}
 	enableOnlyProducts(t, engine, products...)
 
-	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, repo, commit, loc, engine, tokenService)
+	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, repo, commit, loc, engine, tokenService, smokeDeps)
 	cloneTargetDirString := (string)(cloneTargetDir)
 
 	waitForScan(t, cloneTargetDirString, engine)
@@ -653,7 +684,7 @@ func runSmokeTest(t *testing.T, engine workflow.Engine, tokenService *config.Tok
 		checkOnlyOneQuickFixCodeAction(t, jsonRPCRecorder, cloneTargetDirString, loc)
 		checkOnlyOneCodeLens(t, jsonRPCRecorder, cloneTargetDirString, loc)
 	}
-	waitForDeltaScan(t, di.ScanStateAggregator())
+	waitForDeltaScan(t, smokeDeps.ScanStateAggregator)
 }
 
 func receivedFolderConfigNotification(t *testing.T, notifications []jrpc2.Request, cloneTargetDir types.FilePath) bool {
@@ -953,11 +984,18 @@ func checkForScanParamsWithMaxWait(t *testing.T, jsonRPCRecorder *testsupport.Js
 func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, p product.Product, folderPath types.FilePath) []types.ScanIssue {
 	t.Helper()
 
-	var issueList []types.ScanIssue
+	// A publishDiagnostics notification replaces, not adds to, the previously published
+	// diagnostics for its URI (LSP spec) — only the latest notification per URI counts.
+	latestByURI := make(map[sglsp.DocumentURI]types.PublishDiagnosticsParams)
 	notifications := jsonRPCRecorder.FindNotificationsByMethod("textDocument/publishDiagnostics")
 	for _, n := range notifications {
 		diagnosticsParams := types.PublishDiagnosticsParams{}
 		_ = n.UnmarshalParams(&diagnosticsParams)
+		latestByURI[diagnosticsParams.URI] = diagnosticsParams
+	}
+
+	var issueList []types.ScanIssue
+	for _, diagnosticsParams := range latestByURI {
 		for _, diagnostic := range diagnosticsParams.Diagnostics {
 			diagnosticCode, ok := diagnostic.Code.(string)
 			if ok && diagnosticCode == "Snyk Error" {
@@ -1003,12 +1041,23 @@ func checkAutofixDiffs(t *testing.T, engine workflow.Engine, issueList []types.S
 			continue
 		}
 		waitForNetwork(engine)
+
+		// Setup: prime AiFixHandler.currentIssueId for this issue before triggering the
+		// async fix (see resetAiFixCacheIfDifferent in infrastructure/code/ai_fix_handler.go).
 		_, err := loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
+			Command:   types.GenerateIssueDescriptionCommand,
+			Arguments: []any{issue.Id},
+		})
+		require.NoError(t, err)
+
+		// Trigger the async autofix.
+		_, err = loc.Client.Call(t.Context(), "workspace/executeCommand", sglsp.ExecuteCommandParams{
 			Command:   types.CodeFixDiffsCommand,
 			Arguments: []any{issue.Id},
 		})
 		assert.NoError(t, err)
-		// don't check for all issues, just the first
+
+		// Assert: don't check for all issues, just the first.
 		assert.Eventuallyf(t, func() bool {
 			notifications := recorder.FindCallbacksByMethod("window/showDocument")
 			for _, notification := range notifications {
@@ -1018,8 +1067,168 @@ func checkAutofixDiffs(t *testing.T, engine workflow.Engine, issueList []types.S
 			}
 			return false
 		}, 30*time.Second, time.Millisecond, "failed to get autofix diffs")
+
+		// Assert the explanation passthrough from code-client-go reaches the client.
+		checkAutofixExplanation(t, engine, loc, issue.Id)
 		break
 	}
+}
+
+// sectionShown reports whether the named section's outer tag carries a "show" class,
+// i.e. the template rendered it visible rather than "hidden" - the same signal the
+// client's own CSS relies on to reveal a section.
+func sectionShown(htmlContent, sectionID string) bool {
+	re := regexp.MustCompile(`id="` + regexp.QuoteMeta(sectionID) + `"[^>]*class="[^"]*\bshow\b[^"]*"`)
+	return re.MatchString(htmlContent)
+}
+
+// sectionTagPresent reports whether the named section's opening tag carries the
+// show/hidden toggle class sectionShown depends on - checking for either token, not
+// just "show", since the section is still hidden at preflight time. Used as a preflight
+// check so a template markup change fails fast with a clear message instead of a
+// misleading timeout.
+func sectionTagPresent(htmlContent, sectionID string) bool {
+	re := regexp.MustCompile(`id="` + regexp.QuoteMeta(sectionID) + `"[^>]*class="[^"]*\b(show|hidden)\b[^"]*"`)
+	return re.MatchString(htmlContent)
+}
+
+// autofixSuggestionsFromHtml extracts the JSON blob the AI-fix panel embeds for the
+// client-side JS to consume (see details.html's #suggestionDiv), decoding it into just
+// the field this test cares about. This is the same wire content the client receives -
+// no internal Go types are involved.
+func autofixSuggestionsFromHtml(t *testing.T, htmlContent string) []struct {
+	Explanation string `json:"explanation"`
+} {
+	t.Helper()
+	const marker = `id="suggestionDiv" class="hidden">`
+	start := strings.Index(htmlContent, marker)
+	require.NotEqualf(t, -1, start, "suggestionDiv not found in issue description HTML")
+	rest := htmlContent[start+len(marker):]
+	end := strings.Index(rest, "</div>")
+	require.NotEqualf(t, -1, end, "suggestionDiv not closed in issue description HTML")
+	blob := strings.TrimSpace(html.UnescapeString(rest[:end]))
+
+	var suggestions []struct {
+		Explanation string `json:"explanation"`
+	}
+	if blob == "{}" {
+		// No suggestions were generated for this issue - a legitimate outcome, distinct
+		// from whether the explanation passthrough works.
+		return suggestions
+	}
+	require.NoErrorf(t, json.Unmarshal([]byte(blob), &suggestions), "failed to decode autofix suggestions from issue description HTML")
+	return suggestions
+}
+
+// fetchIssueDescriptionHtml fetches the rendered issue description HTML via the same
+// workspace/executeCommand call the client makes.
+func fetchIssueDescriptionHtml(t *testing.T, ctx context.Context, loc server.Local, issueId string) (string, error) {
+	t.Helper()
+	resp, err := loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		Command:   types.GenerateIssueDescriptionCommand,
+		Arguments: []any{issueId},
+	})
+	if err != nil {
+		return "", err
+	}
+	var htmlContent string
+	if err = resp.UnmarshalResult(&htmlContent); err != nil {
+		return "", err
+	}
+	return htmlContent, nil
+}
+
+// pollForAutofixTerminalHtml polls the rendered issue description HTML until the
+// success or error section becomes visible, or the timeout elapses.
+func pollForAutofixTerminalHtml(t *testing.T, loc server.Local, issueId string) string {
+	t.Helper()
+
+	// Using a context timeout instead of assert.Eventually: Eventually spawns a new
+	// goroutine per tick without waiting for the previous one to finish, so a slow tick
+	// (a real LSP round-trip can outlast the tick interval) can leave a goroutine
+	// calling t.Logf/t.Helper() after the test has already finished, which panics.
+	// Polling in a single goroutine also means latestHtml/lastErr below need no
+	// synchronization.
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Minute)
+	defer cancel()
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	var latestHtml string
+	var lastErr error
+	poll := func() bool {
+		pageHtml, err := fetchIssueDescriptionHtml(t, ctx, loc, issueId)
+		if err != nil {
+			if lastErr == nil || err.Error() != lastErr.Error() {
+				t.Logf("checkAutofixExplanation: poll error for issue %s (will keep retrying): %v", issueId, err)
+			}
+			lastErr = err
+			return false
+		}
+		latestHtml = pageHtml
+		return sectionShown(pageHtml, "fixes-section") || sectionShown(pageHtml, "fixes-error-section")
+	}
+
+	if poll() {
+		return latestHtml
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("autofix for issue %s never reached a terminal state (last poll error: %v)", issueId, lastErr)
+		case <-ticker.C:
+			if poll() {
+				return latestHtml
+			}
+		}
+	}
+}
+
+// checkAutofixExplanation asserts the AI explanation reaches the client via the
+// rendered issue description HTML, and cross-checks AiFixHandler's internal state for a
+// real error message if autofix failed.
+func checkAutofixExplanation(t *testing.T, engine workflow.Engine, loc server.Local, issueId string) {
+	t.Helper()
+
+	// Setup: fail fast if the template markup this test depends on has changed shape,
+	// rather than hitting the misleading 5-minute timeout below. Bounded so a hung
+	// call fails fast too, instead of running out the default go test timeout.
+	preflightCtx, preflightCancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer preflightCancel()
+	preflightHtml, err := fetchIssueDescriptionHtml(t, preflightCtx, loc, issueId)
+	require.NoErrorf(t, err, "failed to fetch issue description HTML for issue %s", issueId)
+	require.Truef(t, sectionTagPresent(preflightHtml, "fixes-section"), "template markup changed: fixes-section id/class structure not found")
+	require.Truef(t, sectionTagPresent(preflightHtml, "fixes-error-section"), "template markup changed: fixes-error-section id/class structure not found")
+
+	// Poll until autofix reaches a terminal state.
+	latestHtml := pollForAutofixTerminalHtml(t, loc, issueId)
+
+	// Assert against AiFixHandler's internal state first, since it carries the real
+	// error text if autofix failed.
+	// Safe to pass nil for featureFlagService: the priming calls in checkAutofixDiffs
+	// (via GenerateIssueDescriptionCommand) already construct the singleton with a real
+	// service before this is called.
+	htmlRenderer, err := code.GetHTMLRenderer(engine, nil)
+	require.NoError(t, err)
+	aiFixHandler := htmlRenderer.AiFixHandler
+	require.NoErrorf(t, aiFixHandler.GetAiFixDiffError(), "autofix failed for issue %s", issueId)
+
+	// Assert the client-visible HTML also shows no failure.
+	require.Falsef(t, sectionShown(latestHtml, "fixes-error-section"), "autofix failed for issue %s", issueId)
+
+	internalSuggestions := aiFixHandler.GetAiFixDiffResult()
+	if len(internalSuggestions) == 0 {
+		// A legitimate outcome (codeFixDiffs.handleResponse treats "no good fix found"
+		// as AiFixSuccess with no suggestions) - unrelated to whether the explanation
+		// passthrough works, so there's nothing to assert here.
+		t.Logf("autofix for issue %s completed successfully but produced no suggestions", issueId)
+		return
+	}
+
+	htmlSuggestions := autofixSuggestionsFromHtml(t, latestHtml)
+	require.NotEmptyf(t, htmlSuggestions, "internal state has %d suggestion(s) but none reached the rendered HTML", len(internalSuggestions))
+	assert.NotEmptyf(t, internalSuggestions[0].Explanation, "autofix suggestion %s has no explanation in AiFixHandler's internal state", internalSuggestions[0].FixId)
+	assert.NotEmptyf(t, htmlSuggestions[0].Explanation, "autofix suggestion %s has no explanation in the client-visible HTML", internalSuggestions[0].FixId)
 }
 
 func isNotStandardRegion(engine workflow.Engine) bool {
@@ -1052,9 +1261,9 @@ func enableOnlyProducts(t *testing.T, engine workflow.Engine, products ...produc
 	}
 }
 
-func setupRepoAndInitialize(t *testing.T, repo string, commit string, manifestFile string, loc server.Local, engine workflow.Engine, tokenService *config.TokenServiceImpl) types.FilePath {
+func setupRepoAndInitialize(t *testing.T, repo string, commit string, manifestFile string, loc server.Local, engine workflow.Engine, tokenService *config.TokenServiceImpl, extraDeps ...di.Dependencies) types.FilePath {
 	t.Helper()
-	return setupRepoAndInitializeInDir(t, types.FilePath(testutil.TempDirWithRetry(t)), repo, commit, loc, engine, tokenService)
+	return setupRepoAndInitializeInDir(t, types.FilePath(testutil.TempDirWithRetry(t)), repo, commit, loc, engine, tokenService, extraDeps...)
 }
 
 // setupRepoAndInitializeInDir clones a repo into the given rootDir and initializes the server with it.
@@ -1063,13 +1272,21 @@ func setupRepoAndInitialize(t *testing.T, repo string, commit string, manifestFi
 //
 // When repo is NodejsGoof and sharedGoofDir is populated by TestMain, this uses copyGoofDir
 // (a fast local clone) instead of a network clone.
-func setupRepoAndInitializeInDir(t *testing.T, rootDir types.FilePath, repo string, commit string, loc server.Local, engine workflow.Engine, tokenService *config.TokenServiceImpl) types.FilePath {
+func setupRepoAndInitializeInDir(t *testing.T, rootDir types.FilePath, repo string, commit string, loc server.Local, engine workflow.Engine, tokenService *config.TokenServiceImpl, extraDeps ...di.Dependencies) types.FilePath {
 	t.Helper()
 
 	// Wait for scans to complete before temp dir removal (LIFO order).
 	// This prevents Windows file locking issues where HTTP requests are still in flight during cleanup.
+	// When extraDeps is omitted the wait is skipped — callers that omit deps must disable all
+	// scanning products so no in-flight requests can hold file locks.
+	var agg scanstates.Aggregator
+	if len(extraDeps) > 0 {
+		agg = extraDeps[0].ScanStateAggregator
+	}
 	t.Cleanup(func() {
-		waitForAllScansToComplete(t, di.ScanStateAggregator())
+		if agg != nil {
+			waitForAllScansToComplete(t, agg)
+		}
 	})
 
 	var cloneTargetDir types.FilePath
@@ -1223,26 +1440,30 @@ func checkFeatureFlagStatus(t *testing.T, engine workflow.Engine, loc *server.Lo
 }
 
 func Test_SmokeSnykCodeFileScan(t *testing.T) {
+	t.Parallel()
+	acquireCodeAPISlot(t)
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductCode)
 
-	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, engine, tokenService)
+	cloneTargetDir := setupRepoAndInitializeInDir(t, repoTempDir, testsupport.NodejsGoof, "0336589", loc, engine, tokenService, deps)
 	cloneTargetDirString := string(cloneTargetDir)
 
 	testPath := types.FilePath(filepath.Join(cloneTargetDirString, "app.js"))
 
 	_ = textDocumentDidSave(t, &loc, testPath)
 
-	assert.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), 2*time.Minute, time.Millisecond)
-	waitForDeltaScan(t, di.ScanStateAggregator())
+	assert.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), 5*time.Minute, time.Millisecond)
+	waitForDeltaScan(t, deps.ScanStateAggregator)
 }
 
 func Test_SmokeUncFilePath(t *testing.T) {
+	t.Parallel()
+	acquireCodeAPISlot(t)
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
 	testsupport.OnlyOnWindows(t, "testing windows UNC file paths")
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductCode)
 	testutil.EnableSastAndAutoFix(engine)
 	// This test verifies UNC path handling end-to-end including a real Snyk Code scan.
@@ -1262,16 +1483,18 @@ func Test_SmokeUncFilePath(t *testing.T) {
 	testPath := types.FilePath(filepath.Join(uncPath, "app.js"))
 
 	assert.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), maxIntegTestDuration, time.Millisecond)
-	waitForDeltaScan(t, di.ScanStateAggregator())
+	waitForDeltaScan(t, deps.ScanStateAggregator)
 }
 
 func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
+	t.Parallel()
+	acquireCodeAPISlot(t)
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductCode)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
 	testutil.EnableSastAndAutoFix(engine)
-	scanAggregator := di.ScanStateAggregator()
+	scanAggregator := deps.ScanStateAggregator
 	fileWithNewVulns := "vulns.js"
 	cloneTargetDir := copyGoofDir(t)
 	cloneTargetDirString := string(cloneTargetDir)
@@ -1294,11 +1517,13 @@ func Test_SmokeSnykCodeDelta_NewVulns(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
+	t.Parallel()
+	acquireCodeAPISlot(t)
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductCode)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
-	scanAggregator := di.ScanStateAggregator()
+	scanAggregator := deps.ScanStateAggregator
 
 	fileWithNewVulns := "vulns.js"
 	cloneTargetDir := copyGoofDir(t)
@@ -1320,11 +1545,14 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound(t *testing.T) {
 }
 
 func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
+	// Note: t.Parallel() omitted — concurrent non-Code SHARD_3 tests interfere
+	// with Code scan context initialization under high parallel load.
+	acquireCodeAPISlot(t)
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductCode)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
-	scanAggregator := di.ScanStateAggregator()
+	scanAggregator := deps.ScanStateAggregator
 
 	cloneTargetDir := initLocalFixtureRepoFromTestdata(t, []string{
 		"smokefix/java/VulnApp.java",
@@ -1351,12 +1579,14 @@ func Test_SmokeSnykCodeDelta_NoNewIssuesFound_JavaGoof(t *testing.T) {
 // This reproduces the bug where git.PlainOpen fails for subfolders because it doesn't
 // walk up parent directories to find .git. The fix uses PlainOpenWithOptions with DetectDotGit.
 func Test_SmokeSnykCodeDelta_SubfolderWorkspace(t *testing.T) {
+	t.Parallel()
+	acquireCodeAPISlot(t)
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_2")
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	testutil.OnlyEnableCode(t, engine)
 	testutil.EnableSastAndAutoFix(engine)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingScanNetNew), true)
-	scanAggregator := di.ScanStateAggregator()
+	scanAggregator := deps.ScanStateAggregator
 
 	// Use a local copy of the shared goof clone as the git root (fast local clone, no network).
 	gitRoot := copyGoofDir(t)
@@ -1395,10 +1625,13 @@ app.get('/unique_subfolder_test', function(req, res) {
 	assertDeltaNewIssuesInFile(t, jsonRPCRecorder, subfolderPath, newVulnFilePath)
 }
 
+// Note: t.Parallel() omitted — the unmanaged CLI scan (--unmanaged for C/C++ repos)
+// is CPU/IO-intensive and consistently times out at maxIntegTestDuration when competing
+// with parallel shard-1 tests for CLI resources and API bandwidth.
 func Test_SmokeScanUnmanaged(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_1")
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	// OSS-only: unmanaged scan is an OSS-specific path (--unmanaged for C/C++ repos).
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
 	// When scan net-new is on, FilterAndPublishDiagnostics keeps only IsNew issues; enrichment/baseline
@@ -1427,6 +1660,7 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 
 	waitForScan(t, cloneTargetDirString, engine)
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductOpenSource)
+	waitForDeltaScan(t, deps.ScanStateAggregator)
 
 	// Diagnostics can arrive after $/snyk.scan reports Success (same pattern as checkOnlyOneQuickFixCodeAction).
 	var issueList []types.ScanIssue
@@ -1440,6 +1674,13 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 type lspFolderConfigNotifOpts struct {
 	clearNotifications               bool
 	waitForNonEmptyAutoDeterminedOrg bool
+	requireAdditionalParameters      string
+	requireSetting                   *requiredSetting
+}
+
+type requiredSetting struct {
+	name string
+	want any
 }
 
 type lspFolderConfigNotifOption func(*lspFolderConfigNotifOpts)
@@ -1453,6 +1694,16 @@ func lspFolderConfigClearAfter(clearNotifications bool) lspFolderConfigNotifOpti
 // validators (LDX-Sync can populate folder configs before autoDeterminedOrg is ready).
 func lspFolderConfigWaitForAutoDeterminedOrg() lspFolderConfigNotifOption {
 	return func(o *lspFolderConfigNotifOpts) { o.waitForNonEmptyAutoDeterminedOrg = true }
+}
+
+func lspFolderConfigRequireAdditionalParameters(want string) lspFolderConfigNotifOption {
+	return func(o *lspFolderConfigNotifOpts) { o.requireAdditionalParameters = want }
+}
+
+// lspFolderConfigRequireSettingValue gates the wait on a notification that already reflects
+// the change the caller just made, so a notification emitted before it is skipped.
+func lspFolderConfigRequireSettingValue(name string, want any) lspFolderConfigNotifOption {
+	return func(o *lspFolderConfigNotifOpts) { o.requireSetting = &requiredSetting{name: name, want: want} }
 }
 
 func parseLspFolderConfigNotifOpts(opts ...lspFolderConfigNotifOption) lspFolderConfigNotifOpts {
@@ -1547,6 +1798,67 @@ func folderConfigNotificationMatchesValidators(
 	return true
 }
 
+// folderConfigsCarryAdditionalParameters gates a notification on the additional_parameters
+// value the caller's own trigger just sent, so a notification emitted before that trigger
+// is skipped rather than mistaken for the response to it.
+func folderConfigsCarryAdditionalParameters(
+	param types.LspConfigurationParam,
+	validators map[types.FilePath]func(types.LspFolderConfig),
+	want string,
+) bool {
+	if want == "" {
+		return true
+	}
+	for wantPath := range validators {
+		matched := false
+		for _, fc := range param.FolderConfigs {
+			if !folderConfigPathsMatch(fc.FolderPath, wantPath) {
+				continue
+			}
+			setting := fc.Settings[types.SettingAdditionalParameters]
+			if setting == nil {
+				continue
+			}
+			values, ok := setting.Value.([]any)
+			if !ok || len(values) != 1 || values[0] != want {
+				continue
+			}
+			matched = true
+			break
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
+}
+
+func folderConfigsCarrySetting(
+	param types.LspConfigurationParam,
+	validators map[types.FilePath]func(types.LspFolderConfig),
+	want *requiredSetting,
+) bool {
+	if want == nil {
+		return true
+	}
+	for wantPath := range validators {
+		matched := false
+		for _, fc := range param.FolderConfigs {
+			if !folderConfigPathsMatch(fc.FolderPath, wantPath) {
+				continue
+			}
+			if setting := fc.Settings[want.name]; setting != nil && reflect.DeepEqual(setting.Value, want.want) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
+}
+
 // tryParseLatestMatchingFolderConfig walks notifications newest-first and returns the first
 // $/snyk.configuration payload that satisfies cfg (including optional autoDeterminedOrg wait).
 func tryParseLatestMatchingFolderConfig(
@@ -1567,6 +1879,12 @@ func tryParseLatestMatchingFolderConfig(
 				continue
 			}
 		}
+		if !folderConfigsCarryAdditionalParameters(param, validators, cfg.requireAdditionalParameters) {
+			continue
+		}
+		if !folderConfigsCarrySetting(param, validators, cfg.requireSetting) {
+			continue
+		}
 		return param, true
 	}
 	return types.LspConfigurationParam{}, false
@@ -1577,6 +1895,7 @@ func countValidatedFolderConfigs(
 	validators map[types.FilePath]func(types.LspFolderConfig),
 ) int {
 	validationsCount := 0
+	// Fast path when callers pass exactly one folder config and one validator; not required for correctness.
 	if len(lastConfigParam.FolderConfigs) == 1 && len(validators) == 1 {
 		fc := lastConfigParam.FolderConfigs[0]
 		for wantPath, onlyValidator := range validators {
@@ -1635,6 +1954,7 @@ func requireLspFolderConfigNotification(t *testing.T, jsonRpcRecorder *testsuppo
 }
 
 func Test_SmokeOrgSelection(t *testing.T) {
+	t.Parallel()
 	setupOrgSelectionTest := func(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder, types.FilePath, types.InitializeParams) {
 		t.Helper()
 		engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_3")
@@ -1659,6 +1979,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	}
 
 	t.Run("authenticated - takes given non-default org, sends folder config after init", func(t *testing.T) {
+		t.Parallel()
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		preferredOrg := "non-default"
 
@@ -1685,6 +2006,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	})
 
 	t.Run("authenticated - determines org when nothing is given", func(t *testing.T) {
+		t.Parallel()
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 
 		// No folder config needed - LS will auto-determine org
@@ -1703,6 +2025,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	})
 
 	t.Run("authenticated - global default org results in auto mode", func(t *testing.T) {
+		t.Parallel()
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 
 		initParams.InitializationOptions.FolderConfigs = []types.LspFolderConfig{
@@ -1724,6 +2047,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	})
 
 	t.Run("authenticated - global non-default org is preserved", func(t *testing.T) {
+		t.Parallel()
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 
 		expectedOrg := "00000000-0000-0000-0000-000000000001"
@@ -1746,6 +2070,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	})
 
 	t.Run("authenticated - adding folder with existing folderConfig. Making sure PreferredOrg is preserved", func(t *testing.T) {
+		t.Parallel()
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 
 		ensureInitialized(t, engine, tokenService, loc, initParams, nil)
@@ -1796,6 +2121,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	})
 
 	t.Run("authenticated - user blanks folder-level org, so LS uses global org", func(t *testing.T) {
+		t.Parallel()
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {
 			s, _ := folderconfig.ConfigFileFromConfig(engine.GetConfiguration())
@@ -1859,12 +2185,17 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	})
 
 	t.Run("unauthenticated - re-adding folder with changing the config through workspace/didChangeConfiguration", func(t *testing.T) {
+		t.Parallel()
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {
 			s, _ := folderconfig.ConfigFileFromConfig(engine.GetConfiguration())
 			_ = os.Remove(s)
 		})
-		t.Setenv("SNYK_TOKEN", "")
+		// Blank the token on this test's own engine config rather than in the
+		// process environment: the parallel SHARD_3 siblings read SNYK_TOKEN
+		// lazily at test-body time, so os.Setenv("SNYK_TOKEN", "") here races
+		// them into an unauthenticated state.
+		tokenService.SetToken(engine.GetConfiguration(), "")
 
 		ensureInitialized(t, engine, tokenService, loc, initParams, nil)
 
@@ -1923,6 +2254,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	})
 
 	t.Run("authenticated - user opts in to automatic org selection", func(t *testing.T) {
+		t.Parallel()
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {
 			s, _ := folderconfig.ConfigFileFromConfig(engine.GetConfiguration())
@@ -1971,7 +2303,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 				require.False(t, fc.Settings[types.SettingOrgSetByUser].Value.(bool), "OrgSetByUser should be false after user opts-in to auto org selection")
 				// PreferredOrg may be inherited from global org in auto mode
 			},
-		})
+		}, lspFolderConfigRequireSettingValue(types.SettingOrgSetByUser, false))
 		// When OrgSetByUser is false, effective org is AutoDeterminedOrg (if LDX-Sync succeeded) or global org (fallback)
 		// Either way, it should NOT be the user's initialOrg anymore
 		effectiveOrg := config.FolderOrganization(engine.GetConfiguration(), repo, engine.GetLogger())
@@ -1980,6 +2312,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 	})
 
 	t.Run("authenticated - user opts out of automatic org selection", func(t *testing.T) {
+		t.Parallel()
 		engine, tokenService, loc, jsonRpcRecorder, repo, initParams := setupOrgSelectionTest(t)
 		t.Cleanup(func() {
 			s, _ := folderconfig.ConfigFileFromConfig(engine.GetConfiguration())
@@ -2028,8 +2361,11 @@ func Test_SmokeOrgSelection(t *testing.T) {
 func ensureInitialized(t *testing.T, engine workflow.Engine, tokenService *config.TokenServiceImpl, loc server.Local, initParams types.InitializeParams, preInitSetupFunc func(workflow.Engine)) {
 	t.Helper()
 	if os.Getenv("SNYK_LOG_LEVEL") == "" {
+		// Set the in-process log level to "info" when no env-level override is
+		// active. config.SetLogLevel writes the zerolog global atomically; there
+		// is no need to propagate this through os.Setenv because SetupLogging
+		// (called immediately below) reads GetLogLevel() for the in-process level.
 		config.SetLogLevel(zerolog.LevelInfoValue)
-		t.Setenv("SNYK_LOG_LEVEL", config.GetLogLevel())
 	}
 	config.SetupLogging(engine, tokenService, nil) // we don't need to send logs to the client
 	engineConfig := engine.GetConfiguration()
@@ -2037,7 +2373,6 @@ func ensureInitialized(t *testing.T, engine workflow.Engine, tokenService *confi
 
 	documentURI := initParams.WorkspaceFolders[0].Uri
 	commitHash := getCurrentCommitHash(t, uri.PathFromUri(documentURI))
-	config.Version = commitHash
 
 	// Sanitize test name to make it safe for file system paths
 	sanitizedTestName := testsupport.PathSafeTestName(t)
@@ -2314,13 +2649,14 @@ const monorepoRealScanPhaseMaxWait = 90 * time.Minute
 
 // monorepoRealScanHarness holds state for Test_SmokeRealScanMonorepoFixture.
 type monorepoRealScanHarness struct {
-	cloneTarget     types.FilePath
-	codeLeafFolders int
-	ossLeafFolders  int
-	engine          workflow.Engine
-	tokenService    *config.TokenServiceImpl
-	loc             server.Local
-	jsonRPCRecorder *testsupport.JsonRPCRecorder
+	cloneTarget         types.FilePath
+	codeLeafFolders     int
+	ossLeafFolders      int
+	engine              workflow.Engine
+	tokenService        *config.TokenServiceImpl
+	loc                 server.Local
+	jsonRPCRecorder     *testsupport.JsonRPCRecorder
+	scanStateAggregator scanstates.Aggregator
 }
 
 func setupMonorepoRealScanHarness(t *testing.T) *monorepoRealScanHarness {
@@ -2336,14 +2672,21 @@ func setupMonorepoRealScanHarness(t *testing.T) *monorepoRealScanHarness {
 	benchmark.AssertMonorepoFixtureLayout(t, repoDir, nCode, nOSS)
 	cloneTarget := types.FilePath(repoDir)
 
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	// The benchmark defaults to prod. Passing it per-server keeps it out of the process
+	// environment, where it would leak into every other test in the binary.
+	endpoint := os.Getenv("SNYK_API")
+	if endpoint == "" {
+		endpoint = "https://api.snyk.io"
+	}
+
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI(), WithAPIEndpoint(endpoint))
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 
 	// Register after setupServer so this cleanup runs before shutdown (LIFO); capture aggregator
-	// because di.ScanStateAggregator() is not reliable after shutdown has run.
-	scanAgg := di.ScanStateAggregator()
+	// from deps so it remains valid after shutdown.
+	scanAgg := deps.ScanStateAggregator
 	require.NotNil(t, scanAgg)
 	t.Cleanup(func() {
 		waitForAllScansToComplete(t, scanAgg)
@@ -2353,13 +2696,14 @@ func setupMonorepoRealScanHarness(t *testing.T) *monorepoRealScanHarness {
 	ensureInitialized(t, engine, tokenService, loc, initParams, nil)
 
 	return &monorepoRealScanHarness{
-		cloneTarget:     cloneTarget,
-		codeLeafFolders: nCode,
-		ossLeafFolders:  nOSS,
-		engine:          engine,
-		tokenService:    tokenService,
-		loc:             loc,
-		jsonRPCRecorder: jsonRPCRecorder,
+		cloneTarget:         cloneTarget,
+		codeLeafFolders:     nCode,
+		ossLeafFolders:      nOSS,
+		engine:              engine,
+		tokenService:        tokenService,
+		loc:                 loc,
+		jsonRPCRecorder:     jsonRPCRecorder,
+		scanStateAggregator: scanAgg,
 	}
 }
 
@@ -2385,10 +2729,10 @@ func runMonorepoRealScanScanPhase(t *testing.T, h *monorepoRealScanHarness) {
 			h.codeLeafFolders+h.ossLeafFolders, monorepoPerLeafDiagnosticCoverageMaxLeaves)
 	}
 
-	waitUntilDeltaScanComplete(t, di.ScanStateAggregator(), monorepoRealScanPhaseMaxWait, true)
+	waitUntilDeltaScanComplete(t, h.scanStateAggregator, monorepoRealScanPhaseMaxWait, true)
 
 	if os.Getenv(testsupport.BenchmarkRealScanMonorepoProfileDirEnvVar) != "" {
-		waitForAllScansToComplete(t, di.ScanStateAggregator())
+		waitForAllScansToComplete(t, h.scanStateAggregator)
 		h.jsonRPCRecorder.DrainRecordedTrafficForProfiling()
 		runtime.GC()
 	}
@@ -2451,11 +2795,6 @@ func monorepoLeafFoldersHaveMatchingDiagnostics(jsonRPCRecorder *testsupport.Jso
 func Test_SmokeRealScanMonorepoFixture(t *testing.T) {
 	testsupport.SkipUnlessBenchmarkRealScanMonorepo(t)
 
-	testutil.CreateDummyProgressListener(t)
-	if os.Getenv("SNYK_API") == "" {
-		t.Setenv("SNYK_API", "https://api.snyk.io")
-	}
-
 	h := setupMonorepoRealScanHarness(t)
 	withMonorepoRealScanPprof(t, os.Getenv(testsupport.BenchmarkRealScanMonorepoProfileDirEnvVar), func() {
 		runMonorepoRealScanScanPhase(t, h)
@@ -2486,6 +2825,9 @@ func monorepoBenchmarkFixtureScale(t *testing.T) (codeFolders, ossFolders int) {
 func initializeGitRepoForMonorepoBenchmark(t *testing.T, repoDir string) {
 	t.Helper()
 	cmd := gitCommandForMonorepoBenchmark(repoDir, "init", "--initial-branch=main")
+	require.NoError(t, cmd.Run())
+
+	cmd = gitCommandForMonorepoBenchmark(repoDir, "config", "commit.gpgsign", "false")
 	require.NoError(t, cmd.Run())
 
 	cmd = gitCommandForMonorepoBenchmark(repoDir, "add", ".")
@@ -2538,14 +2880,13 @@ func substituteRemyFlow(t *testing.T, engine workflow.Engine) {
 	// Point SettingCliPath at the preview dir so the downloader writes there.
 	conf.Set(configresolver.UserGlobalKey(types.SettingCliPath), previewCLIPath)
 	er := error_reporting.NewTestErrorReporter(engine)
-	resolver := testutil.DefaultConfigResolver(engine)
 	cliRelease := install.NewCLIRelease(engine, func() *http.Client { return http.DefaultClient })
 	release, err := cliRelease.GetLatestReleaseByChannel("preview", false)
 	if err != nil {
 		t.Skipf("skipping: preview CLI release fetch failed (no network?): %v", err)
 	}
-	downloader := install.NewDownloader(engine, er, func() *http.Client { return http.DefaultClient }, resolver)
-	if err = downloader.Download(release, false); err != nil {
+	downloader := install.NewDownloader(engine, er, func() *http.Client { return http.DefaultClient }, testutil.NewDrainedProgressTracker())
+	if _, err = downloader.Download(release, previewCLIPath, false); err != nil {
 		t.Skipf("skipping: preview CLI download failed (no network?): %v", err)
 	}
 
@@ -2598,7 +2939,6 @@ func Test_Smoke_RemediationAgent_CodeAction(t *testing.T) {
 	}
 
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
-	testutil.CreateDummyProgressListener(t)
 
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
 	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
@@ -2708,16 +3048,15 @@ func Test_Smoke_RemediationAgent_FixFolder(t *testing.T) {
 	}
 
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
-	testutil.CreateDummyProgressListener(t)
 
 	repoTempDir := types.FilePath(testutil.TempDirWithRetry(t))
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	enableOnlyProducts(t, engine, product.ProductCode)
 
 	// Register the scan-completion cleanup so temp-dir removal races with in-flight
 	// HTTP requests are avoided (same pattern as setupRepoAndInitializeInDir).
 	t.Cleanup(func() {
-		waitForAllScansToComplete(t, di.ScanStateAggregator())
+		waitForAllScansToComplete(t, deps.ScanStateAggregator)
 	})
 	cloneTargetDir := copyGoofDirInto(t, string(repoTempDir))
 

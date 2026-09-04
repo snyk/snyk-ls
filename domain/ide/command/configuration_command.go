@@ -76,18 +76,24 @@ func ConstructSettingsFromConfig(engine workflow.Engine, r types.ConfigResolverI
 
 	severity := r.FilterSeverityForFolder(nil)
 	issueView := r.IssueViewOptionsForFolder(nil)
+	secureAtInceptionExecutionFrequency := r.GetString(types.SettingSecureAtInceptionExecutionFreq, nil)
+	if secureAtInceptionExecutionFrequency == "" {
+		secureAtInceptionExecutionFrequency = "Manual"
+	}
 
 	m := map[string]any{
-		types.SettingToken:                config.GetToken(conf),
-		types.SettingApiEndpoint:          r.GetString(types.SettingApiEndpoint, nil),
-		types.SettingAuthenticationMethod: r.GetString(types.SettingAuthenticationMethod, nil),
-		types.SettingProxyInsecure:        r.GetBool(types.SettingProxyInsecure, nil),
-		types.SettingSnykOssEnabled:       r.GetBool(types.SettingSnykOssEnabled, nil),
-		types.SettingSnykCodeEnabled:      r.GetBool(types.SettingSnykCodeEnabled, nil),
-		types.SettingSnykIacEnabled:       r.GetBool(types.SettingSnykIacEnabled, nil),
-		types.SettingSnykSecretsEnabled:   r.GetBool(types.SettingSnykSecretsEnabled, nil),
-		types.SettingScanAutomatic:        r.GetBool(types.SettingScanAutomatic, nil),
-		types.SettingScanNetNew:           r.GetBool(types.SettingScanNetNew, nil),
+		types.SettingToken:                          config.GetToken(conf),
+		types.SettingApiEndpoint:                    r.GetString(types.SettingApiEndpoint, nil),
+		types.SettingAuthenticationMethod:           r.GetString(types.SettingAuthenticationMethod, nil),
+		types.SettingProxyInsecure:                  r.GetBool(types.SettingProxyInsecure, nil),
+		types.SettingSnykOssEnabled:                 r.GetBool(types.SettingSnykOssEnabled, nil),
+		types.SettingSnykCodeEnabled:                r.GetBool(types.SettingSnykCodeEnabled, nil),
+		types.SettingSnykIacEnabled:                 r.GetBool(types.SettingSnykIacEnabled, nil),
+		types.SettingSnykSecretsEnabled:             r.GetBool(types.SettingSnykSecretsEnabled, nil),
+		types.SettingScanAutomatic:                  r.GetBool(types.SettingScanAutomatic, nil),
+		types.SettingScanNetNew:                     r.GetBool(types.SettingScanNetNew, nil),
+		types.SettingAutoConfigureMcpServer:         r.GetBool(types.SettingAutoConfigureMcpServer, nil),
+		types.SettingSecureAtInceptionExecutionFreq: secureAtInceptionExecutionFrequency,
 		// Display the org explicitly set by the user (if they set one), not the UUID it resolves to.
 		types.SettingOrganization:           types.GetGlobalString(conf, types.SettingLastSetOrganization),
 		types.SettingSeverityFilterCritical: severity.Critical,
@@ -107,6 +113,9 @@ func ConstructSettingsFromConfig(engine workflow.Engine, r types.ConfigResolverI
 		// Env is stored as string under SettingAdditionalEnvironment UserGlobalKey (written by applyEnvironment).
 		types.SettingAdditionalParameters:  strings.Join(r.GetStringSlice(types.SettingCliAdditionalOssParameters, nil), " "),
 		types.SettingAdditionalEnvironment: r.GetString(types.SettingAdditionalEnvironment, nil),
+		types.SettingLlmProvider:           r.GetString(types.SettingLlmProvider, nil),
+		types.SettingLlmBaseUrl:            r.GetString(types.SettingLlmBaseUrl, nil),
+		types.SettingLlmModel:              r.GetString(types.SettingLlmModel, nil),
 	}
 
 	folderConfigs := collectFolderConfigs(conf, logger, engine, r)
@@ -168,6 +177,7 @@ func computeEffectiveConfig(fc *types.FolderConfig) map[string]types.EffectiveVa
 		types.SettingSnykIacEnabled,
 		types.SettingSnykSecretsEnabled,
 		types.SettingRiskScoreThreshold,
+		types.SettingAmbientCanaryAutonomy,
 	}
 
 	for _, settingName := range orgScopeSettings {

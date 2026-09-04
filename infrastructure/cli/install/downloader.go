@@ -29,33 +29,38 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/progress"
-	"github.com/snyk/snyk-ls/internal/types"
 )
 
 type Downloader struct {
-	progressTracker *progress.Tracker
-	errorReporter   error_reporting.ErrorReporter
-	httpClient      func() *http.Client
-	engine          workflow.Engine
-	configResolver  types.ConfigResolverInterface
+	progressTask  *progress.Task
+	errorReporter error_reporting.ErrorReporter
+	httpClient    func() *http.Client
+	engine        workflow.Engine
+	removeFile    func(string) error
+	renameFile    func(string, string) error
+	mkdirTemp     func(string, string) (string, error)
 }
 
-func NewDownloader(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, httpClientFunc func() *http.Client, configResolver types.ConfigResolverInterface) *Downloader {
+// The progressTracker must be non-nil and its channel drained: a long download blocks on
+// a full channel and never finishes.
+func NewDownloader(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, httpClientFunc func() *http.Client, progressTracker *progress.Tracker) *Downloader {
 	return &Downloader{
-		progressTracker: progress.NewTracker(true, engine.GetLogger()),
-		errorReporter:   errorReporter,
-		httpClient:      httpClientFunc,
-		engine:          engine,
-		configResolver:  configResolver,
+		progressTask:  progressTracker.New(true),
+		errorReporter: errorReporter,
+		httpClient:    httpClientFunc,
+		engine:        engine,
+		removeFile:    os.Remove,
+		renameFile:    os.Rename,
+		mkdirTemp:     os.MkdirTemp,
 	}
 }
 
 // writeCounter counts the number of bytes written to it.
 type writeCounter struct {
-	total           int64 // total size
-	downloaded      int64 // downloaded # of bytes transferred
-	onProgress      func(downloaded int64, total int64, progressTracker *progress.Tracker)
-	progressTracker *progress.Tracker
+	total        int64 // total size
+	downloaded   int64 // downloaded # of bytes transferred
+	onProgressFn func(downloaded int64, total int64, pb *progress.Task)
+	pb           *progress.Task
 }
 
 // Write implements the io.Writer interface.
@@ -64,29 +69,32 @@ type writeCounter struct {
 func (wc *writeCounter) Write(p []byte) (n int, e error) {
 	n = len(p)
 	wc.downloaded += int64(n)
-	wc.onProgress(wc.downloaded, wc.total, wc.progressTracker)
+	wc.onProgressFn(wc.downloaded, wc.total, wc.pb)
 	return
 }
 
-func newWriter(size int64, progressTracker *progress.Tracker, onProgress func(downloaded, total int64, progressTracker *progress.Tracker)) io.Writer {
-	return &writeCounter{total: size, progressTracker: progressTracker, onProgress: onProgress}
+func newWriter(size int64, pb *progress.Task, onProgressFn func(downloaded, total int64, pb *progress.Task)) io.Writer {
+	return &writeCounter{total: size, pb: pb, onProgressFn: onProgressFn}
 }
 
-func onProgress(downloaded, total int64, progressTracker *progress.Tracker) {
+func onProgress(downloaded, total int64, pb *progress.Task) {
 	percentage := float64(downloaded) / float64(total) * 100
-	progressTracker.Report(int(percentage))
+	pb.Report(int(percentage))
 }
 
 func (d *Downloader) lockFileName() (string, error) {
 	return config.CLIDownloadLockFileName(d.engine.GetConfiguration())
 }
 
-func (d *Downloader) validateDownloadPreconditions(r *Release) error {
+func (d *Downloader) validateDownloadPreconditions(r *Release, cliPath string) error {
 	if r == nil {
 		return fmt.Errorf("release cannot be nil")
 	}
 	if d.httpClient == nil {
 		return fmt.Errorf("http client function is not configured")
+	}
+	if cliPath == "" {
+		return fmt.Errorf("CLI path is not configured")
 	}
 	return nil
 }
@@ -98,10 +106,11 @@ func downloadKind(isUpdate bool) string {
 	return "download"
 }
 
-func (d *Downloader) Download(r *Release, isUpdate bool) error {
-	if err := d.validateDownloadPreconditions(r); err != nil {
-		return err
+func (d *Downloader) Download(r *Release, cliPath string, isUpdate bool) (destinationPath string, err error) {
+	if err = d.validateDownloadPreconditions(r, cliPath); err != nil {
+		return "", err
 	}
+
 	logger := d.engine.GetLogger().With().Str("method", "Download").Logger()
 	kindStr := downloadKind(isUpdate)
 	logger.Debug().Str("release", r.Version).Msgf("attempting %s", kindStr)
@@ -111,19 +120,36 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 	// download CLI binary
 	downloadURL, err := cliDiscovery.DownloadURL(r)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if downloadURL == "" {
-		return fmt.Errorf("no builds found for current OS")
+		return "", fmt.Errorf("no builds found for current OS")
 	}
 
 	logger.Debug().Str("download_url", downloadURL).Msgf("Snyk CLI %s in progress...", kindStr)
 
+	pb := d.progressTask
 	if isUpdate {
-		d.progressTracker.BeginWithMessage("Updating Snyk CLI...", "")
+		pb.BeginWithMessage("Updating Snyk CLI...", "")
 	} else {
-		d.progressTracker.BeginWithMessage("Downloading Snyk CLI...", "We download Snyk CLI to run security scans.")
+		pb.BeginWithMessage("Downloading Snyk CLI...", "We download Snyk CLI to run security scans.")
 	}
+
+	// Begin was just sent above, so from this point on every return path
+	// (early or final) must close the progress indicator exactly once. A
+	// deferred function keyed off the named return values guarantees this
+	// regardless of which return statement is hit.
+	defer func() {
+		if err != nil {
+			pb.EndWithMessage(fmt.Sprintf("Failed to %s Snyk CLI.", kindStr))
+			return
+		}
+		if isUpdate {
+			pb.EndWithMessage("Snyk CLI has been updated.")
+		} else {
+			pb.EndWithMessage("Snyk CLI has been downloaded.")
+		}
+	}()
 
 	doneCh := make(chan struct{}, 1)
 
@@ -131,7 +157,7 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 
 	resp, err = d.httpClient().Get(downloadURL) //nolint:bodyclose // body is closed in a longer-lived goroutine
 	if err != nil {
-		return err
+		return "", err
 	}
 	logger.Debug().Any("response-headers", resp.Header).Msg("headers")
 
@@ -140,13 +166,9 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 			_ = body.Close()
 			logger.Debug().Msgf("Cancellation received. Aborting %s.", kindStr)
 		}
-		d.progressTracker.CancelOrDone(cancel, doneCh)
+		pb.CancelOrDone(cancel, doneCh)
 	}(resp.Body)
 
-	if resp.StatusCode != http.StatusOK {
-		d.errorReporter.CaptureError(err)
-		return fmt.Errorf("failed to %s Snyk CLI from %q: %s", kindStr, downloadURL, resp.Status)
-	}
 	executableFileName := cliDiscovery.ExecutableName(isUpdate)
 	defer func(Body io.ReadCloser) {
 		_ = Body.Close()
@@ -154,29 +176,30 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 		logger.Debug().Msgf("finished Snyk CLI %s", kindStr)
 	}(resp.Body)
 
-	// pipe stream
-	cliReader := io.TeeReader(resp.Body, newWriter(resp.ContentLength, d.progressTracker, onProgress))
-
-	cliPath := d.configResolver.GetString(types.SettingCliPath, nil)
-	if cliPath != "" {
-		cliPath = filepath.Clean(cliPath)
+	if resp.StatusCode != http.StatusOK {
+		d.errorReporter.CaptureError(err)
+		return "", fmt.Errorf("failed to %s Snyk CLI from %q: %s", kindStr, downloadURL, resp.Status)
 	}
+
+	// pipe stream
+	cliReader := io.TeeReader(resp.Body, newWriter(resp.ContentLength, pb, onProgress))
+
 	cliDirectory := filepath.Dir(cliPath)
 	err = os.MkdirAll(cliDirectory, 0755)
 	if err != nil {
 		logger.Err(err).Msg("couldn't create directory for Snyk CLI")
-		return err
+		return "", err
 	}
-	tmpDirPath, err := os.MkdirTemp(cliDirectory, "downloads")
+	tmpDirPath, err := d.mkdirTempDir(cliDirectory, "downloads")
 	if err != nil {
 		logger.Err(err).Msg("couldn't create tmpdir")
-		return err
+		return "", err
 	}
 
 	cliTmpPath := filepath.Join(tmpDirPath, executableFileName)
 	cliTmpFile, err := os.Create(cliTmpPath)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer func() {
 		_ = cliTmpFile.Close()
@@ -185,30 +208,24 @@ func (d *Downloader) Download(r *Release, isUpdate bool) error {
 
 	bytesCopied, err := io.Copy(cliTmpFile, cliReader)
 	if err != nil {
-		return err
+		return "", err
 	}
 	logger.Debug().Int64("bytes_copied", bytesCopied).Msgf("copied to %s", cliTmpFile.Name())
 
 	expectedChecksum, err := expectedChecksum(r, &cliDiscovery)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	err = compareChecksum(d.engine.GetLogger(), expectedChecksum, cliTmpFile.Name())
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	_ = cliTmpFile.Close() // close file to allow moving it on Windows
-	err = d.moveToDestination(executableFileName, cliTmpFile.Name())
+	destinationPath, err = d.moveToDestination(cliPath, executableFileName, cliTmpFile.Name(), expectedChecksum)
 
-	if isUpdate {
-		d.progressTracker.EndWithMessage("Snyk CLI has been updated.")
-	} else {
-		d.progressTracker.EndWithMessage("Snyk CLI has been downloaded.")
-	}
-
-	return err
+	return destinationPath, err
 }
 
 func (d *Downloader) createLockFile() error {
@@ -226,47 +243,89 @@ func (d *Downloader) createLockFile() error {
 	return nil
 }
 
-func (d *Downloader) moveToDestination(destinationFileName string, sourceFilePath string) error {
-	logger := d.engine.GetLogger().With().Str("method", "moveToDestination").Logger()
-	cliPath := d.configResolver.GetString(types.SettingCliPath, nil)
-	if cliPath != "" {
-		cliPath = filepath.Clean(cliPath)
+func (d *Downloader) destinationPath(cliPath string, destinationFileName string) string {
+	return filepath.Join(filepath.Dir(cliPath), destinationFileName)
+}
+
+func (d *Downloader) remove(path string) error {
+	if d.removeFile != nil {
+		return d.removeFile(path)
 	}
-	cliDirectory := filepath.Dir(cliPath)
+	return os.Remove(path)
+}
+
+func (d *Downloader) rename(sourceFilePath string, destinationFilePath string) error {
+	if d.renameFile != nil {
+		return d.renameFile(sourceFilePath, destinationFilePath)
+	}
+	return os.Rename(sourceFilePath, destinationFilePath)
+}
+
+func (d *Downloader) mkdirTempDir(dir string, pattern string) (string, error) {
+	if d.mkdirTemp != nil {
+		return d.mkdirTemp(dir, pattern)
+	}
+	return os.MkdirTemp(dir, pattern)
+}
+
+func (d *Downloader) existingDestinationMatchesChecksum(expectedChecksum HashSum, destinationFilePath string) bool {
+	compareErr := compareChecksum(d.engine.GetLogger(), expectedChecksum, destinationFilePath)
+	if compareErr == nil {
+		return true
+	}
+	d.engine.GetLogger().Debug().Err(compareErr).Str("path", destinationFilePath).Msg("existing Snyk CLI does not match requested checksum")
+	return false
+}
+
+func (d *Downloader) moveToDestination(cliPath string, destinationFileName string, sourceFilePath string, expectedChecksum HashSum) (string, error) {
+	// Defend this file-moving boundary when it is called independently of Install.
+	if cliPath == "" {
+		return "", fmt.Errorf("CLI path is not configured")
+	}
+	logger := d.engine.GetLogger().With().Str("method", "moveToDestination").Logger()
+	destinationFilePath := d.destinationPath(cliPath, destinationFileName)
+	cliDirectory := filepath.Dir(destinationFilePath)
 	err := os.MkdirAll(cliDirectory, 0755)
 	if err != nil {
 		msg := fmt.Sprintf("couldn't create directory for Snyk CLI at %s. "+
 			"Please change permissions or configured CLI path.", cliDirectory)
 		err = errors.Wrap(err, msg)
 		logger.Err(err).Send()
-		return err
+		return "", err
 	}
-	destinationFilePath := filepath.Join(cliDirectory, destinationFileName) // snyk-win.exe.latest
 	logger.Info().Str("path", destinationFilePath).Msg("copying Snyk CLI to user directory")
 
 	// for Windows, we have to remove original file first before move/rename
 	if fileInfo, statErr := os.Stat(destinationFilePath); statErr == nil {
-		removeErr := os.Remove(destinationFilePath)
+		removeErr := d.remove(destinationFilePath)
 		if removeErr != nil {
 			returnErr := errors.Wrap(
 				removeErr,
 				fmt.Sprintf("couldn't remove old CLI at %s. FileInfo: %v", destinationFilePath, fileInfo),
 			)
+			if d.existingDestinationMatchesChecksum(expectedChecksum, destinationFilePath) {
+				logger.Info().Str("path", destinationFilePath).Msg("another installer already wrote the requested Snyk CLI")
+				return destinationFilePath, nil
+			}
 			logger.Err(returnErr).Send()
-			return err
+			return "", returnErr
 		}
 	}
 
 	logger.Debug().Str("tempFilePath", sourceFilePath).Msg("tempfile path")
-	err = os.Rename(sourceFilePath, destinationFilePath)
+	err = d.rename(sourceFilePath, destinationFilePath)
 	if err != nil {
 		returnErr :=
 			errors.Wrap(
 				err,
 				fmt.Sprintf("couldn't rename Snyk CLI from %s to %s", sourceFilePath, destinationFilePath),
 			)
+		if d.existingDestinationMatchesChecksum(expectedChecksum, destinationFilePath) {
+			logger.Info().Str("path", destinationFilePath).Msg("another installer already wrote the requested Snyk CLI")
+			return destinationFilePath, nil
+		}
 		logger.Err(returnErr).Send()
-		return returnErr
+		return "", returnErr
 	}
 
 	logger.Info().Str("path", destinationFilePath).Msg("setting executable bit for Snyk CLI")
@@ -275,7 +334,7 @@ func (d *Downloader) moveToDestination(destinationFileName string, sourceFilePat
 		returnErr :=
 			errors.Wrap(err, fmt.Sprintf("couldn't set executable bit for Snyk CLI at %s", destinationFilePath))
 		logger.Err(returnErr).Send()
-		return returnErr
+		return "", returnErr
 	}
-	return nil
+	return destinationFilePath, nil
 }

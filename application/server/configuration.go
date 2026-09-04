@@ -450,6 +450,7 @@ func processConfigSettings(ctx context.Context, conf configuration.Configuration
 	applyProxyConfig(conf, settings)
 	applyCodeEndpoint(conf, settings)
 	applyCliReleaseChannel(conf, settings)
+	applyLlmProviderConfig(conf, logger, settings)
 
 	return globalOrgChanged, lockedMachineFields
 }
@@ -911,7 +912,7 @@ func globalEffectiveValue(conf configuration.Configuration, name string) any {
 // globalResetFilterKeys is the subset of GlobalResettableSettings whose reset
 // must trigger a diagnostics refresh, mirroring applyProductEnablement /
 // applySeverityFilter / applyIssueViewOptions / applyDeltaFindings.
-var globalResetFilterKeys = map[string]bool{
+var globalResetFilterKeys = map[string]bool{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	types.SettingSnykOssEnabled:         true,
 	types.SettingSnykCodeEnabled:        true,
 	types.SettingSnykIacEnabled:         true,
@@ -1358,6 +1359,17 @@ func applyCliReleaseChannel(conf configuration.Configuration, settings map[strin
 	}
 }
 
+// llmEnvMgr is a singleton managing the LLM provider environment variable state.
+// The environment is process-global, so this must be too - see llmProviderEnvManager's
+// appliedEnvVar field doc for why.
+var llmEnvMgr = newLlmProviderEnvManager() //nolint:gochecknoglobals // singleton for LLM env management
+
+// applyLlmProviderConfig persists the developer's chosen LLM provider, model and
+// custom API endpoint for autonomous remediation. It delegates to the singleton manager.
+func applyLlmProviderConfig(conf configuration.Configuration, logger *zerolog.Logger, settings map[string]*types.ConfigSetting) {
+	llmEnvMgr.ApplyConfig(conf, logger, settings)
+}
+
 func buildIncomingLspConfigMap(folderConfigs []types.LspFolderConfig) map[types.FilePath]types.LspFolderConfig {
 	incomingMap := make(map[types.FilePath]types.LspFolderConfig)
 	for _, fc := range folderConfigs {
@@ -1443,9 +1455,9 @@ func processSingleLspFolderConfig(ctx context.Context, conf configuration.Config
 // into the single deduplicated locked-fields notification per triggering event
 // (see [IDE-1970]).
 //
-// The resolver is passed in (not fetched via di.ConfigResolver()) so that
-// machine-scope and folder-scope validation share the same resolver instance
-// when a caller injects one through UpdateSettings/InitializeSettings.
+// The resolver is passed in rather than constructed here so that machine-scope
+// and folder-scope validation share the same resolver instance when a caller
+// injects one through UpdateSettings/InitializeSettings.
 //
 // If the incoming update changes PreferredOrg, locks are evaluated against the NEW org's policies
 // to prevent bypassing stricter locks during an org switch.

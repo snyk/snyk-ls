@@ -1,0 +1,39 @@
+Feature: Choose the LLM provider used by autonomous remediation
+  A developer can tell the Snyk Remediation Agent which LLM backend to use,
+  and optionally point it at a self-hosted endpoint, from the existing Snyk
+  configuration dialog. The setting exists, persists, is reflected back in
+  the dialog, and is actually used by autonomous remediation when it runs.
+
+  # maps: IDE-2274-M1, IDE-2274-M2
+  Scenario: The chosen provider and endpoint survive reopening the dialog
+    Given a running language server
+    When a developer saves "ollama" as the LLM provider with custom API endpoint "http://localhost:11434"
+    And the developer reopens the Snyk configuration dialog
+    Then the configuration dialog shows "ollama" as the selected LLM provider
+    And the configuration dialog shows "http://localhost:11434" as the custom LLM provider's API endpoint
+
+  # maps: IDE-2274-M5
+  Scenario: A developer who has never chosen a provider sees no forced default
+    Given a running language server
+    When a developer reopens the Snyk configuration dialog without ever choosing an LLM provider
+    Then the configuration dialog shows no LLM provider selected
+
+  # maps: IDE-2274-M4
+  Scenario: The configuration dialog never asks for or displays an LLM API key
+    Given a running language server
+    When a developer reopens the Snyk configuration dialog
+    Then the configuration dialog contains no field for an LLM API key
+
+  # maps: IDE-2274-M1
+  Scenario: A provider that requires an explicit model persists and applies the chosen model
+    Given a running language server
+    When a developer saves "ollama" as the LLM provider with model "llama3.1"
+    And the developer reopens the Snyk configuration dialog
+    Then the configuration dialog shows "llama3.1" as the selected LLM model
+
+  # maps: IDE-2274-CP-2
+  Scenario: An autonomous fix run uses the developer's chosen LLM provider and model
+    Given a running language server
+    When a developer saves "ollama" as the LLM provider with model "llama3.1"
+    And the developer asks Snyk to autonomously fix a folder
+    Then the fix runs with the developer's chosen LLM provider and model

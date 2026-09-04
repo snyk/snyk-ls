@@ -37,8 +37,17 @@
 			cli_release_channel_custom: "",
 			binary_base_url: "https://downloads.snyk.io/"
 		},
+		secureAtInception: {
+			auto_configure_mcp_server: false,
+			secure_at_inception_execution_frequency: "Manual"
+		},
 		permissions: {
 			trusted_folders: []
+		},
+		autonomousRemediation: {
+			llm_provider: "",
+			llm_model: "",
+			llm_base_url: ""
 		}
 	};
 

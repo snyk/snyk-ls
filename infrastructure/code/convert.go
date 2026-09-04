@@ -28,9 +28,6 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/hexops/gotextdiff"
-	"github.com/hexops/gotextdiff/myers"
-	"github.com/hexops/gotextdiff/span"
 	"golang.org/x/exp/slices"
 
 	codeClientSarif "github.com/snyk/code-client-go/sarif"
@@ -697,48 +694,4 @@ func buildOneLineTextEdit(startLine int, endLine int, text string, lastLineOfOri
 		},
 		NewText: text,
 	}, nil
-}
-
-func (s *AutofixResponse) toUnifiedDiffSuggestions(engine workflow.Engine, baseDir types.FilePath, filePath types.FilePath) []AutofixUnifiedDiffSuggestion {
-	var fixSuggestions []AutofixUnifiedDiffSuggestion
-	for _, suggestion := range s.AutofixSuggestions {
-		decodedPath, unifiedDiff := getPathAndUnifiedDiff(engine, baseDir, filePath, suggestion.Value)
-		if decodedPath == "" || unifiedDiff == "" {
-			continue
-		}
-
-		d := AutofixUnifiedDiffSuggestion{
-			FixId:               suggestion.Id,
-			UnifiedDiffsPerFile: map[string]string{},
-		}
-
-		d.UnifiedDiffsPerFile[string(decodedPath)] = string(unifiedDiff)
-		fixSuggestions = append(fixSuggestions, d)
-	}
-	return fixSuggestions
-}
-
-func getPathAndUnifiedDiff(engine workflow.Engine, baseDir types.FilePath, filePath types.FilePath, newText string) (decodedPath types.FilePath, unifiedDiff types.FilePath) {
-	logger := engine.GetLogger().With().Str("method", "getUnifiedDiff").Logger()
-
-	decodedPathString, err := DecodePath(ToAbsolutePath(baseDir, filePath))
-	decodedPath = types.FilePath(decodedPathString)
-	if err != nil {
-		logger.Err(err).Msgf("cannot decode filePath %s", filePath)
-		return
-	}
-	logger.Debug().Msgf("File decodedPath %s", decodedPath)
-
-	fileContent, err := os.ReadFile(decodedPathString)
-	if err != nil {
-		logger.Err(err).Msgf("cannot read fileContent %s", decodedPath)
-		return
-	}
-
-	// Workaround: AI Suggestion API only returns \n new lines. It doesn't consider carriage returns.
-	contentBefore := strings.ReplaceAll(string(fileContent), "\r\n", "\n")
-	edits := myers.ComputeEdits(span.URIFromPath(decodedPathString), contentBefore, newText)
-	unifiedDiff = types.FilePath(fmt.Sprint(gotextdiff.ToUnified(decodedPathString, decodedPathString+"fixed", contentBefore, edits)))
-
-	return decodedPath, unifiedDiff
 }

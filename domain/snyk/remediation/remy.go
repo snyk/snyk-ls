@@ -106,16 +106,54 @@ var _ RemediationProvider = (*remyProvider)(nil)
 var _ FileChangeNotifier = (*remyProvider)(nil)
 var _ FolderRemediator = (*remyProvider)(nil)
 
+// llmProviderEnvMu guards the LLM endpoint env vars (ANTHROPIC_BASE_URL etc.)
+// that application/server writes on a settings change and gafRunner's Remy
+// invocation reads. remy-cli-extension has no config-based override for the
+// base URL — it reads it via os.Getenv at an unbounded point during the fix
+// workflow — so the read must hold the lock for the whole invocation, not
+// just a snapshot, to rule out observing a torn (unset/not-yet-set) value.
+var llmProviderEnvMu sync.RWMutex //nolint:gochecknoglobals // required guard for process-global LLM env vars
+
+// TryWithLLMProviderEnvLock attempts to acquire the LLM provider env lock for
+// writing without blocking, runs fn if it succeeds, and reports whether fn ran.
+func TryWithLLMProviderEnvLock(fn func()) bool {
+	if !llmProviderEnvMu.TryLock() {
+		return false
+	}
+	defer llmProviderEnvMu.Unlock()
+	fn()
+	return true
+}
+
+// WithLLMProviderEnvLock acquires the LLM provider env lock for writing,
+// blocking until it is free, and runs fn under it.
+func WithLLMProviderEnvLock(fn func()) {
+	llmProviderEnvMu.Lock()
+	defer llmProviderEnvMu.Unlock()
+	fn()
+}
+
 // gafRunner is the default remyRunner that invokes the legacycli workflow via
 // the Go Application Framework engine. The remy fix workflow is a Go extension
 // registered under the "fix" workflow ID — invoke it directly, not via legacycli.
 // auto-approve suppresses interactive prompts required for non-interactive LS use.
 func gafRunner(ctx context.Context, eng workflow.Engine, contentRoot string, _ string) error {
+	llmProviderEnvMu.RLock()
+	defer llmProviderEnvMu.RUnlock()
 	remyWorkflowID := workflow.NewWorkflowIdentifier("fix")
 	conf := buildRemyFixConfig(eng.GetConfiguration(), contentRoot)
 	_, err := eng.Invoke(remyWorkflowID, workflow.WithContext(ctx), workflow.WithConfig(conf))
 	return err
 }
+
+// remyProviderConfigKey and remyModelConfigKey match remy-cli-extension's
+// FlagProvider/FlagModel (internal/commands/remyfix/flags.go) — the fix
+// workflow reads the developer's chosen LLM provider/model under these exact
+// keys.
+const (
+	remyProviderConfigKey = "provider"
+	remyModelConfigKey    = "model"
+)
 
 // buildRemyFixConfig clones base and sets the configuration keys that select and
 // drive the fix workflow for contentRoot. It is a pure helper (no engine, no I/O)
@@ -132,6 +170,12 @@ func buildRemyFixConfig(base configuration.Configuration, contentRoot string) co
 	conf.Set("sast", true)
 	conf.Set("experimental", true)
 	conf.Set(configuration.INPUT_DIRECTORY, []string{contentRoot})
+	if provider := types.GetGlobalString(base, types.SettingLlmProvider); provider != "" {
+		conf.Set(remyProviderConfigKey, provider)
+	}
+	if model := types.GetGlobalString(base, types.SettingLlmModel); model != "" {
+		conf.Set(remyModelConfigKey, model)
+	}
 	return conf
 }
 
@@ -596,6 +640,12 @@ func (p *remyProvider) collectFileDiffs(ctx context.Context, runDir string) ([]t
 	enumCtx, enumCancel := context.WithTimeout(context.Background(), gitEnumerationTimeout)
 	defer enumCancel()
 
+	// Invalidate the stat cache before diffing to prevent false-clean results
+	// when mtime+size happen to match the index (IDE-2289 / Windows coarse clock).
+	if err := invalidateStatCache(enumCtx, runDir); err != nil {
+		return nil, err
+	}
+
 	// Enumerate changed tracked files via NUL-delimited name-status.
 	nameStatusOut, err := exec.CommandContext(enumCtx, "git", "-C", runDir,
 		"diff", "-z", "--name-status", "--no-renames", "HEAD").Output()
@@ -877,6 +927,57 @@ func gitShowHEAD(ctx context.Context, root, relPath string) ([]byte, error) {
 	return stdout.Bytes(), nil
 }
 
+// invalidateStatCache forces git to content-compare every tracked file in
+// root on the next diff, defeating the index stat cache regardless of mtime
+// granularity.
+//
+// Root cause (IDE-2289): git caches mtime+size per file in the index. With
+// core.checkStat=minimal (second precision), a fix that lands in the same
+// clock second as the worktree checkout and does not change the file's size
+// is indistinguishable from an unchanged file — git skips content hashing and
+// reports no diff, silently discarding a completed fix. On Windows this is
+// common because coarse NTFS last-write-time granularity places the runner's
+// write in the same tick as the checkout.
+//
+// Fix: git's racy-git rule re-reads any index entry whose cached mtime is
+// >= the index file's own mtime (the write could have raced with the index
+// write) — but ONLY if the index's recorded mtime is itself nonzero; git's
+// is_racy_timestamp() short-circuits to "not racy" when istate->timestamp.sec
+// is 0, treating an all-zero timestamp as "no timestamp recorded" rather than
+// "the year 1970". So the index mtime is set to 1 second past the Unix epoch,
+// not to the epoch itself: nonzero (so the check actually runs) and older
+// than any real checkout (so every entry's cached mtime is >= it). That makes
+// every entry racy, so git re-hashes content for all of them on the next
+// diff — one syscall, not one per tracked file. Unchanged files re-hash to
+// their HEAD blobs and vanish from git diff output; modified files surface
+// correctly. (Verified empirically: an index mtime of exactly 0 reproduces
+// the original bug — git reports no diff — while 1 second past epoch fixes it.)
+//
+// This only ever touches .git/index (never a worktree file) inside an
+// isolated, disposable worktree, where mutating it is harmless.
+//
+// Returns an error if the index cannot be located or its mtime cannot be set
+// (e.g. root is not a git repo), so callers can surface the failure rather
+// than running git diff on a stale index and silently dropping a completed fix.
+func invalidateStatCache(ctx context.Context, root string) error {
+	// --git-path resolves the index correctly for linked worktrees, where it
+	// lives at .git/worktrees/<name>/index rather than .git/index.
+	out, err := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "--git-path", "index").Output()
+	if err != nil {
+		return fmt.Errorf("remy: invalidate stat cache (locate index): %w", err)
+	}
+	indexPath := strings.TrimSpace(string(out))
+	if !filepath.IsAbs(indexPath) {
+		indexPath = filepath.Join(root, indexPath)
+	}
+	// 1 second past the Unix epoch, not the epoch itself — see comment above.
+	pastMtime := time.Unix(1, 0)
+	if err := os.Chtimes(indexPath, pastMtime, pastMtime); err != nil {
+		return fmt.Errorf("remy: invalidate stat cache (chtimes %s): %w", indexPath, err)
+	}
+	return nil
+}
+
 // gitChangedFiles returns the relative paths of files that differ from HEAD in
 // the working tree at root.
 // -z gives NUL-separated records so filenames with embedded newlines or
@@ -886,6 +987,11 @@ func gitShowHEAD(ctx context.Context, root, relPath string) ([]byte, error) {
 // causing the old-name snapshot lookup to miss and the deletion to be silently
 // dropped.
 func gitChangedFiles(ctx context.Context, root string) ([]string, error) {
+	// Invalidate the stat cache before diffing to prevent false-clean results
+	// when mtime+size happen to match the index (IDE-2289 / Windows coarse clock).
+	if err := invalidateStatCache(ctx, root); err != nil {
+		return nil, err
+	}
 	cmd := exec.CommandContext(ctx, "git", "-C", root, "diff", "-z", "--name-only", "--no-renames", "HEAD")
 	out, err := cmd.Output()
 	if err != nil {

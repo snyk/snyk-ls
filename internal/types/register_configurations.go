@@ -130,6 +130,23 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"Automatic Authentication"},
 		configresolver.AnnotationDescription: {"Enable automatic authentication"},
 	})
+	// Machine-scope, no LDX-Sync remote key - this is a local, non-synced choice
+	// of which LLM backend the Snyk Remediation Agent uses.
+	registerFlag(fs, SettingLlmProvider, "", "LLM provider used by autonomous remediation", map[string][]string{
+		configresolver.AnnotationScope:       {machineScope},
+		configresolver.AnnotationDisplayName: {"LLM Provider"},
+		configresolver.AnnotationDescription: {"Which LLM backend the Snyk Remediation Agent uses to generate fixes"},
+	})
+	registerFlag(fs, SettingLlmBaseUrl, "", "Custom API endpoint for the selected LLM provider", map[string][]string{
+		configresolver.AnnotationScope:       {machineScope},
+		configresolver.AnnotationDisplayName: {"Custom API Endpoint"},
+		configresolver.AnnotationDescription: {"Point the selected LLM provider at a self-hosted or gateway endpoint"},
+	})
+	registerFlag(fs, SettingLlmModel, "", "Model for the selected LLM provider", map[string][]string{
+		configresolver.AnnotationScope:       {machineScope},
+		configresolver.AnnotationDisplayName: {"LLM Model"},
+		configresolver.AnnotationDescription: {"Model id for the selected LLM provider; required for Ollama and LiteLLM"},
+	})
 	registerFlag(fs, SettingFormat, "md", "Output format", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationDisplayName: {"Output Format"},
@@ -355,6 +372,12 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationScope:       {folderScope},
 		configresolver.AnnotationDisplayName: {"SAST Settings"},
 		configresolver.AnnotationDescription: {"SAST configuration from Snyk API (autofix, local code engine)"},
+	})
+	registerFlag(fs, SettingAmbientCanaryAutonomy, "", "Ambient Canary autonomy for this folder", map[string][]string{
+		configresolver.AnnotationScope:       {folderScope},
+		configresolver.AnnotationRemoteKey:   {"ambient_canary_autonomy"},
+		configresolver.AnnotationDisplayName: {"Ambient Canary Autonomy"},
+		configresolver.AnnotationDescription: {"Whether Ambient Canary notifies only or applies fixes automatically for this folder"},
 	})
 
 	registerFlag(fs, SettingSnykAdvisorEnabled, false, "Enable Snyk Advisor", map[string][]string{

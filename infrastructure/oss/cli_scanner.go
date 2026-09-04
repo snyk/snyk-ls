@@ -54,7 +54,7 @@ import (
 )
 
 var (
-	lockFilesToManifestMap = map[string]string{
+	lockFilesToManifestMap = map[string]string{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 		"Gemfile.lock":      "Gemfile",
 		"package-lock.json": "package.json",
 		"yarn.lock":         "package.json",
@@ -67,7 +67,7 @@ var (
 	}
 
 	// see https://github.com/snyk/cli/blob/765e53a67ea1cbad79c2ee8c436e5e5816003744/src/cli/main.ts#L388-L397
-	allProjectsParamBlacklist = map[string]bool{
+	allProjectsParamBlacklist = map[string]bool{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 		"--file":             true,
 		"--package-manager":  true,
 		"--project-name":     true,
@@ -104,9 +104,10 @@ type CLIScanner struct {
 	engine                  workflow.Engine
 	logger                  *zerolog.Logger
 	configResolver          types.ConfigResolverInterface
+	progressTracker         *progress.Tracker
 }
 
-func NewCLIScanner(engine workflow.Engine, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, learnService learn.Service, notifier noti.Notifier, configResolver types.ConfigResolverInterface) types.ProductScanner {
+func NewCLIScanner(engine workflow.Engine, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, learnService learn.Service, notifier noti.Notifier, configResolver types.ConfigResolverInterface, progressTracker *progress.Tracker) types.ProductScanner {
 	scanner := CLIScanner{
 		instrumentor:            instrumentor,
 		errorReporter:           errorReporter,
@@ -125,6 +126,7 @@ func NewCLIScanner(engine workflow.Engine, instrumentor performance.Instrumentor
 		engine:                  engine,
 		logger:                  engine.GetLogger(),
 		configResolver:          configResolver,
+		progressTracker:         progressTracker,
 		supportedFiles: map[string]bool{
 			"yarn.lock":               true,
 			"package-lock.json":       true,
@@ -184,11 +186,10 @@ func (cliScanner *CLIScanner) Scan(ctx context.Context, pathToScan types.FilePat
 
 	logger.Debug().Msg("OSS scanner: starting scan")
 
-	if err = scannercommon.RequireProductEnabled(
-		cliScanner.getConfigResolver(ctx).IsProductEnabledForFolder(product.ProductOpenSource, workspaceFolderConfig),
-		utils.ErrSnykOssNotEnabledForFolder,
-	); err != nil {
-		return nil, err
+	if !scannercommon.IsProductEnabledForScan(
+		ctx, cliScanner.getConfigResolver(ctx), product.ProductOpenSource, workspaceFolderConfig,
+	) {
+		return nil, errors.New(utils.ErrSnykOssNotEnabledForFolder)
 	}
 
 	if err = scannercommon.RequireAuthToken(cliScanner.engine.GetConfiguration(), logger); err != nil {
@@ -251,7 +252,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	// Use workspace folder from folderConfig for CLI execution (org lookup, etc.)
 	workspaceFolder := folderConfig.FolderPath
 
-	p := progress.NewScanTracker(true, cliScanner.engine.GetLogger(), workspaceFolder)
+	p := cliScanner.progressTracker.NewScan(true, workspaceFolder)
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
 	p.BeginUnquantifiableLength("Scanning for Snyk Open Source issues", string(path))
 	defer p.EndWithMessage("Snyk Open Source scan completed.")
@@ -264,6 +265,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 		previousScan.CancelScan()
 	}
 	newScan := scans.NewScanProgressWithLogger(cliScanner.engine.GetLogger())
+	newScan.SetCancelFunc(cancel)
 	go newScan.Listen(ctx, cancel, i)
 	defer func() {
 		cliScanner.mutex.Lock()
@@ -612,7 +614,7 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 	cliScanner.scheduledScanMtx.Unlock()
 
 	// decouple scheduled scan from session but keep context values
-	newCtx := ctx2.Clone(ctx, context.Background())
+	newCtx := context.WithoutCancel(ctx)
 
 	go func() {
 		select {
@@ -620,11 +622,6 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 			folderConfig := config.GetUnenrichedFolderConfigFromEngine(cliScanner.engine, cliScanner.configResolver, path, cliScanner.engine.GetLogger())
 			if !cliScanner.getConfigResolver(newCtx).IsProductEnabledForFolder(product.ProductOpenSource, folderConfig) {
 				logger.Info().Msg("OSS scan is disabled, skipping scheduled scan")
-				return
-			}
-
-			if newCtx.Err() != nil {
-				logger.Info().Msg("Scheduled scan canceled")
 				return
 			}
 
@@ -646,7 +643,7 @@ func (cliScanner *CLIScanner) scheduleRefreshScan(ctx context.Context, path type
 
 // legacyOnlyFlags are CLI flags that require routing to the legacy scan path
 // because the new ostest workflow does not support them.
-var legacyOnlyFlags = map[string]bool{
+var legacyOnlyFlags = map[string]bool{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	"--print-graph":     true,
 	"--print-deps":      true,
 	"--print-dep-paths": true,
@@ -654,7 +651,7 @@ var legacyOnlyFlags = map[string]bool{
 }
 
 // newFeatureFlags are CLI flags whose presence indicates the scan requires the new ostest workflow.
-var newFeatureFlags = map[string]bool{
+var newFeatureFlags = map[string]bool{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	"--reachability": true,
 	"--sbom":         true,
 }

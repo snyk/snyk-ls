@@ -75,7 +75,7 @@ func Test_Scan_ReturnsErrorWhenOssDisabledForFolder_ContextResolver(t *testing.T
 		Return(false).
 		Times(1)
 
-	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine))
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker())
 	folderConfig := &types.FolderConfig{FolderPath: "."}
 	ctx := ctx2.NewContextWithConfigResolver(context.Background(), mockResolver)
 	ctx = ctx2.NewContextWithFolderConfig(ctx, folderConfig)
@@ -98,7 +98,7 @@ func Test_Scan_ReturnsErrorWhenOssDisabledForFolder_StructResolver(t *testing.T)
 		Return(false).
 		Times(1)
 
-	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), mockResolver)
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), mockResolver, testutil.NewDrainedProgressTracker())
 	folderConfig := &types.FolderConfig{FolderPath: "."}
 	ctx := ctx2.NewContextWithFolderConfig(context.Background(), folderConfig)
 
@@ -119,6 +119,7 @@ func Test_Scan_SkipsUnsupportedPathWithoutError(t *testing.T) {
 		getLearnMock(t),
 		notification.NewMockNotifier(),
 		defaultResolver(t, engine),
+		testutil.NewDrainedProgressTracker(),
 	)
 
 	folderConfig := &types.FolderConfig{FolderPath: "."}
@@ -278,7 +279,7 @@ func Test_introducingPackageAndVersionJava(t *testing.T) {
 func Test_ContextCanceled_Scan_DoesNotScan(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	cliMock := cli.NewTestExecutor(engine)
-	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine))
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker())
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	ctx = ctx2.NewContextWithFolderConfig(ctx, &types.FolderConfig{FolderPath: "."})
@@ -307,7 +308,7 @@ func Test_Scan_FileScan_UsesFolderConfigOrganization(t *testing.T) {
 	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), workspacePath, engine.GetLogger())
 
 	cliMock := cli.NewTestExecutor(engine)
-	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine))
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker())
 
 	// Act - scan a specific file within the workspace
 	ctx := EnrichContextForTest(t, t.Context(), engine, workspaceDir)
@@ -337,7 +338,7 @@ func Test_Scan_SubfolderScan_UsesFolderConfigOrganization(t *testing.T) {
 	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), workspacePath, engine.GetLogger())
 
 	cliMock := cli.NewTestExecutor(engine)
-	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine))
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker())
 
 	// Act - scan a subfolder (not the workspace root)
 	ctx := EnrichContextForTest(t, t.Context(), engine, workspaceDir)
@@ -365,7 +366,7 @@ func Test_Scan_WorkspaceFolderScan_UsesFolderConfigOrganization(t *testing.T) {
 	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), workspacePath, engine.GetLogger())
 
 	cliMock := cli.NewTestExecutor(engine)
-	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine))
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker())
 
 	// Act - scan the workspace folder itself
 	ctx := EnrichContextForTest(t, t.Context(), engine, workspaceDir)
@@ -402,7 +403,7 @@ func Test_Scan_DeltaScan_BaseBranchUsesCorrectFolderConfig(t *testing.T) {
 	// Store the folder config so it can be retrieved
 
 	cliMock := cli.NewTestExecutor(engine)
-	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine))
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker())
 
 	// Act - scan the base branch folder (as scanBaseBranch would do)
 	ctx := EnrichContextForTest(t, t.Context(), engine, workspaceDir)
@@ -452,7 +453,7 @@ func Test_Scan_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 	passedFolderConfig.ConfigResolver = types.NewMinimalConfigResolver(passedConf)
 
 	cliMock := cli.NewTestExecutor(engine)
-	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine))
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cliMock, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker())
 
 	// Act
 	ctx := EnrichContextForTest(t, t.Context(), engine, scanDir)
@@ -490,7 +491,7 @@ func mavenTestIssue() ossIssue {
 
 func TestUnmarshalOssJsonSingle(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine)).(*CLIScanner)
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker()).(*CLIScanner)
 
 	dir, err := os.Getwd()
 	if err != nil {
@@ -508,7 +509,7 @@ func TestUnmarshalOssJsonSingle(t *testing.T) {
 
 func TestUnmarshalOssJsonArray(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine)).(*CLIScanner)
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker()).(*CLIScanner)
 
 	dir, err := os.Getwd()
 	if err != nil {
@@ -526,7 +527,7 @@ func TestUnmarshalOssJsonArray(t *testing.T) {
 
 func TestUnmarshalOssErroneousJson(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine)).(*CLIScanner)
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker()).(*CLIScanner)
 
 	dir, err := os.Getwd()
 	if err != nil {
@@ -603,8 +604,10 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 	workingDir, _ := os.Getwd()
 	folderPath := workingDir
 	fakeCli := cli.NewTestExecutor(engine)
-	fakeCli.ExecuteDuration = 200 * time.Millisecond
-	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), fakeCli, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine))
+	// Execute blocks on this channel instead of a wall-clock timer, so which scan is the
+	// "winner" (last registered, never canceled) is decided by scanCount, not by timing.
+	fakeCli.ExecuteRelease = make(chan struct{})
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), fakeCli, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker()).(*CLIScanner)
 	wg := sync.WaitGroup{}
 	p, _ := filepath.Abs(workingDir + testDataPackageJson)
 
@@ -612,8 +615,6 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 	for i := 0; i < concurrentScanRequests; i++ {
 		wg.Add(1)
 		go func() {
-			// Adding a short delay so the cancel listener will start before a new scan is sending the cancel signal
-			time.Sleep(20 * time.Millisecond)
 			ctx := EnrichContextForTest(t, t.Context(), engine, workingDir)
 			folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), types.FilePath(folderPath), engine.GetLogger())
 			ctx = ctx2.NewContextWithFolderConfig(ctx, folderConfig)
@@ -621,6 +622,17 @@ func Test_SeveralScansOnSameFolder_DoNotRunAtOnce(t *testing.T) {
 			wg.Done()
 		}()
 	}
+
+	// scanCount starts at 1 (NewCLIScanner), so 10 registrations => 11. Every predecessor's
+	// CancelScan() runs inside the same critical section, before scanCount++, so reaching
+	// 11 means all 9 victims are already canceled - only the winner is left waiting below.
+	require.Eventually(t, func() bool {
+		scanner.mutex.RLock()
+		defer scanner.mutex.RUnlock()
+		return scanner.scanCount == concurrentScanRequests+1
+	}, 10*time.Second, time.Millisecond, "all scans should register")
+	close(fakeCli.ExecuteRelease)
+
 	wg.Wait()
 
 	// Assert
@@ -637,7 +649,7 @@ func Test_ScanError_ScanProgressIsMarkedDone(t *testing.T) {
 	mockExecutor.EXPECT().ExpandParametersFromConfig(gomock.Any(), gomock.Any()).Return([]string{}).AnyTimes()
 	mockExecutor.EXPECT().Execute(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("test scan error"))
 
-	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), mockExecutor, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine)).(*CLIScanner)
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), mockExecutor, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker()).(*CLIScanner)
 
 	ctx := EnrichContextForTest(t, t.Context(), engine, workingDir)
 	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), folderPath, engine.GetLogger())
@@ -867,7 +879,7 @@ func getLearnMock(t *testing.T) learn.Service {
 func Test_prepareScanCommand(t *testing.T) {
 	t.Run("Expands parameters", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
-		scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine)).(*CLIScanner)
+		scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker()).(*CLIScanner)
 
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"--all-projects", "-d"})
 		workDir := types.FilePath(t.TempDir())
@@ -884,7 +896,7 @@ func Test_prepareScanCommand(t *testing.T) {
 
 	t.Run("does not use --all-projects if --file is given", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
-		scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine)).(*CLIScanner)
+		scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker()).(*CLIScanner)
 
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"--file=asdf", "-d"})
 		folderConfig := &types.FolderConfig{}
@@ -898,7 +910,7 @@ func Test_prepareScanCommand(t *testing.T) {
 
 	t.Run("support `--`", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
-		scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine)).(*CLIScanner)
+		scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker()).(*CLIScanner)
 
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"-d", "--", "-PappBuild=true", "-Prules=false", "-x"})
 		folderConfig := &types.FolderConfig{}
@@ -911,9 +923,10 @@ func Test_prepareScanCommand(t *testing.T) {
 
 	t.Run("Uses --all-projects by default", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
-		// Clear the default org set by UnitTest to test command without --org parameter.
-		config.SetOrganization(engine.GetConfiguration(), "")
-		scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine)).(*CLIScanner)
+		knownOrgUUID := "12345678-1234-1234-1234-123456789012"
+		config.SetOrganization(engine.GetConfiguration(), knownOrgUUID)
+
+		scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), cli.NewTestExecutor(engine), getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker()).(*CLIScanner)
 
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliAdditionalOssParameters), []string{"-d"})
 		folderConfig := &types.FolderConfig{}
@@ -921,7 +934,8 @@ func Test_prepareScanCommand(t *testing.T) {
 		cmd, _ := scanner.prepareScanCommand([]string{"a"}, map[string]bool{}, "", folderConfig)
 
 		assert.Contains(t, cmd, "--all-projects")
-		assert.Lenf(t, cmd, 6, "cmd: %v", cmd)
+		assert.Contains(t, cmd, "--org="+knownOrgUUID)
+		assert.Lenf(t, cmd, 7, "Assert the set org passes through as well")
 	})
 }
 
@@ -931,7 +945,7 @@ func Test_Scan_SchedulesNewScan(t *testing.T) {
 	workingDir, _ := os.Getwd()
 	fakeCli := cli.NewTestExecutorWithResponseFromFile(engine, path.Join(workingDir, "testdata/oss-result.json"))
 	fakeCli.ExecuteDuration = time.Millisecond
-	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), fakeCli, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine)).(*CLIScanner)
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), fakeCli, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker()).(*CLIScanner)
 
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	ctx, cancel := context.WithCancel(t.Context())
@@ -964,7 +978,7 @@ func Test_scheduleRefreshScan_UsesConfigResolverFromContext(t *testing.T) {
 
 	fakeCli := cli.NewTestExecutor(engine)
 	fakeCli.ExecuteDuration = time.Millisecond
-	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), fakeCli, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine)).(*CLIScanner)
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), fakeCli, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker()).(*CLIScanner)
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 
 	workingDir, _ := os.Getwd()
@@ -1007,7 +1021,7 @@ func Test_scheduleRefreshScan_FallsBackToStructFieldWhenNoResolverInContext(t *t
 
 	fakeCli := cli.NewTestExecutor(engine)
 	fakeCli.ExecuteDuration = time.Millisecond
-	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), fakeCli, getLearnMock(t), notification.NewMockNotifier(), mockResolver).(*CLIScanner)
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), fakeCli, getLearnMock(t), notification.NewMockNotifier(), mockResolver, testutil.NewDrainedProgressTracker()).(*CLIScanner)
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 
 	workingDir, _ := os.Getwd()
@@ -1028,7 +1042,7 @@ func Test_scheduleNewScanWithProductDisabled_NoScanRun(t *testing.T) {
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
 	fakeCli := cli.NewTestExecutor(engine)
 	fakeCli.ExecuteDuration = time.Millisecond
-	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), fakeCli, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine)).(*CLIScanner)
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), fakeCli, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker()).(*CLIScanner)
 
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
@@ -1052,7 +1066,7 @@ func Test_scheduleNewScanTwice_RunsOnlyOnce(t *testing.T) {
 	// Arrange
 	fakeCli := cli.NewTestExecutor(engine)
 	fakeCli.ExecuteDuration = time.Millisecond
-	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), fakeCli, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine)).(*CLIScanner)
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), fakeCli, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker()).(*CLIScanner)
 
 	scanner.refreshScanWaitDuration = 50 * time.Millisecond
 	workingDir, _ := os.Getwd()
@@ -1081,7 +1095,7 @@ func Test_scheduleNewScan_ContextCancelledAfterScanScheduled_NoScanRun(t *testin
 	// Arrange
 	fakeCli := cli.NewTestExecutor(engine)
 	fakeCli.ExecuteDuration = time.Millisecond
-	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), fakeCli, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine)).(*CLIScanner)
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), fakeCli, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker()).(*CLIScanner)
 
 	scanner.refreshScanWaitDuration = 2 * time.Second
 	workingDir, _ := os.Getwd()
@@ -1107,7 +1121,7 @@ func Test_Scan_missingDisplayTargetFileDoesNotBreakAnalysis(t *testing.T) {
 	fakeCli := cli.NewTestExecutorWithResponseFromFile(engine, path.Join(workingDir,
 		"testdata/oss-result-without-targetFile.json"))
 	fakeCli.ExecuteDuration = time.Millisecond
-	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), fakeCli, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine))
+	scanner := NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine), fakeCli, getLearnMock(t), notification.NewMockNotifier(), defaultResolver(t, engine), testutil.NewDrainedProgressTracker())
 	filePath, _ := filepath.Abs(workingDir + testDataPackageJson)
 
 	// Act

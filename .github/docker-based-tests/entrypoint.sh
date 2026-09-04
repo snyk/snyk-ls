@@ -27,6 +27,7 @@ sudo iptables -A OUTPUT -p tcp --dport 443 -j REJECT
 sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
 sleep 5 # wait for squid to startup
 make tools
-export PATH=$PATH:$PWD/.bin/pact/bin:$PWD/.bin/
+TOOLS_BIN="$PWD/.bin/$(go env GOOS)-$(go env GOARCH)"
+export PATH=$PATH:$TOOLS_BIN/pact/bin:$TOOLS_BIN/
 export DISPLAY=:99
 exec "$@"

@@ -115,12 +115,6 @@ func Test_HandleFolders_TriggersMcpConfigWorkflow(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	mockEngine, engineConfig := testutil.SetUpEngineMock(t, engine)
 
-	originalService := Service()
-	t.Cleanup(func() {
-		SetService(originalService)
-	})
-	SetService(types.NewCommandServiceMock())
-
 	// Clear token to prevent RefreshConfigFromLdxSync from being called in this test
 	tokenService.SetToken(engineConfig, "")
 
@@ -424,5 +418,59 @@ func Test_BuildLspConfiguration_FolderConfigsStableOrder(t *testing.T) {
 		require.Equal(t, first, got,
 			"iteration %d: BuildLspConfiguration result must be identical to the first call (got ordering mismatch)",
 			iter)
+	}
+}
+
+func Test_sendFolderConfigs_IncludesAmbientCanaryAutonomy(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	engineConfig := engine.GetConfiguration()
+
+	folderPaths := []types.FilePath{types.FilePath(t.TempDir())}
+	_, notifier := workspaceutil.SetupWorkspace(t, engine, folderPaths...)
+
+	types.SetFolderUserSetting(engineConfig, folderPaths[0], types.SettingAmbientCanaryAutonomy, "notify_only")
+
+	resolver := newConfigResolverForTest(engine)
+	sendFolderConfigs(engine.GetConfiguration(), engine, engine.GetLogger(), notifier, resolver)
+
+	messages := notifier.SentMessages()
+	require.Len(t, messages, 1)
+
+	configParam, ok := messages[0].(types.LspConfigurationParam)
+	require.True(t, ok, "Expected LspConfigurationParam notification")
+	require.Len(t, configParam.FolderConfigs, 1)
+	require.NotNil(t, configParam.FolderConfigs[0].Settings[types.SettingAmbientCanaryAutonomy])
+	assert.Equal(t, "notify_only", configParam.FolderConfigs[0].Settings[types.SettingAmbientCanaryAutonomy].Value)
+}
+
+// Test_BuildLspConfiguration_PerFolderAutonomyIsIndependent guards against the "renders blank"/
+// omission risk: a per-folder explicit choice on one folder must not leak into, or be
+// overwritten by, another folder's setting.
+func Test_BuildLspConfiguration_PerFolderAutonomyIsIndependent(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	engineConfig := engine.GetConfiguration()
+
+	folderPaths := []types.FilePath{
+		types.FilePath(t.TempDir() + "/folder-0"),
+		types.FilePath(t.TempDir() + "/folder-1"),
+	}
+	_, _ = workspaceutil.SetupWorkspace(t, engine, folderPaths...)
+
+	types.SetFolderUserSetting(engineConfig, folderPaths[0], types.SettingAmbientCanaryAutonomy, "notify_only")
+	types.SetFolderUserSetting(engineConfig, folderPaths[1], types.SettingAmbientCanaryAutonomy, "autonomous_fixes")
+
+	resolver := newConfigResolverForTest(engine)
+	lspConfig := BuildLspConfiguration(engineConfig, engine, engine.GetLogger(), resolver)
+	require.Len(t, lspConfig.FolderConfigs, 2)
+
+	expected := map[types.FilePath]string{
+		types.PathKey(folderPaths[0]): "notify_only",
+		types.PathKey(folderPaths[1]): "autonomous_fixes",
+	}
+	for _, fc := range lspConfig.FolderConfigs {
+		want, found := expected[types.PathKey(fc.FolderPath)]
+		require.True(t, found, "unexpected folder path: %s", fc.FolderPath)
+		require.NotNil(t, fc.Settings[types.SettingAmbientCanaryAutonomy], "folder %s missing ambient_canary_autonomy", fc.FolderPath)
+		assert.Equal(t, want, fc.Settings[types.SettingAmbientCanaryAutonomy].Value, "folder %s must keep its own explicit value", fc.FolderPath)
 	}
 }

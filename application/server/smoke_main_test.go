@@ -112,6 +112,9 @@ func TestMain(m *testing.M) {
 	if os.Getenv(testsupport.SmokeTestEnvVar) == "" {
 		os.Exit(m.Run())
 	}
+	if os.Getenv("BDD_STEPS_HELPER_PROCESS") == "1" {
+		os.Exit(m.Run())
+	}
 
 	fixtureCache := os.Getenv("SNYK_LS_FIXTURE_CACHE_DIR")
 
@@ -134,7 +137,7 @@ func TestMain(m *testing.M) {
 	}
 	sharedFakeLeaksDir = types.FilePath(filepath.Join(string(fakeLeaksBase), "fake-leaks"))
 
-	cliDir, cleanupCLI := resolveCliDir()
+	cliDir, cleanupCLI := resolveCliDir(os.Getenv("SNYK_LS_CLI_CACHE_DIR"))
 
 	engine, err := testutil.NewMinimalEngine()
 	if err != nil {
@@ -173,7 +176,7 @@ func downloadCLI(engine workflow.Engine, cliDir string) (string, error) {
 
 	er := error_reporting.NewTestErrorReporter(engine)
 	resolver := testutil.DefaultConfigResolver(engine)
-	installer := install.NewInstaller(engine, er, func() *http.Client { return http.DefaultClient }, resolver)
+	installer := install.NewInstaller(engine, er, func() *http.Client { return http.DefaultClient }, resolver, testutil.NewDrainedProgressTracker())
 	return installer.Install(ctx)
 }
 
@@ -238,14 +241,14 @@ func repoIsAtCommit(repoDir, commit string) bool {
 }
 
 // resolveCliDir returns the directory to use for the shared CLI binary.
-// When SNYK_LS_CLI_CACHE_DIR is set the directory is created if needed and cleanup is a no-op.
+// When cacheDir is set it is created if needed and cleanup is a no-op.
 // Otherwise a fresh temp dir is created and cleanup removes it.
-func resolveCliDir() (dir string, cleanup func()) {
-	if d := os.Getenv("SNYK_LS_CLI_CACHE_DIR"); d != "" {
-		if err := os.MkdirAll(d, 0o750); err != nil {
+func resolveCliDir(cacheDir string) (dir string, cleanup func()) {
+	if cacheDir != "" {
+		if err := os.MkdirAll(cacheDir, 0o750); err != nil {
 			log.Fatalf("CLI cache dir: %v", err)
 		}
-		return d, func() {}
+		return cacheDir, func() {}
 	}
 	d, err := os.MkdirTemp("", "snyk-ls-cli-shared-*")
 	if err != nil {

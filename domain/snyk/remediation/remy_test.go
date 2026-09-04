@@ -60,6 +60,7 @@ func initGitRepo(t *testing.T) string {
 	run("init")
 	run("config", "user.email", "test@example.com")
 	run("config", "user.name", "Test")
+	run("config", "commit.gpgsign", "false")
 	// Overlay filesystems (e.g. Docker on Linux) have write-ordering delays that
 	// can cause git to report "not a valid object" when the object database is
 	// read immediately after a write. core.checkStat=minimal tells git not to
@@ -83,6 +84,62 @@ func commitFile(t *testing.T, repoRoot, relPath, content string) {
 func fakeRunner(fn func(ctx context.Context, root string, findingID string) error) func(ctx context.Context, eng workflow.Engine, root string, findingID string) error {
 	return func(ctx context.Context, _ workflow.Engine, root string, findingID string) error {
 		return fn(ctx, root, findingID)
+	}
+}
+
+// statCleanRunner returns a fix-runner that reproduces the exact Windows
+// stat-clean race (IDE-2289) inside root: it overwrites the tracked file at
+// relPath with a same-byte-length replacement, resets the file's mtime to its
+// checkout-time value so mtime+size match the cached index entry exactly, then
+// pushes the git index's own mtime 2 seconds into the future to defeat git's
+// racy-git protection (which only fires when index_mtime <= file_mtime) —
+// reproducing the exact condition a slow Windows `git worktree add` produces.
+// newContent must be the same byte length as the file's committed content, or
+// the SIZE_CHANGED bit flips and the race no longer reproduces.
+//
+// Shared by TestRemediate_StatCleanSameSize_StillDetected (Remediate /
+// gitChangedFiles) and TestFixFolder_StatCleanSameSize_StillDetected
+// (FixFolder / collectFileDiffs): both exercise the same invalidateStatCache
+// call against the same fixture shape.
+func statCleanRunner(relPath, newContent string) func(_ context.Context, _ workflow.Engine, root string, _ string) error {
+	return func(_ context.Context, _ workflow.Engine, root string, _ string) error {
+		worktreeFile := filepath.Join(root, relPath)
+
+		// Capture the mtime git recorded in the index at checkout time.
+		info, err := os.Stat(worktreeFile)
+		if err != nil {
+			return err
+		}
+		checkoutMtime := info.ModTime()
+
+		// Write the same-size change — SIZE_CHANGED bit stays 0.
+		if err := os.WriteFile(worktreeFile, []byte(newContent), 0o644); err != nil {
+			return err
+		}
+
+		// Reset file mtime to checkout mtime: mtime+size now match the index entry.
+		if err := os.Chtimes(worktreeFile, checkoutMtime, checkoutMtime); err != nil {
+			return err
+		}
+
+		// Advance the index file's mtime strictly past the file mtime. This
+		// defeats git's racy-git protection: the racy check fires only when
+		// index_mtime <= file_mtime. With index_mtime > file_mtime, git treats
+		// the index as having been written after the file, so it trusts the
+		// cached stat (mtime+size match → assume clean → skip content hashing).
+		// This is the exact Windows CI condition: git worktree add is slow
+		// enough that the index is written in a later clock tick than the
+		// checked-out files.
+		idxPathBytes, idxErr := exec.Command("git", "-C", root, "rev-parse", "--git-path", "index").Output()
+		if idxErr != nil {
+			return idxErr
+		}
+		idxPath := strings.TrimSpace(string(idxPathBytes))
+		if !filepath.IsAbs(idxPath) {
+			idxPath = filepath.Join(root, idxPath)
+		}
+		futureTime := checkoutMtime.Add(2 * time.Second)
+		return os.Chtimes(idxPath, futureTime, futureTime)
 	}
 }
 
@@ -746,6 +803,7 @@ func initGitRepoInDir(t *testing.T, dir string) {
 	run("init")
 	run("config", "user.email", "test@example.com")
 	run("config", "user.name", "Test")
+	run("config", "commit.gpgsign", "false")
 	run("config", "core.checkStat", "minimal")
 }
 

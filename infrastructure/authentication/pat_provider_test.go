@@ -25,6 +25,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -109,15 +110,16 @@ func TestPatAuthenticationProvider_ClearAuthentication(t *testing.T) {
 }
 
 func TestPatAuthenticationProvider_GetCheckAuthenticationFunction(t *testing.T) {
-	p := &PatAuthenticationProvider{}
-	engine := testutil.UnitTest(t)
+	_, mockEngine, mockConfig := testutil.UnitTestWithMockEngine(t)
+	mockConfig.EXPECT().GetString(gomock.Any()).Return("").AnyTimes()
+	mockConfig.EXPECT().IsSet(gomock.Any()).Return(false).AnyTimes()
 
-	// GetCheckAuthenticationFunction should return AuthenticationCheck
-	user, err := p.GetCheckAuthenticationFunction()(engine)
-	if assert.Error(t, err) {
-		assert.Contains(t, err.Error(), "failed to get active user:")
-	}
-	assert.Equal(t, "", user, "GetCheckAuthenticationFunction()()")
+	p := &PatAuthenticationProvider{}
+
+	user, err := p.GetCheckAuthenticationFunction()(mockEngine)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to get active user:")
+	assert.Equal(t, "", user)
 }
 
 func TestPatAuthenticationProvider_setAuthUrl(t *testing.T) {

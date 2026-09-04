@@ -19,9 +19,9 @@ package secrets
 
 import (
 	"context"
+	"errors"
 	"sync"
 
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
@@ -30,7 +30,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/issuecache"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
@@ -65,32 +64,30 @@ func NewScanStatus() *ScanStatus {
 
 type Scanner struct {
 	*issuecache.IssueCache
-	SnykApiClient      snyk_api.SnykApiClient
-	scanStatusMutex    sync.RWMutex
-	runningScans       map[types.FilePath]*ScanStatus
-	changedPaths       map[types.FilePath]map[types.FilePath]bool // tracks files that were changed since the last scan per workspace folder
-	featureFlagService featureflag.Service
-	notifier           notification.Notifier
-	Instrumentor       performance.Instrumentor
-	conf               configuration.Configuration
-	engine             workflow.Engine
-	logger             *zerolog.Logger
-	configResolver     types.ConfigResolverInterface
+	SnykApiClient   snyk_api.SnykApiClient
+	scanStatusMutex sync.RWMutex
+	runningScans    map[types.FilePath]*ScanStatus
+	changedPaths    map[types.FilePath]map[types.FilePath]bool // tracks files that were changed since the last scan per workspace folder
+	notifier        notification.Notifier
+	Instrumentor    performance.Instrumentor
+	conf            configuration.Configuration
+	engine          workflow.Engine
+	logger          *zerolog.Logger
+	configResolver  types.ConfigResolverInterface
 }
 
-func New(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, featureFlagService featureflag.Service, notifier notification.Notifier, configResolver types.ConfigResolverInterface) *Scanner {
+func New(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, notifier notification.Notifier, configResolver types.ConfigResolverInterface) *Scanner {
 	return &Scanner{
-		IssueCache:         issuecache.NewIssueCache(product.ProductSecrets),
-		SnykApiClient:      apiClient,
-		runningScans:       map[types.FilePath]*ScanStatus{},
-		changedPaths:       map[types.FilePath]map[types.FilePath]bool{},
-		featureFlagService: featureFlagService,
-		notifier:           notifier,
-		Instrumentor:       instrumentor,
-		conf:               conf,
-		engine:             engine,
-		logger:             logger,
-		configResolver:     configResolver,
+		IssueCache:     issuecache.NewIssueCache(product.ProductSecrets),
+		SnykApiClient:  apiClient,
+		runningScans:   map[types.FilePath]*ScanStatus{},
+		changedPaths:   map[types.FilePath]map[types.FilePath]bool{},
+		notifier:       notifier,
+		Instrumentor:   instrumentor,
+		conf:           conf,
+		engine:         engine,
+		logger:         logger,
+		configResolver: configResolver,
 	}
 }
 
@@ -184,22 +181,14 @@ func (sc *Scanner) checkPreconditions(ctx context.Context, pathToScan types.File
 	l := scannercommon.LoggerWithProductScanFields(sc.logger, "secrets.Scan", pathToScan, workspaceFolder, scanType)
 	ctxLogger := &l
 
-	if err = scannercommon.RequireProductEnabled(
-		sc.getConfigResolver(ctx).IsProductEnabledForFolder(sc.Product(), workspaceFolderConfig),
-		utils.ErrSnykSecretsNotEnabledForFolder,
-	); err != nil {
-		return workspaceFolderConfig, ctxLogger, false, err
+	if !scannercommon.IsProductEnabledForScan(ctx, sc.getConfigResolver(ctx), sc.Product(), workspaceFolderConfig) {
+		return workspaceFolderConfig, ctxLogger, false, errors.New(utils.ErrSnykSecretsNotEnabledForFolder)
 	}
 
 	if err = scannercommon.RequireAuthToken(sc.conf, *ctxLogger); err != nil {
 		return workspaceFolderConfig, ctxLogger, false, err
 	}
 
-	isSecretsScannerEnabled := workspaceFolderConfig.GetFeatureFlag(featureflag.SnykSecretsEnabled)
-	if !isSecretsScannerEnabled {
-		ctxLogger.Debug().Str("folderPath", string(workspaceFolder)).Msgf("feature flag %s not enabled, skipping scan", featureflag.SnykSecretsEnabled)
-		return workspaceFolderConfig, ctxLogger, false, errors.New(utils.ErrSnykSecretsNotEnabled)
-	}
 	return workspaceFolderConfig, ctxLogger, true, nil
 }
 

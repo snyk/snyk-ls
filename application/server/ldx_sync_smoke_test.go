@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adrg/xdg"
 	"github.com/creachadair/jrpc2"
 	"github.com/creachadair/jrpc2/server"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
@@ -42,22 +41,20 @@ import (
 )
 
 // setupLdxSyncTest creates test environment for LDX-Sync cache tests
-func setupLdxSyncTest(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder) {
+func setupLdxSyncTest(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder, di.Dependencies) {
 	t.Helper()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, "SNYK_TOKEN_CONSISTENT_IGNORES", "SMOKE_SHARD_4")
 
-	origConfigHome := xdg.ConfigHome
-	xdg.ConfigHome = t.TempDir()
-	t.Cleanup(func() { xdg.ConfigHome = origConfigHome })
+	setupTestConfigIsolation(t, engine)
 
-	loc, jsonRpcRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRpcRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 
 	// Disable scanning products - only testing cache behavior
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), false)
 
-	return engine, tokenService, loc, jsonRpcRecorder
+	return engine, tokenService, loc, jsonRpcRecorder, deps
 }
 
 // requireLspConfigurationNotification is a helper to check $/snyk.configuration notifications
@@ -110,7 +107,8 @@ func assertSmokeLdxFolderOrgResolution(t *testing.T, fc types.LspFolderConfig) {
 // Test_SmokeLdxSync_Initialize verifies LDX-Sync cache population and notifications
 // are sent correctly when initializing with a workspace folder
 func Test_SmokeLdxSync_Initialize(t *testing.T) {
-	engine, tokenService, loc, jsonRpcRecorder := setupLdxSyncTest(t)
+	t.Parallel()
+	engine, tokenService, loc, jsonRpcRecorder, _ := setupLdxSyncTest(t)
 
 	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
@@ -138,7 +136,8 @@ func Test_SmokeLdxSync_Initialize(t *testing.T) {
 // Test_SmokeLdxSync_AddFolder verifies LDX-Sync cache is refreshed and notifications
 // are sent when adding a workspace folder dynamically via didChangeWorkspaceFolders
 func Test_SmokeLdxSync_AddFolder(t *testing.T) {
-	engine, tokenService, loc, jsonRpcRecorder := setupLdxSyncTest(t)
+	t.Parallel()
+	engine, tokenService, loc, jsonRpcRecorder, _ := setupLdxSyncTest(t)
 
 	folder1 := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
@@ -198,7 +197,8 @@ func Test_SmokeLdxSync_AddFolder(t *testing.T) {
 // Test_SmokeLdxSync_Login_Trigger3 verifies LDX-Sync trigger 3: user login → full refresh → $/snyk.configuration.
 // Only login is faked (FakeAuthentication); LDX-Sync and config path are real.
 func Test_SmokeLdxSync_Login_Trigger3(t *testing.T) {
-	engine, tokenService, loc, jsonRpcRecorder := setupLdxSyncTest(t)
+	t.Parallel()
+	engine, tokenService, loc, jsonRpcRecorder, deps := setupLdxSyncTest(t)
 
 	_ = setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 
@@ -209,7 +209,7 @@ func Test_SmokeLdxSync_Login_Trigger3(t *testing.T) {
 	// Switch to FakeAuthentication AFTER initialization (which hardcodes TokenAuthentication)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAutomaticAuthentication), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
-	authService := di.AuthenticationService()
+	authService := deps.AuthenticationService
 	authService.ConfigureProviders(engine.GetConfiguration(), engine.GetLogger())
 	fakeProvider := authService.Provider().(*authentication.FakeAuthenticationProvider)
 	fakeProvider.IsAuthenticated = false
@@ -230,7 +230,8 @@ func Test_SmokeLdxSync_Login_Trigger3(t *testing.T) {
 // Test_SmokeLdxSync_ChangePreferredOrg verifies LDX-Sync cache is refreshed and
 // notifications are sent when changing the PreferredOrg via didChangeConfiguration
 func Test_SmokeLdxSync_ChangePreferredOrg(t *testing.T) {
-	engine, tokenService, loc, jsonRpcRecorder := setupLdxSyncTest(t)
+	t.Parallel()
+	engine, tokenService, loc, jsonRpcRecorder, _ := setupLdxSyncTest(t)
 
 	folder := setupRepoAndInitialize(t, testsupport.NodejsGoof, "0336589", "package.json", loc, engine, tokenService)
 

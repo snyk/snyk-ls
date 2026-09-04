@@ -18,12 +18,16 @@ package scanner
 
 import (
 	"context"
+	"errors"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
+	"github.com/gosimple/hashdir"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -35,7 +39,9 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/initialize"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
+	"github.com/snyk/snyk-ls/domain/snyk/persistence/mock_persistence"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
+	"github.com/snyk/snyk-ls/infrastructure/secrets"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -71,6 +77,126 @@ func TestScan_UsesEnabledProductLinesOnly(t *testing.T) {
 	scanner.Scan(ctx, "", types.NoopResultProcessor, nil)
 
 	// gomock will verify expectations automatically
+}
+
+func TestDelegatingConcurrentScanner_Scan_DisabledRealFolderDoesNotPersistReference(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	disabledScanner := mock_types.NewMockProductScanner(ctrl)
+	disabledScanner.EXPECT().Product().Return(product.ProductSecrets).AnyTimes()
+	disabledScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(false)
+	disabledScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
+	mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
+	mockPersister.EXPECT().Exists(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+	mockPersister.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	sc, _ := setupScanner(t, engine, tokenService, disabledScanner)
+	sc.(*DelegatingConcurrentScanner).scanPersister = mockPersister
+	folderPath := types.FilePath(t.TempDir())
+	folderConfig := &types.FolderConfig{FolderPath: folderPath}
+	syncFolderToConfig(t, engine, folderConfig, &syncFolderOpts{ReferenceFolderPath: types.FilePath(t.TempDir())})
+	ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
+
+	sc.Scan(ctx, folderPath, types.NoopResultProcessor, nil)
+}
+
+func TestDelegatingConcurrentScanner_Scan_ReferenceUsesTemporaryFolderButPersistsAgainstRealFolder(t *testing.T) {
+	// Setup.
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	mockEngine, conf := testutil.SetUpEngineMock(t, engine)
+	tokenService.SetToken(conf, "valid-token")
+	conf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), false)
+
+	realFolder := types.FilePath(t.TempDir())
+	referenceFolder := types.FilePath(t.TempDir())
+	require.NoError(t, os.WriteFile(filepath.Join(string(referenceFolder), "baseline.txt"), []byte("baseline"), 0o600))
+	expectedHash, err := hashdir.Make(string(referenceFolder), "sha256")
+	require.NoError(t, err)
+
+	folderConfig := &types.FolderConfig{FolderPath: realFolder}
+	syncFolderToConfig(t, mockEngine, folderConfig, &syncFolderOpts{
+		ReferenceFolderPath: referenceFolder,
+		UserOverrides: map[string]any{
+			types.SettingSnykSecretsEnabled: true,
+		},
+	})
+	resolver := testutil.DefaultConfigResolver(mockEngine)
+	require.True(t, resolver.IsProductEnabledForFolder(product.ProductSecrets, folderConfig))
+	require.False(t, resolver.IsProductEnabledForFolder(product.ProductSecrets, &types.FolderConfig{FolderPath: referenceFolder}))
+
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+	workflowCalls := 0
+	mockEngine.EXPECT().
+		InvokeWithConfig(workflow.NewWorkflowIdentifier("secrets.test"), gomock.Any()).
+		DoAndReturn(func(workflow.Identifier, configuration.Configuration) ([]workflow.Data, error) {
+			workflowCalls++
+			return []workflow.Data{}, nil
+		}).
+		AnyTimes()
+	mockEngine.EXPECT().
+		InvokeWithInputAndConfig(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return([]workflow.Data{}, nil).
+		AnyTimes()
+	productionScanner := secrets.New(
+		conf,
+		mockEngine,
+		engine.GetLogger(),
+		performance.NewInstrumentor(),
+		&snyk_api.FakeApiClient{},
+		notification.NewMockNotifier(),
+		resolver,
+	)
+
+	workingResults := []types.Issue{testutil.NewMockIssue("working-result", realFolder)}
+	referenceResults := []types.Issue{testutil.NewMockIssue("reference-result", referenceFolder)}
+	var referenceErr error
+	mockScanner := mock_types.NewMockProductScanner(ctrl)
+	mockScanner.EXPECT().Product().Return(product.ProductSecrets).AnyTimes()
+	mockScanner.EXPECT().IsEnabledForFolder(folderConfig).Return(true)
+	// Assert working and reference scans.
+	gomock.InOrder(
+		mockScanner.EXPECT().Scan(gomock.Any(), realFolder).DoAndReturn(
+			func(ctx context.Context, path types.FilePath) ([]types.Issue, error) {
+				_, scanErr := productionScanner.Scan(ctx, path)
+				return workingResults, scanErr
+			},
+		),
+		mockScanner.EXPECT().Scan(gomock.Any(), referenceFolder).DoAndReturn(
+			func(ctx context.Context, path types.FilePath) ([]types.Issue, error) {
+				scanType, ok := ctx2.DeltaScanTypeFromContext(ctx)
+				assert.True(t, ok)
+				assert.Equal(t, ctx2.Reference, scanType)
+				assert.Equal(t, referenceFolder, path)
+				referenceConfig, ok := ctx2.FolderConfigFromContext(ctx)
+				assert.True(t, ok)
+				assert.NotNil(t, referenceConfig)
+				if !ok || referenceConfig == nil {
+					return nil, errors.New("reference folder config missing from production context")
+				}
+				assert.Equal(t, referenceFolder, referenceConfig.FolderPath)
+				_, referenceErr = productionScanner.Scan(ctx, path)
+				return referenceResults, referenceErr
+			},
+		),
+	)
+
+	mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
+	// Assert real folder is persisted.
+	mockPersister.EXPECT().Exists(realFolder, expectedHash, product.ProductSecrets).Return(false)
+	mockPersister.EXPECT().Add(realFolder, expectedHash, referenceResults, product.ProductSecrets).Return(nil)
+
+	sc, _ := setupScannerWithResolver(t, mockEngine, tokenService, resolver, mockScanner)
+	sc.(*DelegatingConcurrentScanner).scanPersister = mockPersister
+	ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
+
+	sc.Scan(ctx, realFolder, types.NoopResultProcessor, nil)
+
+	require.NoError(t, referenceErr, "reference scan must bypass only the temporary-folder enablement check")
+	assert.Equal(t, 2, workflowCalls, "working and reference scans must both reach secrets.test")
 }
 
 func setupScanner(t *testing.T, engine workflow.Engine, tokenService types.TokenService, testProductScanners ...types.ProductScanner) (
@@ -655,6 +781,74 @@ func TestEnrichContextAndLogger_PreservesExistingDeps(t *testing.T) {
 	fc, ok := ctx2.FolderConfigFromContext(enrichedCtx)
 	require.True(t, ok, "FolderConfig should be preserved from incoming context")
 	require.Same(t, folderConfig, fc, "FolderConfig should be the same instance")
+}
+
+// Test_ServerCtxCanceled_RefScanCtxCanceled verifies that when the outer
+// server-lifetime context is canceled, the reference scan goroutine's context
+// is also canceled. With context.WithoutCancel this test fails because the
+// reference scan context is permanently non-cancelable. After the fix (using
+// serverCtx instead), the reference scan context inherits cancellation from
+// the server-lifetime context.
+func Test_ServerCtxCanceled_RefScanCtxCanceled(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	// Arrange: valid token so the scan proceeds.
+	tokenService.SetToken(engine.GetConfiguration(), uuid.New().String())
+	wdScanStarted := make(chan bool, 1)
+	wdScanRelease := make(chan bool, 1)
+
+	mockScanner := mock_types.NewMockProductScanner(ctrl)
+	mockScanner.EXPECT().Product().Return(product.ProductCode).AnyTimes()
+	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
+	// WD scan: signal start, block until released.
+	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ types.FilePath) ([]types.Issue, error) {
+			wdScanStarted <- true
+			<-wdScanRelease
+			return []types.Issue{}, nil
+		}).Times(1)
+
+	sc, _ := setupScanner(t, engine, tokenService, mockScanner)
+
+	// serverCtx simulates the server-lifetime context that shutdownHandler cancels.
+	serverCtx, serverCancel := context.WithCancel(t.Context())
+	defer serverCancel()
+
+	// Capture the context passed to processResults for the reference scan.
+	var refScanCtxErr error
+	refScanDone := make(chan bool, 1)
+	captureProcessor := func(ctx context.Context, data types.ScanData) {
+		if data.IsReferenceScan {
+			refScanCtxErr = ctx.Err()
+			refScanDone <- true
+		}
+	}
+
+	done := make(chan bool, 1)
+	go func() {
+		// pathToScan == folderPath ("") triggers the reference scan goroutine.
+		fc := &types.FolderConfig{FolderPath: ""}
+		scanCtx := ctx2.NewContextWithFolderConfig(serverCtx, fc)
+		sc.Scan(scanCtx, "", captureProcessor, nil)
+		done <- true
+	}()
+
+	// Wait for WD scan to start, then cancel the server context (simulating shutdown).
+	testsupport.RequireEventuallyReceive(t, wdScanStarted, 5*time.Second, 10*time.Millisecond, "WD scan should start")
+	serverCancel()
+	wdScanRelease <- true
+
+	// Wait for Scan to return.
+	testsupport.RequireEventuallyReceive(t, done, 5*time.Second, 10*time.Millisecond, "Scan should complete")
+
+	// Wait for the reference scan processResults callback to fire.
+	testsupport.RequireEventuallyReceive(t, refScanDone, 5*time.Second, 10*time.Millisecond, "reference scan should complete")
+
+	// The reference scan context must be canceled because serverCtx was canceled.
+	assert.ErrorIs(t, refScanCtxErr, context.Canceled,
+		"reference scan context must be canceled when the server-lifetime context is canceled")
 }
 
 func TestDelegatingConcurrentScanner_getPersistHash_ErrorOnMissingReference(t *testing.T) {

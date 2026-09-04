@@ -26,9 +26,9 @@ VERSION := $(shell git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)
 COMMIT := $(shell git show -s --format=%h)
 LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/application/config.Development=true' -X 'github.com/snyk/snyk-ls/application/config.Version=v$(VERSION)-SNAPSHOT-$(COMMIT)'"
 
-TOOLS_BIN := $(shell pwd)/.bin
+TOOLS_BIN := $(shell pwd)/.bin/$(DEV_GOOS)-$(DEV_GOARCH)
 
-OVERRIDE_GOCI_LINT_V := v2.10.1
+OVERRIDE_GOCI_LINT_V := v2.12.2
 GOLICENSES_V := v1.6.0
 PACT_V := 2.4.2
 
@@ -38,13 +38,12 @@ TIMEOUT := "-timeout=90m"
 ## tools: Install required tooling.
 .PHONY: tools
 tools: $(TOOLS_BIN)/go-licenses $(TOOLS_BIN)/golangci-lint $(TOOLS_BIN)/pact/bin/pact
-	@command -v pre-commit >/dev/null 2>&1 && { pre-commit install && pre-commit install --hook-type pre-push; } || \
+	@command -v pre-commit >/dev/null 2>&1 && pre-commit install || \
 		echo "⚠️  pre-commit not found — run 'make hooks' after installing pre-commit to enable git hooks"
 
 .PHONY: hooks
 hooks:
 	@pre-commit install
-	@pre-commit install --hook-type pre-push
 
 
 $(TOOLS_BIN)/go-licenses:
@@ -87,16 +86,29 @@ format: lint-fix
 test: test-js
 	@echo "==> Running tests..."
 	@mkdir -p $(BUILD_DIR)
+	@export PATH=$(TOOLS_BIN)/pact/bin:$$PATH && \
 	go test $(TIMEOUT) -failfast ./...
 	@stages="test"; \
 	 [ -n "$(INTEG_TESTS)" ] && stages="$$stages test-integ" || true; \
 	 [ -n "$(SMOKE_TESTS)" ] && stages="$$stages test-smoke" || true; \
 	 for s in $$stages; do $(MAKE) --no-print-directory _save-test-hash STAGE=$$s; done
 
+## test-live: Run tests printing each failure as it happens, not at the end (local dev).
+## Usage: make test-live PKG=./application/server/ ARGS="-race"
+.PHONY: test-live
+test-live: PKG ?= ./...
+test-live:
+	@scripts/test-live.sh $(PKG) $(TIMEOUT) $(ARGS)
+
 ## test-integ: Run integration tests (alias for INTEG_TESTS=1 make test).
 .PHONY: test-integ
 test-integ:
 	INTEG_TESTS=1 $(MAKE) test
+
+## test-bdd: Run the godog BDD feature suite (features/*.feature, driven from application/server).
+.PHONY: test-bdd
+test-bdd:
+	go test $(TIMEOUT) -run TestBDD ./application/server/...
 
 ## test-smoke: Run smoke tests (all shards, single go test invocation).
 .PHONY: test-smoke
@@ -222,7 +234,7 @@ tree-view-fixture:
 config-dialog-fixture:
 	@echo "==> Generating config dialog HTML fixture..."
 	@mkdir -p js-tests/fixtures
-	@go run scripts/config-dialog/main.go --dummy-data -no-panel > js-tests/fixtures/config-page.html
+	@go run scripts/config-dialog/main.go --dummy-data --integration VS_CODE -no-panel > js-tests/fixtures/config-page.html
 	@echo "    Written to js-tests/fixtures/config-page.html"
 
 ## settings-fallback-fixture: Regenerate settings fallback HTML fixtures used by JS tests.

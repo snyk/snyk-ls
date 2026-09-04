@@ -18,9 +18,8 @@
 package di
 
 import (
-	"sync"
+	"context"
 
-	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -29,9 +28,8 @@ import (
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence"
 	"github.com/snyk/snyk-ls/infrastructure/secrets"
+	"github.com/snyk/snyk-ls/internal/progress"
 	"github.com/snyk/snyk-ls/internal/types"
-
-	codeClientObservability "github.com/snyk/code-client-go/observability"
 
 	"github.com/snyk/snyk-ls/application/codeaction"
 	"github.com/snyk/snyk-ls/application/config"
@@ -61,39 +59,6 @@ import (
 	performance2 "github.com/snyk/snyk-ls/internal/observability/performance"
 )
 
-var (
-	snykApiClient               snyk_api.SnykApiClient
-	snykCodeScanner             *code.Scanner
-	snykSecretsScanner          *secrets.Scanner
-	infrastructureAsCodeScanner *iac.Scanner
-	openSourceScanner           types.ProductScanner
-	scanInitializer             initialize.Initializer
-	authenticationService       authentication.AuthenticationService
-	learnService                learn.Service
-	instrumentor                performance2.Instrumentor
-	errorReporter               er.ErrorReporter
-	installer                   install.Installer
-	hoverService                hover.Service
-	scanner                     scanner2.Scanner
-	featureFlagService          featureflag.Service
-	cliInitializer              *cli.Initializer
-	scanNotifier                scanner2.ScanNotifier
-	codeActionService           *codeaction.CodeActionsService
-	fileWatcher                 *watcher.FileWatcher
-	remediationNotifier         remediation.FileChangeNotifier
-	initMutex                   = &sync.Mutex{}
-	notifier                    domainNotify.Notifier
-	codeInstrumentor            codeClientObservability.Instrumentor
-	codeErrorReporter           codeClientObservability.ErrorReporter
-	scanPersister               persistence.ScanSnapshotPersister
-	scanStateAggregator         scanstates.Aggregator
-	scanStateChangeEmitter      scanstates.ScanStateChangeEmitter
-	treeEmitterInstance         *treeview.TreeScanStateEmitter
-	snykCli                     cli.Executor
-	ldxSyncService              command.LdxSyncService
-	configResolver              types.ConfigResolverInterface
-)
-
 type Dependencies struct {
 	AuthenticationService authentication.AuthenticationService
 	ConfigResolver        types.ConfigResolverInterface
@@ -103,12 +68,14 @@ type Dependencies struct {
 	LdxSyncService        command.LdxSyncService
 	ScanStateAggregator   scanstates.Aggregator
 	InlineValueProvider   snyk.InlineValueProvider
-	TreeEmitter           command.TreeEmitter
-	// Handler-accessed dependencies (previously read via di.*() globals).
-	// Note: Installer and Initializer are intentionally absent — they are
-	// process-lifecycle dependencies used during startup, not per-request.
-	// Access them via di.Installer() / di.Initializer() until those global
-	// accessors are retired.
+	// TreeEmitter is the concrete type rather than command.TreeEmitter because
+	// the server owns its disposal on shutdown, and disposal is a lifecycle
+	// concern that the consumer-facing interface has no reason to carry. Nil
+	// when emitter construction failed; Dispose tolerates that.
+	TreeEmitter *treeview.TreeScanStateEmitter
+	// Handler-accessed dependencies. Only what handlers read belongs here, which
+	// is why initialize.Initializer does not: no handler reads it, it is consumed
+	// once during startup by NewDelegatingScanner.
 	Scanner             scanner2.Scanner
 	HoverService        hover.Service
 	ScanNotifier        scanner2.ScanNotifier
@@ -117,53 +84,28 @@ type Dependencies struct {
 	ErrorReporter       er.ErrorReporter
 	CodeActionService   *codeaction.CodeActionsService
 	RemediationNotifier remediation.FileChangeNotifier
+	Installer           install.Installer
+	CommandService      types.CommandService
+	// ProgressTracker is the per-server Tracker of the progress channel and the
+	// token→task registry [IDE-2036]. Each server instance has its own Tracker so
+	// progress events from one server cannot leak to another server's listener.
+	ProgressTracker *progress.Tracker
+	// ScanCtx is a server-lifetime context for workspace scan goroutines.
+	// Canceling ScanCancel on shutdown ensures in-flight scan goroutines exit
+	// cleanly, preventing file-handle leaks on Windows [IDE-2036].
+	ScanCtx    context.Context
+	ScanCancel context.CancelFunc
 }
 
-func currentDependencies() Dependencies {
-	var inlineValueProvider snyk.InlineValueProvider
-	if ivp, ok := scanner.(snyk.InlineValueProvider); ok {
-		inlineValueProvider = ivp
-	}
-	return Dependencies{
-		AuthenticationService: authenticationService,
-		ConfigResolver:        configResolver,
-		FeatureFlagService:    featureFlagService,
-		Notifier:              notifier,
-		LearnService:          learnService,
-		LdxSyncService:        ldxSyncService,
-		ScanStateAggregator:   scanStateAggregator,
-		InlineValueProvider:   inlineValueProvider,
-		TreeEmitter:           treeEmitterInstance,
-		// Handler-accessed dependencies:
-		Scanner:             scanner,
-		HoverService:        hoverService,
-		ScanNotifier:        scanNotifier,
-		ScanPersister:       scanPersister,
-		FileWatcher:         fileWatcher,
-		ErrorReporter:       errorReporter,
-		CodeActionService:   codeActionService,
-		RemediationNotifier: remediationNotifier,
-	}
-}
-
+// Init constructs a fully-initialized set of production dependencies using only
+// local variables, so multiple callers (e.g. parallel smoke-test servers) are
+// safe to run concurrently. The caller owns the returned graph, including
+// disposing Dependencies.TreeEmitter and calling Dependencies.ScanCancel.
 func Init(engine workflow.Engine, tokenService types.TokenService) Dependencies {
-	initMutex.Lock()
-	defer initMutex.Unlock()
 	conf := engine.GetConfiguration()
 	logger := engine.GetLogger()
-	initInfrastructure(tokenService, conf, engine, logger)
-	initDomain(tokenService, conf, engine, logger)
-	initApplication(conf, engine, logger)
-	return currentDependencies()
-}
+	progressTracker := progress.NewTracker(logger)
 
-func initDomain(tokenService types.TokenService, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) {
-	hoverService = hover.NewDefaultService(logger)
-	scanner = scanner2.NewDelegatingScanner(engine, tokenService, scanInitializer, instrumentor, scanNotifier, snykApiClient, authenticationService, notifier, scanPersister, scanStateAggregator, configResolver, snykCodeScanner, infrastructureAsCodeScanner, openSourceScanner, snykSecretsScanner)
-	ldxSyncService = command.NewLdxSyncService(configResolver)
-}
-
-func initInfrastructure(tokenService types.TokenService, conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) {
 	gafConfiguration := conf
 	gafConfiguration.Set(configuration.STOP_REQUESTS_WITHOUT_AUTH, true)
 
@@ -172,208 +114,111 @@ func initInfrastructure(tokenService types.TokenService, conf configuration.Conf
 	_ = gafConfiguration.AddFlagSet(fs)
 	fm := workflow.ConfigurationOptionsFromFlagset(fs)
 
-	// init NetworkAccess
+	// Network access
 	networkAccess := engine.GetNetworkAccess()
 	authorizedClient := networkAccess.GetHttpClient
 	unauthorizedHttpClient := networkAccess.GetUnauthorizedHttpClient
 
-	notifier = domainNotify.NewNotifier()
+	// Infrastructure layer — all local variables
+	localNotifier := domainNotify.NewNotifier()
 	resolver := types.NewConfigResolver(logger)
 	prefixKeyResolver := configresolver.New(gafConfiguration, fm)
 	resolver.SetPrefixKeyResolver(prefixKeyResolver, gafConfiguration, fm)
-	configResolver = resolver
-	errorReporter = sentry.NewSentryErrorReporter(conf, logger, engine, notifier, configResolver)
-	installer = install.NewInstaller(engine, errorReporter, unauthorizedHttpClient, configResolver)
-	learnService = learn.New(gafConfiguration, logger, unauthorizedHttpClient)
-	instrumentor = performance2.NewInstrumentor()
-	featureFlagService = featureflag.New(conf, logger, engine, configResolver)
-	snykApiClient = snyk_api.NewSnykApiClient(conf, logger, authorizedClient, configResolver)
-	scanPersister = persistence.NewGitPersistenceProvider(logger, gafConfiguration)
-	summaryEmitter := scanstates.NewSummaryEmitter(conf, logger, notifier, engine, configResolver)
-	if treeEmitterInstance != nil {
-		treeEmitterInstance.Dispose()
-	}
-	treeEmitter, treeEmitterErr := treeview.NewTreeScanStateEmitter(conf, logger, notifier)
-	if treeEmitterErr != nil {
-		logger.Warn().Err(treeEmitterErr).Msg("failed to create tree scan state emitter, using summary emitter only")
-		treeEmitterInstance = nil
-		scanStateChangeEmitter = summaryEmitter
+	localConfigResolver := types.ConfigResolverInterface(resolver)
+
+	localErrorReporter := sentry.NewSentryErrorReporter(conf, logger, engine, localNotifier, localConfigResolver)
+	localInstaller := install.NewInstaller(engine, localErrorReporter, unauthorizedHttpClient, localConfigResolver, progressTracker)
+	localLearnService := learn.New(gafConfiguration, logger, unauthorizedHttpClient)
+	localInstrumentor := performance2.NewInstrumentor()
+	localFeatureFlagService := featureflag.New(conf, logger, engine, localConfigResolver)
+	localSnykApiClient := snyk_api.NewSnykApiClient(conf, logger, authorizedClient, localConfigResolver)
+	localScanPersister := persistence.NewGitPersistenceProvider(logger, gafConfiguration)
+
+	localSummaryEmitter := scanstates.NewSummaryEmitter(conf, logger, localNotifier, engine, localConfigResolver)
+	localTreeEmitter, localTreeEmitterErr := treeview.NewTreeScanStateEmitter(conf, logger, localNotifier)
+	var localScanStateChangeEmitter scanstates.ScanStateChangeEmitter
+	if localTreeEmitterErr != nil {
+		logger.Warn().Err(localTreeEmitterErr).Msg("failed to create tree scan state emitter, using summary emitter only")
+		localTreeEmitter = nil // Dependencies.TreeEmitter promises nil on failure
+		localScanStateChangeEmitter = localSummaryEmitter
 	} else {
-		treeEmitterInstance = treeEmitter
-		scanStateChangeEmitter = scanstates.NewCompositeEmitter(summaryEmitter, treeEmitter)
+		localScanStateChangeEmitter = scanstates.NewCompositeEmitter(localSummaryEmitter, localTreeEmitter)
 	}
-	scanStateAggregator = scanstates.NewScanStateAggregator(conf, logger, scanStateChangeEmitter, configResolver, engine)
-	authenticationService = authentication.NewAuthenticationService(engine, tokenService, nil, errorReporter, notifier, configResolver)
-	snykCli = cli.NewExecutor(engine, errorReporter, notifier, configResolver)
 
+	localScanStateAggregator := scanstates.NewScanStateAggregator(conf, logger, localScanStateChangeEmitter, localConfigResolver, engine)
+	localAuthenticationService := authentication.NewAuthenticationService(engine, tokenService, nil, localErrorReporter, localNotifier, localConfigResolver)
+
+	localSnykCli := cli.NewExecutor(engine, localErrorReporter, localNotifier, localConfigResolver)
 	if gafConfiguration.GetString(cli_constants.EXECUTION_MODE_KEY) == cli_constants.EXECUTION_MODE_VALUE_EXTENSION {
-		snykCli = cli.NewExtensionExecutor(engine, configResolver)
+		localSnykCli = cli.NewExtensionExecutor(engine, localConfigResolver)
 	}
 
-	codeInstrumentor = code.NewCodeInstrumentor()
-	codeErrorReporter = code.NewCodeErrorReporter(errorReporter)
+	localCodeInstrumentor := code.NewCodeInstrumentor()
+	localCodeErrorReporter := code.NewCodeErrorReporter(localErrorReporter)
 
-	infrastructureAsCodeScanner = iac.New(conf, logger, instrumentor, errorReporter, snykCli, configResolver)
-	openSourceScanner = oss.NewCLIScanner(engine, instrumentor, errorReporter, snykCli, learnService, notifier, configResolver)
-	scanNotifier, _ = appNotification.NewScanNotifier(notifier, configResolver)
-	snykCodeScanner = code.New(engine, instrumentor, snykApiClient, codeErrorReporter, learnService, featureFlagService, notifier, codeInstrumentor, codeErrorReporter, code.CreateCodeScanner, configResolver)
-	snykSecretsScanner = secrets.New(conf, engine, logger, instrumentor, snykApiClient, featureFlagService, notifier, configResolver)
+	localIaCScanner := iac.New(conf, logger, localInstrumentor, localErrorReporter, localSnykCli, localConfigResolver, progressTracker)
+	localOpenSourceScanner := oss.NewCLIScanner(engine, localInstrumentor, localErrorReporter, localSnykCli, localLearnService, localNotifier, localConfigResolver, progressTracker)
+	localScanNotifier, _ := appNotification.NewScanNotifier(localNotifier, localConfigResolver)
+	localSnykCodeScanner := code.New(engine, localInstrumentor, localSnykApiClient, localCodeErrorReporter, localLearnService, localFeatureFlagService, localNotifier, localCodeInstrumentor, localCodeErrorReporter, code.CreateCodeScanner, localConfigResolver, progressTracker)
+	localSecretsScanner := secrets.New(conf, engine, logger, localInstrumentor, localSnykApiClient, localNotifier, localConfigResolver)
 
-	cliInitializer = cli.NewInitializer(conf, logger, errorReporter, installer, notifier, snykCli, configResolver)
-	authInitializer := authentication.NewInitializer(conf, logger, authenticationService, errorReporter, notifier, configResolver)
-	scanInitializer = initialize.NewDelegatingInitializer(
-		authInitializer,
-		cliInitializer,
+	localCLIInitializer := cli.NewInitializer(conf, logger, localErrorReporter, localInstaller, localNotifier, localSnykCli, localConfigResolver)
+	localAuthInitializer := authentication.NewInitializer(conf, logger, localAuthenticationService, localErrorReporter, localNotifier, localConfigResolver)
+	localScanInitializer := initialize.NewDelegatingInitializer(
+		localAuthInitializer,
+		localCLIInitializer,
 	)
-}
 
-func initApplication(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger) {
-	w := workspace.New(conf, logger, instrumentor, scanner, hoverService, scanNotifier, notifier, scanPersister, scanStateAggregator, featureFlagService, configResolver, engine) // don't use getters or it'll deadlock
+	// Domain layer
+	localHoverService := hover.NewDefaultService(logger)
+	localScanner := scanner2.NewDelegatingScanner(engine, tokenService, localScanInitializer, localInstrumentor, localScanNotifier, localSnykApiClient, localAuthenticationService, localNotifier, localScanPersister, localScanStateAggregator, localConfigResolver, localSnykCodeScanner, localIaCScanner, localOpenSourceScanner, localSecretsScanner)
+	localLdxSyncService := command.NewLdxSyncService(localConfigResolver)
+
+	// Server-lifetime scan context: canceled on shutdown so that in-flight scan
+	// goroutines exit cleanly, preventing file-handle leaks on Windows [IDE-2036].
+	// Created before the command service so it can be injected at construction [Decision D1].
+	localScanCtx, localScanCancel := context.WithCancel(context.Background())
+
+	// Application layer
+	w := workspace.New(conf, logger, localInstrumentor, localScanner, localHoverService, localScanNotifier, localNotifier, localScanPersister, localScanStateAggregator, localFeatureFlagService, localConfigResolver, engine)
 	config.SetWorkspace(conf, w)
-	fileWatcher = watcher.NewFileWatcher()
+	localFileWatcher := watcher.NewFileWatcher()
 
-	var remediationProvider remediation.RemediationProvider
-	var folderRemediator remediation.FolderRemediator
-	remediationNotifier = nil
-	p := remediation.NewRemyProvider(engine, nil)
-	remediationProvider = p
-	if n, ok := p.(remediation.FileChangeNotifier); ok {
-		remediationNotifier = n
+	localRemediationProvider := remediation.NewRemyProvider(engine, nil)
+	localRemediationNotifier, _ := localRemediationProvider.(remediation.FileChangeNotifier)
+	localFolderRemediator, _ := localRemediationProvider.(remediation.FolderRemediator)
+
+	localCodeActionService := codeaction.NewService(engine, w, localFileWatcher, localNotifier, localFeatureFlagService, localConfigResolver, localRemediationProvider)
+	localCommandService := command.NewService(engine, logger, localAuthenticationService, localFeatureFlagService, localNotifier, localLearnService, w, localSnykCodeScanner, localSnykCli, localLdxSyncService, localConfigResolver, localScanStateAggregator.StateSnapshot, localFolderRemediator, localScanCtx)
+
+	var localInlineValueProvider snyk.InlineValueProvider
+	if ivp, ok := localScanner.(snyk.InlineValueProvider); ok {
+		localInlineValueProvider = ivp
 	}
-	if fr, ok := p.(remediation.FolderRemediator); ok {
-		folderRemediator = fr
+
+	deps := Dependencies{
+		AuthenticationService: localAuthenticationService,
+		ConfigResolver:        localConfigResolver,
+		FeatureFlagService:    localFeatureFlagService,
+		Notifier:              localNotifier,
+		LearnService:          localLearnService,
+		LdxSyncService:        localLdxSyncService,
+		ScanStateAggregator:   localScanStateAggregator,
+		InlineValueProvider:   localInlineValueProvider,
+		TreeEmitter:           localTreeEmitter,
+		Scanner:               localScanner,
+		HoverService:          localHoverService,
+		ScanNotifier:          localScanNotifier,
+		ScanPersister:         localScanPersister,
+		FileWatcher:           localFileWatcher,
+		ErrorReporter:         localErrorReporter,
+		CodeActionService:     localCodeActionService,
+		RemediationNotifier:   localRemediationNotifier,
+		Installer:             localInstaller,
+		CommandService:        localCommandService,
+		ProgressTracker:       progressTracker,
+		ScanCtx:               localScanCtx,
+		ScanCancel:            localScanCancel,
 	}
-
-	codeActionService = codeaction.NewService(engine, w, fileWatcher, notifier, featureFlagService, configResolver, remediationProvider)
-	command.SetService(command.NewService(engine, logger, authenticationService, featureFlagService, notifier, learnService, w, snykCodeScanner, snykCli, ldxSyncService, configResolver, scanStateAggregator.StateSnapshot, folderRemediator))
-}
-
-/*
-TODO Accessors: This should go away, since all dependencies should be satisfied at startup-time, if needed for testing
-they can be returned by the test helper for unit/integration tests
-*/
-
-func Notifier() domainNotify.Notifier {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return notifier
-}
-
-func ErrorReporter() er.ErrorReporter {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return errorReporter
-}
-
-func AuthenticationService() authentication.AuthenticationService {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return authenticationService
-}
-
-func HoverService() hover.Service {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return hoverService
-}
-
-func ScanPersister() persistence.ScanSnapshotPersister {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return scanPersister
-}
-
-func ScanStateAggregator() scanstates.Aggregator {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return scanStateAggregator
-}
-
-func ScanNotifier() scanner2.ScanNotifier {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return scanNotifier
-}
-
-func Scanner() scanner2.Scanner {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return scanner
-}
-
-func Initializer() initialize.Initializer {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return scanInitializer
-}
-
-func Installer() install.Installer {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return installer
-}
-
-func CodeActionService() *codeaction.CodeActionsService {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return codeActionService
-}
-
-func FileWatcher() *watcher.FileWatcher {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return fileWatcher
-}
-
-func LearnService() learn.Service {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return learnService
-}
-
-func FeatureFlagService() featureflag.Service {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return featureFlagService
-}
-
-// SetFeatureFlagService replaces the global featureFlagService for future calls
-// to FeatureFlagService(). Objects already constructed before this call retain
-// their previous reference. Intended for test use only.
-func SetFeatureFlagService(service featureflag.Service) {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	featureFlagService = service
-}
-
-func LdxSyncService() command.LdxSyncService {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return ldxSyncService
-}
-
-func SetLdxSyncService(service command.LdxSyncService) {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	ldxSyncService = service
-}
-
-func DisposeTreeEmitter() {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	if treeEmitterInstance != nil {
-		treeEmitterInstance.Dispose()
-	}
-}
-
-func ConfigResolver() types.ConfigResolverInterface {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	return configResolver
-}
-
-func SetConfigResolver(resolver types.ConfigResolverInterface) {
-	initMutex.Lock()
-	defer initMutex.Unlock()
-	configResolver = resolver
+	return deps
 }

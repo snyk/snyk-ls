@@ -387,6 +387,93 @@ body {
   cursor: pointer;
 }
 
+/* File/issue search box (IDE-2362).
+   Sits between the filter toolbar and the tree. tree.js filters the rendered
+   nodes client-side as the user types, mirroring the native TreeSpeedSearch the
+   old Swing tree provided. Reuses the same input tokens as the delta ref picker
+   so it tracks the IDE theme. */
+.tree-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--panel-border);
+  position: relative;
+}
+
+/* Hidden until the toolbar toggle opens it. Needed because .tree-search sets an
+   explicit display, which would otherwise defeat the `hidden` attribute. */
+.tree-search[hidden] {
+  display: none;
+}
+
+/* Toolbar toggle that shows/hides the search box. Matches the neutral funnel
+   trigger treatment (not the dim severity-icon treatment) so the magnifier
+   reads clearly at rest, and highlights while the box is open. */
+.tree-search-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 4px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background-color: transparent;
+  color: var(--description-foreground);
+  font: inherit;
+  line-height: 0;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.tree-search-toggle svg {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  vertical-align: middle;
+}
+
+.tree-search-toggle:hover,
+.tree-search-toggle[aria-expanded="true"] {
+  background-color: var(--list-hover-background);
+  color: var(--text-color);
+}
+
+.tree-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 3px 6px;
+  font-family: var(--default-font);
+  font-size: var(--font-size);
+  /* Match the tree/sidebar background so the field blends into the panel
+     instead of showing as a bright white box (IDE-2362). */
+  background-color: var(--sidebar-background);
+  color: var(--text-color);
+  border: 1px solid var(--input-border);
+  border-radius: 2px;
+  outline: none;
+}
+
+.tree-search-input:focus {
+  border-color: var(--focus-border);
+}
+
+/* Nodes filtered out by the client-side search. !important so it overrides the
+   .tree-node.expanded > .tree-node-children display rules for hidden subtrees. */
+.tree-node.tree-search-hidden {
+  display: none !important;
+}
+
+/* "No results" message shown by tree.js when a query matches nothing. */
+.tree-search-empty {
+  padding: 8px 12px;
+  color: var(--description-foreground);
+  font-style: italic;
+}
+
+.tree-search-empty[hidden] {
+  display: none;
+}
+
 /* Filter toolbar */
 .tree-filters {
   padding: 6px 8px;
@@ -404,6 +491,14 @@ body {
 .filter-group {
   display: inline-block;
   vertical-align: middle;
+}
+
+/* Right-hand toolbar cluster: search toggle + "more filters" funnel. Kept on the
+   right by the toolbar's space-between, with the two controls sitting together. */
+.filter-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .filter-separator {

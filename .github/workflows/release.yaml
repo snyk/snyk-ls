@@ -56,7 +56,7 @@ jobs:
           DEEPROXY_API_URL: ${{secrets.DEEPROXY_API_URL}}
           SNYK_TOKEN: ${{secrets.SNYK_TOKEN }}
         run: |
-          export PATH=$PWD/.bin/pact/bin:$PATH
+          export PATH=$PWD/.bin/$(go env GOOS)-$(go env GOARCH)/pact/bin:$PATH
 
           # this is required to be able to test the clipboard
           export DISPLAY=:99
@@ -73,7 +73,7 @@ jobs:
           INTEG_TESTS: "true"
           SMOKE_TESTS: "true"
         run: |
-          export PATH=$PWD/.bin/pact/bin:$PATH
+          export PATH=$PWD/.bin/$(go env GOOS)-$(go env GOARCH)/pact/bin:$PATH
 
           # this is required to be able to test the clipboard
           export DISPLAY=:99

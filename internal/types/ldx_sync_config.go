@@ -85,6 +85,9 @@ const (
 	SettingCliReleaseChannel               = "cli_release_channel"
 	SettingOrganization                    = "organization"
 	SettingAutomaticAuthentication         = "automatic_authentication"
+	SettingLlmProvider                     = "llm_provider"
+	SettingLlmBaseUrl                      = "llm_base_url"
+	SettingLlmModel                        = "llm_model"
 
 	SettingTrustedFolders               = "trusted_folders"
 	SettingToken                        = "token"
@@ -109,6 +112,7 @@ const (
 	SettingSnykSecretsEnabled     = "snyk_secrets_enabled"
 	SettingScanAutomatic          = "scan_automatic"
 	SettingScanNetNew             = "scan_net_new"
+	SettingAmbientCanaryAutonomy  = "ambient_canary_autonomy"
 	SettingIssueViewOpenIssues    = "issue_view_open_issues"
 	SettingIssueViewIgnoredIssues = "issue_view_ignored_issues"
 	SettingReferenceFolder        = "reference_folder"

@@ -17,6 +17,7 @@
 package featureflag
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"sync"
@@ -24,11 +25,13 @@ import (
 
 	"github.com/erni27/imcache"
 	"github.com/rs/zerolog"
+
 	"github.com/snyk/code-client-go/pkg/code"
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
+	gafUtils "github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -38,30 +41,37 @@ import (
 const (
 	SnykCodeConsistentIgnores     string = "snykCodeConsistentIgnores"
 	SnykCodeInlineIgnore          string = "snykCodeInlineIgnore"
-	IgnoreApprovalEnabled         string = "internal_iaw_enabled"
 	UseExperimentalRiskScoreInCLI string = "useExperimentalRiskScoreInCLI"
 	UseExperimentalRiskScore      string = "useExperimentalRiskScore"
 	UseOsTest                     string = "useTestShimForOSCliTest"
-	SnykSecretsEnabled            string = "isSecretsEnabled"
 )
 
-var Flags = []string{
+// ffServiceResolvedFlags are platform feature flag names, each looked up by name on its own request.
+var ffServiceResolvedFlags = []string{ //nolint:gochecknoglobals // a fixed list Go cannot express as a const; nothing writes to it
 	SnykCodeConsistentIgnores,
 	SnykCodeInlineIgnore,
-	IgnoreApprovalEnabled,
 	UseExperimentalRiskScoreInCLI,
 	UseExperimentalRiskScore,
 	UseOsTest,
-	SnykSecretsEnabled,
+}
+
+// gafConfigResolvedFlags are GAF configuration keys, not the feature flag names themselves.
+// Using the GAF configuration key ensures we use the same resolution logic as GAF, plus keeps LS
+// free of a second copy of the flag name that could drift. GAF decides how each key is answered and
+// we don't need to worry about the implementation details.
+var gafConfigResolvedFlags = []string{ //nolint:gochecknoglobals // a fixed list Go cannot express as a const; nothing writes to it
+	ignore_workflow.ConfigIgnoreApprovalEnabled,
+	gafUtils.FF_FILE_FILTER_METACHARACTER_FIX,
+	gafUtils.FF_GITIGNORE_RESPECT_TRACKED_FILES,
 }
 
 func UseOsTestWorkflow(folderConfig *types.FolderConfig) bool {
 	return folderConfig.GetFeatureFlag(UseExperimentalRiskScoreInCLI) || folderConfig.GetFeatureFlag(UseOsTest)
 }
 
-// ExternalCallsProvider abstracts configuration and API calls for testability
-type ExternalCallsProvider interface {
-	getIgnoreApprovalEnabled(org string) (bool, error)
+// externalCalls abstracts configuration and API calls for testability
+type externalCalls interface {
+	getConfigValues(configKeys []string, org string) (map[string]bool, error)
 	getFeatureFlag(flag string, org string) (bool, error)
 	getSastSettings(org string) (*sast_contract.SastResponse, error)
 }
@@ -81,10 +91,25 @@ type externalCallsProvider struct {
 	engine workflow.Engine
 }
 
-func (p *externalCallsProvider) getIgnoreApprovalEnabled(org string) (bool, error) {
+// getConfigValues resolves GAF configuration keys for a single organization. All keys share one clone
+// because GAF caches whatever it resolves on the configuration object it is handed: keys that GAF
+// answers with a single batched flag evaluation pay for that evaluation once between them, where a
+// clone per key would pay for it each time.
+func (p *externalCallsProvider) getConfigValues(configKeys []string, org string) (map[string]bool, error) {
 	conf := p.conf.Clone()
 	conf.Set(configuration.ORGANIZATION, org)
-	return conf.GetBoolWithError(ignore_workflow.ConfigIgnoreApprovalEnabled)
+
+	values := make(map[string]bool, len(configKeys))
+	var errs []error
+	for _, key := range configKeys {
+		value, err := conf.GetBoolWithError(key)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to resolve config key %s: %w", key, err))
+		}
+		values[key] = value
+	}
+
+	return values, errors.Join(errs...)
 }
 
 func (p *externalCallsProvider) getFeatureFlag(flag string, org string) (bool, error) {
@@ -115,7 +140,7 @@ type serviceImpl struct {
 	logger               *zerolog.Logger
 	engine               workflow.Engine
 	configResolver       types.ConfigResolverInterface
-	provider             ExternalCallsProvider
+	provider             externalCalls
 	orgToFlag            *imcache.Cache[string, map[string]bool]
 	orgToSastSettings    *imcache.Cache[string, *sast_contract.SastResponse]
 	orgToSastSettingsErr *imcache.Cache[string, struct{}]
@@ -131,7 +156,7 @@ type serviceImpl struct {
 
 type Option func(*serviceImpl)
 
-func WithProvider(provider ExternalCallsProvider) Option {
+func withProvider(provider externalCalls) Option {
 	return func(s *serviceImpl) {
 		s.provider = provider
 	}
@@ -181,22 +206,35 @@ func (s *serviceImpl) fetch(org string) map[string]bool {
 	orgFlags = make(map[string]bool)
 
 	var wg sync.WaitGroup
-	wg.Add(len(Flags))
+	wg.Add(1)
 
-	for _, flag := range Flags {
+	// One goroutine rather than one per key: the keys share a clone, so whatever GAF caches on it while
+	// resolving the first key is still there for the rest.
+	go func() {
+		defer wg.Done()
+
+		values, err := s.provider.getConfigValues(gafConfigResolvedFlags, org)
+		if err != nil {
+			s.logger.Err(err).Str("method", "GetFlags").Str("org", org).Msg("couldn't get config values")
+		}
+
+		for key, enabled := range values {
+			s.logger.Debug().Str("method", "GetFlags").Str("org", org).Str("flag", key).Bool("enabled", enabled).Msg("feature flag result")
+		}
+
+		s.mutex.Lock()
+		for key, enabled := range values {
+			orgFlags[key] = enabled
+		}
+		s.mutex.Unlock()
+	}()
+
+	for _, flag := range ffServiceResolvedFlags {
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
-			var enabled bool
-			var err error
-
-			// Use provider to fetch config values
-			if flag == IgnoreApprovalEnabled {
-				enabled, err = s.provider.getIgnoreApprovalEnabled(org)
-			} else {
-				enabled, err = s.provider.getFeatureFlag(flag, org)
-			}
-
+			enabled, err := s.provider.getFeatureFlag(flag, org)
 			if err != nil {
 				s.logger.Err(err).Str("method", "GetFlags").Str("org", org).Str("flag", flag).Msgf("couldn't get config value %s", flag)
 			} else {

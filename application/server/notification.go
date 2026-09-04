@@ -36,18 +36,7 @@ func notifyClient(logger *zerolog.Logger, srv types.Server, method string, param
 	logError(logger, nil, err, "notifier")
 }
 
-var progressStopChan = make(chan bool, 1000)
-
-func createProgressListener(progressChannel chan types.ProgressParams, server types.Server, logger *zerolog.Logger) {
-	// cleanup stopchannel before starting
-	for {
-		select {
-		case <-progressStopChan:
-			continue
-		default:
-		}
-		break
-	}
+func createProgressListener(progressChannel chan types.ProgressParams, stopChan <-chan bool, server types.Server, logger *zerolog.Logger) {
 	logger.Debug().Msg("started progress listener")
 	defer logger.Debug().Msg("stopped progress listener")
 	for {
@@ -65,7 +54,7 @@ func createProgressListener(progressChannel chan types.ProgressParams, server ty
 				}
 			}
 			notifyProgress(server, p)
-		case <-progressStopChan:
+		case <-stopChan:
 			logger.Debug().Msg("received stop message for progress listener")
 			return
 		}
@@ -79,12 +68,8 @@ func notifyProgress(server types.Server, p types.ProgressParams) {
 	_ = server.Notify(context.Background(), "$/progress", p)
 }
 
-func disposeProgressListener() {
-	progressStopChan <- true
-}
-
 //nolint:gocyclo // this is ok, as it's so high because of forwarding the calls
-func registerNotifier(conf configuration.Configuration, engine workflow.Engine, configResolver types.ConfigResolverInterface, logger *zerolog.Logger, srv types.Server, n noti.Notifier) {
+func registerNotifier(conf configuration.Configuration, engine workflow.Engine, configResolver types.ConfigResolverInterface, logger *zerolog.Logger, srv types.Server, n noti.Notifier, commandService types.CommandService) {
 	if n == nil {
 		panic("registerNotifier: Notifier must not be nil — check server startup wiring")
 	}
@@ -126,7 +111,7 @@ func registerNotifier(conf configuration.Configuration, engine workflow.Engine, 
 				Interface("status", params.Status).
 				Msg("sending scan data to client")
 		case types.ShowMessageRequest:
-			go handleShowMessageRequest(srv, params, &l)
+			go handleShowMessageRequest(srv, params, &l, commandService)
 			l.Debug().Msg("sending show message request to client")
 		case types.PublishDiagnosticsParams:
 			notifyClient(logger, srv, "textDocument/publishDiagnostics", params)
@@ -159,6 +144,9 @@ func registerNotifier(conf configuration.Configuration, engine workflow.Engine, 
 		case types.SnykRegisterMcpParams:
 			notifyClient(logger, srv, "$/snyk.registerMcp", params)
 			l.Debug().Interface("mcpConfig", params).Msg("sending MCP config to client")
+		case types.AiFixNotification:
+			notifyClient(logger, srv, "$/snyk.aiFix", params)
+			l.Debug().Str("issueId", params.IssueId).Str("status", params.Status).Msg("sending AI fix status to client")
 		default:
 			l.Warn().
 				Interface("params", params).
@@ -263,7 +251,7 @@ func handleApplyWorkspaceEdit(conf configuration.Configuration, srv types.Server
 		Msgf("Workspace edit applied %t. %s", editResult.Applied, editResult.FailureReason)
 }
 
-func handleShowMessageRequest(srv types.Server, params types.ShowMessageRequest, logger *zerolog.Logger) {
+func handleShowMessageRequest(srv types.Server, params types.ShowMessageRequest, logger *zerolog.Logger, commandService types.CommandService) {
 	// convert our internal message request to LSP message request
 	requestParams := types.ShowMessageRequestParams{
 		Type:    params.Type,
@@ -308,7 +296,7 @@ func handleShowMessageRequest(srv types.Server, params types.ShowMessageRequest,
 			return
 		}
 
-		_, err := command.Service().ExecuteCommandData(context.Background(), selectedCommand, srv)
+		_, err := commandService.ExecuteCommandData(context.Background(), selectedCommand, srv)
 		if err != nil {
 			logger.Error().
 				Err(err).

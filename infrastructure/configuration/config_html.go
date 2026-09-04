@@ -31,7 +31,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/constants"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -176,10 +176,6 @@ func sourceToClass(source string) string {
 	}
 }
 
-func tmplIsSecretsFeatureEnabled(fc types.FolderConfig) bool {
-	return fc.GetFeatureFlag(featureflag.SnykSecretsEnabled)
-}
-
 // tmplSourceIndicator returns HTML for source indicators (icons with tooltips).
 // Returns: "🏢🔒" for locked, "🏢" for organization, "👤" for user override (with
 // per-project vs project-defaults tooltip variants), empty for global/default.
@@ -209,13 +205,12 @@ func tmplSourceIndicator(effectiveConfig map[string]types.EffectiveValue, settin
 func NewConfigHtmlRenderer(engine workflow.Engine, configResolver types.ConfigResolverInterface) (*ConfigHtmlRenderer, error) {
 	// Register custom template functions for better template reusability
 	funcMap := template.FuncMap{
-		"toLower":                 strings.ToLower,
-		"getScanConfig":           tmplGetScanConfig,
-		"getEffectiveValue":       tmplGetEffectiveValue,
-		"isLocked":                tmplIsLocked,
-		"getSourceClass":          tmplGetSourceClass,
-		"isSecretsFeatureEnabled": tmplIsSecretsFeatureEnabled,
-		"sourceIndicator":         tmplSourceIndicator,
+		"toLower":           strings.ToLower,
+		"getScanConfig":     tmplGetScanConfig,
+		"getEffectiveValue": tmplGetEffectiveValue,
+		"isLocked":          tmplIsLocked,
+		"getSourceClass":    tmplGetSourceClass,
+		"sourceIndicator":   tmplSourceIndicator,
 	}
 
 	tmpl, err := template.New("config").Funcs(funcMap).Parse(configHtmlTemplate)
@@ -344,13 +339,13 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings map[string]any, folderConfig
 		"ResetHandler": template.JS(configResetHandlerTemplate),
 		"Tabs":         template.JS(configTabsTemplate),
 		// App initialization
-		"App":                     template.JS(configAppTemplate),
-		"Nonce":                   "ideNonce", // Replaced by IDE extension
-		"FolderLabel":             folderLabel,
-		"FolderNames":             folderNames,
-		"CliReleaseChannel":       cliReleaseChannel,
-		"IsSecretsFeatureEnabled": isAnyFolderSecretsEnabled(folderConfigs),
-		"IsEclipse":               isEclipse(integrationName),
+		"App":               template.JS(configAppTemplate),
+		"Nonce":             "ideNonce", // Replaced by IDE extension
+		"FolderLabel":       folderLabel,
+		"FolderNames":       folderNames,
+		"CliReleaseChannel": cliReleaseChannel,
+		"IsEclipse":         isEclipse(integrationName),
+		"IsVSCode":          isVSCode(integrationName),
 	}
 
 	var buffer bytes.Buffer
@@ -362,22 +357,16 @@ func (r *ConfigHtmlRenderer) GetConfigHtml(settings map[string]any, folderConfig
 	return buffer.String()
 }
 
-// isAnyFolderSecretsEnabled returns true if any folder has the Snyk Secrets feature flag enabled
-func isAnyFolderSecretsEnabled(folderConfigs []types.FolderConfig) bool {
-	for _, fc := range folderConfigs {
-		if fc.GetFeatureFlag(featureflag.SnykSecretsEnabled) {
-			return true
-		}
-	}
-	return false
-}
-
 func isVisualStudio(integrationName string) bool {
-	return integrationName == "VISUAL_STUDIO"
+	return integrationName == constants.IntegrationNameVisualStudio
 }
 
 func isEclipse(integrationName string) bool {
-	return integrationName == "ECLIPSE"
+	return integrationName == constants.IntegrationNameEclipse
+}
+
+func isVSCode(integrationName string) bool {
+	return integrationName == constants.IntegrationNameVSCode
 }
 
 // getCliReleaseChannel returns the configured CLI release channel, falling back to a

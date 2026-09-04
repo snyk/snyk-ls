@@ -54,17 +54,17 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-var scanCount = 1
+var scanCount = 1 //nolint:gochecknoglobals // legacy process-global state
 var _ types.ProductScanner = (*Scanner)(nil)
 
 var (
-	issueSeverities = map[string]types.Severity{
+	issueSeverities = map[string]types.Severity{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 		"high": types.High,
 		"low":  types.Low,
 	}
 )
 
-var extensions = map[string]bool{
+var extensions = map[string]bool{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
 	".yaml": true,
 	".yml":  true,
 	".json": true,
@@ -72,26 +72,28 @@ var extensions = map[string]bool{
 }
 
 type Scanner struct {
-	instrumentor   performance.Instrumentor
-	errorReporter  error_reporting.ErrorReporter
-	cli            cli.Executor
-	mutex          sync.Mutex
-	runningScans   map[sglsp.DocumentURI]*scans.ScanProgress
-	conf           configuration.Configuration
-	logger         *zerolog.Logger
-	configResolver types.ConfigResolverInterface
+	instrumentor    performance.Instrumentor
+	errorReporter   error_reporting.ErrorReporter
+	cli             cli.Executor
+	mutex           sync.Mutex
+	runningScans    map[sglsp.DocumentURI]*scans.ScanProgress
+	conf            configuration.Configuration
+	logger          *zerolog.Logger
+	configResolver  types.ConfigResolverInterface
+	progressTracker *progress.Tracker
 }
 
-func New(conf configuration.Configuration, logger *zerolog.Logger, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, configResolver types.ConfigResolverInterface) *Scanner {
+func New(conf configuration.Configuration, logger *zerolog.Logger, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, configResolver types.ConfigResolverInterface, progressTracker *progress.Tracker) *Scanner {
 	return &Scanner{
-		instrumentor:   instrumentor,
-		errorReporter:  errorReporter,
-		cli:            cli,
-		mutex:          sync.Mutex{},
-		runningScans:   map[sglsp.DocumentURI]*scans.ScanProgress{},
-		conf:           conf,
-		logger:         logger,
-		configResolver: configResolver,
+		instrumentor:    instrumentor,
+		errorReporter:   errorReporter,
+		cli:             cli,
+		mutex:           sync.Mutex{},
+		runningScans:    map[sglsp.DocumentURI]*scans.ScanProgress{},
+		conf:            conf,
+		logger:          logger,
+		configResolver:  configResolver,
+		progressTracker: progressTracker,
 	}
 }
 
@@ -128,11 +130,10 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 
 	logger.Debug().Msg("IAC scanner: starting scan")
 
-	if err = scannercommon.RequireProductEnabled(
-		iac.getConfigResolver(ctx).IsProductEnabledForFolder(product.ProductInfrastructureAsCode, workspaceFolderConfig),
-		utils.ErrSnykIacNotEnabledForFolder,
-	); err != nil {
-		return nil, err
+	if !scannercommon.IsProductEnabledForScan(
+		ctx, iac.getConfigResolver(ctx), product.ProductInfrastructureAsCode, workspaceFolderConfig,
+	) {
+		return nil, errors.New(utils.ErrSnykIacNotEnabledForFolder)
 	}
 
 	if err = scannercommon.RequireAuthToken(iac.conf, logger); err != nil {
@@ -154,7 +155,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 		logger.Debug().Msg("IaC scan skipped: path is not a supported IaC file or directory")
 		return []types.Issue{}, nil
 	}
-	p := progress.NewScanTracker(true, iac.logger, workspaceFolder)
+	p := iac.progressTracker.NewScan(true, workspaceFolder)
 	go func() { p.CancelOrDone(cancel, ctx.Done()) }()
 	p.BeginUnquantifiableLength("Scanning for Snyk IaC issues", string(pathToScan))
 	defer p.EndWithMessage("Snyk Iac Scan completed.")
@@ -165,6 +166,7 @@ func (iac *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues
 		previousScan.CancelScan()
 	}
 	newScan := scans.NewScanProgressWithLogger(iac.logger)
+	newScan.SetCancelFunc(cancel)
 	go newScan.Listen(ctx, cancel, i)
 	defer func() {
 		iac.mutex.Lock()

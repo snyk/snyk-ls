@@ -83,7 +83,7 @@ func Test_initializedHandler_FiresSignalWhenDepResolutionPanicsBeforeGoroutineLa
 		close(waiterReturned)
 	}()
 
-	h := initializedHandler(conf, engine, nil)
+	h := initializedHandler(conf, engine, nil, &backgroundInit{})
 
 	// Invoke the handler and recover the missing-dep panic, exactly as jrpc2/withContext
 	// do in production — the server must survive it.

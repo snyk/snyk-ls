@@ -219,6 +219,7 @@
 	var FOLDER_RESET_FIELDS = [
 		"scan_automatic",
 		"scan_net_new",
+		"ambient_canary_autonomy",
 		"severity_filter_critical",
 		"severity_filter_high",
 		"severity_filter_medium",

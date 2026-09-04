@@ -19,6 +19,7 @@ package testutil
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -154,7 +155,6 @@ func UnitTestWithEngine(t *testing.T) (workflow.Engine, *config.TokenServiceImpl
 	})
 	t.Cleanup(func() {
 		cleanupFakeCliFile(conf, logger)
-		progress.CleanupChannels()
 	})
 
 	return engine, ts
@@ -168,6 +168,24 @@ func UnitTestWithCtx(t *testing.T) (workflow.Engine, context.Context) {
 	})
 	ctx = ctx2.NewContextWithLogger(ctx, engine.GetLogger())
 	return engine, ctx
+}
+
+// UnitTestWithMockEngine creates a mock engine with configuration and logger expectations
+// for unit tests that do not need a real workflow engine. Unlike SetUpEngineMock, it does
+// not require an existing engine.
+func UnitTestWithMockEngine(t *testing.T) (*gomock.Controller, *mocks.MockEngine, *mocks.MockConfiguration) {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockEngine := mocks.NewMockEngine(ctrl)
+	mockConfig := mocks.NewMockConfiguration(ctrl)
+	logger := zerolog.New(io.Discard)
+
+	mockEngine.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
+	mockEngine.EXPECT().GetLogger().Return(&logger).AnyTimes()
+
+	return ctrl, mockEngine, mockConfig
 }
 
 func cleanupFakeCliFile(conf configuration.Configuration, logger *zerolog.Logger) {
@@ -198,24 +216,20 @@ func CLIDownloadLockFileCleanUp(t *testing.T, conf configuration.Configuration) 
 	})
 }
 
-func CreateDummyProgressListener(t *testing.T) {
-	t.Helper()
-	var dummyProgressStopChannel = make(chan bool, 1)
-
-	t.Cleanup(func() {
-		dummyProgressStopChannel <- true
-	})
-
+// NewDrainedProgressTracker returns a Tracker whose channel is drained for the
+// life of the test binary, so a producer never blocks on a full channel. Takes no
+// *testing.T so it is usable from TestMain too. Nop logger rather than a test
+// writer: producers can outlive the test, and logging after it finishes panics.
+// ponytail: the drain goroutine never exits — the channel is never closed. Fine
+// for test binaries; close the channel if a leak check ever lands.
+func NewDrainedProgressTracker() *progress.Tracker {
+	logger := zerolog.Nop()
+	tracker := progress.NewTracker(&logger)
 	go func() {
-		for {
-			select {
-			case <-progress.ToServerProgressChannel:
-				continue
-			case <-dummyProgressStopChannel:
-				return
-			}
+		for range tracker.Channel() {
 		}
 	}()
+	return tracker
 }
 
 func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) (workflow.Engine, *config.TokenServiceImpl) {
@@ -247,7 +261,6 @@ func prepareTestHelper(t *testing.T, envVar string, tokenSecretName string) (wor
 	CLIDownloadLockFileCleanUp(t, conf)
 	t.Cleanup(func() {
 		cleanupFakeCliFile(conf, logger)
-		progress.CleanupChannels()
 	})
 	return engine, ts
 }

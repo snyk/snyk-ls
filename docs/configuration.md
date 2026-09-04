@@ -76,6 +76,13 @@ Scope is declared at registration time via the `config.scope` annotation on each
 - For **machine-scope** settings, it is the primary user-writable layer (overrides remote:machine default, falls back to remote:machine value if not set).
 - For **folder-scope** settings, it is the lowest-priority user-set fallback: if a folder has no `user:folder` value and no remote config, the global user value is used. This lets users set a default that applies to all folders unless overridden.
 
+The Secure At Inception settings `auto_configure_mcp_server` and
+`secure_at_inception_execution_frequency` are machine-scoped and remain
+top-level in the LS configuration payload, never in `folderConfigs`. The VS
+Code bridge maps them to window-scoped native settings; see
+[Configuration Dialog Integration Guide](configuration-dialog.md#secure-at-inception-vs-code-only)
+for the VS Code-only dialog contract.
+
 ### How `user:folder` Relates to Remote Config
 
 `user:folder:<path>:<name>` entries can be written by:
@@ -164,9 +171,9 @@ When `conf.AddFlagSet(fs)` is called, GAF indexes annotations into lookup maps. 
 
 ### Registered Settings
 
-**Machine scope (29):** `api_endpoint`, `code_endpoint`, `authentication_method`, `proxy_http`, `proxy_https`, `proxy_no_proxy`, `proxy_insecure`, `auto_configure_mcp_server`, `publish_security_at_inception_rules`, `trust_enabled`, `binary_base_url`, `cli_path`, `automatic_download`, `cli_release_channel`, `organization`, `automatic_authentication`, `cli_insecure`, `format`, `device_id`, `offline`, `user_settings_path`, `hover_verbosity`, `client_protocol_version`, `os_platform`, `os_arch`, `runtime_name`, `runtime_version`, `trusted_folders`, `secure_at_inception_execution_frequency`
+**Machine scope (32):** `api_endpoint`, `code_endpoint`, `authentication_method`, `proxy_http`, `proxy_https`, `proxy_no_proxy`, `proxy_insecure`, `auto_configure_mcp_server`, `publish_security_at_inception_rules`, `trust_enabled`, `binary_base_url`, `cli_path`, `automatic_download`, `cli_release_channel`, `organization`, `automatic_authentication`, `cli_insecure`, `format`, `device_id`, `offline`, `user_settings_path`, `hover_verbosity`, `client_protocol_version`, `os_platform`, `os_arch`, `runtime_name`, `runtime_version`, `trusted_folders`, `secure_at_inception_execution_frequency`, `llm_provider`, `llm_base_url`, `llm_model`
 
-**Folder scope (28):** `severity_filter_critical`, `severity_filter_high`, `severity_filter_medium`, `severity_filter_low`, `risk_score_threshold`, `cwe_ids`, `cve_ids`, `rule_ids`, `snyk_code_enabled`, `snyk_oss_enabled`, `snyk_iac_enabled`, `snyk_secrets_enabled`, `scan_automatic`, `scan_net_new`, `issue_view_open_issues`, `issue_view_ignored_issues`, `reference_folder`, `reference_branch`, `additional_parameters`, `cli_additional_oss_parameters`, `additional_environment`, `base_branch`, `local_branches`, `preferred_org`, `auto_determined_org`, `org_set_by_user`, `scan_command_config`, `sast_settings`
+**Folder scope (29):** `severity_filter_critical`, `severity_filter_high`, `severity_filter_medium`, `severity_filter_low`, `risk_score_threshold`, `cwe_ids`, `cve_ids`, `rule_ids`, `snyk_code_enabled`, `snyk_oss_enabled`, `snyk_iac_enabled`, `snyk_secrets_enabled`, `scan_automatic`, `scan_net_new`, `issue_view_open_issues`, `issue_view_ignored_issues`, `reference_folder`, `reference_branch`, `additional_parameters`, `cli_additional_oss_parameters`, `additional_environment`, `base_branch`, `local_branches`, `preferred_org`, `auto_determined_org`, `org_set_by_user`, `scan_command_config`, `sast_settings`, `ambient_canary_autonomy`
 
 > **`additional_parameters` / `additional_environment` at Project Defaults (global fallback):** These two folder-scope settings are also writable at `user:global` from the Project Defaults tab of the HTML settings dialog. The LS stores: params as `cli_additional_oss_parameters` (`[]string`) at `UserGlobalKey` via `SetGlobalDeferredFolderScope`; env as a raw string at `UserGlobalKey(additional_environment)` via `SetGlobalUser` (also applied to the process via `os.Setenv`). At scan time the resolver falls back to `user:global` for folders without a folder-level override, so Project Defaults values apply to all projects by default. Per-project additional_parameters are **appended**; per-project additional_environment entries **override** Project Defaults values on key conflict (project wins). These settings are intentionally **not LDX-Sync routed** (security requirement: IDE settings flow only, see `ldx_sync_adapter.go`).
 

@@ -50,13 +50,13 @@ func TestDI_FixFolderCommand_AlwaysWired(t *testing.T) {
 
 	// Call di.Init to exercise the real wiring path.
 	deps := di.Init(engine, tokenService)
-	_ = deps
+	t.Cleanup(deps.ScanCancel)
 
-	// The real command.Service singleton was set by di.Init. Verify it handles
-	// the fixFolder command without panicking on a nil provider.
+	// Verify the command service built by di.Init handles the fixFolder command
+	// without panicking on a nil provider.
 	// Provider is always wired; a nil provider would return "not enabled".
-	svc := command.Service()
-	require.NotNil(t, svc, "command.Service() must be non-nil after di.Init")
+	svc := deps.CommandService
+	require.NotNil(t, svc, "di.Init must build a command service")
 
 	_, err := svc.ExecuteCommandData(context.Background(), types.CommandData{
 		CommandId: types.RemediationAgentFixFolderCommand,
@@ -90,6 +90,7 @@ func TestDI_NewService_FixFolderProvider_Wired(t *testing.T) {
 		engine.GetLogger(),
 		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
 		provider,
+		t.Context(),
 	)
 
 	_, _ = svc.ExecuteCommandData(context.Background(), types.CommandData{
@@ -126,6 +127,7 @@ func initGitRepoForDI(t *testing.T) string {
 	run("init")
 	run("config", "user.email", "test@example.com")
 	run("config", "user.name", "Test")
+	run("config", "commit.gpgsign", "false")
 	// overlay-FS write-ordering delays cause git to report "not a valid object" or
 	// false "local changes would be overwritten" errors during rebase/cherry-pick
 	// on this overlay filesystem. core.checkStat=minimal suppresses those

@@ -75,3 +75,73 @@ test("collectData: folder severity_filter_* fields with all unchecked", async ()
 		}
 	}
 });
+
+test("collectData and collectChangedData serialize Secure At Inception values at top level", async () => {
+	const win = await buildDom();
+	const doc = win.document;
+	const checkbox = doc.querySelector('input[name="auto_configure_mcp_server"]');
+	const frequencySelect = doc.querySelector(
+		'select[name="secure_at_inception_execution_frequency"]'
+	);
+	assert.ok(checkbox, "auto_configure_mcp_server checkbox must exist");
+	assert.ok(frequencySelect, "secure_at_inception_execution_frequency select must exist");
+
+	for (const autoConfigure of [false, true]) {
+		for (const frequency of ["On Code Generation", "Smart Scan", "Manual"]) {
+			checkbox.checked = autoConfigure;
+			frequencySelect.value = frequency;
+			win.dirtyTracker.originalData.auto_configure_mcp_server = !autoConfigure;
+			win.dirtyTracker.originalData.secure_at_inception_execution_frequency =
+				frequency === "Manual" ? "Smart Scan" : "Manual";
+
+			const data = win.ConfigApp.formHandler.collectData();
+			const changedData = win.ConfigApp.formHandler.collectChangedData();
+
+			assert.equal(data.auto_configure_mcp_server, autoConfigure);
+			assert.equal(data.secure_at_inception_execution_frequency, frequency);
+			assert.equal(changedData.auto_configure_mcp_server, autoConfigure);
+			assert.equal(changedData.secure_at_inception_execution_frequency, frequency);
+			for (const folderConfig of data.folderConfigs) {
+				assert.equal(
+					Object.prototype.hasOwnProperty.call(folderConfig, "auto_configure_mcp_server"),
+					false
+				);
+				assert.equal(
+					Object.prototype.hasOwnProperty.call(
+						folderConfig,
+						"secure_at_inception_execution_frequency"
+					),
+					false
+				);
+			}
+		}
+	}
+});
+
+test("Secure At Inception section reset restores false and Manual", async () => {
+	const win = await buildDom();
+	const doc = win.document;
+	const checkbox = doc.querySelector('input[name="auto_configure_mcp_server"]');
+	const frequencySelect = doc.querySelector(
+		'select[name="secure_at_inception_execution_frequency"]'
+	);
+	const reset = doc.querySelector(
+		'.reset-section-btn[data-section="secureAtInception"]'
+	);
+	assert.ok(checkbox, "auto_configure_mcp_server checkbox must exist");
+	assert.ok(frequencySelect, "secure_at_inception_execution_frequency select must exist");
+	assert.ok(reset, "Secure At Inception reset button must exist");
+
+	checkbox.checked = true;
+	frequencySelect.value = "On Code Generation";
+	win.dirtyTracker.originalData.auto_configure_mcp_server = true;
+	win.dirtyTracker.originalData.secure_at_inception_execution_frequency =
+		"On Code Generation";
+	reset.click();
+
+	assert.equal(checkbox.checked, false);
+	assert.equal(frequencySelect.value, "Manual");
+	const changedData = win.ConfigApp.formHandler.collectChangedData();
+	assert.equal(changedData.auto_configure_mcp_server, false);
+	assert.equal(changedData.secure_at_inception_execution_frequency, "Manual");
+});

@@ -32,6 +32,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -164,16 +165,17 @@ func runOSSComparisonTest(t *testing.T, unifiedScan bool, dir string) []types.Di
 func setupOSSComparisonTest(t *testing.T) (workflow.Engine, *config.TokenServiceImpl, server.Local, *testsupport.JsonRPCRecorder) {
 	t.Helper()
 	engine, tokenService := testutil.SmokeTestWithEngine(t, tokenSecretNameForRiskScore, "SMOKE_SHARD_4")
-	testutil.CreateDummyProgressListener(t)
+	// Set the endpoint on this server's engine config instead of os.Setenv so
+	// parallel smoke tests cannot clobber each other's endpoint.
 	endpoint := os.Getenv("SNYK_API")
-	if endpoint == "" {
-		t.Setenv("SNYK_API", "https://api.snyk.io")
+	switch endpoint {
+	case "":
+		endpoint = "https://api.snyk.io"
+	case "/v1":
+		// Not a usable endpoint; WithAPIEndpoint("") leaves the engine's own value.
+		endpoint = ""
 	}
-
-	if endpoint != "" && endpoint != "/v1" {
-		t.Setenv("SNYK_API", endpoint)
-	}
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI(), WithAPIEndpoint(endpoint))
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykIacEnabled), false)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykOssEnabled), true)
@@ -412,14 +414,15 @@ func collectDiagnosticFieldComparisons(title string, unified, legacy types.Diagn
 		})
 	}
 
-	// Compare CodeDescription
-	if unified.CodeDescription != legacy.CodeDescription {
+	// Compare CodeDescription. It is a pointer, so compare what it describes and
+	// keep an absent one distinct from one with an empty href.
+	if !sameCodeDescription(unified.CodeDescription, legacy.CodeDescription) {
 		comparisons = append(comparisons, FieldComparison{
 			DiagnosticTitle: title,
-			FieldPath:       "CodeDescription.Href",
+			FieldPath:       "CodeDescription",
 			Matched:         false,
-			UnifiedValue:    formatAny(unified.CodeDescription.Href),
-			LegacyValue:     formatAny(legacy.CodeDescription.Href),
+			UnifiedValue:    formatCodeDescription(unified.CodeDescription),
+			LegacyValue:     formatCodeDescription(legacy.CodeDescription),
 		})
 	}
 
@@ -1175,6 +1178,39 @@ func compareTags(unified, legacy []types.DiagnosticTag) bool {
 
 func compareAny(a, b any) bool {
 	return formatAny(a) == formatAny(b)
+}
+
+// Runs without credentials, unlike the smoke test that consumes these helpers.
+func TestSameCodeDescription(t *testing.T) {
+	present := &types.CodeDescription{Href: "https://docs.snyk.io"}
+	empty := &types.CodeDescription{}
+
+	assert.True(t, sameCodeDescription(nil, nil))
+	assert.True(t, sameCodeDescription(present, &types.CodeDescription{Href: present.Href}))
+	assert.False(t, sameCodeDescription(present, &types.CodeDescription{Href: "https://security.snyk.io"}))
+	assert.False(t, sameCodeDescription(nil, present))
+	assert.False(t, sameCodeDescription(present, nil))
+	// Collapsing an absent link into an empty one would hide the very difference
+	// between the unified and legacy payloads this comparator exists to report.
+	assert.False(t, sameCodeDescription(nil, empty))
+
+	assert.Equal(t, "<absent>", formatCodeDescription(nil))
+	assert.Equal(t, `""`, formatCodeDescription(empty))
+	assert.Equal(t, `"https://docs.snyk.io"`, formatCodeDescription(present))
+}
+
+func sameCodeDescription(unified, legacy *types.CodeDescription) bool {
+	if unified == nil || legacy == nil {
+		return unified == legacy
+	}
+	return unified.Href == legacy.Href
+}
+
+func formatCodeDescription(codeDescription *types.CodeDescription) string {
+	if codeDescription == nil {
+		return "<absent>"
+	}
+	return formatAny(string(codeDescription.Href))
 }
 
 func formatFieldDiff(fieldName string, unified, legacy any) string {

@@ -79,6 +79,9 @@ type Folder interface {
 	// IsDeltaFindingsEnabledFromConfig is like IsDeltaFindingsEnabled but accepts a pre-fetched
 	// FolderConfig to avoid a redundant FolderConfigReadOnly() call.
 	IsDeltaFindingsEnabledFromConfig(cfg *FolderConfig) bool
+	// IsDeltaAppliedForProduct returns whether delta findings are both enabled and actually
+	// applied (i.e. a baseline is available) for the given product.
+	IsDeltaAppliedForProduct(p product.Product) bool
 	// IsAutoScanEnabled returns whether automatic scanning is enabled for this folder.
 	IsAutoScanEnabled() bool
 	// DisplayableIssueTypes returns which issue types are enabled for this folder.

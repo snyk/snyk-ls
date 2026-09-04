@@ -70,6 +70,7 @@ func initGitRepoForCmd(t *testing.T) string {
 	run("init")
 	run("config", "user.email", "test@example.com")
 	run("config", "user.name", "Test")
+	run("config", "commit.gpgsign", "false")
 	run("config", "core.checkStat", "minimal")
 	f := filepath.Join(dir, "main.go")
 	require.NoError(t, os.WriteFile(f, []byte("package main\n"), 0644))
@@ -97,7 +98,7 @@ func buildFixFolderService(t *testing.T, provider remediation.FolderRemediator, 
 	t.Helper()
 	engine, _ := testutil.UnitTestWithEngine(t)
 	logger := engine.GetLogger()
-	return command.NewService(engine, logger, nil, nil, notifier, nil, nil, nil, nil, nil, nil, nil, provider)
+	return command.NewService(engine, logger, nil, nil, notifier, nil, nil, nil, nil, nil, nil, nil, provider, t.Context())
 }
 
 // ACC-101: gate ON; fake runner edits 2 files; response is FolderFixResult with 2 entries;
