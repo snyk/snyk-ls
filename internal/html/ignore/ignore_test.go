@@ -18,7 +18,6 @@ package ignore
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -40,55 +39,21 @@ func TestCanCreateIgnore(t *testing.T) {
 
 	t.Run("git repo without origin remote", func(t *testing.T) {
 		dir := t.TempDir()
-		initGitRepo(t, dir)
+		testsupport.InitTestGitRepo(t, dir)
 		assert.False(t, CanCreateIgnore(dir))
 	})
 
 	t.Run("git repo with origin remote", func(t *testing.T) {
 		dir := t.TempDir()
-		initGitRepo(t, dir)
-		runGit(t, dir, "remote", "add", "origin", "https://github.com/org/repo.git")
+		testsupport.InitTestGitRepoWithOrigin(t, dir, "")
 		assert.True(t, CanCreateIgnore(dir))
 	})
 
 	t.Run("subfolder of git repo with origin", func(t *testing.T) {
 		dir := t.TempDir()
-		initGitRepo(t, dir)
-		runGit(t, dir, "remote", "add", "origin", "https://github.com/org/repo.git")
+		testsupport.InitTestGitRepoWithOrigin(t, dir, "")
 		subdir := filepath.Join(dir, "nested", "package")
 		require.NoError(t, os.MkdirAll(subdir, 0755))
 		assert.True(t, CanCreateIgnore(subdir))
 	})
-}
-
-func initGitRepo(t *testing.T, dir string) {
-	t.Helper()
-	runGit(t, dir, "init", "--initial-branch=main")
-	runGit(t, dir, "config", "commit.gpgsign", "false")
-	seed := filepath.Join(dir, "seed.txt")
-	require.NoError(t, os.WriteFile(seed, []byte("seed"), 0600))
-	runGit(t, dir, "add", "seed.txt")
-	cmd := gitCommandForTestRepo(dir, "commit", "-m", "init")
-	cmd.Env = append(cmd.Env,
-		"GIT_AUTHOR_NAME=Snyk LS Test",
-		"GIT_AUTHOR_EMAIL=snyk-ls-test@example.invalid",
-		"GIT_COMMITTER_NAME=Snyk LS Test",
-		"GIT_COMMITTER_EMAIL=snyk-ls-test@example.invalid",
-	)
-	output, err := cmd.CombinedOutput()
-	require.NoError(t, err, string(output))
-}
-
-func runGit(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	cmd := gitCommandForTestRepo(dir, args...)
-	output, err := cmd.CombinedOutput()
-	require.NoError(t, err, string(output))
-}
-
-func gitCommandForTestRepo(dir string, args ...string) *exec.Cmd {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	cmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
-	return cmd
 }

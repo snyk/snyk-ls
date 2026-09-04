@@ -19,9 +19,6 @@ package code
 import (
 	"fmt"
 	"html"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"regexp"
 	"testing"
 	"time"
@@ -806,7 +803,7 @@ func Test_Code_Html_CreateIgnoreEnabled_whenGitRepoWithOrigin(t *testing.T) {
 	engine := testutil.UnitTest(t)
 
 	repoDir := t.TempDir()
-	initTestGitRepoWithOrigin(t, repoDir)
+	testsupport.InitTestGitRepoWithOrigin(t, repoDir, "")
 
 	issue := &snyk.Issue{
 		ID:          "java/DontUsePrintStackTrace",
@@ -826,38 +823,4 @@ func Test_Code_Html_CreateIgnoreEnabled_whenGitRepoWithOrigin(t *testing.T) {
 	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
 
 	assert.NotContains(t, codePanelHtml, createIgnoreDisabledButtonMarkup)
-}
-
-func initTestGitRepoWithOrigin(t *testing.T, dir string) {
-	t.Helper()
-	runTestGit(t, dir, "init", "--initial-branch=main")
-	runTestGit(t, dir, "config", "commit.gpgsign", "false")
-	seed := filepath.Join(dir, "seed.txt")
-	require.NoError(t, os.WriteFile(seed, []byte("seed"), 0600))
-	runTestGit(t, dir, "add", "seed.txt")
-	cmd := runTestGitCmd(t, dir, "commit", "-m", "init")
-	cmd.Env = append(cmd.Env,
-		"GIT_AUTHOR_NAME=Snyk LS Test",
-		"GIT_AUTHOR_EMAIL=snyk-ls-test@example.invalid",
-		"GIT_COMMITTER_NAME=Snyk LS Test",
-		"GIT_COMMITTER_EMAIL=snyk-ls-test@example.invalid",
-	)
-	output, err := cmd.CombinedOutput()
-	require.NoError(t, err, string(output))
-	runTestGit(t, dir, "remote", "add", "origin", "https://github.com/org/repo.git")
-}
-
-func runTestGit(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	cmd := runTestGitCmd(t, dir, args...)
-	output, err := cmd.CombinedOutput()
-	require.NoError(t, err, string(output))
-}
-
-func runTestGitCmd(t *testing.T, dir string, args ...string) *exec.Cmd {
-	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	cmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
-	return cmd
 }
