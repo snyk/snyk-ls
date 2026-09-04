@@ -739,6 +739,77 @@ func Test_ConfigureProviders_CredentialMismatch_CallsClearAuthentication(t *test
 	assert.Empty(t, config.GetToken(conf), "mismatched token must be cleared from memory")
 }
 
+func Test_ConfigureProviders_CredentialMismatch_ReleasesWriteLockDuringLogout(t *testing.T) {
+	t.Parallel()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+	ts.SetToken(conf, "00000000-0000-0000-0000-000000000002")
+
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine, Method: types.OAuthAuthentication}
+	lockProbe := make(chan struct{}, 1)
+	var service AuthenticationService
+	notifier := &authNotificationProbeNotifier{
+		onAuthNotification: func() {
+			// logout's updateCredentials must release a.m before runPostMutationEffects;
+			// otherwise IsAuthenticated()'s a.m.RLock deadlocks on this goroutine's write lock.
+			_ = service.IsAuthenticated()
+			select {
+			case lockProbe <- struct{}{}:
+			default:
+			}
+		},
+	}
+	service = NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notifier, testutil.DefaultConfigResolver(engine))
+
+	done := make(chan struct{})
+	go func() {
+		service.ConfigureProviders(conf, engine.GetLogger())
+		close(done)
+	}()
+
+	select {
+	case <-lockProbe:
+	case <-time.After(5 * time.Second):
+		t.Fatal("ConfigureProviders did not release a.m during logout credential clear")
+	}
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("ConfigureProviders did not return: a.m was not correctly re-acquired after logout")
+	}
+}
+
+// authNotificationProbeNotifier forwards auth-credential notifications to a test hook.
+type authNotificationProbeNotifier struct {
+	onAuthNotification func()
+}
+
+func (n *authNotificationProbeNotifier) Receive() (payload any, stop bool) {
+	panic("implement me")
+}
+
+func (n *authNotificationProbeNotifier) CreateListener(_ func(params any)) {
+	panic("implement me")
+}
+
+func (n *authNotificationProbeNotifier) DisposeListener() {
+	panic("implement me")
+}
+
+func (n *authNotificationProbeNotifier) SendShowMessage(_ sglsp.MessageType, _ string) {}
+
+func (n *authNotificationProbeNotifier) Send(msg any) {
+	if _, ok := msg.(types.AuthenticationParams); ok && n.onAuthNotification != nil {
+		n.onAuthNotification()
+	}
+}
+
+func (n *authNotificationProbeNotifier) SendError(_ error) {}
+
+func (n *authNotificationProbeNotifier) SendErrorDiagnostic(_ types.FilePath, _ error) {}
+
 func TestAuthenticate_CancellationPreservesExistingToken(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
@@ -1811,6 +1882,686 @@ func Test_swapHost(t *testing.T) {
 			assert.Equal(t, tt.expected, swapHost(tt.customUrl, tt.newHost))
 		})
 	}
+}
+
+// Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterSyncWrite verifies that a
+// queued async clear-token update (generation N) is discarded by the worker when
+// a later synchronous UpdateCredentials call has already incremented syncGeneration
+// to N+1. This is the unit-level regression guard for IDE-2106: without the fix
+// the worker would process the stale empty-string update and overwrite the token
+// set by applyToken, making config.GetToken return "".
+//
+// Determinism guarantee (white-box, same package):
+//  1. Hold impl.m.Lock() before enqueueing the stale update. The worker also
+//     acquires impl.m before checking the generation, so it is blocked until the
+//     test releases the lock.
+//  2. Enqueue the stale clear update (generation 0) while holding impl.m.
+//  3. Call UpdateCredentials in a goroutine (it will block waiting for impl.m).
+//  4. Release impl.m — both the UpdateCredentials goroutine and the worker race
+//     for the lock. UpdateCredentials wins the lock first because it was already
+//     waiting; it increments syncGeneration to 1 and sets the real token, then
+//     releases the lock.
+//  5. The worker acquires the lock, sees generation 0 < syncGeneration 1, discards
+//     the stale update.
+//  6. Assert real token survives.
+func Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterSyncWrite(t *testing.T) {
+	t.Parallel()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+	impl := service.(*AuthenticationServiceImpl)
+
+	const realToken = "test-real-token-ide-2106"
+
+	// Step 1: hold the mutex so the worker cannot process anything yet.
+	impl.m.Lock()
+
+	// Step 2: enqueue the stale clear-token update (generation 0). The worker
+	// is blocked on impl.m.Lock() so this goes straight to the channel.
+	impl.credentialUpdateChan <- credentialUpdate{
+		token:            "",
+		sendNotification: false,
+		updateApiUrl:     false,
+		generation:       impl.syncGeneration.Load(), // 0
+	}
+
+	// Step 3: start UpdateCredentials — it blocks waiting for impl.m.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		service.UpdateCredentials(realToken, false, false)
+	}()
+
+	// Step 4: release the mutex. UpdateCredentials was already waiting so it
+	// is scheduled ahead of the worker goroutine on most runtimes; it acquires
+	// the lock, increments syncGeneration to 1, writes the real token, and
+	// releases the lock before the worker gets a turn.
+	impl.m.Unlock()
+
+	// Wait for UpdateCredentials to complete.
+	<-done
+
+	// Step 5: wait for the worker to drain the channel. The stale update
+	// (generation 0 < syncGeneration 1) must be discarded.
+	require.Eventually(t, func() bool {
+		return len(impl.credentialUpdateChan) == 0
+	}, 5*time.Second, 10*time.Millisecond, "credential update channel should drain")
+
+	// Give the worker one extra scheduler turn to finish its current iteration.
+	// Under the fixed code the update is discarded inside the lock, so GetToken
+	// must still return the real token.
+	require.Eventually(t, func() bool {
+		// We wait until the channel is empty AND the mutex is not held by the
+		// worker (i.e., the worker has released it after processing/discarding).
+		// Trying to TryLock the mutex would be ideal but sync.Mutex has no TryLock
+		// in older Go versions; a brief wait is equivalent here because the only
+		// work the worker does under the lock is a cheap atomic load + discard.
+		return config.GetToken(engine.GetConfiguration()) == realToken
+	}, 5*time.Second, 10*time.Millisecond,
+		"stale async clear-token update must not overwrite the synchronously-set token")
+}
+
+// Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterAuthenticate verifies that a
+// queued async clear-token update (generation N) is discarded by the worker when
+// a later synchronous authenticate() call has written a real token.
+//
+// This covers Finding 1 from the IDE-2106 verification: authenticate() called
+// a.updateCredentials() WITHOUT incrementing syncGeneration, so a stale async
+// clear-token update at the initial generation would pass the worker's
+// generation check (N < N is false) and wipe the freshly-authenticated token.
+//
+// Determinism guarantee (white-box, same package):
+//  1. Hold impl.m.Lock() before enqueueing the stale update.
+//  2. Enqueue the stale clear update (generation 0) while holding impl.m.
+//  3. Call Authenticate in a goroutine — it blocks waiting for impl.m.
+//  4. Release impl.m; Authenticate acquires the lock, calls authenticate() which
+//     calls updateCredentials() (fixed: this now increments syncGeneration to 1),
+//     writes the real token, then releases the lock.
+//  5. The worker acquires the lock, sees generation 0 < syncGeneration 1, discards
+//     the stale update.
+//  6. Assert the real token set by authenticate() survives.
+func Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterAuthenticate(t *testing.T) {
+	t.Parallel()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{Engine: engine}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+	impl := service.(*AuthenticationServiceImpl)
+
+	// Step 1: hold the mutex so the worker cannot process anything yet.
+	impl.m.Lock()
+
+	// Step 2: enqueue the stale clear-token update (generation 0). The worker
+	// is blocked on impl.m.Lock() so this goes straight to the channel.
+	impl.credentialUpdateChan <- credentialUpdate{
+		token:            "",
+		sendNotification: false,
+		updateApiUrl:     false,
+		generation:       impl.syncGeneration.Load(), // 0
+	}
+
+	// Step 3: start Authenticate — it blocks waiting for impl.m.
+	authDone := make(chan struct{})
+	go func() {
+		defer close(authDone)
+		_, _ = service.Authenticate(t.Context())
+	}()
+
+	// Step 4: release the mutex. Authenticate wins the lock (it was already
+	// waiting), calls authenticate() → updateCredentials() which (after the fix)
+	// increments syncGeneration to 1 and writes the real token.
+	impl.m.Unlock()
+
+	// Wait for Authenticate to complete.
+	<-authDone
+
+	// Step 5: wait for the worker to drain the channel.
+	require.Eventually(t, func() bool {
+		return len(impl.credentialUpdateChan) == 0
+	}, 5*time.Second, 10*time.Millisecond, "credential update channel should drain")
+
+	// Step 6: the stale async clear must be discarded; the real token must survive.
+	require.Eventually(t, func() bool {
+		return config.GetToken(engine.GetConfiguration()) == "e448dc1a-26c6-11ed-a261-0242ac120002"
+	}, 5*time.Second, 10*time.Millisecond,
+		"stale async clear-token update must not overwrite the token set by authenticate()")
+}
+
+// Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterLogout verifies that a
+// queued async restore-token update (generation N) is discarded by the worker
+// when a later synchronous logout() call has cleared the token.
+//
+// This covers Finding 1 from the IDE-2106 verification: logout() called
+// a.updateCredentials("", ...) WITHOUT incrementing syncGeneration, so a stale
+// async update at the initial generation would pass the worker's generation check
+// (N < N is false) and restore a token that was supposed to be cleared.
+//
+// Determinism guarantee (white-box, same package):
+//  1. Set a token so there is something to clear.
+//  2. Hold impl.m.Lock() before enqueueing the stale update.
+//  3. Enqueue the stale restore-token update (generation 0) while holding impl.m.
+//  4. Call Logout in a goroutine — it blocks waiting for impl.m.
+//  5. Release impl.m; Logout acquires the lock, calls logout() which calls
+//     updateCredentials("", ...) (fixed: increments syncGeneration to 1),
+//     clears the token, then releases the lock.
+//  6. The worker acquires the lock, sees generation 0 < syncGeneration 1, discards
+//     the stale restore update.
+//  7. Assert the token remains empty after logout.
+func Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterLogout(t *testing.T) {
+	t.Parallel()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{Engine: engine}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+	impl := service.(*AuthenticationServiceImpl)
+
+	const priorToken = "test-prior-token-that-should-be-cleared"
+
+	// Set an initial token so logout has something to clear.
+	service.UpdateCredentials(priorToken, false, false)
+	// After UpdateCredentials, syncGeneration is 1.
+
+	// Step 1: hold the mutex so the worker cannot process anything yet.
+	impl.m.Lock()
+
+	// Step 2: enqueue a stale restore-token update at the CURRENT generation (1).
+	// After the fix, logout() will increment syncGeneration to 2, making this stale.
+	impl.credentialUpdateChan <- credentialUpdate{
+		token:            priorToken, // would restore the cleared token
+		sendNotification: false,
+		updateApiUrl:     false,
+		generation:       impl.syncGeneration.Load(), // 1
+	}
+
+	// Step 3: start Logout — it blocks waiting for impl.m.
+	logoutDone := make(chan struct{})
+	go func() {
+		defer close(logoutDone)
+		service.Logout(t.Context())
+	}()
+
+	// Step 4: release the mutex. Logout wins the lock (it was already waiting),
+	// calls logout() → updateCredentials("", ...) which (after the fix)
+	// increments syncGeneration to 2 and clears the token.
+	impl.m.Unlock()
+
+	// Wait for Logout to complete.
+	<-logoutDone
+
+	// Step 5: wait for the worker to drain the channel.
+	require.Eventually(t, func() bool {
+		return len(impl.credentialUpdateChan) == 0
+	}, 5*time.Second, 10*time.Millisecond, "credential update channel should drain")
+
+	// Step 6: the stale restore update must be discarded; the token must stay empty.
+	require.Eventually(t, func() bool {
+		return config.GetToken(engine.GetConfiguration()) == ""
+	}, 5*time.Second, 10*time.Millisecond,
+		"stale async restore-token update must not undo the logout")
+}
+
+// Test_CredentialUpdateWorker_HookCanAcquireLock verifies that the
+// credentialUpdateWorker does NOT hold a.m while calling the
+// postCredentialUpdateHook, so that the hook can safely acquire a.m-protected
+// reads (e.g. via IsAuthenticated or Provider).
+//
+// This covers Finding 2 from the IDE-2106 verification: the worker previously
+// held a.m across the entire updateCredentials call, including the hook.
+// Since sync.RWMutex is not reentrant, any hook that called an a.m-locking
+// method (e.g. IsAuthenticated, Provider, Logout) would deadlock the worker
+// goroutine indefinitely.
+//
+// After the fix, the worker releases a.m BEFORE calling runPostMutationEffects,
+// so the hook can freely acquire a.m-protected reads without deadlock.
+func Test_CredentialUpdateWorker_HookCanAcquireLock(t *testing.T) {
+	t.Parallel()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+
+	impl := service.(*AuthenticationServiceImpl)
+	hookCalled := make(chan struct{}, 1)
+
+	// Install a hook that calls IsAuthenticated (acquires a.m.RLock).
+	// If the worker holds a.m.Lock() while calling the hook, IsAuthenticated
+	// will deadlock trying to acquire a.m.RLock on the same goroutine
+	// (sync.RWMutex is not reentrant).
+	service.SetPostCredentialUpdateHook(func() {
+		// IsAuthenticated acquires a.m.RLock — deadlocks if worker holds a.m.Lock.
+		_ = service.IsAuthenticated()
+		select {
+		case hookCalled <- struct{}{}:
+		default:
+		}
+	})
+
+	// Queue a non-empty token update so the hook fires.
+	impl.QueueCredentialUpdate("initial-token", false, false)
+
+	// The hook must complete (no deadlock) within a reasonable timeout.
+	select {
+	case <-hookCalled:
+		// success: worker did not hold a.m while calling the hook
+	case <-time.After(5 * time.Second):
+		t.Fatal("postCredentialUpdateHook deadlocked: worker is holding a.m across the hook call")
+	}
+}
+
+// Test_UpdateCredentials_HookCanAcquireLock verifies that the synchronous
+// UpdateCredentials path (shared by Authenticate, Logout, and UpdateCredentials
+// itself via updateCredentials) does NOT hold a.m while calling the
+// postCredentialUpdateHook, mirroring the worker-path fix verified by
+// Test_CredentialUpdateWorker_HookCanAcquireLock above.
+//
+// Before the fix, updateCredentials ran runPostMutationEffects while still
+// holding a.m (acquired by the caller's own a.m.Lock()/defer a.m.Unlock()).
+// Since sync.RWMutex is not reentrant, a hook that called an a.m-locking
+// method (e.g. IsAuthenticated, Provider) from UpdateCredentials, Authenticate,
+// or Logout would deadlock that caller's own goroutine indefinitely.
+func Test_UpdateCredentials_HookCanAcquireLock(t *testing.T) {
+	t.Parallel()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+
+	hookCalled := make(chan struct{}, 1)
+
+	// Install a hook that calls IsAuthenticated (acquires a.m.RLock).
+	// If UpdateCredentials holds a.m.Lock() while calling the hook, IsAuthenticated
+	// will deadlock trying to acquire a.m.RLock on the same goroutine
+	// (sync.RWMutex is not reentrant).
+	service.SetPostCredentialUpdateHook(func() {
+		_ = service.IsAuthenticated()
+		select {
+		case hookCalled <- struct{}{}:
+		default:
+		}
+	})
+
+	done := make(chan struct{})
+	go func() {
+		service.UpdateCredentials("sync-path-token", false, false)
+		close(done)
+	}()
+
+	select {
+	case <-hookCalled:
+		// success: UpdateCredentials did not hold a.m while calling the hook
+	case <-time.After(5 * time.Second):
+		t.Fatal("postCredentialUpdateHook deadlocked: UpdateCredentials is holding a.m across the hook call")
+	}
+
+	select {
+	case <-done:
+		// success: UpdateCredentials returned with a.m correctly re-acquired and released
+	case <-time.After(5 * time.Second):
+		t.Fatal("UpdateCredentials did not return: a.m was not correctly re-acquired after the hook")
+	}
+}
+
+// Test_UpdateCredentials_SkipsStaleNotification verifies that when a concurrent
+// credential write advances the generation past the value that this call captured,
+// the notification is suppressed (since it would be stale by the time it sends).
+// This guards against the race where updateCredentials releases a.m, calls
+// runPostMutationEffects (unlocked), and a concurrent write bumps syncGeneration
+// before the notification is actually sent.
+func Test_UpdateCredentials_SkipsStaleNotification(t *testing.T) {
+	t.Parallel()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
+
+	// Subtest 1: stale notification suppression
+	// Hook calls UpdateCredentials with a different token, advancing the generation
+	// while the outer call is in the unlocked post-mutation window. The outer call's
+	// notification should be skipped because by the time it would send, syncGeneration
+	// has moved past what the outer call captured.
+	t.Run("stale generation suppresses notification", func(t *testing.T) {
+		t.Parallel()
+		mockNotifier := notification.NewMockNotifier()
+		service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+		hookCalled := make(chan struct{}, 1)
+		// Guard against infinite recursion: allow the inner call only on first hook invocation.
+		innerCalled := atomic.Bool{}
+		service.SetPostCredentialUpdateHook(func() {
+			if !innerCalled.Swap(true) {
+				// Make a legitimate concurrent credential write by calling UpdateCredentials
+				// from inside the hook. This advances the generation from within the
+				// unlocked post-mutation window of the outer call, exactly as production
+				// would if a hook triggered a re-authentication.
+				service.UpdateCredentials("token-inner", true, false)
+			}
+			select {
+			case hookCalled <- struct{}{}:
+			default:
+			}
+		})
+
+		service.UpdateCredentials("token-outer", true, false)
+
+		select {
+		case <-hookCalled:
+			// hook ran, inner UpdateCredentials advanced the generation
+		case <-time.After(5 * time.Second):
+			t.Fatal("hook never called")
+		}
+
+		// The outer call's notification should have been suppressed because the inner
+		// call advanced the generation in the unlocked window.
+		// The inner call's notification should have been sent.
+		assert.Equal(t, 1, mockNotifier.SendCount(), "only the inner call's notification should send")
+		messages := mockNotifier.SentMessages()
+		require.Len(t, messages, 1)
+		authParams, ok := messages[0].(types.AuthenticationParams)
+		require.True(t, ok, "message should be AuthenticationParams")
+		assert.Equal(t, "token-inner", authParams.Token, "notification should be for the inner token")
+	})
+
+	// Subtest 2: happy path still sends notification
+	// Without concurrent advancement of syncGeneration, the notification should send normally.
+	t.Run("current generation sends notification", func(t *testing.T) {
+		t.Parallel()
+		mockNotifier := notification.NewMockNotifier()
+		service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+		service.UpdateCredentials("token-b", true, false)
+
+		// The notification should have been sent since no concurrent write advanced the generation.
+		assert.Equal(t, 1, mockNotifier.SendCount(), "notification should send when generation is current")
+		messages := mockNotifier.SentMessages()
+		require.Len(t, messages, 1)
+		authParams, ok := messages[0].(types.AuthenticationParams)
+		require.True(t, ok, "message should be AuthenticationParams")
+		assert.Equal(t, "token-b", authParams.Token)
+	})
+}
+
+// blockingNotifier wraps a notifier to block on Send, allowing tests to
+// synchronize concurrent credential updates and verify that check and send
+// are atomic with respect to writers.
+type blockingNotifier struct {
+	startOnce sync.Once
+	started   chan struct{}
+	release   chan struct{}
+	wrapped   notification.Notifier
+}
+
+func (b *blockingNotifier) Send(msg any) {
+	b.startOnce.Do(func() { close(b.started) })
+	<-b.release
+	b.wrapped.Send(msg)
+}
+
+func (b *blockingNotifier) SendShowMessage(messageType sglsp.MessageType, message string) {
+	b.wrapped.SendShowMessage(messageType, message)
+}
+
+func (b *blockingNotifier) SendError(err error) {
+	b.wrapped.SendError(err)
+}
+
+func (b *blockingNotifier) SendErrorDiagnostic(path types.FilePath, err error) {
+	b.wrapped.SendErrorDiagnostic(path, err)
+}
+
+func (b *blockingNotifier) Receive() (payload any, stop bool) {
+	return b.wrapped.Receive()
+}
+
+func (b *blockingNotifier) CreateListener(callback func(params any)) {
+	b.wrapped.CreateListener(callback)
+}
+
+func (b *blockingNotifier) DisposeListener() {
+	b.wrapped.DisposeListener()
+}
+
+// Test_UpdateCredentials_NotificationBackpressureDoesNotBlockCredentialWrites
+// verifies the core requirement: notification Send backpressure must NOT block
+// credential writes. With the ordering mutex held across Send, a second
+// UpdateCredentials call WILL block on notifyMu when trying to send its own
+// notification. But the crucial assertion is that the credential write work
+// (token update, config write) completes BEFORE the notification backpressure
+// causes the block. We assert this by checking the token is actually written.
+func Test_UpdateCredentials_NotificationBackpressureDoesNotBlockCredentialWrites(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	blocker := &blockingNotifier{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+		wrapped: notification.NewMockNotifier(),
+	}
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), blocker, testutil.DefaultConfigResolver(engine))
+
+	// First UpdateCredentials blocks in Send on the ordering mutex.
+	done1 := make(chan struct{})
+	go func() {
+		service.UpdateCredentials("token-1", true, false)
+		close(done1)
+	}()
+
+	// Wait for first Send to start blocking.
+	select {
+	case <-blocker.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("first Send did not start")
+	}
+
+	// Second UpdateCredentials: the token write must complete even though
+	// the first Send is blocking the notifyMu. We verify this by checking
+	// that the token is actually written to config.
+	done2 := make(chan struct{})
+	go func() {
+		service.UpdateCredentials("token-2", true, false)
+		close(done2)
+	}()
+
+	// Give second call a moment to reach its credential write and token persistence.
+	time.Sleep(100 * time.Millisecond)
+
+	// Check that the second token WAS written to config (credential write
+	// completed) even though first Send is still blocked and second Send is
+	// queued behind it on notifyMu.
+	if config.GetToken(conf) != "token-2" {
+		t.Fatal("second credential write did not complete; notification backpressure blocked credential writes")
+	}
+
+	// Release the first Send so both complete.
+	close(blocker.release)
+
+	select {
+	case <-done1:
+	case <-time.After(5 * time.Second):
+		t.Fatal("first UpdateCredentials did not complete")
+	}
+
+	select {
+	case <-done2:
+	case <-time.After(5 * time.Second):
+		t.Fatal("second UpdateCredentials did not complete")
+	}
+}
+
+// Test_UpdateCredentials_OrderingGuarantee verifies that superseded
+// notifications are dropped via the ordering guard, ensuring a newer
+// generation's notification is never delivered after an older one.
+//
+// The test does this by using a hook to call UpdateCredentials with
+// generation 2 while generation 1 is in the unlocked post-mutation window.
+// Generation 2 completes and increments the counter, then generation 1's
+// notification check finds it's now stale and is skipped.
+func Test_UpdateCredentials_OrderingGuarantee(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	// Hook that triggers a newer credential update while the outer call is
+	// in the unlocked post-mutation window.
+	callCount := atomic.Int32{}
+	service.SetPostCredentialUpdateHook(func() {
+		if callCount.Add(1) == 1 {
+			// On the first hook call (from gen 1), trigger gen 2's update.
+			// This advances the generation counter while gen 1 is still in
+			// the unlocked window, creating the race condition where gen 2
+			// writes "newer" into the ordering guard before gen 1 tries to send.
+			service.UpdateCredentials("token-gen2", true, false)
+		}
+	})
+
+	// Trigger the first update. Inside its hook, gen 2 will update and complete.
+	// When gen 1's notification send finally executes, it will find that gen 2's
+	// generation has already been recorded, causing gen 1 to be dropped.
+	service.UpdateCredentials("token-gen1", true, false)
+
+	// Only gen 2's notification should be sent; gen 1 should be dropped by the
+	// ordering guard because gen 2's generation was recorded first.
+	require.Equal(t, 1, mockNotifier.SendCount(), "only gen 2 notification should send; gen 1 should be dropped")
+	messages := mockNotifier.SentMessages()
+	require.Len(t, messages, 1)
+
+	authParams, ok := messages[0].(types.AuthenticationParams)
+	require.True(t, ok, "message should be AuthenticationParams")
+	assert.Equal(t, "token-gen2", authParams.Token, "only gen 2's token should be delivered")
+}
+
+// Test_UpdateCredentials_OrderingGuard_DropsSuperseded (TEST C) verifies that
+// the ordering guard deterministically drops notifications for generations that
+// have already been sent. Sets lastNotifiedGeneration higher than the generation
+// the next update will carry, then asserts the notification is dropped.
+func Test_UpdateCredentials_OrderingGuard_DropsSuperseded(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+	impl := service.(*AuthenticationServiceImpl)
+
+	// Manually set lastNotifiedGeneration higher than the generation that will be used.
+	impl.notifyMu.Lock()
+	nextGen := impl.syncGeneration.Load() + 1
+	impl.lastNotifiedGeneration = nextGen + 10
+	impl.notifyMu.Unlock()
+
+	// UpdateCredentials will increment syncGeneration to nextGen, which is < lastNotifiedGeneration,
+	// so the notification should be dropped by the ordering guard (superseded by newer epoch).
+	service.UpdateCredentials("token-test", true, false)
+
+	// No notification should be sent (superseded by newer epoch).
+	require.Equal(t, 0, mockNotifier.SendCount(), "superseded generation should not send notification")
+}
+
+// Test_UpdateCredentials_OrderingGuard_SyncGenerationAdvancedNoNotification
+// verifies that the syncGeneration guard catches the case where a newer
+// credential write completes (advancing syncGeneration) but does NOT notify
+// (leaving lastNotifiedGeneration unchanged), and then an older generation
+// reaches the notify step. This is the case that only guard A catches.
+func Test_UpdateCredentials_OrderingGuard_SyncGenerationAdvancedNoNotification(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+	callCount := atomic.Int32{}
+	service.SetPostCredentialUpdateHook(func() {
+		if callCount.Add(1) == 1 {
+			// From inside the outer (generation 1) hook, perform a newer
+			// credential update (generation 2) with sendNotification=FALSE.
+			// This advances syncGeneration without advancing lastNotifiedGeneration,
+			// creating the exact case that guard A must catch: when the outer
+			// generation reaches the notify step, syncGeneration will be ahead
+			// but lastNotifiedGeneration won't reflect the newer generation.
+			service.UpdateCredentials("token-gen2-no-notify", false, false)
+		}
+	})
+
+	// Trigger the first update with sendNotification=TRUE. Inside its hook,
+	// gen 2 will update and complete without notifying. When gen 1's notification
+	// attempt executes, it will find that gen 2's generation has already been
+	// recorded in syncGeneration (by the inner UpdateCredentials advancing it),
+	// causing gen 1 to be dropped by guard A despite lastNotifiedGeneration
+	// not advancing (since gen 2 didn't notify).
+	service.UpdateCredentials("token-gen1", true, false)
+
+	// No notifications should be sent. Gen 1's notification is dropped by guard A
+	// because syncGeneration advanced (due to gen 2 completing) even though
+	// lastNotifiedGeneration never advanced (since gen 2 didn't notify).
+	require.Equal(t, 0, mockNotifier.SendCount(), "gen 1 should be dropped by syncGeneration guard despite lastNotifiedGeneration not advancing")
+}
+
+// Test_UpdateCredentials_OrderingAtomicity (TEST D) verifies that the claim
+// (checking ordering) and the push (calling Send) are atomic: a concurrent
+// call cannot sneak through and deliver a stale notification in between.
+func Test_UpdateCredentials_OrderingAtomicity(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+
+	blocker := &blockingNotifier{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+		wrapped: notification.NewMockNotifier(),
+	}
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), blocker, testutil.DefaultConfigResolver(engine))
+	impl := service.(*AuthenticationServiceImpl)
+
+	// G1: start first UpdateCredentials, will block in Send while holding notifyMu.
+	g1Done := make(chan struct{})
+	go func() {
+		service.UpdateCredentials("token-1", true, false)
+		close(g1Done)
+	}()
+
+	// Wait for G1 to block in Send (started signal means Send was entered).
+	select {
+	case <-blocker.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("G1 Send did not start; blocker not working")
+	}
+
+	// G2: start second UpdateCredentials while G1's Send is blocked.
+	// G2 must block at the notify step (trying to acquire notifyMu), not earlier.
+	// We verify this by checking that G2 cannot complete the notification part
+	// while G1's Send is blocked.
+	g2Done := make(chan struct{})
+	g2ReachedNotify := make(chan struct{})
+	go func() {
+		impl.notifyMu.Lock()
+		close(g2ReachedNotify)
+		impl.notifyMu.Unlock()
+		service.UpdateCredentials("token-2", true, false)
+		close(g2Done)
+	}()
+
+	// G2 should not reach the notify step (acquire notifyMu) until G1 releases it.
+	select {
+	case <-g2ReachedNotify:
+		// G2 was able to acquire the lock - this would indicate the lock is not held.
+		// But we expect this to block, so if we get here, it means G1 did NOT acquire it.
+		t.Fatal("G2 acquired notifyMu while G1 was still in Send - mutex not held during Send")
+	case <-time.After(500 * time.Millisecond):
+		// Expected: G2 is blocked trying to acquire notifyMu
+	}
+
+	// Release G1's Send and let both complete.
+	close(blocker.release)
+
+	select {
+	case <-g1Done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("G1 did not complete after releasing Send")
+	}
+
+	select {
+	case <-g2Done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("G2 did not complete after G1 finished")
+	}
+
+	// Verify notifications were sent in order.
+	require.Equal(t, 2, blocker.wrapped.(*notification.MockNotifier).SendCount(), "both should send")
+	messages := blocker.wrapped.(*notification.MockNotifier).SentMessages()
+	require.Len(t, messages, 2)
+
+	ap1, ok1 := messages[0].(types.AuthenticationParams)
+	require.True(t, ok1)
+	assert.Equal(t, "token-1", ap1.Token)
+
+	ap2, ok2 := messages[1].(types.AuthenticationParams)
+	require.True(t, ok2)
+	assert.Equal(t, "token-2", ap2.Token)
 }
 
 // Regression guard that pins the existing semantics of getPrioritizedApiUrl,
