@@ -170,7 +170,7 @@ func Test_LSPInitCompletesWithManyFoldersRealHTTP(t *testing.T) {
 		t.Skip("real-HTTP init test is not part of the smoke suite; run explicitly without SMOKE_TESTS")
 	}
 
-	engine, tokenService := testutil.UnitTestWithEngine(t)
+	engine, tokenService := testutil.RealHTTPTestWithEngine(t)
 	params := buildInitParams(t, lspInitPerfFolderCount)
 
 	loc, _, _ := setupServer(t, engine, tokenService)
