@@ -171,6 +171,7 @@ func UnitTestWithEngine(t *testing.T) (workflow.Engine, *config.TokenServiceImpl
 // when no credentials are available.
 func RealHTTPTestWithEngine(t *testing.T) (workflow.Engine, *config.TokenServiceImpl) {
 	t.Helper()
+	_ = os.Setenv(shellenv.DisableShellEnvLoadingEnvVar, "1") //nolint:usetesting // t.Setenv panics when called from a parallel test (Go 1.25+)
 	token := testsupport.GetEnvironmentToken("")
 	if token == "" {
 		t.Skip("SNYK_TOKEN is not set; real-HTTP test requires credentials")
