@@ -725,7 +725,7 @@ If you have any issues with running pact, please extend your PATH env.
 For example:
 
 ```
-PATH=$PATH:$PWD/.bin/pact/bin make test
+PATH=$PATH:$PWD/.bin/$(go env GOOS)-$(go env GOARCH)/pact/bin make test
 ```
 
 The output should look like this (it is running against the Snyk Code API and using the real CLI):

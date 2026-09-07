@@ -45,6 +45,7 @@ func setupLocalBareRepo(t *testing.T) localRepo {
 		{"init"},
 		{"config", "user.email", "test@example.com"},
 		{"config", "user.name", "Test"},
+		{"config", "commit.gpgsign", "false"},
 	} {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = dir

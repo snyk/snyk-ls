@@ -112,6 +112,9 @@ func TestMain(m *testing.M) {
 	if os.Getenv(testsupport.SmokeTestEnvVar) == "" {
 		os.Exit(m.Run())
 	}
+	if os.Getenv("BDD_STEPS_HELPER_PROCESS") == "1" {
+		os.Exit(m.Run())
+	}
 
 	fixtureCache := os.Getenv("SNYK_LS_FIXTURE_CACHE_DIR")
 

@@ -95,12 +95,13 @@ func didOpenTextParams(t *testing.T) (sglsp.DidOpenTextDocumentParams, types.Fil
 type ServerTestOption func(*serverTestConfig)
 
 type serverTestConfig struct {
-	useRealDI       bool
-	overrideDeps    *di.Dependencies
-	callbackFn      onCallbackFn
-	apiEndpoint     string
-	concurrency     int
-	scannerOverride scanner.Scanner
+	useRealDI            bool
+	overrideDeps         *di.Dependencies
+	callbackFn           onCallbackFn
+	apiEndpoint          string
+	concurrency          int
+	scannerOverride      scanner.Scanner
+	authProviderOverride authentication.AuthenticationProvider
 }
 
 func WithRealDI() ServerTestOption {
@@ -141,6 +142,16 @@ func WithAPIEndpoint(endpoint string) ServerTestOption {
 func WithScanner(s scanner.Scanner) ServerTestOption {
 	return func(cfg *serverTestConfig) {
 		cfg.scannerOverride = s
+	}
+}
+
+// WithAuthProvider replaces the AuthenticationProvider in the AuthenticationService.
+// It composes with WithRealDI so the auth check uses the provided provider instead
+// of the real authenticator, allowing deterministic test control without relying on
+// network conditions.
+func WithAuthProvider(p authentication.AuthenticationProvider) ServerTestOption {
+	return func(cfg *serverTestConfig) {
+		cfg.authProviderOverride = p
 	}
 }
 
@@ -207,6 +218,11 @@ func setupServer(
 	// Scanner dependency injected into request contexts is replaced.
 	if cfg.scannerOverride != nil {
 		deps.Scanner = cfg.scannerOverride
+	}
+
+	// Auth provider override applies to either DI path (composes with WithRealDI).
+	if cfg.authProviderOverride != nil {
+		deps.AuthenticationService.SetProvider(cfg.authProviderOverride)
 	}
 
 	setUniqueCliPath(t, engine)

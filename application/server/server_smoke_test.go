@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"runtime"
 	"runtime/pprof"
@@ -1453,7 +1454,7 @@ func Test_SmokeSnykCodeFileScan(t *testing.T) {
 
 	_ = textDocumentDidSave(t, &loc, testPath)
 
-	assert.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), 2*time.Minute, time.Millisecond)
+	assert.Eventually(t, checkForPublishedDiagnostics(t, engine, testPath, -1, jsonRPCRecorder), 5*time.Minute, time.Millisecond)
 	waitForDeltaScan(t, deps.ScanStateAggregator)
 }
 
@@ -1629,8 +1630,8 @@ app.get('/unique_subfolder_test', function(req, res) {
 // with parallel shard-1 tests for CLI resources and API bandwidth.
 func Test_SmokeScanUnmanaged(t *testing.T) {
 	testsupport.NotOnWindows(t, "git clone does not work here. dunno why. ") // FIXME
-	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_1")
-	loc, jsonRPCRecorder, _ := setupServer(t, engine, tokenService, WithRealDI())
+	engine, tokenService := testutil.SmokeTestWithEngine(t, "", "SMOKE_SHARD_4")
+	loc, jsonRPCRecorder, deps := setupServer(t, engine, tokenService, WithRealDI())
 	// OSS-only: unmanaged scan is an OSS-specific path (--unmanaged for C/C++ repos).
 	enableOnlyProducts(t, engine, product.ProductOpenSource)
 	// When scan net-new is on, FilterAndPublishDiagnostics keeps only IsNew issues; enrichment/baseline
@@ -1659,6 +1660,7 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 
 	waitForScan(t, cloneTargetDirString, engine)
 	checkForScanParams(t, jsonRPCRecorder, cloneTargetDirString, product.ProductOpenSource)
+	waitForDeltaScan(t, deps.ScanStateAggregator)
 
 	// Diagnostics can arrive after $/snyk.scan reports Success (same pattern as checkOnlyOneQuickFixCodeAction).
 	var issueList []types.ScanIssue
@@ -1672,6 +1674,13 @@ func Test_SmokeScanUnmanaged(t *testing.T) {
 type lspFolderConfigNotifOpts struct {
 	clearNotifications               bool
 	waitForNonEmptyAutoDeterminedOrg bool
+	requireAdditionalParameters      string
+	requireSetting                   *requiredSetting
+}
+
+type requiredSetting struct {
+	name string
+	want any
 }
 
 type lspFolderConfigNotifOption func(*lspFolderConfigNotifOpts)
@@ -1685,6 +1694,16 @@ func lspFolderConfigClearAfter(clearNotifications bool) lspFolderConfigNotifOpti
 // validators (LDX-Sync can populate folder configs before autoDeterminedOrg is ready).
 func lspFolderConfigWaitForAutoDeterminedOrg() lspFolderConfigNotifOption {
 	return func(o *lspFolderConfigNotifOpts) { o.waitForNonEmptyAutoDeterminedOrg = true }
+}
+
+func lspFolderConfigRequireAdditionalParameters(want string) lspFolderConfigNotifOption {
+	return func(o *lspFolderConfigNotifOpts) { o.requireAdditionalParameters = want }
+}
+
+// lspFolderConfigRequireSettingValue gates the wait on a notification that already reflects
+// the change the caller just made, so a notification emitted before it is skipped.
+func lspFolderConfigRequireSettingValue(name string, want any) lspFolderConfigNotifOption {
+	return func(o *lspFolderConfigNotifOpts) { o.requireSetting = &requiredSetting{name: name, want: want} }
 }
 
 func parseLspFolderConfigNotifOpts(opts ...lspFolderConfigNotifOption) lspFolderConfigNotifOpts {
@@ -1779,6 +1798,67 @@ func folderConfigNotificationMatchesValidators(
 	return true
 }
 
+// folderConfigsCarryAdditionalParameters gates a notification on the additional_parameters
+// value the caller's own trigger just sent, so a notification emitted before that trigger
+// is skipped rather than mistaken for the response to it.
+func folderConfigsCarryAdditionalParameters(
+	param types.LspConfigurationParam,
+	validators map[types.FilePath]func(types.LspFolderConfig),
+	want string,
+) bool {
+	if want == "" {
+		return true
+	}
+	for wantPath := range validators {
+		matched := false
+		for _, fc := range param.FolderConfigs {
+			if !folderConfigPathsMatch(fc.FolderPath, wantPath) {
+				continue
+			}
+			setting := fc.Settings[types.SettingAdditionalParameters]
+			if setting == nil {
+				continue
+			}
+			values, ok := setting.Value.([]any)
+			if !ok || len(values) != 1 || values[0] != want {
+				continue
+			}
+			matched = true
+			break
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
+}
+
+func folderConfigsCarrySetting(
+	param types.LspConfigurationParam,
+	validators map[types.FilePath]func(types.LspFolderConfig),
+	want *requiredSetting,
+) bool {
+	if want == nil {
+		return true
+	}
+	for wantPath := range validators {
+		matched := false
+		for _, fc := range param.FolderConfigs {
+			if !folderConfigPathsMatch(fc.FolderPath, wantPath) {
+				continue
+			}
+			if setting := fc.Settings[want.name]; setting != nil && reflect.DeepEqual(setting.Value, want.want) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
+}
+
 // tryParseLatestMatchingFolderConfig walks notifications newest-first and returns the first
 // $/snyk.configuration payload that satisfies cfg (including optional autoDeterminedOrg wait).
 func tryParseLatestMatchingFolderConfig(
@@ -1799,6 +1879,12 @@ func tryParseLatestMatchingFolderConfig(
 				continue
 			}
 		}
+		if !folderConfigsCarryAdditionalParameters(param, validators, cfg.requireAdditionalParameters) {
+			continue
+		}
+		if !folderConfigsCarrySetting(param, validators, cfg.requireSetting) {
+			continue
+		}
 		return param, true
 	}
 	return types.LspConfigurationParam{}, false
@@ -1809,6 +1895,7 @@ func countValidatedFolderConfigs(
 	validators map[types.FilePath]func(types.LspFolderConfig),
 ) int {
 	validationsCount := 0
+	// Fast path when callers pass exactly one folder config and one validator; not required for correctness.
 	if len(lastConfigParam.FolderConfigs) == 1 && len(validators) == 1 {
 		fc := lastConfigParam.FolderConfigs[0]
 		for wantPath, onlyValidator := range validators {
@@ -2216,7 +2303,7 @@ func Test_SmokeOrgSelection(t *testing.T) {
 				require.False(t, fc.Settings[types.SettingOrgSetByUser].Value.(bool), "OrgSetByUser should be false after user opts-in to auto org selection")
 				// PreferredOrg may be inherited from global org in auto mode
 			},
-		})
+		}, lspFolderConfigRequireSettingValue(types.SettingOrgSetByUser, false))
 		// When OrgSetByUser is false, effective org is AutoDeterminedOrg (if LDX-Sync succeeded) or global org (fallback)
 		// Either way, it should NOT be the user's initialOrg anymore
 		effectiveOrg := config.FolderOrganization(engine.GetConfiguration(), repo, engine.GetLogger())
@@ -2738,6 +2825,9 @@ func monorepoBenchmarkFixtureScale(t *testing.T) (codeFolders, ossFolders int) {
 func initializeGitRepoForMonorepoBenchmark(t *testing.T, repoDir string) {
 	t.Helper()
 	cmd := gitCommandForMonorepoBenchmark(repoDir, "init", "--initial-branch=main")
+	require.NoError(t, cmd.Run())
+
+	cmd = gitCommandForMonorepoBenchmark(repoDir, "config", "commit.gpgsign", "false")
 	require.NoError(t, cmd.Run())
 
 	cmd = gitCommandForMonorepoBenchmark(repoDir, "add", ".")

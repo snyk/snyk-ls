@@ -1241,6 +1241,7 @@ func createGitRepoForFix(t *testing.T) (string, error) {
 		{"init"},
 		{"config", "user.email", "test@example.com"},
 		{"config", "user.name", "Test"},
+		{"config", "commit.gpgsign", "false"},
 		{"config", "core.checkStat", "minimal"},
 	} {
 		if err := run(args...); err != nil {

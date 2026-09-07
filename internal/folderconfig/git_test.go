@@ -49,6 +49,10 @@ func initializeTestGitRepo(t *testing.T, repoDir string, branches []string) {
 	err := cmd.Run()
 	require.NoError(t, err)
 
+	cmd = gitCommandForTestRepo(repoDir, "config", "commit.gpgsign", "false")
+	err = cmd.Run()
+	require.NoError(t, err)
+
 	// Create and commit a file (required for branches to exist)
 	testFile := filepath.Join(repoDir, "test.txt")
 	err = os.WriteFile(testFile, []byte("test content"), 0644)

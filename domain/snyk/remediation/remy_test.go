@@ -60,6 +60,7 @@ func initGitRepo(t *testing.T) string {
 	run("init")
 	run("config", "user.email", "test@example.com")
 	run("config", "user.name", "Test")
+	run("config", "commit.gpgsign", "false")
 	// Overlay filesystems (e.g. Docker on Linux) have write-ordering delays that
 	// can cause git to report "not a valid object" when the object database is
 	// read immediately after a write. core.checkStat=minimal tells git not to
@@ -802,6 +803,7 @@ func initGitRepoInDir(t *testing.T, dir string) {
 	run("init")
 	run("config", "user.email", "test@example.com")
 	run("config", "user.name", "Test")
+	run("config", "commit.gpgsign", "false")
 	run("config", "core.checkStat", "minimal")
 }
 
