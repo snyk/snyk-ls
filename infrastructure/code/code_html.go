@@ -168,13 +168,13 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	exampleCommits := prepareExampleCommits(additionalData.ExampleCommitFixes)
 	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, logger)
 	dataFlowKeys, dataFlowTable := prepareDataFlowTable(additionalData)
+	aiFixDiffStatus, aiFixDiffResult, aiFixDiffErr := renderer.AiFixHandler.GetAiFixDiffSnapshot()
 	var aiFixErr string
-	if aiFixDiffErr := renderer.AiFixHandler.GetAiFixDiffError(); aiFixDiffErr != nil {
+	if aiFixDiffErr != nil {
 		aiFixErr = aiFixDiffErr.Error()
 	}
 
 	// Agent Fix only ever produces one suggestion.
-	aiFixDiffResult := renderer.AiFixHandler.GetAiFixDiffResult()
 	if len(aiFixDiffResult) > 0 && aiFixDiffResult[0].Explanation == "" {
 		logger.Warn().Msgf("autofix suggestion %s has no explanation", aiFixDiffResult[0].FixId)
 	}
@@ -247,7 +247,7 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"Scripts":              template.JS(htmlIgnore.Scripts() + "\n" + customScripts),
 		"Nonce":                nonce,
 		"AiFixResult":          aiFixResult,
-		"AiFixDiffStatus":      renderer.AiFixHandler.GetAiFixDiffStatus(),
+		"AiFixDiffStatus":      aiFixDiffStatus,
 		"AiFixError":           aiFixErr,
 		"AutoTriggerAiFix":     autoTriggerAiFix,
 	}
