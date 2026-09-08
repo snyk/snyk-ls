@@ -165,7 +165,9 @@ func SetupCustomTestRepo(t *testing.T, rootDir types.FilePath, url string, targe
 		reset.Env = gitEnv
 		output, err = reset.CombinedOutput()
 		logger.Debug().Msg(string(output))
-		assert.NoError(t, err, "reset didn't work: %s", string(output))
+		if err != nil {
+			return "", fmt.Errorf("reset didn't work: %w: %s", err, string(output))
+		}
 	}
 
 	clean := exec.Command("git", testsupport.GitUnsigned("clean", "--force")...)
@@ -173,7 +175,9 @@ func SetupCustomTestRepo(t *testing.T, rootDir types.FilePath, url string, targe
 	clean.Env = gitEnv
 	output, err = clean.CombinedOutput()
 	logger.Debug().Msg(string(output))
-	assert.NoError(t, err, "clean didn't work: %s", string(output))
+	if err != nil {
+		return "", fmt.Errorf("clean didn't work: %w: %s", err, string(output))
+	}
 
 	return types.FilePath(absoluteCloneRepoDir), nil
 }
