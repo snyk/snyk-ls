@@ -17,9 +17,12 @@
 package code
 
 import (
+	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -76,7 +79,7 @@ func TestIssueEnhancer_autofixShowDetailsFunc(t *testing.T) {
 		AdditionalData:   snyk.CodeIssueData{Key: "123"},
 		Range:            fakeRange,
 	}
-	expectedURI := "snyk:///Users/user/workspace/blah/app.js?product=Snyk+Code&issueId=123&action=showInDetailPanel"
+	expectedURI := "snyk:///Users/user/workspace/blah/app.js?action=showInDetailPanel&issueId=123&product=Snyk+Code"
 
 	t.Run("returns CommandData with correct URI and range", func(t *testing.T) {
 		commandDataFunc := issueEnhancer.autofixShowDetailsFunc(t.Context(), issue)
@@ -181,16 +184,36 @@ func Test_ideSnykURI(t *testing.T) {
 	testutil.UnitTest(t)
 	t.Run("generates correct URI", func(t *testing.T) {
 		issue, ideAction, expectedURI := setupAiFixTestData()
-		actualURI, err := SnykMagnetUri(issue, ideAction)
+		actualURI, err := SnykMagnetUri(util.Ptr(zerolog.Nop()), issue, ideAction)
 		assert.NoError(t, err)
 		assert.Equal(t, expectedURI, actualURI)
 	})
 
 	t.Run("handles missing Key in additional data", func(t *testing.T) {
 		issue, ideAction, expectedURI := setupAiFixTestData()
-		actualURI, err := SnykMagnetUri(issue, ideAction)
+		actualURI, err := SnykMagnetUri(util.Ptr(zerolog.Nop()), issue, ideAction)
 		assert.NoError(t, err)
 		assert.Equal(t, expectedURI, actualURI)
+	})
+
+	// lspUri.File's file:// shape puts a leading '/' before the drive letter (RFC 8089),
+	// keeping the authority empty; a raw path in url.URL instead renders "C:%5Cpath" and
+	// "C:" parses as host:port (RFC 3986).
+	t.Run("Windows paths follow RFCs for encoding", func(t *testing.T) {
+		filePath := `C:\Mac\Home\Documents\Code\JavaScript\snyk-goof\db.js`
+		issue := &snyk.Issue{
+			AffectedFilePath: types.FilePath(filePath),
+			Product:          "Code",
+			AdditionalData:   snyk.CodeIssueData{Key: "123"},
+		}
+
+		actualURI, err := SnykMagnetUri(util.Ptr(zerolog.Nop()), issue, ShowInDetailPanelIdeCommand)
+		require.NoError(t, err)
+
+		parsed, parseErr := url.Parse(actualURI)
+		require.NoError(t, parseErr, "generated URI should be re-parseable, but got: %s", actualURI)
+		assert.Empty(t, parsed.Host, "authority should be empty, not swallow the Windows drive letter as a host")
+		assert.True(t, strings.HasPrefix(parsed.Path, "/C:"), "path should start with a leading slash before the drive letter, got: %s", parsed.Path)
 	})
 }
 
@@ -248,7 +271,7 @@ func setupAiFixTestData() (issue *snyk.Issue, ideAction string, expectedURI stri
 		AdditionalData:   snyk.CodeIssueData{Key: "123"}, // Provide additional data
 	}
 	ideAction = "showInDetailPanel"
-	expectedURI = "snyk:///Users/user/workspace/blah/app.js?product=Code&issueId=123&action=showInDetailPanel"
+	expectedURI = "snyk:///Users/user/workspace/blah/app.js?action=showInDetailPanel&issueId=123&product=Code"
 
 	return
 }

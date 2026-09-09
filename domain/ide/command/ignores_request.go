@@ -132,7 +132,7 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		cmd.treeEmitter.Emit(cmd.scanStateFunc())
 	}
 
-	SendShowDocumentRequest(ctx, logger, issue, cmd.srv)
+	SendShowDocumentRequest(ctx, &logger, issue, cmd.srv)
 
 	return nil, nil
 }

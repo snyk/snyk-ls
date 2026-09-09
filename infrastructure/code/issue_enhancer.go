@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/rs/zerolog"
 	codeClientObservability "github.com/snyk/code-client-go/observability"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/types"
+	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/util"
 )
 
@@ -96,7 +98,7 @@ func (b *IssueEnhancer) addIssueActions(_ context.Context, issues []types.Issue)
 			codeActionShowDocument := b.createShowDocumentCodeAction(issues[i])
 			issues[i].SetCodeActions(append(issues[i].GetCodeActions(), codeActionShowDocument))
 
-			uri, err := SnykMagnetUri(issues[i], ShowInDetailPanelIdeCommand)
+			snykUri, err := SnykMagnetUri(b.engine.GetLogger(), issues[i], ShowInDetailPanelIdeCommand)
 			if err != nil {
 				b.engine.GetLogger().Error().Str("method", method).Msg("Failed to create URI for showInDetailPanel action")
 				return
@@ -104,7 +106,7 @@ func (b *IssueEnhancer) addIssueActions(_ context.Context, issues []types.Issue)
 			issues[i].SetCodelensCommands(append(issues[i].GetCodelensCommands(), types.CommandData{
 				Title:     FixIssuePrefix + issueTitle(issues[i]),
 				CommandId: types.NavigateToRangeCommand,
-				Arguments: []any{uri, issues[i].GetRange()},
+				Arguments: []any{snykUri, issues[i].GetRange()},
 			}))
 		}
 		issues[i].SetAdditionalData(issueData)
@@ -121,7 +123,7 @@ func (b *IssueEnhancer) addIssueActions(_ context.Context, issues []types.Issue)
 // returns the deferred code action CodeAction which calls autofix.
 func (b *IssueEnhancer) createShowDocumentCodeAction(issue types.Issue) (codeAction types.CodeAction) {
 	method := "code.createShowDocumentCodeAction"
-	uri, err := SnykMagnetUri(issue, ShowInDetailPanelIdeCommand)
+	snykUri, err := SnykMagnetUri(b.engine.GetLogger(), issue, ShowInDetailPanelIdeCommand)
 	if err != nil {
 		b.engine.GetLogger().Error().Str("method", method).Msg("Failed to create URI for showInDetailPanel action")
 		return nil
@@ -135,7 +137,7 @@ func (b *IssueEnhancer) createShowDocumentCodeAction(issue types.Issue) (codeAct
 		Command: &types.CommandData{
 			Title:     title,
 			CommandId: types.NavigateToRangeCommand,
-			Arguments: []any{uri, issue.GetRange()},
+			Arguments: []any{snykUri, issue.GetRange()},
 		},
 	}
 	return codeAction
@@ -147,18 +149,23 @@ func (b *IssueEnhancer) autofixShowDetailsFunc(ctx context.Context, issue types.
 		s := b.instrumentor.StartSpan(ctx, method)
 		defer b.instrumentor.Finish(s)
 
-		return getSnykShowDocumentCommand(issue, ShowInDetailPanelIdeCommand)
+		return b.getSnykShowDocumentCommand(issue, ShowInDetailPanelIdeCommand)
 	}
 	return f
 }
 
-func getSnykShowDocumentCommand(issue types.Issue, action string) *types.CommandData {
-	uri, _ := SnykMagnetUri(issue, action)
+func (b *IssueEnhancer) getSnykShowDocumentCommand(issue types.Issue, action string) *types.CommandData {
+	logger := b.engine.GetLogger()
+	snykUri, err := SnykMagnetUri(logger, issue, action)
+	if err != nil {
+		logger.Err(err).Str("method", "code.getSnykShowDocumentCommand").Msg("failed to build show-document URI")
+		return nil
+	}
 
 	commandData := &types.CommandData{
 		Title:     types.NavigateToRangeCommand,
 		CommandId: types.NavigateToRangeCommand,
-		Arguments: []any{uri, issue.GetRange()},
+		Arguments: []any{snykUri, issue.GetRange()},
 	}
 	return commandData
 }
@@ -226,12 +233,28 @@ func IssueId(issue types.Issue) string {
 	return issue.GetID()
 }
 
-func SnykMagnetUri(issue types.Issue, ideAction string) (string, error) {
-	u := &url.URL{
-		Scheme:   "snyk",
-		Path:     string(issue.GetAffectedFilePath()),
-		RawQuery: fmt.Sprintf("product=%s&issueId=%s&action=%s", url.QueryEscape(string(issue.GetProduct())), url.QueryEscape(IssueId(issue)), ideAction),
-	}
+func SnykMagnetUri(logger *zerolog.Logger, issue types.Issue, ideAction string) (string, error) {
+	l := logger.With().Str("method", "code.SnykMagnetUri").Logger()
 
-	return u.String(), nil
+	affectedFilePath := string(issue.GetAffectedFilePath())
+	// Convert to file URI then swaps the scheme to "snyk",
+	// since building url.URL{Path: <raw OS path>} directly causes a malformed "snyk://C:%5Cpath%5Chere" URI
+	// on Windows, where "C:" gets interpreted as host:port.
+	fileUri := uri.PathToUri(types.FilePath(affectedFilePath))
+	u, err := url.Parse(string(fileUri))
+	if err != nil {
+		l.Err(err).Str("affectedFilePath", affectedFilePath).Msg("failed to parse file URI for affected path")
+		return "", err
+	}
+	u.Scheme = "snyk"
+	u.RawQuery = url.Values{
+		"product": {string(issue.GetProduct())},
+		"issueId": {IssueId(issue)},
+		"action":  {ideAction},
+	}.Encode()
+
+	snykUri := u.String()
+	l.Debug().Str("snykUri", snykUri).Msg("built show-document URI")
+
+	return snykUri, nil
 }
