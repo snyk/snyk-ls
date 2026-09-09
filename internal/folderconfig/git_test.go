@@ -33,7 +33,7 @@ import (
 )
 
 func gitCommandForTestRepo(dir string, args ...string) *exec.Cmd {
-	cmd := exec.Command("git", args...)
+	cmd := exec.Command("git", testsupport.GitUnsigned(args...)...)
 	cmd.Dir = dir
 	cmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
 	return cmd

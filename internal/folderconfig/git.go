@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/slices"
 
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -143,28 +144,40 @@ func SetupCustomTestRepo(t *testing.T, rootDir types.FilePath, url string, targe
 		}
 	}
 	assert.NoError(t, os.MkdirAll(tempDir, 0755))
+	gitEnv := testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
+
 	cmd := []string{"clone", "-v", url, repoDir}
 	logger.Debug().Interface("cmd", cmd).Msg("clone command")
-	clone := exec.Command("git", cmd...)
+	clone := exec.Command("git", testsupport.GitUnsigned(cmd...)...)
 	clone.Dir = tempDir
-	reset := exec.Command("git", "reset", "--hard", targetCommit)
-	reset.Dir = absoluteCloneRepoDir
-
-	clean := exec.Command("git", "clean", "--force")
-	clean.Dir = absoluteCloneRepoDir
+	clone.Env = gitEnv
 
 	output, err := clone.CombinedOutput()
 	if err != nil {
 		t.Log(string(output))
 		t.Fatal(err, "clone didn't work")
 	}
-
 	logger.Debug().Msg(string(output))
-	output, _ = reset.CombinedOutput()
 
-	logger.Debug().Msg(string(output))
+	if targetCommit != "" {
+		reset := exec.Command("git", testsupport.GitUnsigned("reset", "--hard", targetCommit)...)
+		reset.Dir = absoluteCloneRepoDir
+		reset.Env = gitEnv
+		output, err = reset.CombinedOutput()
+		logger.Debug().Msg(string(output))
+		if err != nil {
+			return "", fmt.Errorf("reset didn't work: %w: %s", err, string(output))
+		}
+	}
+
+	clean := exec.Command("git", testsupport.GitUnsigned("clean", "--force")...)
+	clean.Dir = absoluteCloneRepoDir
+	clean.Env = gitEnv
 	output, err = clean.CombinedOutput()
-
 	logger.Debug().Msg(string(output))
-	return types.FilePath(absoluteCloneRepoDir), err
+	if err != nil {
+		return "", fmt.Errorf("clean didn't work: %w: %s", err, string(output))
+	}
+
+	return types.FilePath(absoluteCloneRepoDir), nil
 }

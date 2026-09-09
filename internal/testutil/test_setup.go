@@ -106,6 +106,11 @@ func SmokeTestWithEngine(t *testing.T, tokenSecretName string, shardEnvVar strin
 	return prepareTestHelper(t, testsupport.SmokeTestEnvVar, tokenSecretName)
 }
 
+// unitTestAPIURL points unit tests at a closed port. A unit test must not
+// depend on the network: reaching the real API makes the result vary with
+// whatever credentials the host or its proxy supplies.
+const unitTestAPIURL = "http://127.0.0.1:1"
+
 func UnitTest(t *testing.T) workflow.Engine {
 	t.Helper()
 	engine, _ := UnitTestWithEngine(t)
@@ -141,10 +146,51 @@ func UnitTestWithEngine(t *testing.T) (workflow.Engine, *config.TokenServiceImpl
 	}
 
 	config.SetupLogging(engine, ts, nil)
+	config.UpdateApiEndpointsOnConfig(conf, unitTestAPIURL)
 	ts.SetToken(conf, "00000000-0000-0000-0000-000000000001")
 	types.SetGlobalUser(conf, types.SettingTrustEnabled, false)
 	types.SetGlobalUser(conf, types.SettingAutomaticAuthentication, false)
 	types.SetGlobalUser(conf, types.SettingAuthenticationMethod, string(types.FakeAuthentication))
+	redirectConfigAndDataHome(t, conf, logger)
+	CLIDownloadLockFileCleanUp(t, conf)
+	config.SetOrganization(conf, "00000000-0000-0000-0000-000000000000")
+	conf.Set(configuration.ORGANIZATION_SLUG, "test-default-org-slug")
+	conf.Set(code.ConfigurationSastSettings, &sast_contract.SastResponse{SastEnabled: true, LocalCodeEngine: sast_contract.LocalCodeEngine{
+		Enabled: false,
+	},
+	})
+	t.Cleanup(func() {
+		cleanupFakeCliFile(conf, logger)
+	})
+
+	return engine, ts
+}
+
+// RealHTTPTestWithEngine sets up an engine pointed at the default Snyk API with a
+// real token. Unlike UnitTestWithEngine, this exercises live HTTP paths and skips
+// when no credentials are available.
+func RealHTTPTestWithEngine(t *testing.T) (workflow.Engine, *config.TokenServiceImpl) {
+	t.Helper()
+	_ = os.Setenv(shellenv.DisableShellEnvLoadingEnvVar, "1") //nolint:usetesting // t.Setenv panics when called from a parallel test (Go 1.25+)
+	token := testsupport.GetEnvironmentToken("")
+	if token == "" {
+		t.Skip("SNYK_TOKEN is not set; real-HTTP test requires credentials")
+	}
+	engine, ts := config.InitEngine(initStandaloneTestPreEngine(t, []string{}))
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+
+	err := types.WaitForDefaultEnv(t.Context(), conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	config.SetupLogging(engine, ts, nil)
+	config.UpdateApiEndpointsOnConfig(conf, config.DefaultSnykApiUrl)
+	ts.SetToken(conf, token)
+	types.SetGlobalUser(conf, types.SettingTrustEnabled, false)
+	types.SetGlobalUser(conf, types.SettingAutomaticAuthentication, false)
+	types.SetGlobalUser(conf, types.SettingAuthenticationMethod, string(types.TokenAuthentication))
 	redirectConfigAndDataHome(t, conf, logger)
 	CLIDownloadLockFileCleanUp(t, conf)
 	config.SetOrganization(conf, "00000000-0000-0000-0000-000000000000")

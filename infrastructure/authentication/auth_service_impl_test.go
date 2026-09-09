@@ -258,6 +258,8 @@ func Test_UpdateCredentials(t *testing.T) {
 		mockNotifier := notification.NewMockNotifier()
 		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
 
+		config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), config.DefaultSnykApiUrl)
+
 		token := "some_other_token"
 		service.UpdateCredentials(token, true, true)
 
@@ -311,6 +313,9 @@ func Test_Authenticate(t *testing.T) {
 	t.Run("Get endpoint from config and set in snyk-ls configuration ", func(t *testing.T) {
 		apiEndpoint := "https://api.eu.snyk.io"
 		engine, ts := testutil.UnitTestWithEngine(t)
+		// The engine URL is only adopted while the user has not customized the
+		// endpoint themselves, so the default is part of the scenario.
+		config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), config.DefaultSnykApiUrl)
 		engine.GetConfiguration().Set(configuration.API_URL, apiEndpoint)
 
 		provider := FakeAuthenticationProvider{Engine: engine}
