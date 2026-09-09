@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -48,20 +49,30 @@ type Install struct {
 	engine          workflow.Engine
 	configResolver  types.ConfigResolverInterface
 	progressTracker *progress.Tracker
+	// lockFileTTL and lockPollInterval bound how long installRelease/updateFromRelease
+	// wait for a sibling process's fresh lock file to clear (see createLockFile).
+	// Overridable per-instance by tests; production callers get the defaults below.
+	lockFileTTL      time.Duration
+	lockPollInterval time.Duration
 }
 
 func NewInstaller(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, client func() *http.Client, configResolver types.ConfigResolverInterface, progressTracker *progress.Tracker) *Install {
 	return &Install{
-		errorReporter:   errorReporter,
-		httpClient:      client,
-		engine:          engine,
-		configResolver:  configResolver,
-		progressTracker: progressTracker,
+		errorReporter:    errorReporter,
+		httpClient:       client,
+		engine:           engine,
+		configResolver:   configResolver,
+		progressTracker:  progressTracker,
+		lockFileTTL:      defaultLockFileTTL,
+		lockPollInterval: defaultLockPollInterval,
 	}
 }
 
 func (i *Install) newDownloader() *Downloader {
-	return NewDownloader(i.engine, i.errorReporter, i.httpClient, i.progressTracker)
+	d := NewDownloader(i.engine, i.errorReporter, i.httpClient, i.progressTracker)
+	d.lockFileTTL = i.lockFileTTL
+	d.lockPollInterval = i.lockPollInterval
+	return d
 }
 
 func (i *Install) Find() (string, error) {
@@ -224,6 +235,15 @@ func expectedChecksum(r *Release, cliDiscovery *Discovery) (HashSum, error) {
 	return h, nil
 }
 
+// defaultLockFileTTL is how old an existing lock file must be before it is treated as
+// stale (e.g. left behind by a crashed process) rather than an active sibling install.
+// This threshold is unchanged from the original hard-fail check; only the action taken
+// while a lock is fresh (wait instead of failing immediately) has changed.
+const defaultLockFileTTL = 10 * time.Minute
+
+// defaultLockPollInterval is how often waitForLockToClear re-checks a fresh lock file.
+const defaultLockPollInterval = 500 * time.Millisecond
+
 func createLockFile(engine workflow.Engine, d *Downloader) (lockfileName string, err error) {
 	logger := engine.GetLogger()
 	lockFileName, err := config.CLIDownloadLockFileName(engine.GetConfiguration())
@@ -232,17 +252,40 @@ func createLockFile(engine workflow.Engine, d *Downloader) (lockfileName string,
 		logger.Error().Str("method", "Download").Str("lockfile", lockFileName).Msg(msg)
 		return "", errors.New(msg)
 	}
-	fileInfo, err := os.Stat(lockFileName)
-	if err == nil && (time.Since(fileInfo.ModTime()) < 10*time.Minute) {
-		msg := fmt.Sprintf("installer lockfile from %v found", fileInfo.ModTime())
-		logger.Error().Str("method", "Download").Str("lockfile", lockFileName).Msg(msg)
-		return "", errors.New(msg)
-	}
+
+	waitForLockToClear(logger, lockFileName, d.lockFileTTL, d.lockPollInterval)
+
 	err = d.createLockFile()
 	if err != nil {
 		return "", err
 	}
 	return lockFileName, nil
+}
+
+// waitForLockToClear blocks while a sibling process appears to hold a fresh (younger
+// than ttl) lock file at lockFileName, polling every pollInterval. A concurrent
+// installer's in-progress download - detected via this lock file - no longer aborts
+// the caller outright (IDE-2446); instead the caller waits for it to either finish
+// (lock file removed) or age past ttl, at which point it is treated as stale, exactly
+// as an already-stale lock always was.
+func waitForLockToClear(logger *zerolog.Logger, lockFileName string, ttl, pollInterval time.Duration) {
+	for {
+		fileInfo, statErr := os.Stat(lockFileName)
+		if statErr != nil {
+			return
+		}
+		age := time.Since(fileInfo.ModTime())
+		if age >= ttl {
+			return
+		}
+		wait := pollInterval
+		if remaining := ttl - age; remaining < wait {
+			wait = remaining
+		}
+		logger.Debug().Str("method", "Download").Str("lockfile", lockFileName).
+			Dur("age", age).Msg("waiting for sibling installer lockfile to clear")
+		time.Sleep(wait)
+	}
 }
 
 func cleanupLockFile(engine workflow.Engine, lockFileName string) {

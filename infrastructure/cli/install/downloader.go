@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -39,19 +40,26 @@ type Downloader struct {
 	removeFile    func(string) error
 	renameFile    func(string, string) error
 	mkdirTemp     func(string, string) (string, error)
+	// lockFileTTL and lockPollInterval bound createLockFile's wait for a sibling
+	// process's fresh lock file to clear. See installer.go's createLockFile/
+	// waitForLockToClear. Overridable directly by tests in this package.
+	lockFileTTL      time.Duration
+	lockPollInterval time.Duration
 }
 
 // The progressTracker must be non-nil and its channel drained: a long download blocks on
 // a full channel and never finishes.
 func NewDownloader(engine workflow.Engine, errorReporter error_reporting.ErrorReporter, httpClientFunc func() *http.Client, progressTracker *progress.Tracker) *Downloader {
 	return &Downloader{
-		progressTask:  progressTracker.New(true),
-		errorReporter: errorReporter,
-		httpClient:    httpClientFunc,
-		engine:        engine,
-		removeFile:    os.Remove,
-		renameFile:    os.Rename,
-		mkdirTemp:     os.MkdirTemp,
+		progressTask:     progressTracker.New(true),
+		errorReporter:    errorReporter,
+		httpClient:       httpClientFunc,
+		engine:           engine,
+		removeFile:       os.Remove,
+		renameFile:       os.Rename,
+		mkdirTemp:        os.MkdirTemp,
+		lockFileTTL:      defaultLockFileTTL,
+		lockPollInterval: defaultLockPollInterval,
 	}
 }
 

@@ -26,6 +26,7 @@ import (
 	"path"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -481,22 +482,97 @@ func TestFakeInstaller_Install_ReturnsPath(t *testing.T) {
 	assert.FileExists(t, got)
 }
 
-func TestInstaller_Install_DoNotDownloadIfLockfileFound(t *testing.T) {
+// TestInstaller_Install_WaitsForLockThenSucceeds_WhenSiblingLockClearsDuringWait
+// reproduces the flaky-CI defect (IDE-2446): a fresh, recently-created lock file
+// (simulating a sibling process's in-progress CLI download into a shared
+// SNYK_LS_CLI_CACHE_DIR) must not make installRelease hard-fail immediately.
+// Instead it should wait for the lock to clear - here the sibling "finishes" and
+// removes the lock shortly after our wait starts - and then proceed normally.
+func TestInstaller_Install_WaitsForLockThenSucceeds_WhenSiblingLockClearsDuringWait(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	r := getTestAsset()
+	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
+	// CLIDownloadLockFileName derives the lock path from the configured CLI path, so
+	// the config must be set before computing it - otherwise the test would create the
+	// lock file at a different path than installRelease checks.
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), cliPath)
 
 	lockFileName, err := config.CLIDownloadLockFileName(engine.GetConfiguration())
 	require.NoError(t, err)
-	file, err := os.Create(lockFileName)
-	if err != nil {
-		t.Fatal("couldn't create lockfile")
-	}
-	_ = file.Close()
+	require.NoError(t, os.WriteFile(lockFileName, nil, 0o644))
 
-	i := NewInstaller(engine, error_reporting.NewTestErrorReporter(engine), nil, testutil.DefaultConfigResolver(engine), testutil.NewDrainedProgressTracker())
-	_, err = i.installRelease(r)
+	binary := []byte("snyk-cli")
+	checksum := sha256.Sum256(binary)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(binary)
+	}))
+	t.Cleanup(server.Close)
 
-	assert.Error(t, err)
+	installer := NewInstaller(
+		engine,
+		error_reporting.NewTestErrorReporter(engine),
+		func() *http.Client { return server.Client() },
+		testutil.DefaultConfigResolver(engine),
+		testutil.NewDrainedProgressTracker(),
+	)
+	installer.lockFileTTL = 2 * time.Second
+	installer.lockPollInterval = 10 * time.Millisecond
+
+	// Simulate the sibling process finishing its own download and cleaning up its
+	// lock file well within our TTL wait bound.
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		_ = os.Remove(lockFileName)
+	}()
+
+	release := testRelease(server.URL, fmt.Sprintf("%x  %s", checksum, filename.ExecutableName))
+	got, err := installer.installRelease(release)
+
+	require.NoError(t, err)
+	assert.Equal(t, cliPath, got)
+	assert.FileExists(t, got)
+}
+
+// TestInstaller_Install_ProceedsOnceLockAgesPastTTL covers a lock file that is
+// never cleaned up (e.g. left behind by a crashed sibling process): installRelease
+// must still eventually proceed, treating the lock as stale once its age reaches
+// the TTL, rather than blocking or failing forever. The TTL/poll interval are
+// overridden to keep this bounded in a unit test.
+func TestInstaller_Install_ProceedsOnceLockAgesPastTTL(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	cliPath := filepath.Join(t.TempDir(), filename.ExecutableName)
+	// CLIDownloadLockFileName derives the lock path from the configured CLI path, so
+	// the config must be set before computing it - otherwise the test would create the
+	// lock file at a different path than installRelease checks.
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingCliPath), cliPath)
+
+	lockFileName, err := config.CLIDownloadLockFileName(engine.GetConfiguration())
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(lockFileName, nil, 0o644))
+
+	binary := []byte("snyk-cli")
+	checksum := sha256.Sum256(binary)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(binary)
+	}))
+	t.Cleanup(server.Close)
+
+	installer := NewInstaller(
+		engine,
+		error_reporting.NewTestErrorReporter(engine),
+		func() *http.Client { return server.Client() },
+		testutil.DefaultConfigResolver(engine),
+		testutil.NewDrainedProgressTracker(),
+	)
+	installer.lockFileTTL = 50 * time.Millisecond
+	installer.lockPollInterval = 5 * time.Millisecond
+	// lock file is deliberately never removed here.
+
+	release := testRelease(server.URL, fmt.Sprintf("%x  %s", checksum, filename.ExecutableName))
+	got, err := installer.installRelease(release)
+
+	require.NoError(t, err)
+	assert.Equal(t, cliPath, got)
+	assert.FileExists(t, got)
 }
 
 func TestInstaller_Update_DoesntUpdateIfNoLatestRelease(t *testing.T) {
