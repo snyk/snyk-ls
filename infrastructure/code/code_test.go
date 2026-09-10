@@ -18,6 +18,7 @@ package code
 
 import (
 	"context"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -57,21 +58,40 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
+	"github.com/snyk/snyk-ls/internal/uri"
 	"github.com/snyk/snyk-ls/internal/vcs"
 )
 
-func setupTestData() (issue *snyk.Issue, expectedURI string, expectedTitle string) {
+func setupTestData(t *testing.T) (issue *snyk.Issue, expectedURI string, expectedTitle string) {
+	t.Helper()
+	affectedFilePath := filepath.Join(t.TempDir(), "app.js")
 	issue = &snyk.Issue{
-		AffectedFilePath: "/Users/user/workspace/blah/app.js",
+		AffectedFilePath: types.FilePath(affectedFilePath),
 		Product:          product.ProductCode,
 		AdditionalData:   snyk.CodeIssueData{Key: "123", Title: "Test Issue"},
 		Range:            fakeRange,
 	}
 
-	expectedURI = "snyk:///Users/user/workspace/blah/app.js?action=showInDetailPanel&issueId=123&product=Snyk+Code"
+	expectedURI = expectedSnykMagnetUri(t, affectedFilePath, url.Values{
+		"action":  {"showInDetailPanel"},
+		"issueId": {"123"},
+		"product": {"Snyk Code"},
+	})
 	expectedTitle = "⚡ Fix this issue: Test Issue (Snyk)"
 
 	return
+}
+
+// expectedSnykMagnetUri builds the expected snyk:// URI the same way SnykMagnetUri does,
+// so the assertion doesn't hardcode a path shape that's only valid on one OS.
+func expectedSnykMagnetUri(t *testing.T, affectedFilePath string, query url.Values) string {
+	t.Helper()
+	fileUri := uri.PathToUri(types.FilePath(affectedFilePath))
+	u, err := url.Parse(string(fileUri))
+	require.NoError(t, err)
+	u.Scheme = "snyk"
+	u.RawQuery = query.Encode()
+	return u.String()
 }
 
 func sliceToChannel(slice []string) <-chan string {
@@ -713,7 +733,7 @@ func TestIssueEnhancer_createShowDocumentCodeAction(t *testing.T) {
 	}
 
 	t.Run("creates show document code action successfully", func(t *testing.T) {
-		issue, expectedURI, expectedTitle := setupTestData()
+		issue, expectedURI, expectedTitle := setupTestData(t)
 		codeAction := issueEnhancer.createShowDocumentCodeAction(issue)
 
 		assert.NotNil(t, codeAction)

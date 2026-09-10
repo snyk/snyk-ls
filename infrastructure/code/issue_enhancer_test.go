@@ -18,6 +18,7 @@ package code
 
 import (
 	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -73,13 +74,18 @@ func TestIssueEnhancer_autofixShowDetailsFunc(t *testing.T) {
 		rootPath:     "/Users/user/workspace/blah",
 		engine:       engine,
 	}
+	affectedFilePath := filepath.Join(t.TempDir(), "app.js")
 	issue := &snyk.Issue{
-		AffectedFilePath: "/Users/user/workspace/blah/app.js",
+		AffectedFilePath: types.FilePath(affectedFilePath),
 		Product:          product.ProductCode,
 		AdditionalData:   snyk.CodeIssueData{Key: "123"},
 		Range:            fakeRange,
 	}
-	expectedURI := "snyk:///Users/user/workspace/blah/app.js?action=showInDetailPanel&issueId=123&product=Snyk+Code"
+	expectedURI := expectedSnykMagnetUri(t, affectedFilePath, url.Values{
+		"action":  {"showInDetailPanel"},
+		"issueId": {"123"},
+		"product": {"Snyk Code"},
+	})
 
 	t.Run("returns CommandData with correct URI and range", func(t *testing.T) {
 		commandDataFunc := issueEnhancer.autofixShowDetailsFunc(t.Context(), issue)
@@ -183,14 +189,14 @@ func Test_addIssueActions(t *testing.T) {
 func Test_ideSnykURI(t *testing.T) {
 	testutil.UnitTest(t)
 	t.Run("generates correct URI", func(t *testing.T) {
-		issue, ideAction, expectedURI := setupAiFixTestData()
+		issue, ideAction, expectedURI := setupAiFixTestData(t)
 		actualURI, err := SnykMagnetUri(util.Ptr(zerolog.Nop()), issue, ideAction)
 		assert.NoError(t, err)
 		assert.Equal(t, expectedURI, actualURI)
 	})
 
 	t.Run("handles missing Key in additional data", func(t *testing.T) {
-		issue, ideAction, expectedURI := setupAiFixTestData()
+		issue, ideAction, expectedURI := setupAiFixTestData(t)
 		actualURI, err := SnykMagnetUri(util.Ptr(zerolog.Nop()), issue, ideAction)
 		assert.NoError(t, err)
 		assert.Equal(t, expectedURI, actualURI)
@@ -264,14 +270,20 @@ func TestIssueId(t *testing.T) {
 	}
 }
 
-func setupAiFixTestData() (issue *snyk.Issue, ideAction string, expectedURI string) {
+func setupAiFixTestData(t *testing.T) (issue *snyk.Issue, ideAction string, expectedURI string) {
+	t.Helper()
+	affectedFilePath := filepath.Join(t.TempDir(), "app.js")
 	issue = &snyk.Issue{
-		AffectedFilePath: "/Users/user/workspace/blah/app.js",
+		AffectedFilePath: types.FilePath(affectedFilePath),
 		Product:          "Code",
 		AdditionalData:   snyk.CodeIssueData{Key: "123"}, // Provide additional data
 	}
 	ideAction = "showInDetailPanel"
-	expectedURI = "snyk:///Users/user/workspace/blah/app.js?action=showInDetailPanel&issueId=123&product=Code"
+	expectedURI = expectedSnykMagnetUri(t, affectedFilePath, url.Values{
+		"action":  {"showInDetailPanel"},
+		"issueId": {"123"},
+		"product": {"Code"},
+	})
 
 	return
 }
