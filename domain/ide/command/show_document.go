@@ -27,18 +27,27 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func SendShowDocumentRequest(ctx context.Context, logger zerolog.Logger, issue types.Issue, srv types.Server) {
-	snykUri, _ := code.SnykMagnetUri(issue, code.ShowInDetailPanelIdeCommand)
-	logger.Debug().
-		Str("method", "code.sendShowDocumentRequest").
+func SendShowDocumentRequest(ctx context.Context, logger *zerolog.Logger, issue types.Issue, srv types.Server) {
+	l := logger.With().
+		Str("method", "command.SendShowDocumentRequest").
+		Str("issueId", code.IssueId(issue)).
+		Logger()
+
+	snykUri, err := code.SnykMagnetUri(logger, issue, code.ShowInDetailPanelIdeCommand)
+	if err != nil {
+		l.Err(err).Msg("failed to build show-document URI")
+		return
+	}
+	l.Debug().
+		Str("uri", snykUri).
 		Msg("showing Document")
 
 	params := types.ShowDocumentParams{
 		Uri:       lsp.DocumentURI(snykUri),
 		Selection: converter.ToRange(issue.GetRange()),
 	}
-	_, err := srv.Callback(ctx, "window/showDocument", params)
+	_, err = srv.Callback(ctx, "window/showDocument", params)
 	if err != nil {
-		logger.Err(err).Msgf("failed to send snyk window/showDocument callback for file %s", issue.GetAffectedFilePath())
+		l.Err(err).Msgf("failed to send snyk window/showDocument callback for file %s", issue.GetAffectedFilePath())
 	}
 }

@@ -18,9 +18,11 @@ package code
 
 import (
 	"context"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 
@@ -60,18 +62,53 @@ import (
 	"github.com/snyk/snyk-ls/internal/vcs"
 )
 
-func setupTestData() (issue *snyk.Issue, expectedURI string, expectedTitle string) {
+// Fixture pieces shared by SnykMagnetUri-related tests across this package.
+const (
+	testFixtureSubDir  = "some_dir"
+	testFixtureFile    = "app.js"
+	testFixtureIssueId = "123"
+)
+
+var testFixturePathSuffix = testFixtureSubDir + "/" + testFixtureFile // URI path always uses '/', regardless of OS
+
+func setupTestData(t *testing.T) (issue *snyk.Issue, expectedTitle string) {
+	t.Helper()
+	affectedFilePath := filepath.Join(t.TempDir(), testFixtureSubDir, testFixtureFile)
 	issue = &snyk.Issue{
-		AffectedFilePath: "/Users/user/workspace/blah/app.js",
+		AffectedFilePath: types.FilePath(affectedFilePath),
 		Product:          product.ProductCode,
-		AdditionalData:   snyk.CodeIssueData{Key: "123", Title: "Test Issue"},
+		AdditionalData:   snyk.CodeIssueData{Key: testFixtureIssueId, Title: "Test Issue"},
 		Range:            fakeRange,
 	}
-
-	expectedURI = "snyk:///Users/user/workspace/blah/app.js?product=Snyk+Code&issueId=123&action=showInDetailPanel"
 	expectedTitle = "⚡ Fix this issue: Test Issue (Snyk)"
 
 	return
+}
+
+// assertTestDataSnykURI asserts actualURI matches what SnykMagnetUri should produce for the
+// issue setupTestData returned.
+func assertTestDataSnykURI(t *testing.T, actualURI string) {
+	t.Helper()
+	assertSnykURIMatches(t, actualURI, testFixturePathSuffix, url.Values{
+		"action":  {ShowInDetailPanelIdeCommand},
+		"issueId": {testFixtureIssueId},
+		"product": {"Snyk Code"},
+	})
+}
+
+// assertSnykURIMatches asserts actualURI is a well-formed snyk:// URI: scheme "snyk", no
+// host (a Windows drive letter must never be swallowed as an authority — the exact bug this
+// package's URI building exists to avoid), a path ending in expectedPathSuffix, and a query
+// exactly matching expectedQuery.
+func assertSnykURIMatches(t *testing.T, actualURI string, expectedPathSuffix string, expectedQuery url.Values, msgAndArgs ...any) {
+	t.Helper()
+	parsed, err := url.Parse(actualURI)
+	require.NoError(t, err, msgAndArgs...)
+	assert.Equal(t, "snyk", parsed.Scheme, msgAndArgs...)
+	assert.Empty(t, parsed.Host, msgAndArgs...)
+	assert.True(t, strings.HasSuffix(parsed.Path, expectedPathSuffix),
+		"path %q should end with %q", parsed.Path, expectedPathSuffix)
+	assert.Equal(t, expectedQuery, parsed.Query(), msgAndArgs...)
 }
 
 func sliceToChannel(slice []string) <-chan string {
@@ -713,7 +750,7 @@ func TestIssueEnhancer_createShowDocumentCodeAction(t *testing.T) {
 	}
 
 	t.Run("creates show document code action successfully", func(t *testing.T) {
-		issue, expectedURI, expectedTitle := setupTestData()
+		issue, expectedTitle := setupTestData(t)
 		codeAction := issueEnhancer.createShowDocumentCodeAction(issue)
 
 		assert.NotNil(t, codeAction)
@@ -721,7 +758,9 @@ func TestIssueEnhancer_createShowDocumentCodeAction(t *testing.T) {
 		assert.NotNil(t, codeAction.GetCommand())
 		assert.Equal(t, expectedTitle, codeAction.GetCommand().Title)
 		assert.Equal(t, types.NavigateToRangeCommand, codeAction.GetCommand().CommandId)
-		assert.Equal(t, expectedURI, codeAction.GetCommand().Arguments[0])
+		actualURI, ok := codeAction.GetCommand().Arguments[0].(string)
+		require.True(t, ok)
+		assertTestDataSnykURI(t, actualURI)
 		assert.Equal(t, issue.Range, codeAction.GetCommand().Arguments[1])
 	})
 }
