@@ -74,18 +74,7 @@ func TestIssueEnhancer_autofixShowDetailsFunc(t *testing.T) {
 		rootPath:     "/Users/user/workspace/blah",
 		engine:       engine,
 	}
-	affectedFilePath := filepath.Join(t.TempDir(), "app.js")
-	issue := &snyk.Issue{
-		AffectedFilePath: types.FilePath(affectedFilePath),
-		Product:          product.ProductCode,
-		AdditionalData:   snyk.CodeIssueData{Key: "123"},
-		Range:            fakeRange,
-	}
-	expectedURI := expectedSnykMagnetUri(t, affectedFilePath, url.Values{
-		"action":  {"showInDetailPanel"},
-		"issueId": {"123"},
-		"product": {"Snyk Code"},
-	})
+	issue, _ := setupTestData(t)
 
 	t.Run("returns CommandData with correct URI and range", func(t *testing.T) {
 		commandDataFunc := issueEnhancer.autofixShowDetailsFunc(t.Context(), issue)
@@ -93,7 +82,9 @@ func TestIssueEnhancer_autofixShowDetailsFunc(t *testing.T) {
 
 		assert.Equal(t, types.NavigateToRangeCommand, commandData.Title)
 		assert.Equal(t, types.NavigateToRangeCommand, commandData.CommandId)
-		assert.Equal(t, expectedURI, commandData.Arguments[0])
+		actualURI, ok := commandData.Arguments[0].(string)
+		require.True(t, ok)
+		assertTestDataSnykURI(t, actualURI)
 		assert.Equal(t, issue.Range, commandData.Arguments[1])
 	})
 }
@@ -189,17 +180,28 @@ func Test_addIssueActions(t *testing.T) {
 func Test_ideSnykURI(t *testing.T) {
 	testutil.UnitTest(t)
 	t.Run("generates correct URI", func(t *testing.T) {
-		issue, ideAction, expectedURI := setupAiFixTestData(t)
-		actualURI, err := SnykMagnetUri(util.Ptr(zerolog.Nop()), issue, ideAction)
+		issue, _ := setupTestData(t)
+		actualURI, err := SnykMagnetUri(util.Ptr(zerolog.Nop()), issue, ShowInDetailPanelIdeCommand)
 		assert.NoError(t, err)
-		assert.Equal(t, expectedURI, actualURI)
+		assertTestDataSnykURI(t, actualURI)
 	})
 
 	t.Run("handles missing Key in additional data", func(t *testing.T) {
-		issue, ideAction, expectedURI := setupAiFixTestData(t)
-		actualURI, err := SnykMagnetUri(util.Ptr(zerolog.Nop()), issue, ideAction)
+		affectedFilePath := filepath.Join(t.TempDir(), testFixtureSubDir, testFixtureFile)
+		issue := &snyk.Issue{
+			ID:               "vuln-id",
+			AffectedFilePath: types.FilePath(affectedFilePath),
+			Product:          product.ProductCode,
+			AdditionalData:   snyk.CodeIssueData{Key: ""}, // falls back to issue.ID via IssueId()
+		}
+
+		actualURI, err := SnykMagnetUri(util.Ptr(zerolog.Nop()), issue, ShowInDetailPanelIdeCommand)
 		assert.NoError(t, err)
-		assert.Equal(t, expectedURI, actualURI)
+		assertSnykURIMatches(t, actualURI, testFixturePathSuffix, url.Values{
+			"action":  {ShowInDetailPanelIdeCommand},
+			"issueId": {"vuln-id"},
+			"product": {"Snyk Code"},
+		})
 	})
 
 	// lspUri.File's file:// shape puts a leading '/' before the drive letter (RFC 8089),
@@ -209,8 +211,8 @@ func Test_ideSnykURI(t *testing.T) {
 		filePath := `C:\Mac\Home\Documents\Code\JavaScript\snyk-goof\db.js`
 		issue := &snyk.Issue{
 			AffectedFilePath: types.FilePath(filePath),
-			Product:          "Code",
-			AdditionalData:   snyk.CodeIssueData{Key: "123"},
+			Product:          product.ProductCode,
+			AdditionalData:   snyk.CodeIssueData{Key: testFixtureIssueId},
 		}
 
 		actualURI, err := SnykMagnetUri(util.Ptr(zerolog.Nop()), issue, ShowInDetailPanelIdeCommand)
@@ -268,22 +270,4 @@ func TestIssueId(t *testing.T) {
 			}
 		})
 	}
-}
-
-func setupAiFixTestData(t *testing.T) (issue *snyk.Issue, ideAction string, expectedURI string) {
-	t.Helper()
-	affectedFilePath := filepath.Join(t.TempDir(), "app.js")
-	issue = &snyk.Issue{
-		AffectedFilePath: types.FilePath(affectedFilePath),
-		Product:          "Code",
-		AdditionalData:   snyk.CodeIssueData{Key: "123"}, // Provide additional data
-	}
-	ideAction = "showInDetailPanel"
-	expectedURI = expectedSnykMagnetUri(t, affectedFilePath, url.Values{
-		"action":  {"showInDetailPanel"},
-		"issueId": {"123"},
-		"product": {"Code"},
-	})
-
-	return
 }
