@@ -70,10 +70,14 @@ and gotchas rather than install steps to repeat.
   written here (it drifts): `grep OVERRIDE_GOCI_LINT_V Makefile`, then
   `GOBIN=$(pwd)/.bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@<that version>`.
 - **Build and lint:** `make build` produces `build/snyk-ls.linux.amd64` and
-  `make lint` reports `0 issues`. The binary is an **LSP server speaking JSON-RPC
-  over stdio**, so there is no `--help` to inspect: `./build/snyk-ls.linux.amd64 -v`
-  prints the version, and exercising it means writing a framed `initialize` request
-  to stdin, which returns the server capabilities.
+  `make lint` reports `0 issues` — this only validates that the change compiles and
+  lints clean. Never run the resulting binary directly, not even for a trivial
+  check like its version: plugins expect the CLI's LSP framing (see the
+  `cli`-replace note below), not a bare `snyk-ls` process, so a standalone
+  invocation here exercises nothing that matches production. It is an **LSP
+  server speaking JSON-RPC over stdio** with no `--help`; to actually exercise a
+  change (confirm it responds to LSP requests), build and run it through the
+  `cli` repo's `go.mod replace` flow instead.
 - **Do not run the full `make test` casually.** It carries a ~90 minute timeout, and
   its integration and smoke suites need `SNYK_TOKEN` plus network access, so they
   will not pass in a sandboxed VM. For a quick signal run a unit subset such as
