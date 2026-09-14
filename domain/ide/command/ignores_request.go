@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/rs/zerolog"
 
@@ -170,6 +171,10 @@ func (cmd *submitIgnoreRequest) initializeCreateConfiguration(engineConfig confi
 
 	engineConfig = initializeBaseConfiguration(engineConfig, contentRoot)
 	engineConfig = addCreateAndUpdateConfiguration(engineConfig, ignoreType, reason, expiration)
+
+	if remoteRepoUrl := cmd.remoteRepoUrlOverride(contentRoot); remoteRepoUrl != "" {
+		engineConfig.Set(ignore_workflow.RemoteRepoUrlKey, remoteRepoUrl)
+	}
 
 	return engineConfig, nil
 }
@@ -350,12 +355,49 @@ func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, wo
 
 const userMsgCannotDetermineRepoURL = "Cannot submit ignore: could not determine the repository URL for this folder. Please ensure the folder is part of a Git repository with a configured remote."
 
+// remoteRepoUrlFlag is the CLI-style flag name for ignore_workflow.RemoteRepoUrlKey
+// ("remote-repo-url"), as it would appear in a folder's Additional Parameters setting.
+const remoteRepoUrlFlag = "--" + ignore_workflow.RemoteRepoUrlKey
+
+// remoteRepoUrlOverride returns the --remote-repo-url value configured for contentRoot's
+// Additional Parameters setting, or "" if none is set. This mirrors the CLI workaround for
+// non-Git projects (e.g. Endevor/COBOL): --remote-repo-url lets Snyk compute a consistent
+// asset ID without requiring a real Git remote, so the IDE honors the same override here
+// instead of hard-blocking the ignore request.
+func (cmd *submitIgnoreRequest) remoteRepoUrlOverride(contentRoot types.FilePath) string {
+	if cmd.configResolver == nil {
+		return ""
+	}
+	folderConfig := &types.FolderConfig{FolderPath: contentRoot, ConfigResolver: cmd.configResolver}
+	params := cmd.configResolver.GetStringSlice(types.SettingAdditionalParameters, folderConfig)
+	return extractFlagValue(params, remoteRepoUrlFlag)
+}
+
+// extractFlagValue returns the value of a CLI-style flag from args, supporting both the
+// "--flag=value" and "--flag value" forms. Returns "" if the flag is not present.
+func extractFlagValue(args []string, flag string) string {
+	for i, arg := range args {
+		if value, ok := strings.CutPrefix(arg, flag+"="); ok {
+			return value
+		}
+		if arg == flag && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	return ""
+}
+
 // validateIgnoreRequest checks that a repository URL can be resolved for contentRoot
 // using the same resolver as GAF's ignore workflow (git.RepoUrlFromDir) so the two
-// agree. If not, it sends a user-facing warning notification and returns an error.
-// The raw error from go-git is kept in the structured log only, to avoid leaking
+// agree. A configured --remote-repo-url override (see remoteRepoUrlOverride) satisfies
+// this check without a real Git remote, matching the CLI's --remote-repo-url workaround.
+// If neither is available, it sends a user-facing warning notification and returns an
+// error. The raw error from go-git is kept in the structured log only, to avoid leaking
 // filesystem paths.
 func (cmd *submitIgnoreRequest) validateIgnoreRequest(logger zerolog.Logger, contentRoot types.FilePath) error {
+	if cmd.remoteRepoUrlOverride(contentRoot) != "" {
+		return nil
+	}
 	if _, err := git.RepoUrlFromDir(string(contentRoot)); err != nil {
 		logger.Warn().Err(err).Str("contentRoot", string(contentRoot)).Msg("could not determine repository URL for ignore request")
 		if cmd.notifier != nil {

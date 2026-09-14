@@ -650,6 +650,173 @@ func Test_submitIgnoreRequest_NilTreeRefresher_DoesNotPanic(t *testing.T) {
 	})
 }
 
+func Test_extractFlagValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		flag     string
+		expected string
+	}{
+		{
+			name:     "equals form",
+			args:     []string{"--all-projects", "--remote-repo-url=https://github.com/example/repo.git"},
+			flag:     "--remote-repo-url",
+			expected: "https://github.com/example/repo.git",
+		},
+		{
+			name:     "space-separated form",
+			args:     []string{"--remote-repo-url", "https://github.com/example/repo.git"},
+			flag:     "--remote-repo-url",
+			expected: "https://github.com/example/repo.git",
+		},
+		{
+			name:     "flag not present",
+			args:     []string{"--all-projects"},
+			flag:     "--remote-repo-url",
+			expected: "",
+		},
+		{
+			name:     "space-separated form missing value",
+			args:     []string{"--remote-repo-url"},
+			flag:     "--remote-repo-url",
+			expected: "",
+		},
+		{
+			name:     "empty args",
+			args:     []string{},
+			flag:     "--remote-repo-url",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, extractFlagValue(tt.args, tt.flag))
+		})
+	}
+}
+
+func Test_submitIgnoreRequest_remoteRepoUrlOverride(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	folderPath := types.FilePath("/fake/test-folder-remote-repo-url")
+	_, _ = workspaceutil.SetupWorkspace(t, engine, folderPath)
+
+	t.Run("returns empty string when no additional parameters are configured", func(t *testing.T) {
+		cmd := &submitIgnoreRequest{configResolver: testutil.DefaultConfigResolver(engine)}
+		assert.Empty(t, cmd.remoteRepoUrlOverride(folderPath))
+	})
+
+	t.Run("returns the configured --remote-repo-url value", func(t *testing.T) {
+		types.SetFolderUserSetting(engine.GetConfiguration(), folderPath, types.SettingAdditionalParameters,
+			[]string{"--all-projects", "--remote-repo-url=https://github.com/example/repo.git"})
+
+		cmd := &submitIgnoreRequest{configResolver: testutil.DefaultConfigResolver(engine)}
+		assert.Equal(t, "https://github.com/example/repo.git", cmd.remoteRepoUrlOverride(folderPath))
+	})
+
+	t.Run("returns empty string when configResolver is nil", func(t *testing.T) {
+		cmd := &submitIgnoreRequest{}
+		assert.Empty(t, cmd.remoteRepoUrlOverride(folderPath))
+	})
+}
+
+func Test_validateIgnoreRequest__allows_non_git_folder_when_remote_repo_url_override_configured(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	nonGitDir := types.FilePath(t.TempDir())
+	_, _ = workspaceutil.SetupWorkspace(t, engine, nonGitDir)
+	types.SetFolderUserSetting(engine.GetConfiguration(), nonGitDir, types.SettingAdditionalParameters,
+		[]string{"--remote-repo-url=https://github.com/example/repo.git"})
+
+	mockNotifier := notification.NewMockNotifier()
+	cmd := &submitIgnoreRequest{
+		engine:         engine,
+		notifier:       mockNotifier,
+		configResolver: testutil.DefaultConfigResolver(engine),
+	}
+
+	logger := engine.GetLogger().With().Str("method", "test").Logger()
+	err := cmd.validateIgnoreRequest(logger, nonGitDir)
+
+	require.NoError(t, err, "validateIgnoreRequest should not error when a --remote-repo-url override is configured")
+	assert.Empty(t, mockNotifier.SentMessages(), "no warning should be sent when the override lets validation succeed")
+}
+
+func Test_submitIgnoreRequest_initializeCreateConfiguration_SetsRemoteRepoUrlFromOverride(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-remote-repo-url-config")}
+	_, _ = workspaceutil.SetupWorkspace(t, engine, folderPaths...)
+	contentRoot := folderPaths[0]
+
+	engineConf := engine.GetConfiguration()
+	types.SetPreferredOrgAndOrgSetByUser(engineConf, contentRoot, "test-org", true)
+	types.SetFolderUserSetting(engineConf, contentRoot, types.SettingAdditionalParameters,
+		[]string{"--remote-repo-url=https://github.com/example/repo.git"})
+
+	cmd := &submitIgnoreRequest{
+		command: types.CommandData{
+			Arguments: []any{"create", "issueId", "wont_fix", "reason", "expiration"},
+		},
+		engine:         engine,
+		configResolver: testutil.DefaultConfigResolver(engine),
+	}
+
+	resultConfig, err := cmd.initializeCreateConfiguration(engineConf, "finding123", contentRoot)
+	require.NoError(t, err)
+	assert.Equal(t, "https://github.com/example/repo.git", resultConfig.Get(ignore_workflow.RemoteRepoUrlKey))
+}
+
+func Test_submitIgnoreRequest_CreateIgnore_SucceedsForNonGitFolder_WithRemoteRepoUrlOverride(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
+
+	nonGitFolder := types.FilePath(t.TempDir())
+	issue := testutil.NewMockIssue("issueId", types.FilePath(filepath.Join(string(nonGitFolder), "test.cbl")))
+	issue.ContentRoot = nonGitFolder
+	_, _ = workspaceutil.SetupWorkspace(t, mockEngine, nonGitFolder)
+	types.SetPreferredOrgAndOrgSetByUser(mockConf, nonGitFolder, "test-org", true)
+	types.SetFolderUserSetting(mockConf, nonGitFolder, types.SettingAdditionalParameters,
+		[]string{"--remote-repo-url=https://github.com/example/repo.git"})
+
+	issueProvider := mock_snyk.NewMockIssueProvider(ctrl)
+	issueProvider.EXPECT().Issue("issueId").Return(issue).AnyTimes()
+
+	var capturedConfig configuration.Configuration
+	mockEngine.EXPECT().InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gomock.Any()).
+		Do(func(_ workflow.Identifier, cfg configuration.Configuration) {
+			capturedConfig = cfg
+		}).
+		Return([]workflow.Data{workflow.NewData(workflow.NewTypeIdentifier(ignore_workflow.WORKFLOWID_IGNORE_CREATE, "test"), "json", []byte(`{"id":"ignoreId"}`))}, nil).
+		Times(1)
+	mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
+		Return(nil, nil).AnyTimes()
+
+	server := mock_types.NewMockServer(ctrl)
+	server.EXPECT().Callback(gomock.Any(), "window/showDocument", gomock.Any()).Return(nil, nil).AnyTimes()
+	notifier := notification.NewMockNotifier()
+
+	cmd := &submitIgnoreRequest{
+		command:        types.CommandData{Arguments: []any{"create", "issueId", "wont_fix", "reason", "2099-01-01"}},
+		issueProvider:  issueProvider,
+		notifier:       notifier,
+		srv:            server,
+		engine:         mockEngine,
+		configResolver: testutil.DefaultConfigResolver(mockEngine),
+	}
+
+	_, err := cmd.Execute(t.Context())
+
+	require.NoError(t, err, "ignore create should succeed for a non-Git folder when a --remote-repo-url override is configured")
+	assert.Empty(t, notifier.SentMessages(), "no warning should be sent when the override lets validation succeed")
+	require.NotNil(t, capturedConfig, "ignore workflow should have been invoked")
+	assert.Equal(t, "https://github.com/example/repo.git", capturedConfig.Get(ignore_workflow.RemoteRepoUrlKey),
+		"the ignore workflow should receive the same --remote-repo-url used by the CLI workaround")
+}
+
 func Test_validateIgnoreRequest__notifies_user_when_repo_URL_cannot_be_determined(t *testing.T) {
 	engine := testutil.UnitTest(t)
 
