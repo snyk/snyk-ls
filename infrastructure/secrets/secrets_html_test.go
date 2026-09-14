@@ -21,14 +21,20 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
+	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
+
+const createIgnoreDisabledButtonMarkup = `id="ignore-create" class="ignore-button secondary" disabled`
 
 func Test_Secrets_Html_BasicIssue(t *testing.T) {
 	engine := testutil.UnitTest(t)
@@ -40,7 +46,7 @@ func Test_Secrets_Html_BasicIssue(t *testing.T) {
 	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
-	result := htmlRenderer.GetDetailsHtml(issue)
+	result := htmlRenderer.GetDetailsHtml(t.Context(), issue)
 
 	// assert title and message
 	assert.Contains(t, result, "AWS Access Token")
@@ -95,7 +101,7 @@ func Test_Secrets_Html_IgnoredIssue(t *testing.T) {
 	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
-	result := htmlRenderer.GetDetailsHtml(issue)
+	result := htmlRenderer.GetDetailsHtml(t.Context(), issue)
 
 	// assert ignored banner
 	assert.Contains(t, result, `class="sn-status-message mod-warning"`)
@@ -132,7 +138,7 @@ func Test_Secrets_Html_PendingIssue(t *testing.T) {
 	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
-	result := htmlRenderer.GetDetailsHtml(issue)
+	result := htmlRenderer.GetDetailsHtml(t.Context(), issue)
 
 	// assert pending banner
 	assert.Contains(t, result, `class="sn-status-message mod-warning"`)
@@ -162,15 +168,16 @@ func Test_Secrets_Html_CCIEnabled(t *testing.T) {
 	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
-	result := htmlRenderer.GetDetailsHtml(issue)
+	result := htmlRenderer.GetDetailsHtml(t.Context(), issue)
 
 	// assert IAW form is present
 	assert.Contains(t, result, `id="ignore-form-container"`)
 	assert.Contains(t, result, `id="ignore-reason-error"`)
 	assert.Contains(t, result, `id="ignore-form-submit"`)
 
-	// assert "Create ignore" button in footer
-	assert.Contains(t, result, `id="ignore-create"`)
+	// assert "Create ignore" button in footer is disabled without git repo
+	assert.Contains(t, result, createIgnoreDisabledButtonMarkup)
+	assert.Contains(t, result, htmlIgnore.CreateIgnoreUnavailableReason)
 }
 
 func Test_Secrets_Html_hiddenClassIsImportant(t *testing.T) {
@@ -188,7 +195,7 @@ func Test_Secrets_Html_hiddenClassIsImportant(t *testing.T) {
 	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
-	secretsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	secretsPanelHtml := htmlRenderer.GetDetailsHtml(t.Context(), issue)
 	assert.Regexp(t, `\.hidden\s*\{\s*display:\s*none\s*!important\s*;?\s*\}`, secretsPanelHtml)
 }
 
@@ -207,7 +214,7 @@ func Test_Secrets_Html_formInputsDoNotUseBorderAsBackground(t *testing.T) {
 	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
-	secretsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	secretsPanelHtml := htmlRenderer.GetDetailsHtml(t.Context(), issue)
 
 	assert.Regexp(t, `\.sn-select[^}]*background-color:\s*var\(--input-background\)`, secretsPanelHtml)
 	assert.Regexp(t, `\.sn-input[^}]*background-color:\s*var\(--input-background\)`, secretsPanelHtml)
@@ -228,7 +235,7 @@ func Test_Secrets_Html_InvalidAdditionalData(t *testing.T) {
 	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
-	result := htmlRenderer.GetDetailsHtml(issue)
+	result := htmlRenderer.GetDetailsHtml(t.Context(), issue)
 
 	assert.Empty(t, result)
 }
@@ -260,4 +267,64 @@ func createBasicSecretIssue() *snyk.Issue {
 			Categories: []string{"Security"},
 		},
 	}
+}
+
+func Test_Secrets_Html_CreateIgnoreDisabled_whenNotGitRepo(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	issue := createBasicSecretIssue()
+	issue.ContentRoot = types.FilePath(t.TempDir())
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
+
+	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
+	require.NoError(t, err)
+
+	result := htmlRenderer.GetDetailsHtml(t.Context(), issue)
+
+	assert.Contains(t, result, createIgnoreDisabledButtonMarkup)
+	assert.Contains(t, result, htmlIgnore.CreateIgnoreUnavailableReason)
+}
+
+func Test_Secrets_Html_CreateIgnoreEnabled_whenGitRepoWithOrigin(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	repoDir := t.TempDir()
+	testsupport.InitTestGitRepoWithOrigin(t, repoDir, "")
+
+	issue := createBasicSecretIssue()
+	issue.ContentRoot = types.FilePath(repoDir)
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
+
+	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
+	require.NoError(t, err)
+
+	result := htmlRenderer.GetDetailsHtml(t.Context(), issue)
+
+	assert.NotContains(t, result, createIgnoreDisabledButtonMarkup)
+}
+
+func Test_Secrets_Html_CreateIgnoreEnabled_whenNonGitFolderWithRemoteRepoUrlOverrideInContext(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	nonGitDir := t.TempDir()
+	types.SetFolderUserSetting(engine.GetConfiguration(), types.FilePath(nonGitDir), types.SettingAdditionalParameters,
+		[]string{"--remote-repo-url=https://github.com/example/repo.git"})
+
+	issue := createBasicSecretIssue()
+	issue.ContentRoot = types.FilePath(nonGitDir)
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
+
+	htmlRenderer, err := NewHtmlRenderer(engine, fakeFeatureFlagService)
+	require.NoError(t, err)
+
+	ctx := ctx2.NewContextWithConfigResolver(t.Context(), testutil.DefaultConfigResolver(engine))
+	result := htmlRenderer.GetDetailsHtml(ctx, issue)
+
+	assert.NotContains(t, result, createIgnoreDisabledButtonMarkup)
 }

@@ -94,15 +94,6 @@
   {{end}}
 {{end}}
 
-{{define "ignore-create-button"}}
-  {{if .IgnoreCreateDisabledReason}}
-  <button id="ignore-create" class="ignore-button secondary" disabled title="{{.IgnoreCreateDisabledReason}}">Create ignore</button>
-  <div class="ignore-create-remedy">{{.IgnoreCreateDisabledReason}}</div>
-  {{else}}
-  <button id="ignore-create" class="ignore-button secondary">Create ignore</button>
-  {{end}}
-{{end}}
-
 {{define "ignore-datepicker"}}
   {{if and (.CCIEnabled) (not .IsIgnored) (not .IsPending)}}
   <script nonce="{{.Nonce}}">

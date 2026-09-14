@@ -25,8 +25,22 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
+
+// CreateIgnoreUnavailableReason is shown when ignore creation requires a repository URL
+// that cannot be resolved for the issue's content root.
+const CreateIgnoreUnavailableReason = "Cannot submit ignore: could not determine the repository URL for this folder. Please " + folderconfig.RepoUrlUnavailableRemedy + "."
+
+func CanCreateIgnore(contentRoot string, configResolver types.ConfigResolverInterface) bool {
+	if contentRoot == "" {
+		return false
+	}
+	folderConfig := &types.FolderConfig{FolderPath: types.FilePath(contentRoot), ConfigResolver: configResolver}
+	_, err := folderconfig.RepoUrlForIgnores(configResolver, folderConfig)
+	return err == nil
+}
 
 //go:embed ignore_styles.css
 var ignoreStyles string

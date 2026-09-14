@@ -18,6 +18,7 @@ package secrets
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"fmt"
 	"html/template"
@@ -29,6 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/html"
 	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -100,7 +102,7 @@ func (renderer *HtmlRenderer) updateFeatureFlags(folder types.FilePath) {
 	renderer.cciEnabled = renderer.featureFlagService.GetFromFolderConfig(folder, featureflag.SnykCodeConsistentIgnores)
 }
 
-func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
+func (renderer *HtmlRenderer) GetDetailsHtml(ctx context.Context, issue types.Issue) string {
 	logger := renderer.engine.GetLogger()
 	additionalData, ok := issue.GetAdditionalData().(snyk.SecretsIssueData)
 	if !ok {
@@ -138,27 +140,33 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		}
 	}
 
+	contentRoot := string(issue.GetContentRoot())
+	configResolver, _ := ctx2.ConfigResolverFromContext(ctx)
+	canCreateIgnore := htmlIgnore.CanCreateIgnore(contentRoot, configResolver)
+
 	data := map[string]any{
-		"IssueTitle":       additionalData.Title,
-		"IssueMessage":     additionalData.Message,
-		"SeverityIcon":     html.SeverityIcon(issue),
-		"CWEs":             issue.GetCWEs(),
-		"IsIgnored":        issue.GetIsIgnored(),
-		"IsPending":        isPending,
-		"IgnoreDetails":    ignoreDetailsRow,
-		"IgnoreReason":     ignoreReason,
-		"CCIEnabled":       renderer.cciEnabled,
-		"IgnoreLineAction": getLineToIgnoreAction(issue),
-		"SnykWebUrl":       appLink,
-		"RuleName":         additionalData.RuleName,
-		"Categories":       additionalData.Categories,
-		"FolderPath":       string(folderPath),
-		"FilePath":         string(issue.GetAffectedFilePath()),
-		"IssueId":          issue.GetAdditionalData().GetKey(),
-		"LocationsCount":   additionalData.LocationsCount,
-		"Styles":           template.CSS(panelStylesTemplate + "\n" + htmlIgnore.Styles()),
-		"Scripts":          template.JS(htmlIgnore.Scripts() + "\n" + customScripts),
-		"Nonce":            nonce,
+		"IssueTitle":                    additionalData.Title,
+		"IssueMessage":                  additionalData.Message,
+		"SeverityIcon":                  html.SeverityIcon(issue),
+		"CWEs":                          issue.GetCWEs(),
+		"IsIgnored":                     issue.GetIsIgnored(),
+		"IsPending":                     isPending,
+		"IgnoreDetails":                 ignoreDetailsRow,
+		"IgnoreReason":                  ignoreReason,
+		"CCIEnabled":                    renderer.cciEnabled,
+		"CanCreateIgnore":               canCreateIgnore,
+		"CreateIgnoreUnavailableReason": htmlIgnore.CreateIgnoreUnavailableReason,
+		"IgnoreLineAction":              getLineToIgnoreAction(issue),
+		"SnykWebUrl":                    appLink,
+		"RuleName":                      additionalData.RuleName,
+		"Categories":                    additionalData.Categories,
+		"FolderPath":                    string(folderPath),
+		"FilePath":                      string(issue.GetAffectedFilePath()),
+		"IssueId":                       issue.GetAdditionalData().GetKey(),
+		"LocationsCount":                additionalData.LocationsCount,
+		"Styles":                        template.CSS(panelStylesTemplate + "\n" + htmlIgnore.Styles()),
+		"Scripts":                       template.JS(htmlIgnore.Scripts() + "\n" + customScripts),
+		"Nonce":                         nonce,
 	}
 
 	var buffer bytes.Buffer

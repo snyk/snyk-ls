@@ -42,6 +42,7 @@
   --button-background-color: var(--vscode-button-background);
   --button-text-color: var(--vscode-button-foreground);
   --disabled-background-color: var(--vscode-foreground);
+  --disabled-foreground: var(--vscode-disabledForeground, #808080);
   --circle-color: var(--vscode-badge-background);
   /* New variables - March 2025 */
   --dimmed-text-color: var(--vscode-editorCodeLens-foreground);

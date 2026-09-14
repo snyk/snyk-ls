@@ -132,22 +132,25 @@
   line-height: 1;
 }
 
-.ignore-button.secondary:not(:disabled):hover,
-.ignore-button.secondary:not(:disabled):active {
+.ignore-button.secondary:hover,
+.ignore-button.secondary:active {
   background: var(--link-color);
   color: white;
   opacity: 0.9;
 }
 
 .ignore-button.secondary:disabled {
+  border-color: var(--disabled-foreground);
+  color: var(--disabled-foreground);
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.6;
 }
 
-.ignore-create-remedy {
-  margin-top: 6px;
-  font-size: 0.9em;
-  color: var(--text-secondary-color, var(--text-color));
+.ignore-button.secondary:disabled:hover,
+.ignore-button.secondary:disabled:active {
+  background: none;
+  color: var(--disabled-foreground);
+  opacity: 0.6;
 }
 
 /* - - - Ignore form (CCI) - - - */

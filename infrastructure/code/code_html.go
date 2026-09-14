@@ -18,6 +18,7 @@ package code
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -36,7 +37,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
-	"github.com/snyk/snyk-ls/internal/folderconfig"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/html"
 	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -146,7 +147,7 @@ func (renderer *HtmlRenderer) determineFolderPath(conf configuration.Configurati
 	return ""
 }
 
-func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
+func (renderer *HtmlRenderer) GetDetailsHtml(ctx context.Context, issue types.Issue) string {
 	autoTriggerAiFix := renderer.AiFixHandler.GetAutoTriggerAiFix()
 	renderer.AiFixHandler.resetAiFixCacheIfDifferent(issue)
 	conf := renderer.engine.GetConfiguration()
@@ -165,7 +166,6 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	folderPath := renderer.determineFolderPath(conf, issue.GetAffectedFilePath())
 
 	codeRenderer.updateFeatureFlags(conf, folderPath)
-	ignoreCreateDisabledReason := renderer.ignoreCreateDisabledReason(conf, issue.GetAffectedFilePath())
 
 	exampleCommits := prepareExampleCommits(additionalData.ExampleCommitFixes)
 	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, logger)
@@ -208,51 +208,56 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		}
 	}
 
+	contentRoot := string(issue.GetContentRoot())
+	configResolver, _ := ctx2.ConfigResolverFromContext(ctx)
+	canCreateIgnore := htmlIgnore.CanCreateIgnore(contentRoot, configResolver)
+
 	data := map[string]any{
-		"IssueTitle":                 additionalData.Title,
-		"IssueMessage":               additionalData.Message,
-		"IssueType":                  getIssueType(),
-		"SeverityIcon":               html.SeverityIcon(issue),
-		"CWEs":                       issue.GetCWEs(),
-		"IssueOverview":              html.MarkdownToHTML(additionalData.Text),
-		"IsIgnored":                  issue.GetIsIgnored(),
-		"IsPending":                  isPending,
-		"IgnoreDetails":              ignoreDetailsRow,
-		"IgnoreReason":               ignoreReason,
-		"CCIEnabled":                 renderer.cciEnabled,
-		"IgnoreCreateDisabledReason": ignoreCreateDisabledReason,
-		"InlineIgnoresEnabled":       renderer.inlineIgnoresEnabled,
-		"DataFlow":                   additionalData.DataFlow,
-		"DataFlowKeys":               dataFlowKeys,
-		"DataFlowTable":              dataFlowTable,
-		"RepoCount":                  additionalData.RepoDatasetSize,
-		"ExampleCount":               len(additionalData.ExampleCommitFixes),
-		"ExampleCommitFixes":         exampleCommits,
-		"CommitFixes":                commitFixes,
-		"PriorityScore":              additionalData.PriorityScore,
-		"SnykWebUrl":                 appLink,
-		"LessonUrl":                  issue.GetLessonUrl(),
-		"LessonIcon":                 html.LessonIcon(),
-		"IgnoreLineAction":           getLineToIgnoreAction(issue),
-		"HasAIFix":                   additionalData.HasAIFix,
-		"ExternalIcon":               html.ExternalIcon(),
-		"ScanAnimation":              html.ScanAnimation(),
-		"GitHubIcon":                 html.GitHubIcon(),
-		"ArrowLeftDark":              html.ArrowLeftDark(),
-		"ArrowLeftLight":             html.ArrowLeftLight(),
-		"ArrowRightDark":             html.ArrowRightDark(),
-		"ArrowRightLight":            html.ArrowRightLight(),
-		"FileIcon":                   html.FileIcon(),
-		"FolderPath":                 string(folderPath),
-		"FilePath":                   string(issue.GetAffectedFilePath()),
-		"IssueId":                    issue.GetAdditionalData().GetKey(),
-		"Styles":                     template.CSS(panelStylesTemplate + "\n" + htmlIgnore.Styles()),
-		"Scripts":                    template.JS(htmlIgnore.Scripts() + "\n" + customScripts),
-		"Nonce":                      nonce,
-		"AiFixResult":                aiFixResult,
-		"AiFixDiffStatus":            aiFixDiffStatus,
-		"AiFixError":                 aiFixErr,
-		"AutoTriggerAiFix":           autoTriggerAiFix,
+		"IssueTitle":                    additionalData.Title,
+		"IssueMessage":                  additionalData.Message,
+		"IssueType":                     getIssueType(),
+		"SeverityIcon":                  html.SeverityIcon(issue),
+		"CWEs":                          issue.GetCWEs(),
+		"IssueOverview":                 html.MarkdownToHTML(additionalData.Text),
+		"IsIgnored":                     issue.GetIsIgnored(),
+		"IsPending":                     isPending,
+		"IgnoreDetails":                 ignoreDetailsRow,
+		"IgnoreReason":                  ignoreReason,
+		"CCIEnabled":                    renderer.cciEnabled,
+		"CanCreateIgnore":               canCreateIgnore,
+		"CreateIgnoreUnavailableReason": htmlIgnore.CreateIgnoreUnavailableReason,
+		"InlineIgnoresEnabled":          renderer.inlineIgnoresEnabled,
+		"DataFlow":                      additionalData.DataFlow,
+		"DataFlowKeys":                  dataFlowKeys,
+		"DataFlowTable":                 dataFlowTable,
+		"RepoCount":                     additionalData.RepoDatasetSize,
+		"ExampleCount":                  len(additionalData.ExampleCommitFixes),
+		"ExampleCommitFixes":            exampleCommits,
+		"CommitFixes":                   commitFixes,
+		"PriorityScore":                 additionalData.PriorityScore,
+		"SnykWebUrl":                    appLink,
+		"LessonUrl":                     issue.GetLessonUrl(),
+		"LessonIcon":                    html.LessonIcon(),
+		"IgnoreLineAction":              getLineToIgnoreAction(issue),
+		"HasAIFix":                      additionalData.HasAIFix,
+		"ExternalIcon":                  html.ExternalIcon(),
+		"ScanAnimation":                 html.ScanAnimation(),
+		"GitHubIcon":                    html.GitHubIcon(),
+		"ArrowLeftDark":                 html.ArrowLeftDark(),
+		"ArrowLeftLight":                html.ArrowLeftLight(),
+		"ArrowRightDark":                html.ArrowRightDark(),
+		"ArrowRightLight":               html.ArrowRightLight(),
+		"FileIcon":                      html.FileIcon(),
+		"FolderPath":                    string(folderPath),
+		"FilePath":                      string(issue.GetAffectedFilePath()),
+		"IssueId":                       issue.GetAdditionalData().GetKey(),
+		"Styles":                        template.CSS(panelStylesTemplate + "\n" + htmlIgnore.Styles()),
+		"Scripts":                       template.JS(htmlIgnore.Scripts() + "\n" + customScripts),
+		"Nonce":                         nonce,
+		"AiFixResult":                   aiFixResult,
+		"AiFixDiffStatus":               aiFixDiffStatus,
+		"AiFixError":                    aiFixErr,
+		"AutoTriggerAiFix":              autoTriggerAiFix,
 	}
 	renderer.AiFixHandler.SetAutoTriggerAiFix(false)
 
@@ -264,32 +269,6 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 
 	result := buffer.String()
 	return result
-}
-
-// ignoreCreateDisabledReason returns why the Create ignore button should be disabled for
-// filePath's folder, or "" if it should stay enabled. Consistent ignores files against a
-// repo URL, so with no Git remote and no --remote-repo-url override there is nothing to
-// file the ignore against.
-func (renderer *HtmlRenderer) ignoreCreateDisabledReason(conf configuration.Configuration, filePath types.FilePath) string {
-	if !renderer.cciEnabled {
-		return ""
-	}
-	ws := config.GetWorkspace(conf)
-	if ws == nil {
-		return ""
-	}
-	folder := ws.GetFolderContaining(filePath)
-	if folder == nil {
-		return ""
-	}
-	fc := folder.FolderConfigReadOnly()
-	if fc == nil {
-		return ""
-	}
-	if _, err := folderconfig.RepoUrlForIgnores(fc.ConfigResolver, fc); err != nil {
-		return folderconfig.RepoUrlUnavailableRemedy
-	}
-	return ""
 }
 
 func (renderer *HtmlRenderer) updateFeatureFlags(conf configuration.Configuration, folder types.FilePath) {
