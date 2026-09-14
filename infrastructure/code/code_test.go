@@ -459,7 +459,7 @@ func Test_enhanceIssuesDetails(t *testing.T) {
 	// invoke method under test
 	htmlRenderer, err := GetHTMLRenderer(engine, featureflag.New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine)))
 	assert.Nil(t, err)
-	html := htmlRenderer.GetDetailsHtml(issues[0])
+	html := htmlRenderer.GetDetailsHtml(t.Context(), issues[0])
 	// Assert
 	assert.Equal(t, expectedLessonUrl, issues[0].GetLessonUrl())
 	assert.Contains(t, html, `href="https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide"`)

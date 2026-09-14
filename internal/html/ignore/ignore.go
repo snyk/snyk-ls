@@ -21,9 +21,11 @@ import (
 	_ "embed"
 	"fmt"
 	"html/template"
+	"strings"
 	"time"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	"github.com/snyk/go-application-framework/pkg/utils/git"
 
 	"github.com/snyk/snyk-ls/internal/types"
@@ -33,14 +35,50 @@ import (
 // that cannot be resolved for the issue's content root.
 const CreateIgnoreUnavailableReason = "Cannot submit ignore: could not determine the repository URL for this folder. Please ensure the folder is part of a Git repository with a configured remote."
 
+// remoteRepoUrlFlag is the CLI-style flag name for ignore_workflow.RemoteRepoUrlKey
+// ("remote-repo-url"), as it would appear in a folder's Additional Parameters setting.
+const remoteRepoUrlFlag = "--" + ignore_workflow.RemoteRepoUrlKey
+
 // CanCreateIgnore reports whether an ignore-approval request can be submitted for
-// content at contentRoot. Uses the same resolver as submitIgnoreRequest validation.
-func CanCreateIgnore(contentRoot string) bool {
+// content at contentRoot. Uses the same resolver as submitIgnoreRequest validation:
+// either a Git remote must resolve for contentRoot, or a --remote-repo-url override
+// must be configured for it.
+func CanCreateIgnore(contentRoot string, configResolver types.ConfigResolverInterface) bool {
 	if contentRoot == "" {
 		return false
 	}
-	_, err := git.RepoUrlFromDir(contentRoot)
-	return err == nil
+	if _, err := git.RepoUrlFromDir(contentRoot); err == nil {
+		return true
+	}
+	return RemoteRepoUrlOverride(configResolver, types.FilePath(contentRoot)) != ""
+}
+
+// RemoteRepoUrlOverride returns the --remote-repo-url value configured for contentRoot's
+// Additional Parameters setting, or "" if none is set. This mirrors the CLI workaround for
+// non-Git projects (e.g. Endevor/COBOL): --remote-repo-url lets Snyk compute a consistent
+// asset ID without requiring a real Git remote, so the IDE honors the same override here
+// instead of hard-blocking the ignore request.
+func RemoteRepoUrlOverride(configResolver types.ConfigResolverInterface, contentRoot types.FilePath) string {
+	if configResolver == nil {
+		return ""
+	}
+	folderConfig := &types.FolderConfig{FolderPath: contentRoot, ConfigResolver: configResolver}
+	params := configResolver.GetStringSlice(types.SettingAdditionalParameters, folderConfig)
+	return extractFlagValue(params, remoteRepoUrlFlag)
+}
+
+// extractFlagValue returns the value of a CLI-style flag from args, supporting both the
+// "--flag=value" and "--flag value" forms. Returns "" if the flag is not present.
+func extractFlagValue(args []string, flag string) string {
+	for i, arg := range args {
+		if value, ok := strings.CutPrefix(arg, flag+"="); ok {
+			return value
+		}
+		if arg == flag && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	return ""
 }
 
 //go:embed ignore_styles.css

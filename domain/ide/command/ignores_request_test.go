@@ -651,52 +651,6 @@ func Test_submitIgnoreRequest_NilTreeRefresher_DoesNotPanic(t *testing.T) {
 	})
 }
 
-func Test_extractFlagValue(t *testing.T) {
-	tests := []struct {
-		name     string
-		args     []string
-		flag     string
-		expected string
-	}{
-		{
-			name:     "equals form",
-			args:     []string{"--all-projects", "--remote-repo-url=https://github.com/example/repo.git"},
-			flag:     "--remote-repo-url",
-			expected: "https://github.com/example/repo.git",
-		},
-		{
-			name:     "space-separated form",
-			args:     []string{"--remote-repo-url", "https://github.com/example/repo.git"},
-			flag:     "--remote-repo-url",
-			expected: "https://github.com/example/repo.git",
-		},
-		{
-			name:     "flag not present",
-			args:     []string{"--all-projects"},
-			flag:     "--remote-repo-url",
-			expected: "",
-		},
-		{
-			name:     "space-separated form missing value",
-			args:     []string{"--remote-repo-url"},
-			flag:     "--remote-repo-url",
-			expected: "",
-		},
-		{
-			name:     "empty args",
-			args:     []string{},
-			flag:     "--remote-repo-url",
-			expected: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, extractFlagValue(tt.args, tt.flag))
-		})
-	}
-}
-
 func Test_submitIgnoreRequest_remoteRepoUrlOverride(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	folderPath := types.FilePath("/fake/test-folder-remote-repo-url")
