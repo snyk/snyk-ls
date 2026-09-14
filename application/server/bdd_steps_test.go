@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -36,6 +37,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -81,6 +83,14 @@ type bddSteps struct {
 	fixCapturedProvider string
 	fixCapturedModel    string
 	fixCommandErr       error
+
+	ignoreCapturedRemoteRepoUrl string
+	ignoreCapturedFindingId     string
+	scannedFindingId            string
+	ignoreCommandErr            error
+
+	issueDetailsHtml string
+	issueDetailsErr  error
 }
 
 func newBDDSteps(t *testing.T) *bddSteps {
@@ -206,6 +216,39 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	})
 	sc.Then(`^the fix runs with the developer's chosen LLM provider and model$`, func() error {
 		return s.runOnScenarioGoroutine(s.theFixRunsWithTheChosenProviderAndModel)
+	})
+	sc.Given(`^a folder that is not a Git repository$`, func() error {
+		return s.runOnScenarioGoroutine(s.aFolderThatIsNotAGitRepository)
+	})
+	sc.Given(`^the developer sets "([^"]*)" as a global additional parameter$`, func(ctx context.Context, param string) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperSetsAGlobalAdditionalParameter(ctx, param) })
+	})
+	sc.Given(`^the developer sets "([^"]*)" as the folder's additional parameter$`, func(ctx context.Context, param string) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperSetsTheFoldersAdditionalParameter(ctx, param) })
+	})
+	sc.When(`^the developer saves a file with a security issue and creates an ignore$`, func(ctx context.Context) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperSavesAFileWithASecurityIssueAndCreatesAnIgnore(ctx) })
+	})
+	sc.Then(`^the ignore is filed for repository "([^"]*)"$`, func(repoUrl string) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theIgnoreIsFiledForRepository(repoUrl) })
+	})
+	sc.Then(`^the ignore is filed against the finding the scan produced$`, func() error {
+		return s.runOnScenarioGoroutine(s.theIgnoreIsFiledAgainstTheFindingTheScanProduced)
+	})
+	sc.Then(`^the issue shows as ignored$`, func(ctx context.Context) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theIssueShowsAsIgnored(ctx) })
+	})
+	sc.Then(`^no error notification is shown to the developer$`, func() error {
+		return s.runOnScenarioGoroutine(s.noErrorNotificationIsShownToTheDeveloper)
+	})
+	sc.Then(`^the details offered an enabled button$`, func() error {
+		return s.runOnScenarioGoroutine(s.theDetailsOfferedAnEnabledButton)
+	})
+	sc.When(`^the developer opens the issue details$`, func(ctx context.Context) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperOpensTheIssueDetails(ctx) })
+	})
+	sc.Then(`^Create ignore is disabled with an explanation to add a Git remote or set --remote-repo-url, then rescan$`, func() error {
+		return s.runOnScenarioGoroutine(s.createIgnoreIsDisabledWithExplanation)
 	})
 }
 
@@ -1075,6 +1118,286 @@ func (s *bddSteps) theFixRunsWithTheChosenProviderAndModel() error {
 	}
 	if s.fixCapturedModel != s.savedLlmModel {
 		return fmt.Errorf("expected the fix workflow to receive model %q, got %q", s.savedLlmModel, s.fixCapturedModel)
+	}
+	return nil
+}
+
+// aFolderThatIsNotAGitRepository builds the same fixture developerSavesFileWithSecurityIssue
+// uses, then strips its .git directory - only a --remote-repo-url override, not a Git
+// remote, can resolve a repository URL for it from here on.
+func (s *bddSteps) aFolderThatIsNotAGitRepository() error {
+	filePath, fileDir := code.TempWorkdirWithIssues(s.scenarioT)
+	if err := os.RemoveAll(filepath.Join(string(fileDir), ".git")); err != nil {
+		return fmt.Errorf("failed to remove .git from fixture folder: %w", err)
+	}
+	s.deltaFilePath = filePath
+	s.deltaFileDir = fileDir
+	s.folderPath = fileDir
+	s.scanStateAggregator.Init([]types.FilePath{fileDir})
+	addFolderToWorkspace(s.scenarioT, s.engine, s.deps, fileDir)
+	return nil
+}
+
+// theDeveloperSetsAGlobalAdditionalParameter mirrors VS Code's storage shape: Additional
+// Parameters is sent as one global string, which applyCliConfig files under
+// SettingCliAdditionalOssParameters.
+func (s *bddSteps) theDeveloperSetsAGlobalAdditionalParameter(ctx context.Context, param string) error {
+	params := types.DidChangeConfigurationParams{
+		Settings: types.LspConfigurationParam{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingAdditionalParameters: {Value: param, Changed: true},
+			},
+		},
+	}
+	if _, err := s.loc.Client.Call(ctx, "workspace/didChangeConfiguration", params); err != nil {
+		return fmt.Errorf("didChangeConfiguration call failed: %w", err)
+	}
+	return nil
+}
+
+// theDeveloperSetsTheFoldersAdditionalParameter mirrors IntelliJ's storage shape:
+// Additional Parameters is sent per folder.
+func (s *bddSteps) theDeveloperSetsTheFoldersAdditionalParameter(ctx context.Context, param string) error {
+	params := types.DidChangeConfigurationParams{
+		Settings: types.LspConfigurationParam{
+			FolderConfigs: []types.LspFolderConfig{
+				{
+					FolderPath: s.folderPath,
+					Settings: map[string]*types.ConfigSetting{
+						types.SettingAdditionalParameters: {Value: []string{param}, Changed: true},
+					},
+				},
+			},
+		},
+	}
+	if _, err := s.loc.Client.Call(ctx, "workspace/didChangeConfiguration", params); err != nil {
+		return fmt.Errorf("didChangeConfiguration call failed: %w", err)
+	}
+	return nil
+}
+
+// theDeveloperSavesAFileWithASecurityIssueAndCreatesAnIgnore saves the fixture file -
+// without re-adding the folder, aFolderThatIsNotAGitRepository already did that - then
+// drives workspace/executeCommand(snyk.submitIgnoreRequest) the way an editor's "ignore"
+// action does. The real ignore-create workflow is replaced with a fake that captures its
+// --remote-repo-url, the same way theDeveloperAsksSnykToFixAFolder substitutes the
+// external "fix" workflow, so the scenario stays network-free.
+func (s *bddSteps) theDeveloperSavesAFileWithASecurityIssueAndCreatesAnIgnore(ctx context.Context) error {
+	didSaveParams := sglsp.DidSaveTextDocumentParams{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(s.deltaFilePath)},
+	}
+	if _, err := s.loc.Client.Call(ctx, textDocumentDidSaveOperation, didSaveParams); err != nil {
+		return fmt.Errorf("didSave call failed: %w", err)
+	}
+	diagnostics, found := s.awaitPublishedDiagnostics(s.deltaFilePath)
+	if !found || len(diagnostics) == 0 {
+		return fmt.Errorf("expected the scan to publish diagnostics for %s, got none", s.deltaFilePath)
+	}
+	// Diagnostic.Data.Id carries the same occurrence-unique key the workspace's
+	// IssueProvider looks issues up by - see theDeveloperAsksSnykToFixTheIssueWithAi.
+	issueID := diagnostics[0].Data.Id
+	if issueID == "" {
+		return fmt.Errorf("expected the scanned issue's diagnostic to carry a non-empty id, got none")
+	}
+
+	// The wire-level Diagnostic.Data.FindingId is a composite built from the issue's raw
+	// finding id plus location - the ignore workflow is keyed on the raw id, so that is what
+	// must be compared against what the ignore workflow actually receives.
+	realWorkspace := config.GetWorkspace(s.engine.GetConfiguration())
+	issueProvider, ok := realWorkspace.(snyk.IssueProvider)
+	if !ok {
+		return fmt.Errorf("workspace does not implement snyk.IssueProvider")
+	}
+	scannedIssue := issueProvider.Issue(issueID)
+	if scannedIssue == nil {
+		return fmt.Errorf("expected to find issue %q in the workspace", issueID)
+	}
+	s.scannedFindingId = scannedIssue.GetFindingId()
+
+	// Captured now, before the ignore is filed below - once the issue is ignored, the
+	// footer that would show the button disappears entirely, so this is the only point
+	// in this composite step from which "the details offered an enabled button" can
+	// still tell an enabled button apart from a button that no longer renders at all.
+	s.enableConsistentIgnoresForFolder()
+	s.scenarioT.Cleanup(code.ResetHTMLRenderer)
+	s.issueDetailsHtml, s.issueDetailsErr = s.fetchIssueDescriptionHtml(ctx, issueID)
+
+	flagset := workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError))
+	callback := func(invocation workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
+		s.ignoreCapturedRemoteRepoUrl = invocation.GetConfiguration().GetString(ignore_workflow.RemoteRepoUrlKey)
+		s.ignoreCapturedFindingId = invocation.GetConfiguration().GetString(ignore_workflow.FindingsIdKey)
+		payload := []byte(`{"status":"accepted"}`)
+		return []workflow.Data{workflow.NewData(workflow.NewTypeIdentifier(ignore_workflow.WORKFLOWID_IGNORE_CREATE, "test"), "json", payload)}, nil
+	}
+	// EngineImpl.Register has no duplicate-registration guard - it always overwrites the
+	// existing entry - so registering this fake unconditionally replaces the real ignore
+	// workflow testutil.UnitTestWithEngine already registered.
+	if _, err := s.engine.Register(ignore_workflow.WORKFLOWID_IGNORE_CREATE, flagset, callback); err != nil {
+		return fmt.Errorf("failed to register test ignore workflow: %w", err)
+	}
+
+	s.jsonRPCRecorder.ClearNotifications()
+	_, callErr := s.loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		Command:   types.SubmitIgnoreRequest,
+		Arguments: []any{"create", issueID, "wont_fix", "test reason", "2099-01-01"},
+	})
+	s.ignoreCommandErr = callErr
+	return nil
+}
+
+func (s *bddSteps) theIgnoreIsFiledForRepository(repoUrl string) error {
+	if s.ignoreCommandErr != nil {
+		return fmt.Errorf("snyk.submitIgnoreRequest call failed: %w", s.ignoreCommandErr)
+	}
+	if s.ignoreCapturedRemoteRepoUrl != repoUrl {
+		return fmt.Errorf("expected the ignore workflow to receive repository URL %q, got %q", repoUrl, s.ignoreCapturedRemoteRepoUrl)
+	}
+	return nil
+}
+
+func (s *bddSteps) theIgnoreIsFiledAgainstTheFindingTheScanProduced() error {
+	if s.ignoreCommandErr != nil {
+		return fmt.Errorf("snyk.submitIgnoreRequest call failed: %w", s.ignoreCommandErr)
+	}
+	if s.scannedFindingId == "" {
+		return fmt.Errorf("expected the scanned issue to carry a non-empty finding id")
+	}
+	if s.ignoreCapturedFindingId != s.scannedFindingId {
+		return fmt.Errorf("expected the ignore workflow to receive finding id %q, got %q", s.scannedFindingId, s.ignoreCapturedFindingId)
+	}
+	return nil
+}
+
+func (s *bddSteps) theIssueShowsAsIgnored(ctx context.Context) error {
+	rsp, err := s.loc.Client.Call(ctx, "textDocument/diagnostic", types.DocumentDiagnosticParams{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(s.deltaFilePath)},
+	})
+	if err != nil {
+		return fmt.Errorf("textDocument/diagnostic call failed: %w", err)
+	}
+	var report types.RelatedFullDocumentDiagnosticReport
+	if err := rsp.UnmarshalResult(&report); err != nil {
+		return fmt.Errorf("unmarshalling textDocument/diagnostic result failed: %w", err)
+	}
+	if len(report.Items) == 0 {
+		return fmt.Errorf("expected diagnostics for %s, got none", s.deltaFilePath)
+	}
+	for _, diagnostic := range report.Items {
+		if diagnostic.Data.IsIgnored {
+			return nil
+		}
+	}
+	return fmt.Errorf("expected the issue to show as ignored, none of the %d diagnostics for %s were", len(report.Items), s.deltaFilePath)
+}
+
+func (s *bddSteps) noErrorNotificationIsShownToTheDeveloper() error {
+	notifications := s.jsonRPCRecorder.FindNotificationsByMethod("window/showMessage")
+	if len(notifications) > 0 {
+		return fmt.Errorf("expected no window/showMessage notification, got %d", len(notifications))
+	}
+	return nil
+}
+
+// enableConsistentIgnoresForFolder writes the Snyk Code Consistent Ignores flag directly
+// into the folder's feature-flag config cache, the value PopulateFolderConfig would
+// otherwise set from a live API fetch. The BDD harness wires the real, network-backed
+// featureflag.Service into the command service (aRunningLanguageServer), so scenarios
+// need this deterministic path to render the CCI-gated ignore button at all.
+func (s *bddSteps) enableConsistentIgnoresForFolder() {
+	folderConfig := config.GetFolderConfigFromEngine(s.engine, s.deps.ConfigResolver, s.deltaFileDir, s.engine.GetLogger())
+	folderConfig.SetFeatureFlag(featureflag.SnykCodeConsistentIgnores, true)
+	// Consistent ignores mode filters issues by the "show ignored issues" view option,
+	// which defaults to off - without this, a later textDocument/diagnostic pull for an
+	// issue that was just ignored would come back empty.
+	types.SetUserFolder(s.engine.GetConfiguration(), s.deltaFileDir, types.SettingIssueViewIgnoredIssues, true)
+}
+
+// fetchIssueDescriptionHtml fetches the rendered issue details the way an editor's details
+// view does, via the same workspace/executeCommand call server_smoke_test.go's
+// fetchIssueDescriptionHtml uses.
+func (s *bddSteps) fetchIssueDescriptionHtml(ctx context.Context, issueID string) (string, error) {
+	rsp, err := s.loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
+		Command:   types.GenerateIssueDescriptionCommand,
+		Arguments: []any{issueID},
+	})
+	if err != nil {
+		return "", err
+	}
+	var htmlContent string
+	if err := rsp.UnmarshalResult(&htmlContent); err != nil {
+		return "", err
+	}
+	return htmlContent, nil
+}
+
+// extractElementTag returns the opening tag of the element with the given id, so a step can
+// check its attributes (e.g. "disabled") without parsing the whole document.
+func extractElementTag(htmlContent, id string) (string, bool) {
+	marker := `id="` + id + `"`
+	markerStart := strings.Index(htmlContent, marker)
+	if markerStart == -1 {
+		return "", false
+	}
+	tagStart := strings.LastIndex(htmlContent[:markerStart], "<")
+	tagEnd := strings.Index(htmlContent[markerStart:], ">")
+	if tagStart == -1 || tagEnd == -1 {
+		return "", false
+	}
+	return htmlContent[tagStart : markerStart+tagEnd+1], true
+}
+
+func (s *bddSteps) theDetailsOfferedAnEnabledButton() error {
+	if s.issueDetailsErr != nil {
+		return fmt.Errorf("generateIssueDescription call failed: %w", s.issueDetailsErr)
+	}
+	tag, found := extractElementTag(s.issueDetailsHtml, "ignore-create")
+	if !found {
+		return fmt.Errorf("expected an ignore-create button in the issue details, found none")
+	}
+	if strings.Contains(tag, "disabled") {
+		return fmt.Errorf("expected the Create ignore button to be enabled, got %q", tag)
+	}
+	return nil
+}
+
+// theDeveloperOpensTheIssueDetails saves the fixture file - aFolderThatIsNotAGitRepository
+// already added the folder - and fetches the Code panel's rendered issue details the way
+// an editor's details view does, without creating an ignore.
+func (s *bddSteps) theDeveloperOpensTheIssueDetails(ctx context.Context) error {
+	didSaveParams := sglsp.DidSaveTextDocumentParams{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(s.deltaFilePath)},
+	}
+	if _, err := s.loc.Client.Call(ctx, textDocumentDidSaveOperation, didSaveParams); err != nil {
+		return fmt.Errorf("didSave call failed: %w", err)
+	}
+	diagnostics, found := s.awaitPublishedDiagnostics(s.deltaFilePath)
+	if !found || len(diagnostics) == 0 {
+		return fmt.Errorf("expected the scan to publish diagnostics for %s, got none", s.deltaFilePath)
+	}
+	issueID := diagnostics[0].Data.Id
+	if issueID == "" {
+		return fmt.Errorf("expected the scanned issue's diagnostic to carry a non-empty id, got none")
+	}
+
+	s.enableConsistentIgnoresForFolder()
+	s.scenarioT.Cleanup(code.ResetHTMLRenderer)
+	s.issueDetailsHtml, s.issueDetailsErr = s.fetchIssueDescriptionHtml(ctx, issueID)
+	return nil
+}
+
+func (s *bddSteps) createIgnoreIsDisabledWithExplanation() error {
+	if s.issueDetailsErr != nil {
+		return fmt.Errorf("generateIssueDescription call failed: %w", s.issueDetailsErr)
+	}
+	tag, found := extractElementTag(s.issueDetailsHtml, "ignore-create")
+	if !found {
+		return fmt.Errorf("expected an ignore-create button in the issue details, found none")
+	}
+	if !strings.Contains(tag, "disabled") {
+		return fmt.Errorf("expected the Create ignore button to be disabled, got %q", tag)
+	}
+	if !strings.Contains(s.issueDetailsHtml, folderconfig.RepoUrlUnavailableRemedy) {
+		return fmt.Errorf("expected the issue details to explain: %q", folderconfig.RepoUrlUnavailableRemedy)
 	}
 	return nil
 }

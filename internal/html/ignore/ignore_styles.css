@@ -132,11 +132,22 @@
   line-height: 1;
 }
 
-.ignore-button.secondary:hover,
-.ignore-button.secondary:active {
+.ignore-button.secondary:not(:disabled):hover,
+.ignore-button.secondary:not(:disabled):active {
   background: var(--link-color);
   color: white;
   opacity: 0.9;
+}
+
+.ignore-button.secondary:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ignore-create-remedy {
+  margin-top: 6px;
+  font-size: 0.9em;
+  color: var(--text-secondary-color, var(--text-color));
 }
 
 /* - - - Ignore form (CCI) - - - */

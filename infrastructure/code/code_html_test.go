@@ -19,6 +19,7 @@ package code
 import (
 	"fmt"
 	"html"
+	"path/filepath"
 	"regexp"
 	"testing"
 	"time"
@@ -34,7 +35,9 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/testutil/workspaceutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -466,6 +469,74 @@ func Test_Code_Html_ignoreForm_hasReasonErrorBadge(t *testing.T) {
 	// Form and error badge should be present in the HTML
 	assert.Contains(t, codePanelHtml, `id="ignore-form-container"`)
 	assert.Contains(t, codePanelHtml, `id="ignore-reason-error"`)
+}
+
+func Test_Code_Html_ignoreCreateButton_disabledWithoutGitRemoteOrOverride(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	folderPath := types.FilePath(t.TempDir())
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
+	workspaceutil.SetupWorkspaceWithFeatureFlags(t, engine, fakeFeatureFlagService, folderPath)
+
+	issue := &snyk.Issue{
+		ID:               "java/DontUsePrintStackTrace",
+		AffectedFilePath: types.FilePath(filepath.Join(string(folderPath), "Dummy.java")),
+		AdditionalData:   snyk.CodeIssueData{},
+	}
+
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
+	assert.NoError(t, err)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+
+	assert.Contains(t, codePanelHtml, `<button id="ignore-create" class="ignore-button secondary" disabled`)
+	assert.Contains(t, codePanelHtml, folderconfig.RepoUrlUnavailableRemedy)
+}
+
+func Test_Code_Html_ignoreCreateButton_enabledWithRemoteRepoUrlOverride(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	folderPath := types.FilePath(t.TempDir())
+	types.SetFolderUserSetting(engine.GetConfiguration(), folderPath, types.SettingAdditionalParameters,
+		[]string{"--remote-repo-url=https://mainframe.example/payroll"})
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
+	workspaceutil.SetupWorkspaceWithFeatureFlags(t, engine, fakeFeatureFlagService, folderPath)
+
+	issue := &snyk.Issue{
+		ID:               "java/DontUsePrintStackTrace",
+		AffectedFilePath: types.FilePath(filepath.Join(string(folderPath), "Dummy.java")),
+		AdditionalData:   snyk.CodeIssueData{},
+	}
+
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
+	assert.NoError(t, err)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+
+	assert.Contains(t, codePanelHtml, `<button id="ignore-create" class="ignore-button secondary">`)
+	assert.NotContains(t, codePanelHtml, folderconfig.RepoUrlUnavailableRemedy)
+}
+
+func Test_Code_Html_ignoreCreateButton_enabledWithGitRemote(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	filePath, folderPath := TempWorkdirWithIssues(t)
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
+	workspaceutil.SetupWorkspaceWithFeatureFlags(t, engine, fakeFeatureFlagService, folderPath)
+
+	issue := &snyk.Issue{
+		ID:               "java/DontUsePrintStackTrace",
+		AffectedFilePath: filePath,
+		AdditionalData:   snyk.CodeIssueData{},
+	}
+
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
+	assert.NoError(t, err)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+
+	assert.Contains(t, codePanelHtml, `<button id="ignore-create" class="ignore-button secondary">`)
+	assert.NotContains(t, codePanelHtml, folderconfig.RepoUrlUnavailableRemedy)
 }
 
 func Test_Code_Html_hasErrorBadgeCSS(t *testing.T) {

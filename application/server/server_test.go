@@ -1148,11 +1148,11 @@ func Test_textDocumentDidSave_manualScanningMode_doesNotScan(t *testing.T) {
 	)
 }
 
-func sendFileSavedMessage(t *testing.T, engine workflow.Engine, filePath types.FilePath, fileDir types.FilePath, loc server.Local, deps di.Dependencies) sglsp.DocumentURI {
+// addFolderToWorkspace registers fileDir as a workspace folder and populates its folder
+// config, the same way sendFileSavedMessage does before triggering a didSave. Extracted so
+// BDD steps can add a folder to the workspace independently of sending a didSave.
+func addFolderToWorkspace(t *testing.T, engine workflow.Engine, deps di.Dependencies, fileDir types.FilePath) {
 	t.Helper()
-	didSaveParams := sglsp.DidSaveTextDocumentParams{
-		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(filePath)},
-	}
 	config.GetWorkspace(engine.GetConfiguration()).AddFolder(workspace.NewFolder(engine.GetConfiguration(), engine.GetLogger(), fileDir,
 		"Test",
 		deps.Scanner,
@@ -1168,6 +1168,14 @@ func sendFileSavedMessage(t *testing.T, engine workflow.Engine, filePath types.F
 	// Populate folder config with SAST settings after adding the folder
 	folderConfig := config.GetFolderConfigFromEngine(engine, testutil.DefaultConfigResolver(engine), fileDir, engine.GetLogger())
 	deps.FeatureFlagService.PopulateFolderConfig(folderConfig)
+}
+
+func sendFileSavedMessage(t *testing.T, engine workflow.Engine, filePath types.FilePath, fileDir types.FilePath, loc server.Local, deps di.Dependencies) sglsp.DocumentURI {
+	t.Helper()
+	didSaveParams := sglsp.DidSaveTextDocumentParams{
+		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(filePath)},
+	}
+	addFolderToWorkspace(t, engine, deps, fileDir)
 
 	_, err := loc.Client.Call(t.Context(), textDocumentDidSaveOperation, didSaveParams)
 	if err != nil {
