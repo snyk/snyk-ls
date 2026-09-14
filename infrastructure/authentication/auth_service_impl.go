@@ -693,16 +693,14 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 //     the hook still runs under the lock on that path — this is a
 //     pre-existing, deliberately untouched hazard on that specific call chain.
 func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool, updateApiUrl bool, releaseLock bool) {
-	// Increment syncGeneration BEFORE the token write, while holding a.m.
-	// This supersedes any async update that was enqueued at the previous
-	// generation: when the worker acquires a.m, it will see
-	// update.generation < syncGeneration and discard the stale update.
-	// Applies to all three callers: UpdateCredentials, authenticate, logout.
-	generation := a.syncGeneration.Add(1)
-
 	if !a.applyTokenMutationLocked(newToken, updateApiUrl) {
 		return
 	}
+
+	// Increment syncGeneration after a successful mutation, while still holding a.m.
+	// This supersedes any async update enqueued at the previous generation without
+	// advancing the epoch on no-op writes (same token, or SetToken did not apply).
+	generation := a.syncGeneration.Add(1)
 
 	if releaseLock {
 		a.m.Unlock()
