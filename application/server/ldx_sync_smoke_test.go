@@ -159,7 +159,7 @@ func Test_SmokeLdxSync_AddFolder(t *testing.T) {
 
 	jsonRpcRecorder.ClearNotifications()
 
-	folder2, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "c32657c", engine.GetLogger(), false)
+	folder2, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "97e28b6", engine.GetLogger(), false)
 	require.NoError(t, err, "Failed to setup second test repo")
 	require.NotEmpty(t, folder2, "Folder path should not be empty")
 	require.DirExists(t, string(folder2), "Folder should exist")
