@@ -30,6 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
+	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 
@@ -401,7 +402,7 @@ func (cmd *submitIgnoreRequest) validateIgnoreRequest(logger zerolog.Logger, con
 	if _, err := git.RepoUrlFromDir(string(contentRoot)); err != nil {
 		logger.Warn().Err(err).Str("contentRoot", string(contentRoot)).Msg("could not determine repository URL for ignore request")
 		if cmd.notifier != nil {
-			cmd.notifier.SendShowMessage(sglsp.MTWarning, userMsgCannotDetermineRepoURL)
+			cmd.notifier.SendShowMessage(sglsp.MTWarning, htmlIgnore.CreateIgnoreUnavailableReason)
 		}
 		return fmt.Errorf("could not determine repository URL: %w", err)
 	}
