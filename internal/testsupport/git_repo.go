@@ -14,7 +14,7 @@ const defaultTestGitOrigin = "https://github.com/org/repo.git"
 // GitCommandForTestRepo returns a git command scoped to dir with an env that
 // does not inherit host worktree/config overrides (see GitEnvWithoutInheritedRepoConfig).
 func GitCommandForTestRepo(dir string, args ...string) *exec.Cmd {
-	cmd := exec.Command("git", args...)
+	cmd := exec.Command("git", GitUnsigned(args...)...)
 	cmd.Dir = dir
 	cmd.Env = GitEnvWithoutInheritedRepoConfig(os.Environ())
 	return cmd
