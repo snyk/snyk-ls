@@ -29,6 +29,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
+	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
 
@@ -348,8 +349,6 @@ func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, wo
 	return nil
 }
 
-const userMsgCannotDetermineRepoURL = "Cannot submit ignore: could not determine the repository URL for this folder. Please ensure the folder is part of a Git repository with a configured remote."
-
 // validateIgnoreRequest checks that a repository URL can be resolved for contentRoot
 // using the same resolver as GAF's ignore workflow (git.RepoUrlFromDir) so the two
 // agree. If not, it sends a user-facing warning notification and returns an error.
@@ -359,7 +358,7 @@ func (cmd *submitIgnoreRequest) validateIgnoreRequest(logger zerolog.Logger, con
 	if _, err := git.RepoUrlFromDir(string(contentRoot)); err != nil {
 		logger.Warn().Err(err).Str("contentRoot", string(contentRoot)).Msg("could not determine repository URL for ignore request")
 		if cmd.notifier != nil {
-			cmd.notifier.SendShowMessage(sglsp.MTWarning, userMsgCannotDetermineRepoURL)
+			cmd.notifier.SendShowMessage(sglsp.MTWarning, htmlIgnore.CreateIgnoreUnavailableReason)
 		}
 		return fmt.Errorf("could not determine repository URL: %w", err)
 	}
