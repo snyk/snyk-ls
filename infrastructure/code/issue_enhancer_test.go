@@ -17,9 +17,13 @@
 package code
 
 import (
+	"net/url"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -70,13 +74,7 @@ func TestIssueEnhancer_autofixShowDetailsFunc(t *testing.T) {
 		rootPath:     "/Users/user/workspace/blah",
 		engine:       engine,
 	}
-	issue := &snyk.Issue{
-		AffectedFilePath: "/Users/user/workspace/blah/app.js",
-		Product:          product.ProductCode,
-		AdditionalData:   snyk.CodeIssueData{Key: "123"},
-		Range:            fakeRange,
-	}
-	expectedURI := "snyk:///Users/user/workspace/blah/app.js?product=Snyk+Code&issueId=123&action=showInDetailPanel"
+	issue, _ := setupTestData(t)
 
 	t.Run("returns CommandData with correct URI and range", func(t *testing.T) {
 		commandDataFunc := issueEnhancer.autofixShowDetailsFunc(t.Context(), issue)
@@ -84,7 +82,9 @@ func TestIssueEnhancer_autofixShowDetailsFunc(t *testing.T) {
 
 		assert.Equal(t, types.NavigateToRangeCommand, commandData.Title)
 		assert.Equal(t, types.NavigateToRangeCommand, commandData.CommandId)
-		assert.Equal(t, expectedURI, commandData.Arguments[0])
+		actualURI, ok := commandData.Arguments[0].(string)
+		require.True(t, ok)
+		assertTestDataSnykURI(t, actualURI)
 		assert.Equal(t, issue.Range, commandData.Arguments[1])
 	})
 }
@@ -180,17 +180,48 @@ func Test_addIssueActions(t *testing.T) {
 func Test_ideSnykURI(t *testing.T) {
 	testutil.UnitTest(t)
 	t.Run("generates correct URI", func(t *testing.T) {
-		issue, ideAction, expectedURI := setupAiFixTestData()
-		actualURI, err := SnykMagnetUri(issue, ideAction)
+		issue, _ := setupTestData(t)
+		actualURI, err := SnykMagnetUri(util.Ptr(zerolog.Nop()), issue, ShowInDetailPanelIdeCommand)
 		assert.NoError(t, err)
-		assert.Equal(t, expectedURI, actualURI)
+		assertTestDataSnykURI(t, actualURI)
 	})
 
 	t.Run("handles missing Key in additional data", func(t *testing.T) {
-		issue, ideAction, expectedURI := setupAiFixTestData()
-		actualURI, err := SnykMagnetUri(issue, ideAction)
+		affectedFilePath := filepath.Join(t.TempDir(), testFixtureSubDir, testFixtureFile)
+		issue := &snyk.Issue{
+			ID:               "vuln-id",
+			AffectedFilePath: types.FilePath(affectedFilePath),
+			Product:          product.ProductCode,
+			AdditionalData:   snyk.CodeIssueData{Key: ""}, // falls back to issue.ID via IssueId()
+		}
+
+		actualURI, err := SnykMagnetUri(util.Ptr(zerolog.Nop()), issue, ShowInDetailPanelIdeCommand)
 		assert.NoError(t, err)
-		assert.Equal(t, expectedURI, actualURI)
+		assertSnykURIMatches(t, actualURI, testFixturePathSuffix, url.Values{
+			"action":  {ShowInDetailPanelIdeCommand},
+			"issueId": {"vuln-id"},
+			"product": {"Snyk Code"},
+		})
+	})
+
+	// lspUri.File's file:// shape puts a leading '/' before the drive letter (RFC 8089),
+	// keeping the authority empty; a raw path in url.URL instead renders "C:%5Cpath" and
+	// "C:" parses as host:port (RFC 3986).
+	t.Run("Windows paths follow RFCs for encoding", func(t *testing.T) {
+		filePath := `C:\Mac\Home\Documents\Code\JavaScript\snyk-goof\db.js`
+		issue := &snyk.Issue{
+			AffectedFilePath: types.FilePath(filePath),
+			Product:          product.ProductCode,
+			AdditionalData:   snyk.CodeIssueData{Key: testFixtureIssueId},
+		}
+
+		actualURI, err := SnykMagnetUri(util.Ptr(zerolog.Nop()), issue, ShowInDetailPanelIdeCommand)
+		require.NoError(t, err)
+
+		parsed, parseErr := url.Parse(actualURI)
+		require.NoError(t, parseErr, "generated URI should be re-parseable, but got: %s", actualURI)
+		assert.Empty(t, parsed.Host, "authority should be empty, not swallow the Windows drive letter as a host")
+		assert.True(t, strings.HasPrefix(parsed.Path, "/C:"), "path should start with a leading slash before the drive letter, got: %s", parsed.Path)
 	})
 }
 
@@ -239,16 +270,4 @@ func TestIssueId(t *testing.T) {
 			}
 		})
 	}
-}
-
-func setupAiFixTestData() (issue *snyk.Issue, ideAction string, expectedURI string) {
-	issue = &snyk.Issue{
-		AffectedFilePath: "/Users/user/workspace/blah/app.js",
-		Product:          "Code",
-		AdditionalData:   snyk.CodeIssueData{Key: "123"}, // Provide additional data
-	}
-	ideAction = "showInDetailPanel"
-	expectedURI = "snyk:///Users/user/workspace/blah/app.js?product=Code&issueId=123&action=showInDetailPanel"
-
-	return
 }
