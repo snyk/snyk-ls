@@ -83,7 +83,7 @@ func (cmd *codeFixDiffs) handleResponse(ctx context.Context, engine workflow.Eng
 	aiFixHandler := htmlRenderer.AiFixHandler
 
 	setStateCallback := func() {
-		SendShowDocumentRequest(ctx, logger, issue, cmd.srv)
+		SendShowDocumentRequest(ctx, &logger, issue, cmd.srv)
 		cmd.sendAiFixNotification(aiFixHandler, issue)
 	}
 
