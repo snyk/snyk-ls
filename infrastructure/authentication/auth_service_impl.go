@@ -910,7 +910,15 @@ func (a *AuthenticationServiceImpl) logout(ctx context.Context, releaseLock bool
 	// triggered this logout) before applying our own authoritative clear below. Without
 	// this, credentialUpdateWorker could apply that stale, queued-but-not-yet-drained
 	// update after our clear, resurrecting the token this logout removes (IDE-2402).
+	// The worker acquires a.m.Lock to apply updates, so flush must not run while the
+	// caller holds a.m (write or read lock).
+	if releaseLock {
+		a.m.Unlock()
+	}
 	a.flushCredentialUpdates()
+	if releaseLock {
+		a.m.Lock()
+	}
 
 	if a.authProvider != nil {
 		err := a.authProvider.ClearAuthentication(ctx)
@@ -930,26 +938,21 @@ func (a *AuthenticationServiceImpl) logout(ctx context.Context, releaseLock bool
 // IsAuthenticated returns true if the token is verified
 // If the token is set, but not valid IsAuthenticated returns false
 func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
-	a.m.RLock()
-	defer a.m.RUnlock()
-
-	return a.isAuthenticated()
-}
-
-func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 	logger := a.engine.GetLogger().With().Str("method", "AuthenticationService.IsAuthenticated").Logger()
 
+	a.m.RLock()
 	conf := a.engine.GetConfiguration()
 	token := config.GetToken(conf)
-
 	_, isNotExpired := a.authCache.Get(token)
+	a.m.RUnlock()
+
 	if isNotExpired {
 		logger.Debug().Msg("IsAuthenticated (found in cache)")
 		return true
 	}
 
 	if token == "" {
-		logger.Info().Str("method", "IsAuthenticated").Msg("no credentials found")
+		logger.Info().Msg("no credentials found")
 		return false
 	}
 
@@ -1146,11 +1149,11 @@ func isPermanentOAuthRefreshError(errMsg string) bool {
 func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLegacyToken bool, invalidToken oauth2.Token) {
 	logger.Info().Msg("could not authenticate user with current credentials, API returned empty user object")
 	logger.Info().Msg("logging out, empty user response")
-	// This is reached from IsAuthenticated() -> isAuthenticated() -> doAuthCheck() with only
-	// a.m.RLock() held (not the write lock): releaseLock=false, since a read lock cannot be
-	// released via a.m.Unlock() (sync.RWMutex has no reentrant upgrade and no way to
-	// introspect which lock mode is currently held).
-	a.logout(context.Background(), false)
+	// IsAuthenticated releases a.m before doAuthCheck; take the write lock here so logout can
+	// flushCredentialUpdates without deadlocking the credentialUpdateWorker (which needs a.m.Lock).
+	a.m.Lock()
+	defer a.m.Unlock()
+	a.logout(context.Background(), true)
 
 	// determine the right error message
 	if !isLegacyToken {
