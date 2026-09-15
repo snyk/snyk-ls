@@ -26,7 +26,7 @@ VERSION := $(shell git show -s --format=%cd --date=format:%Y%m%d.%H%M%S)
 COMMIT := $(shell git show -s --format=%h)
 LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/application/config.Development=true' -X 'github.com/snyk/snyk-ls/application/config.Version=v$(VERSION)-SNAPSHOT-$(COMMIT)'"
 
-TOOLS_BIN := $(shell pwd)/.bin
+TOOLS_BIN := $(shell pwd)/.bin/$(DEV_GOOS)-$(DEV_GOARCH)
 
 OVERRIDE_GOCI_LINT_V := v2.12.2
 GOLICENSES_V := v1.6.0
@@ -38,13 +38,12 @@ TIMEOUT := "-timeout=90m"
 ## tools: Install required tooling.
 .PHONY: tools
 tools: $(TOOLS_BIN)/go-licenses $(TOOLS_BIN)/golangci-lint $(TOOLS_BIN)/pact/bin/pact
-	@command -v pre-commit >/dev/null 2>&1 && { pre-commit install && pre-commit install --hook-type pre-push; } || \
+	@command -v pre-commit >/dev/null 2>&1 && pre-commit install || \
 		echo "⚠️  pre-commit not found — run 'make hooks' after installing pre-commit to enable git hooks"
 
 .PHONY: hooks
 hooks:
 	@pre-commit install
-	@pre-commit install --hook-type pre-push
 
 
 $(TOOLS_BIN)/go-licenses:
@@ -87,6 +86,7 @@ format: lint-fix
 test: test-js
 	@echo "==> Running tests..."
 	@mkdir -p $(BUILD_DIR)
+	@export PATH=$(TOOLS_BIN)/pact/bin:$$PATH && \
 	go test $(TIMEOUT) -failfast ./...
 	@stages="test"; \
 	 [ -n "$(INTEG_TESTS)" ] && stages="$$stages test-integ" || true; \

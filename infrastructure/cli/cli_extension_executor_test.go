@@ -297,25 +297,69 @@ func Test_ExtensionExecutor_SubstitutesOrgInCommandArgs(t *testing.T) {
 
 func Test_ExtensionExecutor_FallsBackToGlobalOrgOnResolutionFailure(t *testing.T) {
 	engine := testutil.UnitTest(t)
-
 	folderPath := types.FilePath(t.TempDir())
 
-	// Set global org as a UUID
 	globalOrgUUID := "00000000-0000-0000-0000-000000000001"
 	config.SetOrganization(engine.GetConfiguration(), globalOrgUUID)
 
-	// Create and store folder config with a slug that will need resolution
-	// Using a slug format that would require API resolution
-	folderOrgSlug := "my-test-org-slug"
-	engineConf := engine.GetConfiguration()
-	types.SetPreferredOrgAndOrgSetByUser(engineConf, folderPath, folderOrgSlug, true)
+	folderOrgSlug := "unresolvable-folder-slug"
+	types.SetPreferredOrgAndOrgSetByUser(engine.GetConfiguration(), folderPath, folderOrgSlug, true)
 
-	// Test - the resolution will fail because we don't have a real API connection
-	executor := NewExtensionExecutor(engine, testutil.DefaultConfigResolver(engine))
-	capturedOrg, _ := testutil.ExecuteAndCaptureConfig(t, engine, executor, []string{"snyk", "test"}, folderPath)
+	baseConfig := engine.GetConfiguration()
+	wrappedConfig := &configWrapper{
+		Configuration: baseConfig,
+		folderOrgSlug: folderOrgSlug,
+	}
 
-	// Verify we fell back to global org when resolution failed
+	mockEngine := &engineWrapper{
+		Engine: engine,
+		config: wrappedConfig,
+	}
+
+	executor := NewExtensionExecutor(mockEngine, testutil.DefaultConfigResolver(engine))
+	capturedOrg, _ := testutil.ExecuteAndCaptureConfig(t, mockEngine, executor, []string{"snyk", "test"}, folderPath)
+
 	assert.Equal(t, globalOrgUUID, capturedOrg, "Should fall back to global org when resolution fails")
+}
+
+type configWrapper struct {
+	configuration.Configuration
+	folderOrgSlug string
+	isCloned      bool
+	orgSet        bool
+}
+
+func (cw *configWrapper) GetString(key string) string {
+	if cw.isCloned && key == configuration.ORGANIZATION && !cw.orgSet {
+		return cw.folderOrgSlug
+	}
+	return cw.Configuration.GetString(key)
+}
+
+func (cw *configWrapper) Set(key string, value interface{}) {
+	cw.Configuration.Set(key, value)
+	if key == configuration.ORGANIZATION && value != cw.folderOrgSlug {
+		cw.orgSet = true
+	}
+}
+
+func (cw *configWrapper) Clone() configuration.Configuration {
+	cloned := cw.Configuration.Clone()
+	return &configWrapper{
+		Configuration: cloned,
+		folderOrgSlug: cw.folderOrgSlug,
+		isCloned:      true,
+		orgSet:        cw.orgSet,
+	}
+}
+
+type engineWrapper struct {
+	workflow.Engine
+	config configuration.Configuration
+}
+
+func (ew *engineWrapper) GetConfiguration() configuration.Configuration {
+	return ew.config
 }
 
 func Test_ExtensionExecutor_SetsSubprocessEnvironment(t *testing.T) {

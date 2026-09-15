@@ -33,7 +33,7 @@ import (
 )
 
 func gitCommandForTestRepo(dir string, args ...string) *exec.Cmd {
-	cmd := exec.Command("git", args...)
+	cmd := exec.Command("git", testsupport.GitUnsigned(args...)...)
 	cmd.Dir = dir
 	cmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
 	return cmd
@@ -47,6 +47,10 @@ func initializeTestGitRepo(t *testing.T, repoDir string, branches []string) {
 	// Initialize Git repo with first branch as initial branch
 	cmd := gitCommandForTestRepo(repoDir, "init", "--initial-branch="+branches[0])
 	err := cmd.Run()
+	require.NoError(t, err)
+
+	cmd = gitCommandForTestRepo(repoDir, "config", "commit.gpgsign", "false")
+	err = cmd.Run()
 	require.NoError(t, err)
 
 	// Create and commit a file (required for branches to exist)

@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -82,6 +83,21 @@ func (w *trustedWorkspace) GetFolderTrust() (trusted []types.Folder, untrusted [
 	return []types.Folder{w.trustedFolder}, nil
 }
 
+// scanContextCommandInitParams avoids background CLI downloads during initialize.
+// These tests only assert scanCtx cancellation on shutdown; a real download leaves
+// snyk-win.exe locked on Windows and breaks t.TempDir cleanup.
+func scanContextCommandInitParams(conf configuration.Configuration) types.InitializeParams {
+	return types.InitializeParams{
+		InitializationOptions: types.InitializationOptions{
+			Settings: map[string]*types.ConfigSetting{
+				types.SettingCliPath:           {Value: types.GetGlobalString(conf, types.SettingCliPath), Changed: true},
+				types.SettingAutomaticDownload: {Value: false, Changed: true},
+				types.SettingScanAutomatic:     {Value: "manual", Changed: true},
+			},
+		},
+	}
+}
+
 // ---------------------------------------------------------------------------
 // INTEG-102 — WorkspaceScanCommand uses server-lifetime scanCtx
 //
@@ -100,10 +116,11 @@ func TestWorkspaceScanCommandCtxCanceledOnShutdown(t *testing.T) {
 	loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
 
 	// Initialize the LSP session so the server is ready to handle commands.
-	_, err := loc.Client.Call(t.Context(), "initialize", nil)
+	_, err := loc.Client.Call(t.Context(), "initialize", scanContextCommandInitParams(conf))
 	require.NoError(t, err)
 	_, err = loc.Client.Call(t.Context(), "initialized", nil)
 	require.NoError(t, err)
+	types.WaitForLspInitialized(conf)
 
 	// Replace the workspace with a context-capturing wrapper AFTER initialization
 	// so the init handshake uses the real workspace.
@@ -155,10 +172,11 @@ func TestClearCacheCommandScanFolderCtxCanceledOnShutdown(t *testing.T) {
 
 	loc, _, _ := setupServer(t, engine, tokenService, WithRealDI())
 
-	_, err := loc.Client.Call(t.Context(), "initialize", nil)
+	_, err := loc.Client.Call(t.Context(), "initialize", scanContextCommandInitParams(conf))
 	require.NoError(t, err)
 	_, err = loc.Client.Call(t.Context(), "initialized", nil)
 	require.NoError(t, err)
+	types.WaitForLspInitialized(conf)
 
 	// Build a trusted capturing folder and wrap the workspace so ClearCacheCommand
 	// sees it as trusted (with auto-scan enabled).

@@ -1230,7 +1230,7 @@ func createGitRepoForFix(t *testing.T) (string, error) {
 		dir = canonical
 	}
 	run := func(args ...string) error {
-		cmd := exec.Command("git", args...)
+		cmd := exec.Command("git", testsupport.GitUnsigned(args...)...)
 		cmd.Dir = dir
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("git %v: %w (%s)", args, err, out)
@@ -1241,6 +1241,7 @@ func createGitRepoForFix(t *testing.T) (string, error) {
 		{"init"},
 		{"config", "user.email", "test@example.com"},
 		{"config", "user.name", "Test"},
+		{"config", "commit.gpgsign", "false"},
 		{"config", "core.checkStat", "minimal"},
 	} {
 		if err := run(args...); err != nil {

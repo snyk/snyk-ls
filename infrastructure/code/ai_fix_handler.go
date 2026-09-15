@@ -109,6 +109,17 @@ func (fixHandler *AiFixHandler) GetAiFixDiffResult() []llm.AutofixUnifiedDiffSug
 	return fixHandler.aiFixDiffState.result
 }
 
+// GetAiFixDiffSnapshot returns status, err and result as they were at a single point in
+// time. Reading them via the separate Get* methods above lets a concurrent
+// SetAiFixDiffState interleave between calls, pairing e.g. a SUCCESS status with an
+// empty result from before the state change.
+func (fixHandler *AiFixHandler) GetAiFixDiffSnapshot() (status AiStatus, result []llm.AutofixUnifiedDiffSuggestion, err error) {
+	fixHandler.mu.RLock()
+	defer fixHandler.mu.RUnlock()
+	state := fixHandler.aiFixDiffState
+	return state.status, state.result, state.err
+}
+
 func (fixHandler *AiFixHandler) resetAiFixCacheIfDifferent(issue types.Issue) {
 	issueKey := issue.GetAdditionalData().GetKey()
 
