@@ -1330,32 +1330,17 @@ func (s *bddSteps) fetchIssueDescriptionHtml(ctx context.Context, issueID string
 	return htmlContent, nil
 }
 
-// extractElementTag returns the opening tag of the element with the given id, so a step can
-// check its attributes (e.g. "disabled") without parsing the whole document.
-func extractElementTag(htmlContent, id string) (string, bool) {
-	marker := `id="` + id + `"`
-	markerStart := strings.Index(htmlContent, marker)
-	if markerStart == -1 {
-		return "", false
-	}
-	tagStart := strings.LastIndex(htmlContent[:markerStart], "<")
-	tagEnd := strings.Index(htmlContent[markerStart:], ">")
-	if tagStart == -1 || tagEnd == -1 {
-		return "", false
-	}
-	return htmlContent[tagStart : markerStart+tagEnd+1], true
-}
+const createIgnoreDisabledButtonMarkup = `id="ignore-create" class="ignore-button secondary" disabled`
 
 func (s *bddSteps) theDetailsOfferedAnEnabledButton() error {
 	if s.issueDetailsErr != nil {
 		return fmt.Errorf("generateIssueDescription call failed: %w", s.issueDetailsErr)
 	}
-	tag, found := extractElementTag(s.issueDetailsHtml, "ignore-create")
-	if !found {
+	if !strings.Contains(s.issueDetailsHtml, `id="ignore-create"`) {
 		return fmt.Errorf("expected an ignore-create button in the issue details, found none")
 	}
-	if strings.Contains(tag, "disabled") {
-		return fmt.Errorf("expected the Create ignore button to be enabled, got %q", tag)
+	if strings.Contains(s.issueDetailsHtml, createIgnoreDisabledButtonMarkup) {
+		return fmt.Errorf("expected the Create ignore button to be enabled")
 	}
 	return nil
 }
@@ -1389,12 +1374,11 @@ func (s *bddSteps) createIgnoreIsDisabledWithExplanation() error {
 	if s.issueDetailsErr != nil {
 		return fmt.Errorf("generateIssueDescription call failed: %w", s.issueDetailsErr)
 	}
-	tag, found := extractElementTag(s.issueDetailsHtml, "ignore-create")
-	if !found {
+	if !strings.Contains(s.issueDetailsHtml, `id="ignore-create"`) {
 		return fmt.Errorf("expected an ignore-create button in the issue details, found none")
 	}
-	if !strings.Contains(tag, "disabled") {
-		return fmt.Errorf("expected the Create ignore button to be disabled, got %q", tag)
+	if !strings.Contains(s.issueDetailsHtml, createIgnoreDisabledButtonMarkup) {
+		return fmt.Errorf("expected the Create ignore button to be disabled")
 	}
 	if !strings.Contains(s.issueDetailsHtml, folderconfig.RepoUrlUnavailableRemedy) {
 		return fmt.Errorf("expected the issue details to explain: %q", folderconfig.RepoUrlUnavailableRemedy)
