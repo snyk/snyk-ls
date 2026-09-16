@@ -25,28 +25,30 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/testsupport"
+	"github.com/snyk/snyk-ls/internal/testutil"
+	"github.com/snyk/snyk-ls/internal/types"
 )
 
 func TestCanCreateIgnore(t *testing.T) {
 	t.Run("empty content root", func(t *testing.T) {
-		assert.False(t, CanCreateIgnore(""))
+		assert.False(t, CanCreateIgnore("", nil))
 	})
 
 	t.Run("not a git repo", func(t *testing.T) {
 		dir := t.TempDir()
-		assert.False(t, CanCreateIgnore(dir))
+		assert.False(t, CanCreateIgnore(dir, nil))
 	})
 
 	t.Run("git repo without origin remote", func(t *testing.T) {
 		dir := t.TempDir()
 		testsupport.InitTestGitRepo(t, dir)
-		assert.False(t, CanCreateIgnore(dir))
+		assert.False(t, CanCreateIgnore(dir, nil))
 	})
 
 	t.Run("git repo with origin remote", func(t *testing.T) {
 		dir := t.TempDir()
 		testsupport.InitTestGitRepoWithOrigin(t, dir, "")
-		assert.True(t, CanCreateIgnore(dir))
+		assert.True(t, CanCreateIgnore(dir, nil))
 	})
 
 	t.Run("subfolder of git repo with origin", func(t *testing.T) {
@@ -54,6 +56,28 @@ func TestCanCreateIgnore(t *testing.T) {
 		testsupport.InitTestGitRepoWithOrigin(t, dir, "")
 		subdir := filepath.Join(dir, "nested", "package")
 		require.NoError(t, os.MkdirAll(subdir, 0755))
-		assert.True(t, CanCreateIgnore(subdir))
+		assert.True(t, CanCreateIgnore(subdir, nil))
+	})
+
+	t.Run("non-git folder with remote-repo-url override configured", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		dir := t.TempDir()
+		types.SetFolderUserSetting(engine.GetConfiguration(), types.FilePath(dir), types.SettingAdditionalParameters,
+			[]string{"--remote-repo-url=https://github.com/example/repo.git"})
+		assert.True(t, CanCreateIgnore(dir, testutil.DefaultConfigResolver(engine)))
+	})
+
+	t.Run("non-git folder without override still returns false", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		dir := t.TempDir()
+		assert.False(t, CanCreateIgnore(dir, testutil.DefaultConfigResolver(engine)))
+	})
+
+	t.Run("non-git folder with global remote-repo-url override configured", func(t *testing.T) {
+		engine := testutil.UnitTest(t)
+		dir := t.TempDir()
+		types.SetGlobalDeferredFolderScope(engine.GetConfiguration(), types.SettingCliAdditionalOssParameters,
+			[]string{"--remote-repo-url=https://github.com/example/repo.git"})
+		assert.True(t, CanCreateIgnore(dir, testutil.DefaultConfigResolver(engine)))
 	})
 }
