@@ -17,9 +17,11 @@
 package cli
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -292,6 +294,109 @@ func TestInitializer_whenBinaryUpdatesAllowed_Updates(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		return installer.Updates() == 1 && installer.Installs() == 0
 	}, time.Second, time.Millisecond)
+}
+
+// blockingInstaller is a test double for install.Installer whose first Install call
+// blocks until release is closed, so tests can hold an Initializer's Init() in-flight
+// to observe whether a concurrent, unrelated Initializer is serialized behind it. Once
+// released, it installs a real (fake) binary at cliPath so a caller's install-retry
+// loop terminates instead of calling Install again.
+type blockingInstaller struct {
+	cliPath   string
+	startedMu sync.Once
+	started   chan struct{}
+	release   chan struct{}
+}
+
+func newBlockingInstaller(cliPath string) *blockingInstaller {
+	return &blockingInstaller{
+		cliPath: cliPath,
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+}
+
+func (b *blockingInstaller) Find() (string, error) { return "", nil }
+
+func (b *blockingInstaller) Install(ctx context.Context) (string, error) {
+	first := false
+	b.startedMu.Do(func() {
+		first = true
+		close(b.started)
+	})
+	if first {
+		select {
+		case <-b.release:
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
+
+	if err := os.WriteFile(b.cliPath, []byte("fake"), 0o755); err != nil { //nolint:gosec // test fixture binary
+		return "", err
+	}
+	return b.cliPath, nil
+}
+
+func (b *blockingInstaller) Update(_ context.Context) (bool, error) { return false, nil }
+
+// Test_Initializer_Init_DoesNotSerializeAcrossUnrelatedInitializers pins down that two
+// Initializer instances with independent Installer/config/engine (as every test, and
+// every real folder-independent server, constructs) must not block on each other's
+// Init(). Before the fix, both instances shared the package-level cli.Mutex, so a slow
+// (e.g. real, retrying) Install() on one instance stalled Init() on every other
+// unrelated instance in the same process for as long as the first one ran.
+func Test_Initializer_Init_DoesNotSerializeAcrossUnrelatedInitializers(t *testing.T) {
+	engine1 := testutil.UnitTest(t)
+	conf1 := engine1.GetConfiguration()
+	cliPath1 := filepath.Join(t.TempDir(), "dummy1.cli")
+	conf1.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), true)
+	conf1.Set(configresolver.UserGlobalKey(types.SettingCliPath), cliPath1)
+	slowInstaller := newBlockingInstaller(cliPath1)
+	initializer1 := SetupInitializerWithInstaller(t, conf1, engine1.GetLogger(), engine1, slowInstaller)
+
+	engine2 := testutil.UnitTest(t)
+	conf2 := engine2.GetConfiguration()
+	cliPath2 := filepath.Join(t.TempDir(), "dummy2.cli")
+	conf2.Set(configresolver.UserGlobalKey(types.SettingAutomaticDownload), true)
+	conf2.Set(configresolver.UserGlobalKey(types.SettingCliPath), cliPath2)
+	fastInstaller := install.NewFakeInstaller(engine2, testutil.DefaultConfigResolver(engine2))
+	initializer2 := SetupInitializerWithInstaller(t, conf2, engine2.GetLogger(), engine2, fastInstaller)
+
+	initializer1Done := make(chan struct{})
+	go func() {
+		defer close(initializer1Done)
+		_ = initializer1.Init(t.Context())
+	}()
+	t.Cleanup(func() {
+		select {
+		case <-slowInstaller.release:
+		default:
+			close(slowInstaller.release)
+		}
+		<-initializer1Done
+	})
+
+	select {
+	case <-slowInstaller.started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("initializer1's blocking Install() was never entered")
+	}
+
+	initializer2Done := make(chan struct{})
+	go func() {
+		defer close(initializer2Done)
+		_ = initializer2.Init(t.Context())
+	}()
+
+	select {
+	case <-initializer2Done:
+		// initializer2 completed without waiting for initializer1's lock, as expected.
+	case <-time.After(2 * time.Second):
+		t.Fatal("initializer2.Init() blocked on an unrelated Initializer's in-flight Install()")
+	}
+
+	assert.Equal(t, 1, fastInstaller.Installs())
 }
 
 func createDummyCliBinaryWithCreatedDate(t *testing.T, conf configuration.Configuration, binaryCreationDate time.Time) {
