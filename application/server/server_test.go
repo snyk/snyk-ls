@@ -669,8 +669,7 @@ func Test_TextDocumentCodeLenses_shouldReturnCodeLenses(t *testing.T) {
 	if err := rsp.UnmarshalResult(&lenses); err != nil {
 		t.Fatal(err)
 	}
-	assert.NotNil(t, lenses)
-	assert.Len(t, lenses, 1)
+	require.Len(t, lenses, 1)
 	assert.Equal(t, lenses[0].Command.Title, code.FixIssuePrefix+code.DontUsePrintStackTrace)
 }
 
