@@ -146,14 +146,41 @@ func gafRunner(ctx context.Context, eng workflow.Engine, contentRoot string, _ s
 	return err
 }
 
-// remyProviderConfigKey and remyModelConfigKey match remy-cli-extension's
-// FlagProvider/FlagModel (internal/commands/remyfix/flags.go) — the fix
-// workflow reads the developer's chosen LLM provider/model under these exact
-// keys.
+// remyProviderConfigKey, remyModelConfigKey and remySeverityThresholdConfigKey
+// match remy-cli-extension's FlagProvider/FlagModel/FlagSeverityThreshold
+// (internal/commands/remyfix/flags.go) — the fix workflow reads the developer's
+// chosen LLM provider/model and the severity floor under these exact keys.
 const (
-	remyProviderConfigKey = "provider"
-	remyModelConfigKey    = "model"
+	remyProviderConfigKey          = "provider"
+	remyModelConfigKey             = "model"
+	remySeverityThresholdConfigKey = "severity-threshold"
 )
+
+// remySeverityThreshold maps the client's severity filter to remy's
+// --severity-threshold value, or "" when the filter restricts nothing.
+//
+// remy's threshold is inclusive-and-above, so it can only express a contiguous
+// filter anchored at the top. The severity controls are four independent
+// toggles, so a gap is possible: critical and medium enabled with high disabled
+// resolves to "medium" and fixes high findings the client is hiding. Widening
+// is the safe direction for a gap; narrowing would silently skip a severity the
+// client does show.
+//
+// ponytail: contiguous-only. Upgrade to remy's --severity-filter, which takes an
+// exact set, once the CLI pins a version that has it (>= v1.42.0).
+func remySeverityThreshold(sf types.SeverityFilter) string {
+	switch {
+	case sf.Low:
+		return "" // nothing excluded
+	case sf.Medium:
+		return "medium"
+	case sf.High:
+		return "high"
+	case sf.Critical:
+		return "critical"
+	}
+	return ""
+}
 
 // buildRemyFixConfig clones base and sets the configuration keys that select and
 // drive the fix workflow for contentRoot. It is a pure helper (no engine, no I/O)
@@ -175,6 +202,11 @@ func buildRemyFixConfig(base configuration.Configuration, contentRoot string) co
 	}
 	if model := types.GetGlobalString(base, types.SettingLlmModel); model != "" {
 		conf.Set(remyModelConfigKey, model)
+	}
+	// Remy runs its own scan and would otherwise fix findings the client has
+	// filtered out of view.
+	if threshold := remySeverityThreshold(types.GetFilterSeverityFromConfig(base)); threshold != "" {
+		conf.Set(remySeverityThresholdConfigKey, threshold)
 	}
 	return conf
 }
