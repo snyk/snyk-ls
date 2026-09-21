@@ -154,12 +154,13 @@ const (
 	remySeverityThresholdConfigKey = "severity-threshold"
 )
 
-// remySeverityThreshold maps the severity filter to remy's --severity-threshold,
-// or "" when nothing is filtered out. The threshold is inclusive-and-above, so a
-// gapped filter widens; it never skips a severity the client shows.
+// remySeverityThreshold picks remy's --severity-threshold, or "" when nothing is
+// filtered out. Remy only understands "this level and up", so a filter with a
+// hole (critical and medium on, high off) rounds down and fixes slightly more
+// than the client shows. Better than rounding up and skipping something shown.
 //
-// ponytail: contiguous-only. Upgrade to --severity-filter (exact set) once the
-// CLI pins remy-cli-extension v1.42.0 or later.
+// ponytail: --severity-filter takes the exact set and would drop the rounding.
+// It needs remy-cli-extension v1.45.0 or newer in the host CLI.
 func remySeverityThreshold(sf types.SeverityFilter) string {
 	switch {
 	case sf.Low:
