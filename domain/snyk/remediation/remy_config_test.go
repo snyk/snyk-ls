@@ -155,9 +155,9 @@ func TestWithLLMProviderEnvLock_RunsFnUnderExclusiveLock(t *testing.T) {
 	assert.True(t, called)
 }
 
-// TestBuildRemyFixConfig_ForwardsSeverityFilterAsThreshold covers the Ambient
-// Canary default: low and medium off must resolve to "high".
-func TestBuildRemyFixConfig_ForwardsSeverityFilterAsThreshold(t *testing.T) {
+// TestBuildRemyFixConfig_ForwardsSeverityFilter covers the Ambient Canary
+// default: low and medium off must reach remy as the exact set it still fixes.
+func TestBuildRemyFixConfig_ForwardsSeverityFilter(t *testing.T) {
 	logger := zerolog.Nop()
 	base := configuration.NewWithOpts()
 	sf := types.NewSeverityFilter(true, true, false, false)
@@ -165,12 +165,12 @@ func TestBuildRemyFixConfig_ForwardsSeverityFilterAsThreshold(t *testing.T) {
 
 	conf := buildRemyFixConfig(base, "/work/repo-root")
 
-	assert.Equal(t, "high", conf.GetString(remySeverityThresholdConfigKey))
+	assert.Equal(t, "critical,high", conf.GetString(remySeverityFilterConfigKey))
 }
 
-// TestBuildRemyFixConfig_SeverityThresholdOmittedWhenNothingFiltered holds the
-// no-forced-default line: nothing filtered out means no key, not a bare "low".
-func TestBuildRemyFixConfig_SeverityThresholdOmittedWhenNothingFiltered(t *testing.T) {
+// TestBuildRemyFixConfig_SeverityFilterOmittedWhenNothingFiltered holds the
+// no-forced-default line: nothing filtered out means no key at all.
+func TestBuildRemyFixConfig_SeverityFilterOmittedWhenNothingFiltered(t *testing.T) {
 	logger := zerolog.Nop()
 	base := configuration.NewWithOpts()
 	sf := types.DefaultSeverityFilter()
@@ -178,12 +178,12 @@ func TestBuildRemyFixConfig_SeverityThresholdOmittedWhenNothingFiltered(t *testi
 
 	conf := buildRemyFixConfig(base, "/work/repo-root")
 
-	assert.False(t, conf.IsSet(remySeverityThresholdConfigKey),
-		"severity-threshold must stay unset when no severity is filtered out")
+	assert.False(t, conf.IsSet(remySeverityFilterConfigKey),
+		"severity-filter must stay unset when no severity is filtered out")
 }
 
-// TestBuildRemyFixConfig_SeverityThresholdCriticalOnly covers the narrowest filter.
-func TestBuildRemyFixConfig_SeverityThresholdCriticalOnly(t *testing.T) {
+// TestBuildRemyFixConfig_SeverityFilterCriticalOnly covers the narrowest filter.
+func TestBuildRemyFixConfig_SeverityFilterCriticalOnly(t *testing.T) {
 	logger := zerolog.Nop()
 	base := configuration.NewWithOpts()
 	sf := types.NewSeverityFilter(true, false, false, false)
@@ -191,5 +191,18 @@ func TestBuildRemyFixConfig_SeverityThresholdCriticalOnly(t *testing.T) {
 
 	conf := buildRemyFixConfig(base, "/work/repo-root")
 
-	assert.Equal(t, "critical", conf.GetString(remySeverityThresholdConfigKey))
+	assert.Equal(t, "critical", conf.GetString(remySeverityFilterConfigKey))
+}
+
+// TestBuildRemyFixConfig_SeverityFilterKeepsGaps is what the exact set buys over
+// a floor: high disabled between two enabled levels must survive, not round down.
+func TestBuildRemyFixConfig_SeverityFilterKeepsGaps(t *testing.T) {
+	logger := zerolog.Nop()
+	base := configuration.NewWithOpts()
+	sf := types.NewSeverityFilter(true, false, true, false)
+	types.SetSeverityFilterOnConfig(base, &sf, &logger)
+
+	conf := buildRemyFixConfig(base, "/work/repo-root")
+
+	assert.Equal(t, "critical,medium", conf.GetString(remySeverityFilterConfigKey))
 }

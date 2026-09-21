@@ -146,33 +146,36 @@ func gafRunner(ctx context.Context, eng workflow.Engine, contentRoot string, _ s
 	return err
 }
 
-// These match remy-cli-extension's FlagProvider/FlagModel/FlagSeverityThreshold
+// These match remy-cli-extension's FlagProvider/FlagModel/FlagSeverityFilter
 // (internal/commands/remyfix/flags.go); the fix workflow reads these exact keys.
 const (
-	remyProviderConfigKey          = "provider"
-	remyModelConfigKey             = "model"
-	remySeverityThresholdConfigKey = "severity-threshold"
+	remyProviderConfigKey       = "provider"
+	remyModelConfigKey          = "model"
+	remySeverityFilterConfigKey = "severity-filter"
 )
 
-// remySeverityThreshold picks remy's --severity-threshold, or "" when nothing is
-// filtered out. Remy only understands "this level and up", so a filter with a
-// hole (critical and medium on, high off) rounds down and fixes slightly more
-// than the client shows. Better than rounding up and skipping something shown.
-//
-// ponytail: --severity-filter takes the exact set and would drop the rounding.
-// It needs remy-cli-extension v1.45.0 or newer in the host CLI.
-func remySeverityThreshold(sf types.SeverityFilter) string {
-	switch {
-	case sf.Low:
-		return "" // nothing excluded
-	case sf.Medium:
-		return "medium"
-	case sf.High:
-		return "high"
-	case sf.Critical:
-		return "critical"
+// remySeverityFilter renders the severity filter as remy's --severity-filter
+// value, or "" when every severity is enabled and there is nothing to scope.
+// The flag is an exact set, so any combination survives the trip, gaps included.
+func remySeverityFilter(sf types.SeverityFilter) string {
+	levels := make([]string, 0, 4)
+	for _, l := range []struct {
+		enabled bool
+		name    string
+	}{
+		{sf.Critical, "critical"},
+		{sf.High, "high"},
+		{sf.Medium, "medium"},
+		{sf.Low, "low"},
+	} {
+		if l.enabled {
+			levels = append(levels, l.name)
+		}
 	}
-	return ""
+	if len(levels) == 4 {
+		return ""
+	}
+	return strings.Join(levels, ",")
 }
 
 // buildRemyFixConfig clones base and sets the configuration keys that select and
@@ -197,8 +200,8 @@ func buildRemyFixConfig(base configuration.Configuration, contentRoot string) co
 		conf.Set(remyModelConfigKey, model)
 	}
 	// Remy scans independently and would otherwise fix findings the client hides.
-	if threshold := remySeverityThreshold(types.GetFilterSeverityFromConfig(base)); threshold != "" {
-		conf.Set(remySeverityThresholdConfigKey, threshold)
+	if filter := remySeverityFilter(types.GetFilterSeverityFromConfig(base)); filter != "" {
+		conf.Set(remySeverityFilterConfigKey, filter)
 	}
 	return conf
 }
