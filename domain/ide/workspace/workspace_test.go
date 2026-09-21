@@ -18,6 +18,7 @@ package workspace
 
 import (
 	"fmt"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -176,6 +177,28 @@ func Test_AddAndRemoveFoldersAndReturnFolderList(t *testing.T) {
 	assert.Nil(t, w.GetFolderContaining(toBeRemoved))
 
 	assert.Len(t, folderList, 2)
+}
+
+func Test_GetFolderContaining_ReturnsDeepestNestedFolder(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	sc := &scanner.TestScanner{}
+	scanNotifier := scanner.NewMockScanNotifier()
+	scanStateAggregator := scanstates.NewNoopStateAggregator()
+	resolver := defaultResolver(engine)
+
+	parent := types.FilePath(filepath.Join(t.TempDir(), "repo"))
+	nested := types.FilePath(filepath.Join(string(parent), "src"))
+
+	for i := 0; i < 50; i++ {
+		w := New(conf, logger, performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewNotifier(), persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
+		w.AddFolder(NewFolder(conf, logger, parent, "repo", sc, nil, scanNotifier, notification.NewNotifier(), persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), resolver, engine))
+		w.AddFolder(NewFolder(conf, logger, nested, "src", sc, nil, scanNotifier, notification.NewNotifier(), persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), resolver, engine))
+
+		require.Equal(t, nested, w.GetFolderContaining(types.FilePath(filepath.Join(string(nested), "a.go"))).Path())
+		require.Equal(t, parent, w.GetFolderContaining(types.FilePath(filepath.Join(string(parent), "lib", "b.go"))).Path())
+	}
 }
 
 // TestGetFolderTrust_ConcurrentAddFolder_NoDataRace guards against the data race
