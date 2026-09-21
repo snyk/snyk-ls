@@ -155,11 +155,8 @@ func TestWithLLMProviderEnvLock_RunsFnUnderExclusiveLock(t *testing.T) {
 	assert.True(t, called)
 }
 
-// TestBuildRemyFixConfig_ForwardsSeverityFilterAsThreshold proves the severity
-// filter the client already sends reaches the fix workflow as remy's
-// "severity-threshold" key, so Remy stops fixing findings the client filtered
-// out of view. Ambient Canary's default (--severity-threshold high) disables
-// low and medium, which must resolve to "high".
+// TestBuildRemyFixConfig_ForwardsSeverityFilterAsThreshold covers the Ambient
+// Canary default: low and medium off must resolve to "high".
 func TestBuildRemyFixConfig_ForwardsSeverityFilterAsThreshold(t *testing.T) {
 	logger := zerolog.Nop()
 	base := configuration.NewWithOpts()
@@ -171,9 +168,8 @@ func TestBuildRemyFixConfig_ForwardsSeverityFilterAsThreshold(t *testing.T) {
 	assert.Equal(t, "high", conf.GetString(remySeverityThresholdConfigKey))
 }
 
-// TestBuildRemyFixConfig_SeverityThresholdOmittedWhenNothingFiltered keeps the
-// no-forced-default discipline: with every severity enabled there is nothing to
-// restrict, so the key must stay unset rather than carry a redundant "low".
+// TestBuildRemyFixConfig_SeverityThresholdOmittedWhenNothingFiltered holds the
+// no-forced-default line: nothing filtered out means no key, not a bare "low".
 func TestBuildRemyFixConfig_SeverityThresholdOmittedWhenNothingFiltered(t *testing.T) {
 	logger := zerolog.Nop()
 	base := configuration.NewWithOpts()
@@ -186,8 +182,7 @@ func TestBuildRemyFixConfig_SeverityThresholdOmittedWhenNothingFiltered(t *testi
 		"severity-threshold must stay unset when no severity is filtered out")
 }
 
-// TestBuildRemyFixConfig_SeverityThresholdCriticalOnly covers the narrowest
-// filter: only critical enabled resolves to the critical threshold.
+// TestBuildRemyFixConfig_SeverityThresholdCriticalOnly covers the narrowest filter.
 func TestBuildRemyFixConfig_SeverityThresholdCriticalOnly(t *testing.T) {
 	logger := zerolog.Nop()
 	base := configuration.NewWithOpts()
