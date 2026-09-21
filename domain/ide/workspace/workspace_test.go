@@ -191,13 +191,40 @@ func Test_GetFolderContaining_ReturnsDeepestNestedFolder(t *testing.T) {
 	parent := types.FilePath(filepath.Join(t.TempDir(), "repo"))
 	nested := types.FilePath(filepath.Join(string(parent), "src"))
 
-	for i := 0; i < 50; i++ {
+	for i := 0; i < testutil.NestedFolderLookupRepetitions; i++ {
 		w := New(conf, logger, performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewNotifier(), persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
 		w.AddFolder(NewFolder(conf, logger, parent, "repo", sc, nil, scanNotifier, notification.NewNotifier(), persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), resolver, engine))
 		w.AddFolder(NewFolder(conf, logger, nested, "src", sc, nil, scanNotifier, notification.NewNotifier(), persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), resolver, engine))
 
 		require.Equal(t, nested, w.GetFolderContaining(types.FilePath(filepath.Join(string(nested), "a.go"))).Path())
 		require.Equal(t, parent, w.GetFolderContaining(types.FilePath(filepath.Join(string(parent), "lib", "b.go"))).Path())
+	}
+}
+
+func Test_RemoveFolder_NestedFolder_LeavesParentIntact(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	logger := engine.GetLogger()
+	sc := &scanner.TestScanner{}
+	scanNotifier := scanner.NewMockScanNotifier()
+	scanStateAggregator := scanstates.NewNoopStateAggregator()
+	resolver := defaultResolver(engine)
+
+	parentPath := types.FilePath(filepath.Join(t.TempDir(), "repo"))
+	nestedPath := types.FilePath(filepath.Join(string(parentPath), "src"))
+
+	for i := 0; i < testutil.NestedFolderLookupRepetitions; i++ {
+		w := New(conf, logger, performance.NewInstrumentor(), sc, nil, scanNotifier, notification.NewNotifier(), persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
+		parent := NewFolder(conf, logger, parentPath, "repo", sc, nil, scanNotifier, notification.NewNotifier(), persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
+		nested := NewFolder(conf, logger, nestedPath, "src", sc, nil, scanNotifier, notification.NewNotifier(), persistence.NewNopScanPersister(), scanStateAggregator, featureflag.NewFakeService(), resolver, engine)
+		w.AddFolder(parent)
+		w.AddFolder(nested)
+		parent.SetStatus(Scanned)
+
+		w.RemoveFolder(nestedPath)
+
+		require.True(t, parent.IsScanned(), "removing the nested folder must not clear the parent")
+		require.Equal(t, parentPath, w.GetFolderContaining(types.FilePath(filepath.Join(string(nestedPath), "a.go"))).Path())
 	}
 }
 
