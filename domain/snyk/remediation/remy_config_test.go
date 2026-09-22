@@ -17,10 +17,13 @@
 package remediation
 
 import (
+	"context"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	gafMocks "github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/internal/types"
@@ -205,4 +208,38 @@ func TestBuildRemyFixConfig_SeverityFilterKeepsGaps(t *testing.T) {
 	conf := buildRemyFixConfig(base, "/work/repo-root")
 
 	assert.Equal(t, "critical,medium", conf.GetString(remySeverityFilterConfigKey))
+}
+
+// TestGafRunner_SkipsInvocationWhenEverySeverityDisabled guards the aliasing
+// hazard: remy reads an empty severity-filter as "no restriction", so a client
+// that hides every severity must produce no run at all rather than a run that
+// fixes everything.
+func TestGafRunner_SkipsInvocationWhenEverySeverityDisabled(t *testing.T) {
+	logger := zerolog.Nop()
+	base := configuration.NewWithOpts()
+	sf := types.NewSeverityFilter(false, false, false, false)
+	types.SetSeverityFilterOnConfig(base, &sf, &logger)
+
+	ctrl := gomock.NewController(t)
+	mockEngine := gafMocks.NewMockEngine(ctrl)
+	mockEngine.EXPECT().GetConfiguration().Return(base).AnyTimes()
+	mockEngine.EXPECT().Invoke(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	assert.NoError(t, gafRunner(context.Background(), mockEngine, "/work/repo-root", ""))
+}
+
+// TestGafRunner_InvokesWhenSomeSeverityEnabled is the counterpart: a single
+// enabled severity still has to reach remy.
+func TestGafRunner_InvokesWhenSomeSeverityEnabled(t *testing.T) {
+	logger := zerolog.Nop()
+	base := configuration.NewWithOpts()
+	sf := types.NewSeverityFilter(true, false, false, false)
+	types.SetSeverityFilterOnConfig(base, &sf, &logger)
+
+	ctrl := gomock.NewController(t)
+	mockEngine := gafMocks.NewMockEngine(ctrl)
+	mockEngine.EXPECT().GetConfiguration().Return(base).AnyTimes()
+	mockEngine.EXPECT().Invoke(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
+
+	assert.NoError(t, gafRunner(context.Background(), mockEngine, "/work/repo-root", ""))
 }

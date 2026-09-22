@@ -140,8 +140,14 @@ func WithLLMProviderEnvLock(fn func()) {
 func gafRunner(ctx context.Context, eng workflow.Engine, contentRoot string, _ string) error {
 	llmProviderEnvMu.RLock()
 	defer llmProviderEnvMu.RUnlock()
+	base := eng.GetConfiguration()
+	// An empty severity-filter value reads to remy as "no restriction", so an
+	// all-off client filter has to skip the run instead of widening it.
+	if !anySeverityEnabled(types.GetFilterSeverityFromConfig(base)) {
+		return nil
+	}
 	remyWorkflowID := workflow.NewWorkflowIdentifier("fix")
-	conf := buildRemyFixConfig(eng.GetConfiguration(), contentRoot)
+	conf := buildRemyFixConfig(base, contentRoot)
 	_, err := eng.Invoke(remyWorkflowID, workflow.WithContext(ctx), workflow.WithConfig(conf))
 	return err
 }
@@ -153,6 +159,11 @@ const (
 	remyModelConfigKey          = "model"
 	remySeverityFilterConfigKey = "severity-filter"
 )
+
+// anySeverityEnabled reports whether the client shows any severity at all.
+func anySeverityEnabled(sf types.SeverityFilter) bool {
+	return sf.Critical || sf.High || sf.Medium || sf.Low
+}
 
 // remySeverityFilter renders the severity filter as remy's --severity-filter
 // value, or "" when every severity is enabled and there is nothing to scope.
