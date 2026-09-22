@@ -43,6 +43,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -474,7 +475,12 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fo
 	requestId := span.GetTraceId() // use span trace id as code-request-id
 	logger.Info().Str("requestId", requestId).Msg("Starting Code analysis.")
 
-	target, err := scan.NewRepositoryTarget(string(path))
+	var target scan.Target
+	if remoteRepoUrl := folderconfig.RemoteRepoUrlOverride(sc.configResolver, folderConfig); remoteRepoUrl != "" {
+		target, err = scan.NewRepositoryTarget(string(path), scan.WithRepositoryUrl(remoteRepoUrl))
+	} else {
+		target, err = scan.NewRepositoryTarget(string(path))
+	}
 	if err != nil {
 		logger.Warn().Err(err).Msg("could not determine repository URL (target)")
 	}

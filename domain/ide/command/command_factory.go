@@ -137,6 +137,7 @@ func CreateFromCommandData(
 			issueProvider:      issueProvider,
 			featureFlagService: featureFlagService,
 			engine:             engine,
+			configResolver:     configResolver,
 		}, nil
 	case types.SubmitIgnoreRequest:
 		te, _ := treeEmitterFromContext(ctx)

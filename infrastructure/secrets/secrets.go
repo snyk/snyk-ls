@@ -34,6 +34,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -144,6 +145,9 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 	}
 
 	secretsConfig.Set(configuration.INPUT_DIRECTORY, string(scanPath))
+	if remoteRepoUrl := folderconfig.RemoteRepoUrlOverride(sc.configResolver, workspaceFolderConfig); remoteRepoUrl != "" {
+		secretsConfig.Set(configuration.FLAG_REMOTE_REPO_URL, remoteRepoUrl)
+	}
 	result, err := sc.engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("secrets.test"), secretsConfig)
 	if err != nil {
 		issues, err = handleSecretsInvokeError(err, ctxLogger)
