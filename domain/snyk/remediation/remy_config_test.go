@@ -158,8 +158,6 @@ func TestWithLLMProviderEnvLock_RunsFnUnderExclusiveLock(t *testing.T) {
 	assert.True(t, called)
 }
 
-// TestBuildRemyFixConfig_ForwardsSeverityFilter covers the Ambient Canary
-// default: low and medium off must reach remy as the exact set it still fixes.
 func TestBuildRemyFixConfig_ForwardsSeverityFilter(t *testing.T) {
 	logger := zerolog.Nop()
 	base := configuration.NewWithOpts()
@@ -171,8 +169,6 @@ func TestBuildRemyFixConfig_ForwardsSeverityFilter(t *testing.T) {
 	assert.Equal(t, "critical,high", conf.GetString(remySeverityFilterConfigKey))
 }
 
-// TestBuildRemyFixConfig_SeverityFilterOmittedWhenNothingFiltered holds the
-// no-forced-default line: nothing filtered out means no key at all.
 func TestBuildRemyFixConfig_SeverityFilterOmittedWhenNothingFiltered(t *testing.T) {
 	logger := zerolog.Nop()
 	base := configuration.NewWithOpts()
@@ -185,7 +181,6 @@ func TestBuildRemyFixConfig_SeverityFilterOmittedWhenNothingFiltered(t *testing.
 		"severity-filter must stay unset when no severity is filtered out")
 }
 
-// TestBuildRemyFixConfig_SeverityFilterCriticalOnly covers the narrowest filter.
 func TestBuildRemyFixConfig_SeverityFilterCriticalOnly(t *testing.T) {
 	logger := zerolog.Nop()
 	base := configuration.NewWithOpts()
@@ -197,8 +192,8 @@ func TestBuildRemyFixConfig_SeverityFilterCriticalOnly(t *testing.T) {
 	assert.Equal(t, "critical", conf.GetString(remySeverityFilterConfigKey))
 }
 
-// TestBuildRemyFixConfig_SeverityFilterKeepsGaps is what the exact set buys over
-// a floor: high disabled between two enabled levels must survive, not round down.
+// A severity floor would round critical+medium up to critical,high,medium.
+// The exact-set flag has to keep the hole at high.
 func TestBuildRemyFixConfig_SeverityFilterKeepsGaps(t *testing.T) {
 	logger := zerolog.Nop()
 	base := configuration.NewWithOpts()
@@ -210,10 +205,8 @@ func TestBuildRemyFixConfig_SeverityFilterKeepsGaps(t *testing.T) {
 	assert.Equal(t, "critical,medium", conf.GetString(remySeverityFilterConfigKey))
 }
 
-// TestGafRunner_SkipsInvocationWhenEverySeverityDisabled guards the aliasing
-// hazard: remy reads an empty severity-filter as "no restriction", so a client
-// that hides every severity must produce no run at all rather than a run that
-// fixes everything.
+// Without the guard the empty filter string reaches remy as no filter and
+// fixes every severity.
 func TestGafRunner_SkipsInvocationWhenEverySeverityDisabled(t *testing.T) {
 	logger := zerolog.Nop()
 	base := configuration.NewWithOpts()
@@ -228,8 +221,6 @@ func TestGafRunner_SkipsInvocationWhenEverySeverityDisabled(t *testing.T) {
 	assert.NoError(t, gafRunner(context.Background(), mockEngine, "/work/repo-root", ""))
 }
 
-// TestGafRunner_InvokesWhenSomeSeverityEnabled is the counterpart: a single
-// enabled severity still has to reach remy.
 func TestGafRunner_InvokesWhenSomeSeverityEnabled(t *testing.T) {
 	logger := zerolog.Nop()
 	base := configuration.NewWithOpts()

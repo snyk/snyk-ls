@@ -141,8 +141,8 @@ func gafRunner(ctx context.Context, eng workflow.Engine, contentRoot string, _ s
 	llmProviderEnvMu.RLock()
 	defer llmProviderEnvMu.RUnlock()
 	base := eng.GetConfiguration()
-	// An empty severity-filter value reads to remy as "no restriction", so an
-	// all-off client filter has to skip the run instead of widening it.
+	// Remy treats an empty severity-filter as no filter at all, so an all-off
+	// client filter must skip the run rather than fix every severity.
 	if !anySeverityEnabled(types.GetFilterSeverityFromConfig(base)) {
 		return nil
 	}
@@ -152,22 +152,21 @@ func gafRunner(ctx context.Context, eng workflow.Engine, contentRoot string, _ s
 	return err
 }
 
-// These match remy-cli-extension's FlagProvider/FlagModel/FlagSeverityFilter
-// (internal/commands/remyfix/flags.go); the fix workflow reads these exact keys.
+// The fix workflow reads these exact strings: remy-cli-extension's
+// FlagProvider, FlagModel and FlagSeverityFilter.
 const (
 	remyProviderConfigKey       = "provider"
 	remyModelConfigKey          = "model"
 	remySeverityFilterConfigKey = "severity-filter"
 )
 
-// anySeverityEnabled reports whether the client shows any severity at all.
 func anySeverityEnabled(sf types.SeverityFilter) bool {
 	return sf.Critical || sf.High || sf.Medium || sf.Low
 }
 
-// remySeverityFilter renders the severity filter as remy's --severity-filter
-// value, or "" when every severity is enabled and there is nothing to scope.
-// The flag is an exact set, so any combination survives the trip, gaps included.
+// remySeverityFilter renders sf as remy's --severity-filter value, or "" when
+// all four are enabled and there is nothing to scope. The flag matches an exact
+// set rather than a floor, so a gap such as critical+low survives.
 func remySeverityFilter(sf types.SeverityFilter) string {
 	levels := make([]string, 0, 4)
 	for _, l := range []struct {
