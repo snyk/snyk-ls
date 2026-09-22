@@ -17,9 +17,13 @@
 package remediation
 
 import (
+	"context"
 	"testing"
 
+	"github.com/golang/mock/gomock"
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	gafMocks "github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/snyk/snyk-ls/internal/types"
@@ -152,4 +156,87 @@ func TestWithLLMProviderEnvLock_RunsFnUnderExclusiveLock(t *testing.T) {
 	WithLLMProviderEnvLock(func() { called = true })
 
 	assert.True(t, called)
+}
+
+func TestBuildRemyFixConfig_ForwardsSeverityFilter(t *testing.T) {
+	logger := zerolog.Nop()
+	base := configuration.NewWithOpts()
+	sf := types.NewSeverityFilter(true, true, false, false)
+	types.SetSeverityFilterOnConfig(base, &sf, &logger)
+
+	conf := buildRemyFixConfig(base, "/work/repo-root")
+
+	assert.Equal(t, "critical,high", conf.GetString(remySeverityFilterConfigKey))
+}
+
+func TestBuildRemyFixConfig_ForwardsEverySeverityWhenNothingFiltered(t *testing.T) {
+	logger := zerolog.Nop()
+	base := configuration.NewWithOpts()
+	sf := types.DefaultSeverityFilter()
+	types.SetSeverityFilterOnConfig(base, &sf, &logger)
+
+	conf := buildRemyFixConfig(base, "/work/repo-root")
+
+	assert.Equal(t, "critical,high,medium,low", conf.GetString(remySeverityFilterConfigKey))
+}
+
+// "" from remySeverityFilter means no severity is enabled, never "all of them",
+// so the two states cannot collapse into one config.
+func TestRemySeverityFilter_EmptyOnlyWhenNothingEnabled(t *testing.T) {
+	assert.Equal(t, "critical,high,medium,low", remySeverityFilter(types.DefaultSeverityFilter()))
+	assert.Empty(t, remySeverityFilter(types.NewSeverityFilter(false, false, false, false)))
+}
+
+func TestBuildRemyFixConfig_SeverityFilterCriticalOnly(t *testing.T) {
+	logger := zerolog.Nop()
+	base := configuration.NewWithOpts()
+	sf := types.NewSeverityFilter(true, false, false, false)
+	types.SetSeverityFilterOnConfig(base, &sf, &logger)
+
+	conf := buildRemyFixConfig(base, "/work/repo-root")
+
+	assert.Equal(t, "critical", conf.GetString(remySeverityFilterConfigKey))
+}
+
+// A severity floor would round critical+medium up to critical,high,medium.
+// The exact-set flag has to keep the hole at high.
+func TestBuildRemyFixConfig_SeverityFilterKeepsGaps(t *testing.T) {
+	logger := zerolog.Nop()
+	base := configuration.NewWithOpts()
+	sf := types.NewSeverityFilter(true, false, true, false)
+	types.SetSeverityFilterOnConfig(base, &sf, &logger)
+
+	conf := buildRemyFixConfig(base, "/work/repo-root")
+
+	assert.Equal(t, "critical,medium", conf.GetString(remySeverityFilterConfigKey))
+}
+
+// Without the guard the empty filter string reaches remy as no filter and
+// fixes every severity.
+func TestGafRunner_SkipsInvocationWhenEverySeverityDisabled(t *testing.T) {
+	logger := zerolog.Nop()
+	base := configuration.NewWithOpts()
+	sf := types.NewSeverityFilter(false, false, false, false)
+	types.SetSeverityFilterOnConfig(base, &sf, &logger)
+
+	ctrl := gomock.NewController(t)
+	mockEngine := gafMocks.NewMockEngine(ctrl)
+	mockEngine.EXPECT().GetConfiguration().Return(base).AnyTimes()
+	mockEngine.EXPECT().Invoke(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+
+	assert.NoError(t, gafRunner(context.Background(), mockEngine, "/work/repo-root", ""))
+}
+
+func TestGafRunner_InvokesWhenSomeSeverityEnabled(t *testing.T) {
+	logger := zerolog.Nop()
+	base := configuration.NewWithOpts()
+	sf := types.NewSeverityFilter(true, false, false, false)
+	types.SetSeverityFilterOnConfig(base, &sf, &logger)
+
+	ctrl := gomock.NewController(t)
+	mockEngine := gafMocks.NewMockEngine(ctrl)
+	mockEngine.EXPECT().GetConfiguration().Return(base).AnyTimes()
+	mockEngine.EXPECT().Invoke(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
+
+	assert.NoError(t, gafRunner(context.Background(), mockEngine, "/work/repo-root", ""))
 }

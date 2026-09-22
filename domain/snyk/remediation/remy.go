@@ -140,20 +140,51 @@ func WithLLMProviderEnvLock(fn func()) {
 func gafRunner(ctx context.Context, eng workflow.Engine, contentRoot string, _ string) error {
 	llmProviderEnvMu.RLock()
 	defer llmProviderEnvMu.RUnlock()
+	base := eng.GetConfiguration()
+	// Remy treats an empty severity-filter as no filter at all, so an all-off
+	// client filter must skip the run rather than fix every severity.
+	if !anySeverityEnabled(types.GetFilterSeverityFromConfig(base)) {
+		return nil
+	}
 	remyWorkflowID := workflow.NewWorkflowIdentifier("fix")
-	conf := buildRemyFixConfig(eng.GetConfiguration(), contentRoot)
+	conf := buildRemyFixConfig(base, contentRoot)
 	_, err := eng.Invoke(remyWorkflowID, workflow.WithContext(ctx), workflow.WithConfig(conf))
 	return err
 }
 
-// remyProviderConfigKey and remyModelConfigKey match remy-cli-extension's
-// FlagProvider/FlagModel (internal/commands/remyfix/flags.go) — the fix
-// workflow reads the developer's chosen LLM provider/model under these exact
-// keys.
+// The fix workflow reads these exact strings: remy-cli-extension's
+// FlagProvider, FlagModel and FlagSeverityFilter.
 const (
-	remyProviderConfigKey = "provider"
-	remyModelConfigKey    = "model"
+	remyProviderConfigKey       = "provider"
+	remyModelConfigKey          = "model"
+	remySeverityFilterConfigKey = "severity-filter"
 )
+
+func anySeverityEnabled(sf types.SeverityFilter) bool {
+	return sf.Critical || sf.High || sf.Medium || sf.Low
+}
+
+// remySeverityFilter renders sf as remy's --severity-filter value. It returns ""
+// only when no severity is enabled, which gafRunner turns into a skipped run.
+// The flag matches an exact set rather than a floor, so a gap such as
+// critical+low survives.
+func remySeverityFilter(sf types.SeverityFilter) string {
+	levels := make([]string, 0, 4)
+	for _, l := range []struct {
+		enabled bool
+		name    string
+	}{
+		{sf.Critical, "critical"},
+		{sf.High, "high"},
+		{sf.Medium, "medium"},
+		{sf.Low, "low"},
+	} {
+		if l.enabled {
+			levels = append(levels, l.name)
+		}
+	}
+	return strings.Join(levels, ",")
+}
 
 // buildRemyFixConfig clones base and sets the configuration keys that select and
 // drive the fix workflow for contentRoot. It is a pure helper (no engine, no I/O)
@@ -175,6 +206,10 @@ func buildRemyFixConfig(base configuration.Configuration, contentRoot string) co
 	}
 	if model := types.GetGlobalString(base, types.SettingLlmModel); model != "" {
 		conf.Set(remyModelConfigKey, model)
+	}
+	// Remy scans independently and would otherwise fix findings the client hides.
+	if filter := remySeverityFilter(types.GetFilterSeverityFromConfig(base)); filter != "" {
+		conf.Set(remySeverityFilterConfigKey, filter)
 	}
 	return conf
 }
