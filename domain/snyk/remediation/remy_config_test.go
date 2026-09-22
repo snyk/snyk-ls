@@ -169,7 +169,7 @@ func TestBuildRemyFixConfig_ForwardsSeverityFilter(t *testing.T) {
 	assert.Equal(t, "critical,high", conf.GetString(remySeverityFilterConfigKey))
 }
 
-func TestBuildRemyFixConfig_SeverityFilterOmittedWhenNothingFiltered(t *testing.T) {
+func TestBuildRemyFixConfig_ForwardsEverySeverityWhenNothingFiltered(t *testing.T) {
 	logger := zerolog.Nop()
 	base := configuration.NewWithOpts()
 	sf := types.DefaultSeverityFilter()
@@ -177,8 +177,14 @@ func TestBuildRemyFixConfig_SeverityFilterOmittedWhenNothingFiltered(t *testing.
 
 	conf := buildRemyFixConfig(base, "/work/repo-root")
 
-	assert.False(t, conf.IsSet(remySeverityFilterConfigKey),
-		"severity-filter must stay unset when no severity is filtered out")
+	assert.Equal(t, "critical,high,medium,low", conf.GetString(remySeverityFilterConfigKey))
+}
+
+// "" from remySeverityFilter means no severity is enabled, never "all of them",
+// so the two states cannot collapse into one config.
+func TestRemySeverityFilter_EmptyOnlyWhenNothingEnabled(t *testing.T) {
+	assert.Equal(t, "critical,high,medium,low", remySeverityFilter(types.DefaultSeverityFilter()))
+	assert.Empty(t, remySeverityFilter(types.NewSeverityFilter(false, false, false, false)))
 }
 
 func TestBuildRemyFixConfig_SeverityFilterCriticalOnly(t *testing.T) {

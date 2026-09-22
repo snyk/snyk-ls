@@ -164,9 +164,10 @@ func anySeverityEnabled(sf types.SeverityFilter) bool {
 	return sf.Critical || sf.High || sf.Medium || sf.Low
 }
 
-// remySeverityFilter renders sf as remy's --severity-filter value, or "" when
-// all four are enabled and there is nothing to scope. The flag matches an exact
-// set rather than a floor, so a gap such as critical+low survives.
+// remySeverityFilter renders sf as remy's --severity-filter value. It returns ""
+// only when no severity is enabled, which gafRunner turns into a skipped run.
+// The flag matches an exact set rather than a floor, so a gap such as
+// critical+low survives.
 func remySeverityFilter(sf types.SeverityFilter) string {
 	levels := make([]string, 0, 4)
 	for _, l := range []struct {
@@ -181,9 +182,6 @@ func remySeverityFilter(sf types.SeverityFilter) string {
 		if l.enabled {
 			levels = append(levels, l.name)
 		}
-	}
-	if len(levels) == 4 {
-		return ""
 	}
 	return strings.Join(levels, ",")
 }
