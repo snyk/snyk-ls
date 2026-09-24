@@ -215,6 +215,23 @@ func TestBuildRemyFixConfig_SeverityFilterKeepsGaps(t *testing.T) {
 	assert.Equal(t, "critical,medium", conf.GetString(remySeverityFilterConfigKey))
 }
 
+// The CLI binds the output workflow's severity-threshold flag, default "low", to
+// the engine config, and remy rejects it next to severity-filter.
+func TestBuildRemyFixConfig_ClearsInheritedSeverityThreshold(t *testing.T) {
+	logger := zerolog.Nop()
+	base := configuration.NewWithOpts()
+	cliFlags := pflag.NewFlagSet("language-server", pflag.ContinueOnError)
+	cliFlags.String(configuration.FLAG_SEVERITY_THRESHOLD, "low", "")
+	require.NoError(t, base.AddFlagSet(cliFlags))
+	sf := types.DefaultSeverityFilter()
+	types.SetSeverityFilterOnConfig(base, &sf, &logger)
+
+	conf := buildRemyFixConfig(base, "/work/repo-root", nil)
+
+	assert.Equal(t, "critical,high,medium,low", conf.GetString(remySeverityFilterConfigKey))
+	assert.Empty(t, conf.GetString(configuration.FLAG_SEVERITY_THRESHOLD))
+}
+
 // Without the guard the empty filter string reaches remy as no filter and
 // fixes every severity.
 func TestGafRunner_SkipsInvocationWhenEverySeverityDisabled(t *testing.T) {

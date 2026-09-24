@@ -12,6 +12,11 @@ function toggleElement(element, toggle) {
     console.error('Unexpected toggle value', toggle);
   }
 }
+function localIsoDate(date) {
+  var month = String(date.getMonth() + 1);
+  var day = String(date.getDate());
+  return date.getFullYear() + '-' + (month.length < 2 ? '0' + month : month) + '-' + (day.length < 2 ? '0' + day : day);
+}
 function dispatchEvent(element, dispatchEventName) {
   if (!element) {
     return;
@@ -64,8 +69,14 @@ if (ignoreFormContainer !== null && ignoreFormContainer !== void 0 && ignoreCrea
     var ignoreExpirationType = document.getElementById('ignore-form-expiration-type').value;
     var ignoreExpirationDate = '';
     if (ignoreExpirationType === 'custom-expiration-date') {
-      ignoreExpirationDate = new Date(document.getElementById('ignore-form-expiration-date').value).toISOString().split('T')[0];
+      ignoreExpirationDate = document.getElementById('ignore-form-expiration-date').value || '';
+      // The ignore service rejects a date that is not in the future; ISO dates compare as strings.
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(ignoreExpirationDate) || ignoreExpirationDate <= localIsoDate(new Date())) {
+        toggleElement(document.getElementById('ignore-expiration-error'), 'show');
+        return;
+      }
     }
+    toggleElement(document.getElementById('ignore-expiration-error'), 'hide');
     var ignoreReason = reasonVal;
     ${ideSubmitIgnoreRequest}
   });
@@ -85,6 +96,9 @@ if (ignoreFormContainer !== null && ignoreFormContainer !== void 0 && ignoreCrea
   // Hide the expiration date field when "Do not expire"
   var ignoreFormExpirationType = document.getElementById('ignore-form-expiration-type');
   var ignoreFormExpirationDate = document.getElementById('ignore-form-expiration-date');
+  ignoreFormExpirationDate.addEventListener('change', function() {
+    toggleElement(document.getElementById('ignore-expiration-error'), 'hide');
+  });
   ignoreFormExpirationType.addEventListener('change', function(event) {
     if (event.target.value === 'never') {
       toggleElement(ignoreFormExpirationDate, 'hide');
