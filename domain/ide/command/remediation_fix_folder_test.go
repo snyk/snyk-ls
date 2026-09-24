@@ -48,7 +48,7 @@ type fakeFolderRemediator struct {
 	err     error
 }
 
-func (f *fakeFolderRemediator) FixFolder(_ context.Context, _ types.FilePath) ([]types.FolderFixFileResult, error) {
+func (f *fakeFolderRemediator) FixFolder(_ context.Context, _ types.FilePath, _ []string) ([]types.FolderFixFileResult, error) {
 	return f.results, f.err
 }
 
@@ -229,7 +229,7 @@ type trackingFolderRemediator struct {
 	fn func(ctx context.Context, root types.FilePath) ([]types.FolderFixFileResult, error)
 }
 
-func (tr *trackingFolderRemediator) FixFolder(ctx context.Context, root types.FilePath) ([]types.FolderFixFileResult, error) {
+func (tr *trackingFolderRemediator) FixFolder(ctx context.Context, root types.FilePath, _ []string) ([]types.FolderFixFileResult, error) {
 	return tr.fn(ctx, root)
 }
 
@@ -270,10 +270,15 @@ func TestFixFolder_Acceptance_RunsInPassedFolderNoNestedWorktree(t *testing.T) {
 
 // newFixFolderCmd constructs a remediationFixFolderCommand for unit testing.
 func newFixFolderCmd(args []any, provider remediation.FolderRemediator) types.Command {
+	return newScopedFixFolderCmd(args, provider, nil)
+}
+
+// newScopedFixFolderCmd is newFixFolderCmd with a workspace, for the delta-scoping tests.
+func newScopedFixFolderCmd(args []any, provider remediation.FolderRemediator, w types.Workspace) types.Command {
 	return command.NewRemediationFixFolderCommand(types.CommandData{
 		CommandId: types.RemediationAgentFixFolderCommand,
 		Arguments: args,
-	}, provider)
+	}, provider, w)
 }
 
 // UNIT-120: wrong arg count → error.

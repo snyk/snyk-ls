@@ -27,9 +27,11 @@ import (
 func NewRemediationFixFolderCommand(
 	cmd types.CommandData,
 	provider remediation.FolderRemediator,
+	w types.Workspace,
 ) types.Command {
 	return &remediationFixFolderCommand{
-		command:  cmd,
-		provider: provider,
+		command:   cmd,
+		provider:  provider,
+		workspace: w,
 	}
 }

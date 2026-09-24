@@ -82,9 +82,9 @@ func commitFile(t *testing.T, repoRoot, relPath, content string) {
 
 // fakeRunner is a test remyRunner that accepts (and ignores) a nil engine.
 // fn is the actual test logic to run.
-func fakeRunner(fn func(ctx context.Context, root string, findingID string) error) func(ctx context.Context, eng workflow.Engine, root string, findingID string) error {
-	return func(ctx context.Context, _ workflow.Engine, root string, findingID string) error {
-		return fn(ctx, root, findingID)
+func fakeRunner(fn func(ctx context.Context, root string, findingIDs []string) error) func(ctx context.Context, eng workflow.Engine, root string, findingIDs []string) error {
+	return func(ctx context.Context, _ workflow.Engine, root string, findingIDs []string) error {
+		return fn(ctx, root, findingIDs)
 	}
 }
 
@@ -102,8 +102,8 @@ func fakeRunner(fn func(ctx context.Context, root string, findingID string) erro
 // gitChangedFiles) and TestFixFolder_StatCleanSameSize_StillDetected
 // (FixFolder / collectFileDiffs): both exercise the same invalidateStatCache
 // call against the same fixture shape.
-func statCleanRunner(relPath, newContent string) func(_ context.Context, _ workflow.Engine, root string, _ string) error {
-	return func(_ context.Context, _ workflow.Engine, root string, _ string) error {
+func statCleanRunner(relPath, newContent string) func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
+	return func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		worktreeFile := filepath.Join(root, relPath)
 
 		// Capture the mtime git recorded in the index at checkout time.
@@ -148,7 +148,7 @@ func statCleanRunner(relPath, newContent string) func(_ context.Context, _ workf
 // produces (nil, nil) and the runner is never called.
 func TestRemyProvider_EmptyFindingId_ReturnsNil(t *testing.T) {
 	called := false
-	runner := fakeRunner(func(_ context.Context, _ string, _ string) error {
+	runner := fakeRunner(func(_ context.Context, _ string, _ []string) error {
 		called = true
 		return nil
 	})
@@ -170,7 +170,7 @@ func TestRemyProvider_EmptyFindingId_ReturnsNil(t *testing.T) {
 // produces (nil, nil) and the runner is never called.
 func TestRemyProvider_EmptyContentRoot_ReturnsNil(t *testing.T) {
 	called := false
-	runner := fakeRunner(func(_ context.Context, _ string, _ string) error {
+	runner := fakeRunner(func(_ context.Context, _ string, _ []string) error {
 		called = true
 		return nil
 	})
@@ -192,7 +192,7 @@ func TestRemyProvider_EmptyContentRoot_ReturnsNil(t *testing.T) {
 // produces (nil, nil) and the runner is never called.
 func TestRemyProvider_EmptyFilePath_ReturnsNil(t *testing.T) {
 	called := false
-	runner := fakeRunner(func(_ context.Context, _ string, _ string) error {
+	runner := fakeRunner(func(_ context.Context, _ string, _ []string) error {
 		called = true
 		return nil
 	})
@@ -211,15 +211,17 @@ func TestRemyProvider_EmptyFilePath_ReturnsNil(t *testing.T) {
 }
 
 // TestRemyProvider_CallsRunnerWithCorrectArgs verifies that the runner receives
-// an isolated worktree path (not the real workspace) and the correct FindingId.
+// an isolated worktree path (not the real workspace) and no finding-id scope:
+// the code action this path serves already hangs off a delta-filtered diagnostic.
 func TestRemyProvider_CallsRunnerWithCorrectArgs(t *testing.T) {
 	repoRoot := initGitRepo(t)
 	commitFile(t, repoRoot, "main.go", "package main\n\nfunc main() {}\n")
 
-	var gotRoot, gotFindingID string
-	runner := fakeRunner(func(_ context.Context, root string, findingID string) error {
+	var gotRoot string
+	var gotFindingIDs []string
+	runner := fakeRunner(func(_ context.Context, root string, findingIDs []string) error {
 		gotRoot = root
-		gotFindingID = findingID
+		gotFindingIDs = findingIDs
 		return nil
 	})
 
@@ -235,7 +237,7 @@ func TestRemyProvider_CallsRunnerWithCorrectArgs(t *testing.T) {
 	// Runner receives the temporary worktree path, not the real workspace root.
 	assert.NotEqual(t, repoRoot, gotRoot, "runner must receive isolated worktree, not real workspace")
 	assert.True(t, filepath.IsAbs(gotRoot), "worktree path must be absolute")
-	assert.Equal(t, "finding-abc", gotFindingID)
+	assert.Empty(t, gotFindingIDs, "the per-finding path must not restrict the run to a finding-id set")
 }
 
 // TestRemyProvider_RunnerError_Propagated verifies that errors from the runner
@@ -245,7 +247,7 @@ func TestRemyProvider_RunnerError_Propagated(t *testing.T) {
 	commitFile(t, repoRoot, "main.go", "package main\n\nfunc main() {}\n")
 
 	runnerErr := errors.New("remy subprocess failed")
-	runner := fakeRunner(func(_ context.Context, _ string, _ string) error {
+	runner := fakeRunner(func(_ context.Context, _ string, _ []string) error {
 		return runnerErr
 	})
 
@@ -267,7 +269,7 @@ func TestRemyProvider_NoChanges_ReturnsNil(t *testing.T) {
 	repoRoot := initGitRepo(t)
 	commitFile(t, repoRoot, "main.go", "package main\n\nfunc main() {}\n")
 
-	runner := fakeRunner(func(_ context.Context, _ string, _ string) error {
+	runner := fakeRunner(func(_ context.Context, _ string, _ []string) error {
 		return nil
 	})
 
@@ -295,7 +297,7 @@ func TestRemyProvider_ReturnsWorkspaceEdit(t *testing.T) {
 	// The Changes key must use the real workspace path, not the worktree path.
 	absPath := filepath.Join(repoRoot, "main.go")
 
-	runner := fakeRunner(func(_ context.Context, root string, _ string) error {
+	runner := fakeRunner(func(_ context.Context, root string, _ []string) error {
 		// Write to the worktree root the runner received, not repoRoot.
 		return os.WriteFile(filepath.Join(root, "main.go"), []byte(modified), 0o644)
 	})
@@ -348,7 +350,7 @@ func TestRemyProvider_MultiFileChange_PartitionsAndCaches(t *testing.T) {
 	absB := filepath.Join(repoRoot, "b.go")
 
 	runnerCalls := 0
-	runner := fakeRunner(func(_ context.Context, root string, _ string) error {
+	runner := fakeRunner(func(_ context.Context, root string, _ []string) error {
 		runnerCalls++
 		if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package main\n\nvar X = 10\n"), 0o644); err != nil {
 			return err
@@ -503,7 +505,7 @@ func TestRemyProvider_InvalidateFile_EvictsFromCache(t *testing.T) {
 	absB := filepath.Join(repoRoot, "b.go")
 
 	runnerCalls := 0
-	runner := fakeRunner(func(_ context.Context, root string, _ string) error {
+	runner := fakeRunner(func(_ context.Context, root string, _ []string) error {
 		runnerCalls++
 		if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package main\n\nvar X = 10\n"), 0o644); err != nil {
 			return err
@@ -552,7 +554,7 @@ func TestRemediate_GitRoot_SubdirWorkspace(t *testing.T) {
 	subdir := filepath.Join(repoRoot, "pkg")
 	absMain := filepath.Join(repoRoot, "pkg", "main.go")
 
-	runner := fakeRunner(func(_ context.Context, root string, _ string) error {
+	runner := fakeRunner(func(_ context.Context, root string, _ []string) error {
 		return os.WriteFile(filepath.Join(root, "pkg", "main.go"), []byte("package main\n\nvar X = 10\n"), 0o644)
 	})
 
@@ -588,7 +590,7 @@ func TestNewRemyProvider_NilEngineNonNilRunner_RemediateEmptyFindingId_ReturnsNi
 // ContentRoot is not inside a git repository, Remediate returns an error from
 // the git root resolution step.
 func TestRemyProvider_ContentRootNotGitRepo_ReturnsError(t *testing.T) {
-	runner := fakeRunner(func(_ context.Context, _ string, _ string) error { return nil })
+	runner := fakeRunner(func(_ context.Context, _ string, _ []string) error { return nil })
 	p := remediation.NewRemyProvider(nil, runner)
 
 	notARepo := t.TempDir() // plain directory, no .git
@@ -603,7 +605,7 @@ func TestRemyProvider_ContentRootNotGitRepo_ReturnsError(t *testing.T) {
 // TestRemyProvider_NonAbsoluteContentRoot_ReturnsError verifies that a relative
 // ContentRoot path produces an error.
 func TestRemyProvider_NonAbsoluteContentRoot_ReturnsError(t *testing.T) {
-	runner := fakeRunner(func(_ context.Context, _ string, _ string) error { return nil })
+	runner := fakeRunner(func(_ context.Context, _ string, _ []string) error { return nil })
 	p := remediation.NewRemyProvider(nil, runner)
 
 	_, err := p.Remediate(context.Background(), remediation.RemediationRequest{
@@ -623,7 +625,7 @@ func TestRemyProvider_FilePathNotInChanges_ReturnsNil(t *testing.T) {
 
 	absA := filepath.Join(repoRoot, "a.go")
 
-	runner := fakeRunner(func(_ context.Context, root string, _ string) error {
+	runner := fakeRunner(func(_ context.Context, root string, _ []string) error {
 		return os.WriteFile(filepath.Join(root, "b.go"), []byte("package main\n\nvar Y = 20\n"), 0o644)
 	})
 
@@ -649,7 +651,7 @@ func TestCacheValid_StatError_InvalidatesCache(t *testing.T) {
 	absB := filepath.Join(repoRoot, "b.go")
 
 	runnerCalls := 0
-	runner := fakeRunner(func(_ context.Context, root string, _ string) error {
+	runner := fakeRunner(func(_ context.Context, root string, _ []string) error {
 		runnerCalls++
 		if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package main\n\nvar X = 10\n"), 0o644); err != nil {
 			return err
@@ -763,7 +765,7 @@ func TestRemediate_SymlinkContentRoot_ReturnsCanonicalEdit(t *testing.T) {
 	canonicalRoot := realDir
 
 	modified := "package main\nvar x = 99\n"
-	runner := fakeRunner(func(_ context.Context, root string, _ string) error {
+	runner := fakeRunner(func(_ context.Context, root string, _ []string) error {
 		return os.WriteFile(filepath.Join(root, "main.go"), []byte(modified), 0o644)
 	})
 
@@ -896,7 +898,7 @@ func TestInvalidateFile_DeletedFile_SymlinkPath_EvictsCanonicalKey(t *testing.T)
 	symlinkB := filepath.Join(symlinkRoot, "b.go")
 
 	var runnerCalls int
-	runner := fakeRunner(func(_ context.Context, root string, _ string) error {
+	runner := fakeRunner(func(_ context.Context, root string, _ []string) error {
 		runnerCalls++
 		// Modify both files so b.go ends up in the cache after the a.go request.
 		if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package main\nvar a = 2\n"), 0o644); err != nil {
@@ -966,7 +968,7 @@ func TestInvalidateFile_SymlinkPath_EvictsCanonicalKey(t *testing.T) {
 	symlinkB := filepath.Join(symlinkRoot, "b.go")
 
 	var runnerCalls int
-	runner := fakeRunner(func(_ context.Context, root string, _ string) error {
+	runner := fakeRunner(func(_ context.Context, root string, _ []string) error {
 		runnerCalls++
 		if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package main\nvar a = 2\n"), 0o644); err != nil {
 			return err

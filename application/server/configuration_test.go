@@ -4101,7 +4101,7 @@ func TestApplyLlmProviderConfig_SettingsSaveDoesNotBlockOnInFlightRemyInvocation
 	fixDone := make(chan struct{})
 	go func() {
 		defer close(fixDone)
-		_, _ = p.FixFolder(context.Background(), types.FilePath(repoDir))
+		_, _ = p.FixFolder(context.Background(), types.FilePath(repoDir), nil)
 	}()
 
 	select {
@@ -4164,7 +4164,7 @@ func TestApplyLlmProviderConfig_MultipleSavesDuringInFlightInvocation_ConvergeTo
 	fixDone := make(chan struct{})
 	go func() {
 		defer close(fixDone)
-		_, _ = p.FixFolder(context.Background(), types.FilePath(repoDir))
+		_, _ = p.FixFolder(context.Background(), types.FilePath(repoDir), nil)
 	}()
 
 	select {

@@ -108,7 +108,7 @@ type diTestFolderRemediator struct {
 	called bool
 }
 
-func (d *diTestFolderRemediator) FixFolder(_ context.Context, _ types.FilePath) ([]types.FolderFixFileResult, error) {
+func (d *diTestFolderRemediator) FixFolder(_ context.Context, _ types.FilePath, _ []string) ([]types.FolderFixFileResult, error) {
 	d.called = true
 	return nil, nil
 }
