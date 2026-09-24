@@ -240,6 +240,9 @@ func buildRemyFixConfig(base configuration.Configuration, contentRoot string, fi
 	// Remy scans independently and would otherwise fix findings the client hides.
 	if filter := remySeverityFilter(types.GetFilterSeverityFromConfig(base)); filter != "" {
 		conf.Set(remySeverityFilterConfigKey, filter)
+		// The CLI's output flags default severity-threshold to "low", and remy
+		// rejects any threshold next to severity-filter.
+		conf.Set(configuration.FLAG_SEVERITY_THRESHOLD, "")
 	}
 	// Remy reads an empty value as no filter at all, so an empty set must leave
 	// the key unset rather than widening the run to every finding.
