@@ -245,9 +245,6 @@ func TestGafRunner_InvokesWhenSomeSeverityEnabled(t *testing.T) {
 	assert.NoError(t, gafRunner(context.Background(), mockEngine, "/work/repo-root", nil))
 }
 
-// TestBuildRemyFixConfig_ScopesToRequestedFindingIDs proves the net-new finding
-// identifiers reach the fix workflow under the exact key remy reads (FlagIssueIDs:
-// "issue-ids"), comma-separated.
 func TestBuildRemyFixConfig_ScopesToRequestedFindingIDs(t *testing.T) {
 	conf := buildRemyFixConfig(configuration.NewWithOpts(), "/work/repo-root", []string{"finding-1", "finding-2"})
 
@@ -255,7 +252,6 @@ func TestBuildRemyFixConfig_ScopesToRequestedFindingIDs(t *testing.T) {
 	assert.True(t, conf.GetBool("auto-approve"), "issue-ids only takes effect with auto-approve")
 }
 
-// Remy reads an empty issue-ids value as no filter, which would fix everything.
 func TestBuildRemyFixConfig_NoFindingIDsLeavesIssueIDsUnset(t *testing.T) {
 	for name, ids := range map[string][]string{"nil": nil, "empty": {}} {
 		t.Run(name, func(t *testing.T) {
@@ -265,8 +261,6 @@ func TestBuildRemyFixConfig_NoFindingIDsLeavesIssueIDsUnset(t *testing.T) {
 	}
 }
 
-// An older bundled remy silently ignores an unknown issue-ids key, so the run
-// must widen visibly rather than pretend it was scoped.
 func TestGafRunner_DropsScopeWhenWorkflowHasNoIssueIDsFlag(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -294,9 +288,8 @@ func TestGafRunner_DropsScopeWhenWorkflowHasNoIssueIDsFlag(t *testing.T) {
 	}
 }
 
-// engineWithFixWorkflow registers a stand-in for the "fix" workflow, which lives in
-// a module snyk-ls does not compile against. withIssueIDs selects whether the
-// registered flagset knows issue-ids, i.e. an older or newer bundled remy.
+// The real "fix" workflow lives in a module snyk-ls does not compile against.
+// withIssueIDs stands in for a newer bundled remy.
 func engineWithFixWorkflow(t *testing.T, withIssueIDs bool, capture func(configuration.Configuration)) workflow.Engine {
 	t.Helper()
 	eng := app.CreateAppEngineWithOptions(app.WithConfiguration(configuration.NewWithOpts()))
@@ -321,7 +314,6 @@ func engineWithFixWorkflow(t *testing.T, withIssueIDs bool, capture func(configu
 	return eng
 }
 
-// A fix workflow that is not registered at all must fail open the same way.
 func TestGafRunner_DropsScopeWhenWorkflowIsNotRegistered(t *testing.T) {
 	logger := zerolog.Nop()
 	base := configuration.NewWithOpts()

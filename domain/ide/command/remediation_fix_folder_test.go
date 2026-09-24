@@ -273,7 +273,6 @@ func newFixFolderCmd(args []any, provider remediation.FolderRemediator) types.Co
 	return newScopedFixFolderCmd(args, provider, nil)
 }
 
-// newScopedFixFolderCmd is newFixFolderCmd with a workspace, for the delta-scoping tests.
 func newScopedFixFolderCmd(args []any, provider remediation.FolderRemediator, w types.Workspace) types.Command {
 	return command.NewRemediationFixFolderCommand(types.CommandData{
 		CommandId: types.RemediationAgentFixFolderCommand,

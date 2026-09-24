@@ -211,8 +211,7 @@ func TestRemyProvider_EmptyFilePath_ReturnsNil(t *testing.T) {
 }
 
 // TestRemyProvider_CallsRunnerWithCorrectArgs verifies that the runner receives
-// an isolated worktree path (not the real workspace) and no finding-id scope:
-// the code action this path serves already hangs off a delta-filtered diagnostic.
+// an isolated worktree path (not the real workspace) and no finding-id scope.
 func TestRemyProvider_CallsRunnerWithCorrectArgs(t *testing.T) {
 	repoRoot := initGitRepo(t)
 	commitFile(t, repoRoot, "main.go", "package main\n\nfunc main() {}\n")

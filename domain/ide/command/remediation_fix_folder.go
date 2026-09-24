@@ -94,9 +94,8 @@ func (cmd *remediationFixFolderCommand) Execute(ctx context.Context) (any, error
 	return types.FolderFixResult{Files: files}, nil
 }
 
-// resolveScope returns the finding ids to restrict the run to. It fails open to
-// an unscoped run when the root matches no registered folder, delta is off, or
-// there is no baseline yet.
+// resolveScope fails open to an unscoped run when the root matches no registered
+// folder, delta is off, or there is no baseline yet.
 func (cmd *remediationFixFolderCommand) resolveScope(args []any) (findingIDs []string, scoped bool, err error) {
 	if len(args) < 2 {
 		return nil, false, nil
@@ -134,9 +133,8 @@ func (cmd *remediationFixFolderCommand) resolveScope(args []any) (findingIDs []s
 	return ids, true, nil
 }
 
-// folderForRoot returns the registered folder whose path is exactly root.
-// Containment matching is deliberately not used: it would also hit a parent
-// folder and scope the run to a different folder's net-new set.
+// Exact match, not containment: containment would also hit a parent folder and
+// scope the run to a different folder's net-new set.
 func (cmd *remediationFixFolderCommand) folderForRoot(root types.FilePath) types.Folder {
 	if cmd.workspace == nil {
 		return nil
@@ -151,9 +149,8 @@ func (cmd *remediationFixFolderCommand) folderForRoot(root types.FilePath) types
 	return nil
 }
 
-// codeFindingIDs collects the Snyk Code finding identifiers from issues, and counts
-// the Code issues that have none. For that product the identifier is the asset
-// fingerprint remy matches issue-ids against, so it needs no translation.
+// For Snyk Code the finding identifier is the asset fingerprint remy matches
+// issue-ids against, so it needs no translation.
 func codeFindingIDs(issues snyk.IssuesByFile) (ids []string, withoutID int) {
 	ids = make([]string, 0, len(issues))
 	for _, fileIssues := range issues {

@@ -41,14 +41,12 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-// deltaFolder is the pair of interfaces the concrete workspace folder satisfies
-// and the scoping path asserts against.
+// The concrete folder satisfies both interfaces, and resolveScope type-asserts the second.
 type deltaFolder struct {
 	*mock_types.MockFolder
 	*mock_snyk.MockFilteringIssueProvider
 }
 
-// recordingRunner captures the finding ids a fix run was scoped to and applies fn.
 type recordingRunner struct {
 	calls      int
 	findingIDs []string
@@ -68,8 +66,6 @@ func newIssue(findingID string) types.Issue {
 	return &snyk.Issue{FindingId: findingID, Product: product.ProductCode}
 }
 
-// newDeltaFolder builds a folder whose cache holds cached and whose display
-// filter keeps shown.
 func newDeltaFolder(t *testing.T, path string, deltaEnabled, baseline bool, cached, shown snyk.IssuesByFile) *deltaFolder {
 	t.Helper()
 	ctrl := gomock.NewController(t)
@@ -85,7 +81,6 @@ func newDeltaFolder(t *testing.T, path string, deltaEnabled, baseline bool, cach
 	return &deltaFolder{MockFolder: mf, MockFilteringIssueProvider: fip}
 }
 
-// scopingFolder is a delta-applied folder that shows exactly the issues it holds.
 func scopingFolder(t *testing.T, path string, issues snyk.IssuesByFile) *deltaFolder {
 	t.Helper()
 	return newDeltaFolder(t, path, true, true, issues, issues)
@@ -123,7 +118,6 @@ func TestFixFolder_Execute_RunsUnscoped(t *testing.T) {
 		workspace func(t *testing.T, repo string) types.Workspace
 	}{
 		{
-			// A single argument runs unscoped.
 			name:      "single argument",
 			singleArg: true,
 			workspace: func(t *testing.T, repo string) types.Workspace {
@@ -252,7 +246,6 @@ func TestFixFolder_Execute_DeltaOnEmptyNetNew_ReturnsEmptyWithoutInvokingRemy(t 
 	assert.NotNil(t, ffr.Files)
 }
 
-// A scoped run that fixed only some requested ids still produced a usable patch.
 func TestFixFolder_Execute_PartialFix_ReturnsChangedFiles(t *testing.T) {
 	repo := initGitRepoForCmd(t)
 	folder := scopingFolder(t, repo, snyk.IssuesByFile{
@@ -333,8 +326,8 @@ func TestFixFolder_Execute_OtherRunnerError_FailsCommand(t *testing.T) {
 	assert.ErrorIs(t, err, boom)
 }
 
-// Without an origin remote, Snyk Code findings carry no asset fingerprint, so
-// remy has nothing to match and the run must be skipped with the reason logged.
+// Snyk Code emits no asset fingerprint without an origin remote, so remy has
+// nothing to match.
 func TestFixFolder_Execute_NetNewFindingsWithoutIDs_SkipsAndWarns(t *testing.T) {
 	repo := initGitRepoForCmd(t)
 	runner := &recordingRunner{}

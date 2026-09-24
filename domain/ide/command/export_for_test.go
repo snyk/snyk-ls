@@ -38,8 +38,7 @@ func NewRemediationFixFolderCommand(
 	}
 }
 
-// NewRemediationFixFolderCommandWithLogger is NewRemediationFixFolderCommand with
-// a logger, for tests that assert on what the command logs.
+// NewRemediationFixFolderCommandWithLogger is NewRemediationFixFolderCommand with a logger.
 func NewRemediationFixFolderCommandWithLogger(
 	cmd types.CommandData,
 	provider remediation.FolderRemediator,

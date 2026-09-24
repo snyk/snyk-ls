@@ -47,7 +47,6 @@ import (
 //
 // eng is the workflow engine used for GAF invocation (nil in tests).
 // contentRoot is the absolute path of the git worktree to operate on.
-// findingIDs are the native finding identifiers the run is restricted to.
 type remyRunner func(ctx context.Context, eng workflow.Engine, contentRoot string, findingIDs []string) error
 
 // remyOptions controls the behavior of the concrete remy-backed provider.
@@ -170,8 +169,7 @@ const (
 // a module snyk-ls does not depend on, so errors.Is cannot reach it.
 const partialFixMessage = "one or more requested issue ids were not fixed"
 
-// isPartialFix reports whether err is remy's partly-fixed signal. The workflow
-// wraps it in a displayable envelope, so the whole chain is searched.
+// The workflow wraps remy's error in a displayable envelope, so walk the chain.
 func isPartialFix(err error) bool {
 	for e := err; e != nil; e = errors.Unwrap(e) {
 		if strings.Contains(e.Error(), partialFixMessage) {
@@ -181,9 +179,8 @@ func isPartialFix(err error) bool {
 	return false
 }
 
-// acceptsIssueIDs reports whether the registered fix workflow knows the issue-ids
-// flag. An older bundled remy ignores an unknown config key silently, which would
-// widen a scoped run to the whole folder with nothing reporting it.
+// An older bundled remy silently ignores an unknown issue-ids key, which would
+// widen a scoped run to the whole folder unreported.
 func acceptsIssueIDs(eng workflow.Engine, id workflow.Identifier) bool {
 	entry, ok := eng.GetWorkflow(id)
 	if !ok || entry == nil {
@@ -513,11 +510,8 @@ func editsToEdit(filePath string, edits []types.TextEdit) *types.WorkspaceEdit {
 }
 
 // collectFixEdits snapshots tracked files in runDir, runs the fix workflow there,
-// and builds TextEdits keyed under keyRoot. It passes a freshly created worktree
-// as runDir and the upstream repo root as keyRoot.
-//
-// The run carries no finding-id restriction: the code action it serves hangs off
-// an already delta-filtered diagnostic, so it needs no delta coupling.
+// and builds TextEdits keyed under keyRoot. The run is unscoped: the code action
+// it serves already hangs off a delta-filtered diagnostic.
 func (p *remyProvider) collectFixEdits(ctx context.Context, runDir, keyRoot string) (map[string][]types.TextEdit, map[string]string, error) {
 	snapshot, err := snapshotGitFiles(ctx, runDir)
 	if err != nil {
@@ -705,8 +699,8 @@ func parseNameStatus(out []byte) ([]nameStatusRecord, error) {
 // never silently dropped.
 func (p *remyProvider) collectFileDiffs(ctx context.Context, runDir string, findingIDs []string) ([]types.FolderFixFileResult, error) {
 	if err := p.runner(ctx, p.engine, runDir, findingIDs); err != nil {
-		// A scoped run that fixed only some of the requested ids still produced a
-		// usable patch, and remy reports that as a failure so a CLI exits nonzero.
+		// Remy fails a partly-fixed scoped run so a CLI exits nonzero, but the
+		// patch it produced is still usable.
 		if len(findingIDs) == 0 || !isPartialFix(err) {
 			return nil, err
 		}

@@ -88,7 +88,6 @@ func TestFixFolder_ReturnsResultForChangedFile(t *testing.T) {
 	assert.Equal(t, mainAbs, r.WorkspacePath, "WorkspacePath must be <folder>/main.go")
 	assert.Contains(t, r.Diff, "var x = 2", "Diff must contain the changed line")
 
-	// Runner must be called with exactly the passed folder and no finding ids.
 	assert.Equal(t, repo, runnerDir, "runner must be called with the passed folder")
 	assert.Empty(t, runnerFindingIDs, "runner must be called with no finding ids for an unscoped folder run")
 }
