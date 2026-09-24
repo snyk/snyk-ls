@@ -44,7 +44,7 @@ func TestFixFolder_AppliesInternalTimeout(t *testing.T) {
 	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
 
 	var hadDeadline bool
-	runner := func(ctx context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(ctx context.Context, _ workflow.Engine, root string, _ []string) error {
 		_, hadDeadline = ctx.Deadline()
 		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0644)
 	}
@@ -53,7 +53,7 @@ func TestFixFolder_AppliesInternalTimeout(t *testing.T) {
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok)
 
-	_, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	_, err := fr.FixFolder(context.Background(), types.FilePath(repo), nil)
 	require.NoError(t, err)
 	assert.True(t, hadDeadline,
 		"FixFolder must bound the runner with an internal timeout so a hung run cannot stall the caller")

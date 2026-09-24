@@ -22,9 +22,13 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/app"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	gafMocks "github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -39,7 +43,7 @@ import (
 func TestBuildRemyFixConfig_SelectsSastAgenticFlow(t *testing.T) {
 	const contentRoot = "/work/repo-root"
 
-	conf := buildRemyFixConfig(configuration.NewWithOpts(), contentRoot)
+	conf := buildRemyFixConfig(configuration.NewWithOpts(), contentRoot, nil)
 
 	assert.True(t, conf.GetBool("agentic"), "agentic must be enabled")
 	assert.True(t, conf.GetBool("sast"), "sast must be enabled to select the Snyk Code agentic flow")
@@ -63,7 +67,7 @@ func TestBuildRemyFixConfig_ForwardsPersistedLlmProviderAndModel(t *testing.T) {
 	types.SetGlobalUser(base, types.SettingLlmProvider, "ollama")
 	types.SetGlobalUser(base, types.SettingLlmModel, "llama3.1")
 
-	conf := buildRemyFixConfig(base, contentRoot)
+	conf := buildRemyFixConfig(base, contentRoot, nil)
 
 	assert.Equal(t, "ollama", conf.GetString("provider"))
 	assert.Equal(t, "llama3.1", conf.GetString("model"))
@@ -74,7 +78,7 @@ func TestBuildRemyFixConfig_ForwardsPersistedLlmProviderAndModel(t *testing.T) {
 // have "provider"/"model" keys set at all, matching the empty-string-key
 // discipline the other flags already follow.
 func TestBuildRemyFixConfig_NoProviderChosen(t *testing.T) {
-	conf := buildRemyFixConfig(configuration.NewWithOpts(), "/work/repo-root")
+	conf := buildRemyFixConfig(configuration.NewWithOpts(), "/work/repo-root", nil)
 
 	assert.False(t, conf.IsSet("provider"), "provider must not be set when the developer never chose one")
 	assert.False(t, conf.IsSet("model"), "model must not be set when the developer never chose a provider")
@@ -86,7 +90,7 @@ func TestBuildRemyFixConfig_ProviderWithoutModel(t *testing.T) {
 	base := configuration.NewWithOpts()
 	types.SetGlobalUser(base, types.SettingLlmProvider, "anthropic")
 
-	conf := buildRemyFixConfig(base, "/work/repo-root")
+	conf := buildRemyFixConfig(base, "/work/repo-root", nil)
 
 	assert.Equal(t, "anthropic", conf.GetString("provider"))
 	assert.False(t, conf.IsSet("model"), "model must not be set when the developer never chose one")
@@ -99,7 +103,7 @@ func TestBuildRemyFixConfig_ModelWithoutProvider(t *testing.T) {
 	base := configuration.NewWithOpts()
 	types.SetGlobalUser(base, types.SettingLlmModel, "llama3.1")
 
-	conf := buildRemyFixConfig(base, "/work/repo-root")
+	conf := buildRemyFixConfig(base, "/work/repo-root", nil)
 
 	assert.False(t, conf.IsSet(remyProviderConfigKey), "provider must not be set when the developer never chose one")
 	assert.Equal(t, "llama3.1", conf.GetString("model"))
@@ -113,12 +117,12 @@ func TestBuildRemyFixConfig_ProviderSwitchDoesNotLeakStaleModel(t *testing.T) {
 	first := configuration.NewWithOpts()
 	types.SetGlobalUser(first, types.SettingLlmProvider, "ollama")
 	types.SetGlobalUser(first, types.SettingLlmModel, "llama3.1")
-	_ = buildRemyFixConfig(first, "/work/repo-root")
+	_ = buildRemyFixConfig(first, "/work/repo-root", nil)
 
 	second := configuration.NewWithOpts()
 	types.SetGlobalUser(second, types.SettingLlmProvider, "anthropic")
 
-	conf := buildRemyFixConfig(second, "/work/repo-root")
+	conf := buildRemyFixConfig(second, "/work/repo-root", nil)
 
 	assert.Equal(t, "anthropic", conf.GetString("provider"))
 	assert.False(t, conf.IsSet("model"), "switching provider must not leak the previous provider's model")
@@ -164,7 +168,7 @@ func TestBuildRemyFixConfig_ForwardsSeverityFilter(t *testing.T) {
 	sf := types.NewSeverityFilter(true, true, false, false)
 	types.SetSeverityFilterOnConfig(base, &sf, &logger)
 
-	conf := buildRemyFixConfig(base, "/work/repo-root")
+	conf := buildRemyFixConfig(base, "/work/repo-root", nil)
 
 	assert.Equal(t, "critical,high", conf.GetString(remySeverityFilterConfigKey))
 }
@@ -175,7 +179,7 @@ func TestBuildRemyFixConfig_ForwardsEverySeverityWhenNothingFiltered(t *testing.
 	sf := types.DefaultSeverityFilter()
 	types.SetSeverityFilterOnConfig(base, &sf, &logger)
 
-	conf := buildRemyFixConfig(base, "/work/repo-root")
+	conf := buildRemyFixConfig(base, "/work/repo-root", nil)
 
 	assert.Equal(t, "critical,high,medium,low", conf.GetString(remySeverityFilterConfigKey))
 }
@@ -193,7 +197,7 @@ func TestBuildRemyFixConfig_SeverityFilterCriticalOnly(t *testing.T) {
 	sf := types.NewSeverityFilter(true, false, false, false)
 	types.SetSeverityFilterOnConfig(base, &sf, &logger)
 
-	conf := buildRemyFixConfig(base, "/work/repo-root")
+	conf := buildRemyFixConfig(base, "/work/repo-root", nil)
 
 	assert.Equal(t, "critical", conf.GetString(remySeverityFilterConfigKey))
 }
@@ -206,7 +210,7 @@ func TestBuildRemyFixConfig_SeverityFilterKeepsGaps(t *testing.T) {
 	sf := types.NewSeverityFilter(true, false, true, false)
 	types.SetSeverityFilterOnConfig(base, &sf, &logger)
 
-	conf := buildRemyFixConfig(base, "/work/repo-root")
+	conf := buildRemyFixConfig(base, "/work/repo-root", nil)
 
 	assert.Equal(t, "critical,medium", conf.GetString(remySeverityFilterConfigKey))
 }
@@ -224,7 +228,7 @@ func TestGafRunner_SkipsInvocationWhenEverySeverityDisabled(t *testing.T) {
 	mockEngine.EXPECT().GetConfiguration().Return(base).AnyTimes()
 	mockEngine.EXPECT().Invoke(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 
-	assert.NoError(t, gafRunner(context.Background(), mockEngine, "/work/repo-root", ""))
+	assert.NoError(t, gafRunner(context.Background(), mockEngine, "/work/repo-root", nil))
 }
 
 func TestGafRunner_InvokesWhenSomeSeverityEnabled(t *testing.T) {
@@ -238,5 +242,90 @@ func TestGafRunner_InvokesWhenSomeSeverityEnabled(t *testing.T) {
 	mockEngine.EXPECT().GetConfiguration().Return(base).AnyTimes()
 	mockEngine.EXPECT().Invoke(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
 
-	assert.NoError(t, gafRunner(context.Background(), mockEngine, "/work/repo-root", ""))
+	assert.NoError(t, gafRunner(context.Background(), mockEngine, "/work/repo-root", nil))
+}
+
+func TestBuildRemyFixConfig_ScopesToRequestedFindingIDs(t *testing.T) {
+	conf := buildRemyFixConfig(configuration.NewWithOpts(), "/work/repo-root", []string{"finding-1", "finding-2"})
+
+	assert.Equal(t, "finding-1,finding-2", conf.GetString(remyIssueIDsConfigKey))
+	assert.True(t, conf.GetBool("auto-approve"), "issue-ids only takes effect with auto-approve")
+}
+
+func TestBuildRemyFixConfig_NoFindingIDsLeavesIssueIDsUnset(t *testing.T) {
+	for name, ids := range map[string][]string{"nil": nil, "empty": {}} {
+		t.Run(name, func(t *testing.T) {
+			conf := buildRemyFixConfig(configuration.NewWithOpts(), "/work/repo-root", ids)
+			assert.False(t, conf.IsSet(remyIssueIDsConfigKey), "issue-ids must stay unset")
+		})
+	}
+}
+
+func TestGafRunner_DropsScopeWhenWorkflowHasNoIssueIDsFlag(t *testing.T) {
+	tests := []struct {
+		name          string
+		registerFlag  bool
+		wantIssueIDs  string
+		wantScopedSet bool
+	}{
+		{name: "flag present", registerFlag: true, wantIssueIDs: "finding-1,finding-2", wantScopedSet: true},
+		{name: "flag absent", registerFlag: false, wantScopedSet: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got configuration.Configuration
+			eng := engineWithFixWorkflow(t, tt.registerFlag, func(conf configuration.Configuration) {
+				got = conf
+			})
+
+			require.NoError(t, gafRunner(context.Background(), eng, "/work/repo-root", []string{"finding-1", "finding-2"}))
+
+			require.NotNil(t, got, "the fix workflow must have been invoked")
+			assert.Equal(t, tt.wantScopedSet, got.IsSet(remyIssueIDsConfigKey))
+			assert.Equal(t, tt.wantIssueIDs, got.GetString(remyIssueIDsConfigKey))
+		})
+	}
+}
+
+// The real "fix" workflow lives in a module snyk-ls does not compile against.
+// withIssueIDs stands in for a newer bundled remy.
+func engineWithFixWorkflow(t *testing.T, withIssueIDs bool, capture func(configuration.Configuration)) workflow.Engine {
+	t.Helper()
+	eng := app.CreateAppEngineWithOptions(app.WithConfiguration(configuration.NewWithOpts()))
+	flagSet := pflag.NewFlagSet("fix", pflag.ContinueOnError)
+	if withIssueIDs {
+		flagSet.String(remyIssueIDsConfigKey, "", "")
+	}
+	_, err := eng.Register(
+		workflow.NewWorkflowIdentifier("fix"),
+		workflow.ConfigurationOptionsFromFlagset(flagSet),
+		func(ictx workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
+			capture(ictx.GetConfiguration())
+			return nil, nil
+		},
+	)
+	require.NoError(t, err)
+	require.NoError(t, eng.Init())
+
+	sf := types.NewSeverityFilter(true, true, true, true)
+	logger := zerolog.Nop()
+	types.SetSeverityFilterOnConfig(eng.GetConfiguration(), &sf, &logger)
+	return eng
+}
+
+func TestGafRunner_DropsScopeWhenWorkflowIsNotRegistered(t *testing.T) {
+	logger := zerolog.Nop()
+	base := configuration.NewWithOpts()
+	sf := types.NewSeverityFilter(true, true, true, true)
+	types.SetSeverityFilterOnConfig(base, &sf, &logger)
+
+	ctrl := gomock.NewController(t)
+	mockEngine := gafMocks.NewMockEngine(ctrl)
+	mockEngine.EXPECT().GetConfiguration().Return(base).AnyTimes()
+	mockEngine.EXPECT().GetLogger().Return(&logger).AnyTimes()
+	mockEngine.EXPECT().GetWorkflow(gomock.Any()).Return(nil, false).AnyTimes()
+	mockEngine.EXPECT().Invoke(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
+
+	assert.NoError(t, gafRunner(context.Background(), mockEngine, "/work/repo-root", []string{"finding-1"}))
 }

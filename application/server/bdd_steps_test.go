@@ -80,6 +80,8 @@ type bddSteps struct {
 	savedLlmModel       string
 	fixCapturedProvider string
 	fixCapturedModel    string
+	fixCapturedIssueIDs string
+	fixRan              bool
 	fixCommandErr       error
 }
 
@@ -147,7 +149,8 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	sc.Given(`^the developer has an established baseline for "([^"]*)" with one known issue$`, func(product string) error {
 		return s.runOnScenarioGoroutine(func() error { return s.developerHasEstablishedBaselineForProduct(product) })
 	})
-	sc.When(`^the developer saves a file that introduces a new issue alongside the known one$`, func() error {
+	// Step: "When" in delta-fail-open, "And" after a Given in remy-delta-scoping.
+	sc.Step(`^the developer saves a file that introduces a new issue alongside the known one$`, func() error {
 		return s.runOnScenarioGoroutine(s.developerSavesFileWithNewIssueAlongsideKnown)
 	})
 	sc.Then(`^the editor is notified of only the newly introduced issue$`, func() error {
@@ -206,6 +209,21 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	})
 	sc.Then(`^the fix runs with the developer's chosen LLM provider and model$`, func() error {
 		return s.runOnScenarioGoroutine(s.theFixRunsWithTheChosenProviderAndModel)
+	})
+	sc.Given(`^the developer saves a file that still has only the known issue$`, func() error {
+		return s.runOnScenarioGoroutine(s.developerSavesFileWithOnlyKnownIssue)
+	})
+	sc.When(`^the developer asks Snyk to autonomously fix that workspace folder$`, func(ctx context.Context) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperAsksSnykToFixTheWorkspaceFolder(ctx) })
+	})
+	sc.Then(`^the fix runs scoped to only the newly introduced finding$`, func() error {
+		return s.runOnScenarioGoroutine(func() error { return s.theFixRunsScopedTo(newIssueFindingID) })
+	})
+	sc.Then(`^the fix runs on the whole folder$`, func() error {
+		return s.runOnScenarioGoroutine(func() error { return s.theFixRunsScopedTo("") })
+	})
+	sc.Then(`^the fix does not run$`, func() error {
+		return s.runOnScenarioGoroutine(s.theFixDoesNotRun)
 	})
 }
 
@@ -972,18 +990,31 @@ func (s *bddSteps) developerSavesFileWithNewIssueAlongsideKnown() error {
 		Product:          product.ProductCode,
 		Message:          "newly introduced code issue",
 		AdditionalData:   snyk.CodeIssueData{Key: "key-new"},
+		FindingId:        newIssueFindingID,
 	}
-	knownIssue := &snyk.Issue{
+	return s.runScanWithFakeScanner(&bddFakeScanner{scans: []types.ScanData{
+		{Product: product.ProductCode, Issues: []types.Issue{newIssue, s.knownCodeIssue()}},
+	}})
+}
+
+func (s *bddSteps) developerSavesFileWithOnlyKnownIssue() error {
+	return s.runScanWithFakeScanner(&bddFakeScanner{scans: []types.ScanData{
+		{Product: product.ProductCode, Issues: []types.Issue{s.knownCodeIssue()}},
+	}})
+}
+
+const newIssueFindingID = "finding-new"
+
+func (s *bddSteps) knownCodeIssue() *snyk.Issue {
+	return &snyk.Issue{
 		ID:               "known-issue",
 		AffectedFilePath: s.deltaFilePath,
 		Severity:         types.Medium,
 		Product:          product.ProductCode,
 		Message:          "known code issue",
 		AdditionalData:   snyk.CodeIssueData{Key: "key-known"},
+		FindingId:        "finding-known",
 	}
-	return s.runScanWithFakeScanner(&bddFakeScanner{scans: []types.ScanData{
-		{Product: product.ProductCode, Issues: []types.Issue{newIssue, knownIssue}},
-	}})
 }
 
 // developerHasACodeIssueFoundBySnyk seeds a real Code issue into a real Folder via the
@@ -1006,6 +1037,7 @@ func (s *bddSteps) developerHasACodeIssueFoundBySnyk() error {
 		Product:          product.ProductCode,
 		Message:          "a code security issue",
 		AdditionalData:   snyk.CodeIssueData{Key: "key-ai-fix"},
+		FindingId:        "finding-ai-fix",
 	}
 	return s.runScanWithFakeScanner(&bddFakeScanner{scans: []types.ScanData{
 		{Product: product.ProductCode, Issues: []types.Issue{issue}},
@@ -1043,13 +1075,35 @@ func (s *bddSteps) theDeveloperAsksSnykToFixAFolder(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create git repo for fix: %w", err)
 	}
+	return s.callFixFolder(ctx, string(uri.PathToUri(types.FilePath(repoDir))))
+}
 
+// The fix runs in the registered workspace folder itself, so the root argument
+// resolves to the folder whose delta state scopes the run.
+func (s *bddSteps) theDeveloperAsksSnykToFixTheWorkspaceFolder(ctx context.Context) error {
+	if err := s.ensureLspInitialized(ctx); err != nil {
+		return err
+	}
+	if err := initCleanGitRepo(string(s.deltaFileDir)); err != nil {
+		return fmt.Errorf("failed to make the workspace folder a git repo: %w", err)
+	}
+	folderURI := string(uri.PathToUri(s.deltaFileDir))
+	return s.callFixFolder(ctx, folderURI, folderURI)
+}
+
+func (s *bddSteps) callFixFolder(ctx context.Context, args ...any) error {
 	fixWorkflowID := workflow.NewWorkflowIdentifier("fix")
 	if _, ok := s.engine.GetWorkflow(fixWorkflowID); !ok {
-		flagset := workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError))
+		// Without the issue-ids flag, gafRunner treats the workflow as an older
+		// remy and drops the scope.
+		fs := pflag.NewFlagSet("", pflag.ContinueOnError)
+		fs.String("issue-ids", "", "")
+		flagset := workflow.ConfigurationOptionsFromFlagset(fs)
 		callback := func(invocation workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
+			s.fixRan = true
 			s.fixCapturedProvider = invocation.GetConfiguration().GetString("provider")
 			s.fixCapturedModel = invocation.GetConfiguration().GetString("model")
+			s.fixCapturedIssueIDs = invocation.GetConfiguration().GetString("issue-ids")
 			return nil, nil
 		}
 		if _, err := s.engine.Register(fixWorkflowID, flagset, callback); err != nil {
@@ -1057,12 +1111,34 @@ func (s *bddSteps) theDeveloperAsksSnykToFixAFolder(ctx context.Context) error {
 		}
 	}
 
-	folderURI := string(uri.PathToUri(types.FilePath(repoDir)))
 	_, callErr := s.loc.Client.Call(ctx, "workspace/executeCommand", sglsp.ExecuteCommandParams{
 		Command:   types.RemediationAgentFixFolderCommand,
-		Arguments: []any{folderURI},
+		Arguments: args,
 	})
 	s.fixCommandErr = callErr
+	return nil
+}
+
+func (s *bddSteps) theFixRunsScopedTo(issueIDs string) error {
+	if s.fixCommandErr != nil {
+		return fmt.Errorf("snyk.remediationAgent.fixFolder call failed: %w", s.fixCommandErr)
+	}
+	if !s.fixRan {
+		return fmt.Errorf("expected the fix workflow to run, it did not")
+	}
+	if s.fixCapturedIssueIDs != issueIDs {
+		return fmt.Errorf("expected the fix workflow to receive issue-ids %q, got %q", issueIDs, s.fixCapturedIssueIDs)
+	}
+	return nil
+}
+
+func (s *bddSteps) theFixDoesNotRun() error {
+	if s.fixCommandErr != nil {
+		return fmt.Errorf("snyk.remediationAgent.fixFolder call failed: %w", s.fixCommandErr)
+	}
+	if s.fixRan {
+		return fmt.Errorf("expected the fix workflow not to run, it ran with issue-ids %q", s.fixCapturedIssueIDs)
+	}
 	return nil
 }
 
@@ -1229,6 +1305,10 @@ func createGitRepoForFix(t *testing.T) (string, error) {
 	if canonical, err := filepath.EvalSymlinks(dir); err == nil {
 		dir = canonical
 	}
+	return dir, initCleanGitRepo(dir)
+}
+
+func initCleanGitRepo(dir string) error {
 	run := func(args ...string) error {
 		cmd := exec.Command("git", testsupport.GitUnsigned(args...)...)
 		cmd.Dir = dir
@@ -1245,19 +1325,16 @@ func createGitRepoForFix(t *testing.T) (string, error) {
 		{"config", "core.checkStat", "minimal"},
 	} {
 		if err := run(args...); err != nil {
-			return "", err
+			return err
 		}
 	}
 	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0o600); err != nil {
-		return "", err
+		return err
 	}
 	if err := run("add", "."); err != nil {
-		return "", err
+		return err
 	}
-	if err := run("commit", "-m", "init"); err != nil {
-		return "", err
-	}
-	return dir, nil
+	return run("commit", "-m", "init")
 }
 
 // Test_BDDSteps_PerScenarioCleanup proves setupServer's t.Cleanup fires once
