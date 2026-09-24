@@ -17,6 +17,7 @@
 package command_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -25,10 +26,12 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/remediation"
@@ -328,4 +331,29 @@ func TestFixFolder_Execute_OtherRunnerError_FailsCommand(t *testing.T) {
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, boom)
+}
+
+// Without an origin remote, Snyk Code findings carry no asset fingerprint, so
+// remy has nothing to match and the run must be skipped with the reason logged.
+func TestFixFolder_Execute_NetNewFindingsWithoutIDs_SkipsAndWarns(t *testing.T) {
+	repo := initGitRepoForCmd(t)
+	runner := &recordingRunner{}
+	var logs bytes.Buffer
+	shown := snyk.IssuesByFile{types.FilePath(filepath.Join(repo, "app.js")): {newIssue(""), newIssue("")}}
+	p, ok := remediation.NewRemyProvider(nil, runner.run).(remediation.FolderRemediator)
+	require.True(t, ok)
+	cmd := command.NewRemediationFixFolderCommandWithLogger(types.CommandData{
+		CommandId: types.RemediationAgentFixFolderCommand,
+		Arguments: []any{repoURI(repo), repoURI(repo)},
+	}, p, workspaceWith(t, scopingFolder(t, repo, shown)), zerolog.New(&logs))
+
+	result, err := cmd.Execute(context.Background())
+
+	require.NoError(t, err)
+	assert.Zero(t, runner.calls)
+	ffr, ok := result.(types.FolderFixResult)
+	require.True(t, ok)
+	assert.Empty(t, ffr.Files)
+	assert.Contains(t, logs.String(), `"findingsWithoutID":2`)
+	assert.Contains(t, logs.String(), "origin remote")
 }

@@ -124,7 +124,11 @@ func (cmd *remediationFixFolderCommand) resolveScope(args []any) (findingIDs []s
 	}
 	// The display filter drops non-net-new findings when delta applies, so this is
 	// exactly the net-new set the developer was shown.
-	ids := codeFindingIDs(fip.FilterIssues(fip.Issues(), folder.DisplayableIssueTypes()))
+	ids, withoutID := codeFindingIDs(fip.FilterIssues(fip.Issues(), folder.DisplayableIssueTypes()))
+	if withoutID > 0 {
+		cmd.logger.Warn().Str("root", rootURIStr).Int("findingsWithoutID", withoutID).
+			Msg("snyk.remediationAgent.fixFolder: some net-new findings have no asset fingerprint, which Snyk Code only emits for a repository with an origin remote, so remy cannot target them")
+	}
 	cmd.logger.Info().Str("root", rootURIStr).Int("netNewFindings", len(ids)).
 		Msg("snyk.remediationAgent.fixFolder: scoping the fix to the folder's net-new findings")
 	return ids, true, nil
@@ -147,18 +151,23 @@ func (cmd *remediationFixFolderCommand) folderForRoot(root types.FilePath) types
 	return nil
 }
 
-// codeFindingIDs collects the Snyk Code finding identifiers from issues. For that
-// product the identifier is the asset fingerprint remy matches issue-ids against,
-// so it needs no translation. Issues carrying none are dropped.
-func codeFindingIDs(issues snyk.IssuesByFile) []string {
-	ids := make([]string, 0, len(issues))
+// codeFindingIDs collects the Snyk Code finding identifiers from issues, and counts
+// the Code issues that have none. For that product the identifier is the asset
+// fingerprint remy matches issue-ids against, so it needs no translation.
+func codeFindingIDs(issues snyk.IssuesByFile) (ids []string, withoutID int) {
+	ids = make([]string, 0, len(issues))
 	for _, fileIssues := range issues {
 		for _, issue := range fileIssues {
-			if id := issue.GetFindingId(); id != "" && issue.GetProduct() == product.ProductCode {
+			if issue.GetProduct() != product.ProductCode {
+				continue
+			}
+			if id := issue.GetFindingId(); id != "" {
 				ids = append(ids, id)
+			} else {
+				withoutID++
 			}
 		}
 	}
 	slices.Sort(ids)
-	return slices.Compact(ids)
+	return slices.Compact(ids), withoutID
 }
