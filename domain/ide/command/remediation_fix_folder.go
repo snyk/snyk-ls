@@ -94,17 +94,9 @@ func (cmd *remediationFixFolderCommand) Execute(ctx context.Context) (any, error
 	return types.FolderFixResult{Files: files}, nil
 }
 
-// netNewProvider is the concrete folder's net-new accessor, matching
-// domain/snyk/delta.Provider.
-type netNewProvider interface {
-	GetDelta(p product.Product) snyk.IssuesByFile
-}
-
-// resolveScope reads the optional workspace-root argument and returns the native
-// finding identifiers the run must be restricted to. scoped reports whether any
-// restriction applies, which is what separates an empty set ("fix nothing") from
-// an absent one ("fix everything"). A root that resolves to no registered folder,
-// a folder with delta off, or one with no baseline yet all run unscoped.
+// resolveScope returns the finding ids to restrict the run to. It fails open to
+// an unscoped run when the root matches no registered folder, delta is off, or
+// there is no baseline yet.
 func (cmd *remediationFixFolderCommand) resolveScope(args []any) (findingIDs []string, scoped bool, err error) {
 	if len(args) < 2 {
 		return nil, false, nil
@@ -125,15 +117,14 @@ func (cmd *remediationFixFolderCommand) resolveScope(args []any) (findingIDs []s
 		}
 		return nil, false, nil
 	}
-	// types.Folder carries the delta predicates but not the net-new set itself,
-	// so the concrete folder's own accessor is reached structurally rather than
-	// by widening that interface and regenerating its mock.
-	deltaProvider, ok := folder.(netNewProvider)
+	fip, ok := folder.(snyk.FilteringIssueProvider)
 	if !ok {
-		cmd.logger.Warn().Str("root", rootURIStr).Msg("snyk.remediationAgent.fixFolder: folder cannot report its net-new findings, running unscoped")
+		cmd.logger.Warn().Str("root", rootURIStr).Msg("snyk.remediationAgent.fixFolder: folder cannot filter its findings, running unscoped")
 		return nil, false, nil
 	}
-	ids := codeFindingIDs(deltaProvider.GetDelta(product.ProductCode))
+	// The display filter drops non-net-new findings when delta applies, so this is
+	// exactly the net-new set the developer was shown.
+	ids := codeFindingIDs(fip.FilterIssues(fip.Issues(), folder.DisplayableIssueTypes()))
 	cmd.logger.Info().Str("root", rootURIStr).Int("netNewFindings", len(ids)).
 		Msg("snyk.remediationAgent.fixFolder: scoping the fix to the folder's net-new findings")
 	return ids, true, nil
@@ -163,11 +154,11 @@ func codeFindingIDs(issues snyk.IssuesByFile) []string {
 	ids := make([]string, 0, len(issues))
 	for _, fileIssues := range issues {
 		for _, issue := range fileIssues {
-			if id := issue.GetFindingId(); id != "" {
+			if id := issue.GetFindingId(); id != "" && issue.GetProduct() == product.ProductCode {
 				ids = append(ids, id)
 			}
 		}
 	}
 	slices.Sort(ids)
-	return ids
+	return slices.Compact(ids)
 }

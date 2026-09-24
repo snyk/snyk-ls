@@ -66,8 +66,6 @@ type FolderRemediator interface {
 	// changed file. Returns an empty slice when the fix produced no changes. It
 	// does NOT apply changes; the caller lands them.
 	//
-	// findingIDs restricts the run to those native finding identifiers. An empty
-	// set means no restriction, so a caller that computed a set and found it empty
-	// must not call FixFolder at all.
+	// findingIDs restricts the run to those native finding identifiers.
 	FixFolder(ctx context.Context, root types.FilePath, findingIDs []string) ([]types.FolderFixFileResult, error)
 }

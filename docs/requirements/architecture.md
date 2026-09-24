@@ -137,3 +137,33 @@ var _ ui.ProgressBar = (*Task)(nil)
 | Token namespacing with one retained global map | Does not remove the global; fails the PR's no-unapproved-globals acceptance gate. |
 | Registry threaded as a value separate from the channel (two values) | Channel and its registry are always created and owned together; two values give the cancel handler two things to resolve instead of one. |
 | Introduce a new structural pattern (Mediator/Blackboard/Space-based) | Codebase already uses pub/sub (channel + listener) + per-server DI for this; a second pattern violates consistency-over-novelty and adds ceremony without solving anything the direct approach doesn't. |
+
+## Scope `snyk.remediationAgent.fixFolder` to the net-new findings the developer was shown
+
+- **Ticket:** IDE-2592
+- **Date:** 2026-09-24
+- **Status:** Accepted
+
+The command takes the folder to fix as its first argument and an optional second argument, the URI of the registered workspace folder the first was derived from. With only one argument the run is unscoped, as before.
+
+```mermaid
+flowchart TD
+    A["fixFolder(folder, root?)"] --> B{"root given and it<br/>exactly matches a registered folder?"}
+    B -->|no| U["run Remy unscoped"]
+    B -->|yes| C{"delta applied for Snyk Code?"}
+    C -->|"no, delta off"| U
+    C -->|"no, delta on but no baseline"| W["log a warning, run Remy unscoped"]
+    C -->|yes| D["filter the folder's issues with the<br/>same filter its diagnostics use"]
+    D --> E{"any Snyk Code finding ids?"}
+    E -->|yes| S["run Remy with issue-ids"]
+    E -->|no| N["return an empty result, Remy does not run"]
+```
+
+| Case | Run |
+|------|-----|
+| One argument, delta off, or the root matches no registered folder | Unscoped |
+| Delta on but no baseline yet | Unscoped, with a warning in the log |
+| Net-new findings shown to the developer | Scoped to their ids through `issue-ids` |
+| Nothing net-new shown | No run, empty `files` |
+
+**Decision.** The id set comes from the folder's display filter (`FilterIssues` over its issues and `DisplayableIssueTypes`), not from the raw net-new cache. The display filter also drops ignored findings and those hidden by severity, risk score, issue view options or issue type, so the patch addresses exactly what the developer was shown. For Snyk Code the finding id is the fingerprint Remy matches `issue-ids` against, so it passes through unchanged. The root is matched by exact path, because containment would also match a parent folder and use that folder's findings. An empty set skips the run because Remy reads an empty `issue-ids` as no filter. A scoped run that Remy reports as partly fixed still returns its patch, which can be empty.

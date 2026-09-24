@@ -47,8 +47,7 @@ import (
 //
 // eng is the workflow engine used for GAF invocation (nil in tests).
 // contentRoot is the absolute path of the git worktree to operate on.
-// findingIDs are the native finding identifiers the run is restricted to; an
-// empty set means no restriction.
+// findingIDs are the native finding identifiers the run is restricted to.
 type remyRunner func(ctx context.Context, eng workflow.Engine, contentRoot string, findingIDs []string) error
 
 // remyOptions controls the behavior of the concrete remy-backed provider.
@@ -518,7 +517,7 @@ func editsToEdit(filePath string, edits []types.TextEdit) *types.WorkspaceEdit {
 // as runDir and the upstream repo root as keyRoot.
 //
 // The run carries no finding-id restriction: the code action it serves hangs off
-// an already delta-filtered diagnostic, so it needs no delta coupling (ADR-20).
+// an already delta-filtered diagnostic, so it needs no delta coupling.
 func (p *remyProvider) collectFixEdits(ctx context.Context, runDir, keyRoot string) (map[string][]types.TextEdit, map[string]string, error) {
 	snapshot, err := snapshotGitFiles(ctx, runDir)
 	if err != nil {

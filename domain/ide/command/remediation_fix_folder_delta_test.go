@@ -18,6 +18,7 @@ package command_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -29,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
+	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -36,14 +38,12 @@ import (
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-// deltaFolder is a types.Folder that can also report its net-new set, which is
-// the pair of interfaces the scoping path asserts against.
+// deltaFolder is the pair of interfaces the concrete workspace folder satisfies
+// and the scoping path asserts against.
 type deltaFolder struct {
 	*mock_types.MockFolder
-	netNew snyk.IssuesByFile
+	*mock_snyk.MockFilteringIssueProvider
 }
-
-func (d *deltaFolder) GetDelta(_ product.Product) snyk.IssuesByFile { return d.netNew }
 
 // recordingRunner captures the finding ids a fix run was scoped to and applies fn.
 type recordingRunner struct {
@@ -65,30 +65,34 @@ func newIssue(findingID string) types.Issue {
 	return &snyk.Issue{FindingId: findingID, Product: product.ProductCode}
 }
 
-// scopedFixFolderFixture wires the real Remy provider to a recording runner over
-// a real git repo, with a workspace holding folder at the repo path.
-func scopedFixFolderFixture(t *testing.T, folder types.Folder, fn func(root string) error) (string, *recordingRunner, types.Workspace) {
+// newDeltaFolder builds a folder whose cache holds cached and whose display
+// filter keeps shown.
+func newDeltaFolder(t *testing.T, path string, deltaEnabled, baseline bool, cached, shown snyk.IssuesByFile) *deltaFolder {
 	t.Helper()
-	repo := initGitRepoForCmd(t)
-	runner := &recordingRunner{fn: fn}
-
 	ctrl := gomock.NewController(t)
-	w := mock_types.NewMockWorkspace(ctrl)
-	if folder != nil {
-		w.EXPECT().Folders().Return([]types.Folder{folder}).AnyTimes()
-	} else {
-		w.EXPECT().Folders().Return(nil).AnyTimes()
-	}
-	return repo, runner, w
-}
-
-func newDeltaFolder(t *testing.T, path string, deltaEnabled, baseline bool, netNew snyk.IssuesByFile) *deltaFolder {
-	t.Helper()
-	mf := mock_types.NewMockFolder(gomock.NewController(t))
+	displayable := map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true}
+	mf := mock_types.NewMockFolder(ctrl)
 	mf.EXPECT().Path().Return(types.FilePath(path)).AnyTimes()
 	mf.EXPECT().IsDeltaFindingsEnabled().Return(deltaEnabled).AnyTimes()
 	mf.EXPECT().IsDeltaAppliedForProduct(product.ProductCode).Return(deltaEnabled && baseline).AnyTimes()
-	return &deltaFolder{MockFolder: mf, netNew: netNew}
+	mf.EXPECT().DisplayableIssueTypes().Return(displayable).AnyTimes()
+	fip := mock_snyk.NewMockFilteringIssueProvider(ctrl)
+	fip.EXPECT().Issues().Return(cached).AnyTimes()
+	fip.EXPECT().FilterIssues(cached, displayable).Return(shown).AnyTimes()
+	return &deltaFolder{MockFolder: mf, MockFilteringIssueProvider: fip}
+}
+
+// scopingFolder is a delta-applied folder that shows exactly the issues it holds.
+func scopingFolder(t *testing.T, path string, issues snyk.IssuesByFile) *deltaFolder {
+	t.Helper()
+	return newDeltaFolder(t, path, true, true, issues, issues)
+}
+
+func workspaceWith(t *testing.T, folders ...types.Folder) types.Workspace {
+	t.Helper()
+	w := mock_types.NewMockWorkspace(gomock.NewController(t))
+	w.EXPECT().Folders().Return(folders).AnyTimes()
+	return w
 }
 
 func executeScopedFixFolder(t *testing.T, args []any, runner *recordingRunner, w types.Workspace) (any, error) {
@@ -98,87 +102,144 @@ func executeScopedFixFolder(t *testing.T, args []any, runner *recordingRunner, w
 	return newScopedFixFolderCmd(args, p, w).Execute(context.Background())
 }
 
+func repoURI(repo string) string {
+	return string(uri.PathToUri(types.FilePath(repo)))
+}
+
 func modifyMain(root string) error {
 	return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0644)
 }
 
-// A single argument keeps the pre-scoping contract: every existing client runs unscoped.
-func TestFixFolder_Execute_SingleArgument_RunsUnscoped(t *testing.T) {
-	repo, runner, w := scopedFixFolderFixture(t, nil, nil)
-	folderURI := string(uri.PathToUri(types.FilePath(repo)))
+const partialFixError = "selection: one or more requested issue ids were not fixed"
 
-	_, err := executeScopedFixFolder(t, []any{folderURI}, runner, w)
+func TestFixFolder_Execute_RunsUnscoped(t *testing.T) {
+	netNew := snyk.IssuesByFile{"main.go": {newIssue("finding-1")}}
+	tests := []struct {
+		name      string
+		singleArg bool
+		workspace func(t *testing.T, repo string) types.Workspace
+	}{
+		{
+			// A single argument runs unscoped.
+			name:      "single argument",
+			singleArg: true,
+			workspace: func(t *testing.T, repo string) types.Workspace {
+				t.Helper()
+				return workspaceWith(t, scopingFolder(t, repo, netNew))
+			},
+		},
+		{
+			name: "delta off",
+			workspace: func(t *testing.T, repo string) types.Workspace {
+				t.Helper()
+				return workspaceWith(t, newDeltaFolder(t, repo, false, false, netNew, netNew))
+			},
+		},
+		{
+			name: "delta on without a baseline",
+			workspace: func(t *testing.T, repo string) types.Workspace {
+				t.Helper()
+				return workspaceWith(t, newDeltaFolder(t, repo, true, false, netNew, netNew))
+			},
+		},
+		{
+			name: "root matches no registered folder",
+			workspace: func(t *testing.T, _ string) types.Workspace {
+				t.Helper()
+				return workspaceWith(t, scopingFolder(t, initGitRepoForCmd(t), netNew))
+			},
+		},
+		{
+			// A parent folder's net-new set belongs to a different folder.
+			name: "only a parent folder is registered",
+			workspace: func(t *testing.T, repo string) types.Workspace {
+				t.Helper()
+				return workspaceWith(t, scopingFolder(t, filepath.Dir(repo), netNew))
+			},
+		},
+		{
+			name:      "no workspace",
+			workspace: func(*testing.T, string) types.Workspace { return nil },
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := initGitRepoForCmd(t)
+			runner := &recordingRunner{}
+			args := []any{repoURI(repo), repoURI(repo)}
+			if tt.singleArg {
+				args = args[:1]
+			}
 
-	require.NoError(t, err)
-	assert.Equal(t, 1, runner.calls)
-	assert.Empty(t, runner.findingIDs, "a single-argument call must not scope the run")
+			_, err := executeScopedFixFolder(t, args, runner, tt.workspace(t, repo))
+
+			require.NoError(t, err)
+			assert.Equal(t, 1, runner.calls)
+			assert.Empty(t, runner.findingIDs)
+		})
+	}
 }
 
 func TestFixFolder_Execute_ThreeArguments_Rejected(t *testing.T) {
-	repo, runner, w := scopedFixFolderFixture(t, nil, nil)
-	folderURI := string(uri.PathToUri(types.FilePath(repo)))
+	repo := initGitRepoForCmd(t)
+	runner := &recordingRunner{}
 
-	_, err := executeScopedFixFolder(t, []any{folderURI, folderURI, folderURI}, runner, w)
+	_, err := executeScopedFixFolder(t, []any{repoURI(repo), repoURI(repo), repoURI(repo)}, runner, workspaceWith(t))
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "got 3")
 	assert.Zero(t, runner.calls)
 }
 
-func TestFixFolder_Execute_DeltaOff_RunsUnscoped(t *testing.T) {
+func TestFixFolder_Execute_InvalidRootArgument_Rejected(t *testing.T) {
 	repo := initGitRepoForCmd(t)
-	folder := newDeltaFolder(t, repo, false, false, snyk.IssuesByFile{
-		"main.go": {newIssue("finding-1")},
-	})
-	_, runner, w := scopedFixFolderFixture(t, folder, nil)
-	folderURI := string(uri.PathToUri(types.FilePath(repo)))
+	runner := &recordingRunner{}
 
-	_, err := executeScopedFixFolder(t, []any{folderURI, folderURI}, runner, w)
+	_, err := executeScopedFixFolder(t, []any{repoURI(repo), 42}, runner, workspaceWith(t))
 
-	require.NoError(t, err)
-	assert.Equal(t, 1, runner.calls)
-	assert.Empty(t, runner.findingIDs, "delta off must leave the run unscoped")
-}
-
-func TestFixFolder_Execute_DeltaOnNoBaseline_RunsUnscoped(t *testing.T) {
-	repo := initGitRepoForCmd(t)
-	folder := newDeltaFolder(t, repo, true, false, snyk.IssuesByFile{
-		"main.go": {newIssue("finding-1")},
-	})
-	_, runner, w := scopedFixFolderFixture(t, folder, nil)
-	folderURI := string(uri.PathToUri(types.FilePath(repo)))
-
-	_, err := executeScopedFixFolder(t, []any{folderURI, folderURI}, runner, w)
-
-	require.NoError(t, err)
-	assert.Equal(t, 1, runner.calls)
-	assert.Empty(t, runner.findingIDs, "a missing baseline must fail open to an unscoped run")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "workspace root URI argument must be a non-empty string")
+	assert.Zero(t, runner.calls)
 }
 
 func TestFixFolder_Execute_DeltaOnWithBaseline_ScopesToNetNewFindingIDs(t *testing.T) {
 	repo := initGitRepoForCmd(t)
-	folder := newDeltaFolder(t, repo, true, true, snyk.IssuesByFile{
-		"main.go": {newIssue("finding-1"), newIssue("")},
-		"util.go": {newIssue("finding-2")},
+	folder := scopingFolder(t, repo, snyk.IssuesByFile{
+		"main.go":      {newIssue("finding-1"), newIssue(""), newIssue("finding-2")},
+		"util.go":      {newIssue("finding-2")},
+		"package.json": {&snyk.Issue{FindingId: "oss-finding", Product: product.ProductOpenSource}},
 	})
-	_, runner, w := scopedFixFolderFixture(t, folder, nil)
-	folderURI := string(uri.PathToUri(types.FilePath(repo)))
+	runner := &recordingRunner{}
 
-	_, err := executeScopedFixFolder(t, []any{folderURI, folderURI}, runner, w)
+	_, err := executeScopedFixFolder(t, []any{repoURI(repo), repoURI(repo)}, runner, workspaceWith(t, folder))
 
 	require.NoError(t, err)
 	assert.Equal(t, 1, runner.calls)
 	assert.Equal(t, []string{"finding-1", "finding-2"}, runner.findingIDs,
-		"the run must carry the net-new findings' native identifiers and drop the ones with none")
+		"the run must carry each net-new Snyk Code finding id once and drop issues with none")
+}
+
+func TestFixFolder_Execute_HiddenNetNewFinding_LeftOutOfScope(t *testing.T) {
+	repo := initGitRepoForCmd(t)
+	shown := newIssue("shown")
+	ignored := &snyk.Issue{FindingId: "ignored", Product: product.ProductCode, IsIgnored: true}
+	folder := newDeltaFolder(t, repo, true, true,
+		snyk.IssuesByFile{"main.go": {shown, ignored}},
+		snyk.IssuesByFile{"main.go": {shown}})
+	runner := &recordingRunner{}
+
+	_, err := executeScopedFixFolder(t, []any{repoURI(repo), repoURI(repo)}, runner, workspaceWith(t, folder))
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"shown"}, runner.findingIDs, "a finding the developer was not shown must not be fixed")
 }
 
 func TestFixFolder_Execute_DeltaOnEmptyNetNew_ReturnsEmptyWithoutInvokingRemy(t *testing.T) {
 	repo := initGitRepoForCmd(t)
-	folder := newDeltaFolder(t, repo, true, true, snyk.IssuesByFile{})
-	_, runner, w := scopedFixFolderFixture(t, folder, nil)
-	folderURI := string(uri.PathToUri(types.FilePath(repo)))
+	runner := &recordingRunner{}
 
-	result, err := executeScopedFixFolder(t, []any{folderURI, folderURI}, runner, w)
+	result, err := executeScopedFixFolder(t, []any{repoURI(repo), repoURI(repo)}, runner,
+		workspaceWith(t, scopingFolder(t, repo, snyk.IssuesByFile{})))
 
 	require.NoError(t, err)
 	assert.Zero(t, runner.calls, "an empty net-new set reaches remy as no filter, so the run must be skipped")
@@ -188,79 +249,20 @@ func TestFixFolder_Execute_DeltaOnEmptyNetNew_ReturnsEmptyWithoutInvokingRemy(t 
 	assert.NotNil(t, ffr.Files)
 }
 
-// An unregistered root cannot answer the delta questions, so the run fails open.
-func TestFixFolder_Execute_UnregisteredRoot_RunsUnscoped(t *testing.T) {
-	repo := initGitRepoForCmd(t)
-	other := initGitRepoForCmd(t)
-	folder := newDeltaFolder(t, other, true, true, snyk.IssuesByFile{
-		"main.go": {newIssue("finding-1")},
-	})
-	_, runner, w := scopedFixFolderFixture(t, folder, nil)
-	folderURI := string(uri.PathToUri(types.FilePath(repo)))
-
-	_, err := executeScopedFixFolder(t, []any{folderURI, folderURI}, runner, w)
-
-	require.NoError(t, err)
-	assert.Equal(t, 1, runner.calls)
-	assert.Empty(t, runner.findingIDs, "a root matching no registered folder must run unscoped")
-}
-
-// A parent folder's net-new set belongs to a different folder, so containment
-// must not be used to resolve the root.
-func TestFixFolder_Execute_ParentFolderRegistered_RunsUnscoped(t *testing.T) {
-	repo := initGitRepoForCmd(t)
-	folder := newDeltaFolder(t, filepath.Dir(repo), true, true, snyk.IssuesByFile{
-		"main.go": {newIssue("parent-finding")},
-	})
-	_, runner, w := scopedFixFolderFixture(t, folder, nil)
-	folderURI := string(uri.PathToUri(types.FilePath(repo)))
-
-	_, err := executeScopedFixFolder(t, []any{folderURI, folderURI}, runner, w)
-
-	require.NoError(t, err)
-	assert.Equal(t, 1, runner.calls)
-	assert.Empty(t, runner.findingIDs, "only an exact path match may scope the run")
-}
-
-func TestFixFolder_Execute_NoWorkspace_RunsUnscoped(t *testing.T) {
-	repo := initGitRepoForCmd(t)
-	runner := &recordingRunner{}
-	folderURI := string(uri.PathToUri(types.FilePath(repo)))
-
-	_, err := executeScopedFixFolder(t, []any{folderURI, folderURI}, runner, nil)
-
-	require.NoError(t, err)
-	assert.Equal(t, 1, runner.calls)
-	assert.Empty(t, runner.findingIDs)
-}
-
-func TestFixFolder_Execute_InvalidRootArgument_Rejected(t *testing.T) {
-	repo, runner, w := scopedFixFolderFixture(t, nil, nil)
-	folderURI := string(uri.PathToUri(types.FilePath(repo)))
-
-	_, err := executeScopedFixFolder(t, []any{folderURI, 42}, runner, w)
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "workspace root URI argument must be a non-empty string")
-	assert.Zero(t, runner.calls)
-}
-
 // A scoped run that fixed only some requested ids still produced a usable patch.
 func TestFixFolder_Execute_PartialFix_ReturnsChangedFiles(t *testing.T) {
 	repo := initGitRepoForCmd(t)
-	folder := newDeltaFolder(t, repo, true, true, snyk.IssuesByFile{
+	folder := scopingFolder(t, repo, snyk.IssuesByFile{
 		"main.go": {newIssue("finding-1"), newIssue("finding-2")},
 	})
-	partial := errors.New("selection: one or more requested issue ids were not fixed")
-	_, runner, w := scopedFixFolderFixture(t, folder, func(root string) error {
+	runner := &recordingRunner{fn: func(root string) error {
 		if err := modifyMain(root); err != nil {
 			return err
 		}
-		return partial
-	})
-	folderURI := string(uri.PathToUri(types.FilePath(repo)))
+		return errors.New(partialFixError)
+	}}
 
-	result, err := executeScopedFixFolder(t, []any{folderURI, folderURI}, runner, w)
+	result, err := executeScopedFixFolder(t, []any{repoURI(repo), repoURI(repo)}, runner, workspaceWith(t, folder))
 
 	require.NoError(t, err, "a partly-fixed scoped run must not fail the command")
 	ffr, ok := result.(types.FolderFixResult)
@@ -269,53 +271,60 @@ func TestFixFolder_Execute_PartialFix_ReturnsChangedFiles(t *testing.T) {
 	assert.Contains(t, ffr.Files[0].Diff, "var x = 2")
 }
 
+func TestFixFolder_Execute_PartialFixWithNoChanges_ReturnsEmptyFiles(t *testing.T) {
+	repo := initGitRepoForCmd(t)
+	folder := scopingFolder(t, repo, snyk.IssuesByFile{"main.go": {newIssue("finding-1")}})
+	runner := &recordingRunner{fn: func(string) error { return errors.New(partialFixError) }}
+
+	result, err := executeScopedFixFolder(t, []any{repoURI(repo), repoURI(repo)}, runner, workspaceWith(t, folder))
+
+	require.NoError(t, err, "a scoped run that fixed nothing must not fail the command")
+	ffr, ok := result.(types.FolderFixResult)
+	require.True(t, ok)
+	encoded, err := json.Marshal(ffr)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"files":[]}`, string(encoded))
+}
+
 // Pins the upstream wording: a reword must fail loudly rather than turn every
 // partly-fixed run back into a failure.
 func TestFixFolder_Execute_PartialFixSentinelWording(t *testing.T) {
 	repo := initGitRepoForCmd(t)
-	folder := newDeltaFolder(t, repo, true, true, snyk.IssuesByFile{
-		"main.go": {newIssue("finding-1")},
-	})
-	reworded := errors.New("selection: some requested issue ids remained unfixed")
-	_, runner, w := scopedFixFolderFixture(t, folder, func(root string) error {
+	folder := scopingFolder(t, repo, snyk.IssuesByFile{"main.go": {newIssue("finding-1")}})
+	runner := &recordingRunner{fn: func(root string) error {
 		if err := modifyMain(root); err != nil {
 			return err
 		}
-		return reworded
-	})
-	folderURI := string(uri.PathToUri(types.FilePath(repo)))
+		return errors.New("selection: some requested issue ids remained unfixed")
+	}}
 
-	_, err := executeScopedFixFolder(t, []any{folderURI, folderURI}, runner, w)
+	_, err := executeScopedFixFolder(t, []any{repoURI(repo), repoURI(repo)}, runner, workspaceWith(t, folder))
 
 	require.Error(t, err, "only the exact upstream message counts as a partial fix")
 }
 
 // An unscoped run requested nothing, so nothing can be partly fixed.
 func TestFixFolder_Execute_PartialFixOnUnscopedRun_StillFails(t *testing.T) {
-	partial := errors.New("selection: one or more requested issue ids were not fixed")
-	repo, runner, w := scopedFixFolderFixture(t, nil, func(root string) error {
+	repo := initGitRepoForCmd(t)
+	runner := &recordingRunner{fn: func(root string) error {
 		if err := modifyMain(root); err != nil {
 			return err
 		}
-		return partial
-	})
-	folderURI := string(uri.PathToUri(types.FilePath(repo)))
+		return errors.New(partialFixError)
+	}}
 
-	_, err := executeScopedFixFolder(t, []any{folderURI}, runner, w)
+	_, err := executeScopedFixFolder(t, []any{repoURI(repo)}, runner, workspaceWith(t))
 
 	require.Error(t, err)
 }
 
 func TestFixFolder_Execute_OtherRunnerError_FailsCommand(t *testing.T) {
 	repo := initGitRepoForCmd(t)
-	folder := newDeltaFolder(t, repo, true, true, snyk.IssuesByFile{
-		"main.go": {newIssue("finding-1")},
-	})
+	folder := scopingFolder(t, repo, snyk.IssuesByFile{"main.go": {newIssue("finding-1")}})
 	boom := errors.New("remy exploded")
-	_, runner, w := scopedFixFolderFixture(t, folder, func(_ string) error { return boom })
-	folderURI := string(uri.PathToUri(types.FilePath(repo)))
+	runner := &recordingRunner{fn: func(string) error { return boom }}
 
-	_, err := executeScopedFixFolder(t, []any{folderURI, folderURI}, runner, w)
+	_, err := executeScopedFixFolder(t, []any{repoURI(repo), repoURI(repo)}, runner, workspaceWith(t, folder))
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, boom)
