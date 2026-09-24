@@ -327,8 +327,8 @@ func TestFixFolder_Execute_OtherRunnerError_FailsCommand(t *testing.T) {
 }
 
 // Snyk Code emits no asset fingerprint without an origin remote, so remy has
-// nothing to match.
-func TestFixFolder_Execute_NetNewFindingsWithoutIDs_SkipsAndWarns(t *testing.T) {
+// nothing to match and the fix falls back to the whole folder.
+func TestFixFolder_Execute_NetNewFindingsWithoutIDs_RunsUnscopedAndWarns(t *testing.T) {
 	repo := initGitRepoForCmd(t)
 	runner := &recordingRunner{}
 	var logs bytes.Buffer
@@ -343,10 +343,10 @@ func TestFixFolder_Execute_NetNewFindingsWithoutIDs_SkipsAndWarns(t *testing.T) 
 	result, err := cmd.Execute(context.Background())
 
 	require.NoError(t, err)
-	assert.Zero(t, runner.calls)
-	ffr, ok := result.(types.FolderFixResult)
+	assert.Equal(t, 1, runner.calls)
+	assert.Nil(t, runner.findingIDs)
+	_, ok = result.(types.FolderFixResult)
 	require.True(t, ok)
-	assert.Empty(t, ffr.Files)
 	assert.Contains(t, logs.String(), `"findingsWithoutID":2`)
 	assert.Contains(t, logs.String(), "origin remote")
 }

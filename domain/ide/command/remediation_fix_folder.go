@@ -95,7 +95,7 @@ func (cmd *remediationFixFolderCommand) Execute(ctx context.Context) (any, error
 }
 
 // resolveScope fails open to an unscoped run when the root matches no registered
-// folder, delta is off, or there is no baseline yet.
+// folder, delta is off, there is no baseline yet, or no net-new finding has an id.
 func (cmd *remediationFixFolderCommand) resolveScope(args []any) (findingIDs []string, scoped bool, err error) {
 	if len(args) < 2 {
 		return nil, false, nil
@@ -124,9 +124,14 @@ func (cmd *remediationFixFolderCommand) resolveScope(args []any) (findingIDs []s
 	// The display filter drops non-net-new findings when delta applies, so this is
 	// exactly the net-new set the developer was shown.
 	ids, withoutID := codeFindingIDs(fip.FilterIssues(fip.Issues(), folder.DisplayableIssueTypes()))
+	if withoutID > 0 && len(ids) == 0 {
+		cmd.logger.Warn().Str("root", rootURIStr).Int("findingsWithoutID", withoutID).
+			Msg("snyk.remediationAgent.fixFolder: net-new findings have no asset fingerprint, which Snyk Code only emits for a repository with an origin remote, running unscoped")
+		return nil, false, nil
+	}
 	if withoutID > 0 {
 		cmd.logger.Warn().Str("root", rootURIStr).Int("findingsWithoutID", withoutID).
-			Msg("snyk.remediationAgent.fixFolder: some net-new findings have no asset fingerprint, which Snyk Code only emits for a repository with an origin remote, so remy cannot target them")
+			Msg("snyk.remediationAgent.fixFolder: some net-new findings have no asset fingerprint, so remy cannot target them")
 	}
 	cmd.logger.Info().Str("root", rootURIStr).Int("netNewFindings", len(ids)).
 		Msg("snyk.remediationAgent.fixFolder: scoping the fix to the folder's net-new findings")

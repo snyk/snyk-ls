@@ -156,7 +156,8 @@ flowchart TD
     C -->|yes| D["filter the folder's issues with the<br/>same filter its diagnostics use"]
     D --> E{"any Snyk Code finding ids?"}
     E -->|yes| S["run Remy with issue-ids"]
-    E -->|no| N["return an empty result, Remy does not run"]
+    E -->|"no, findings shown but none has an id"| W
+    E -->|"no, nothing shown"| N["return an empty result, Remy does not run"]
 ```
 
 | Case | Run |
@@ -164,6 +165,7 @@ flowchart TD
 | One argument, delta off, or the root matches no registered folder | Unscoped |
 | Delta on but no baseline yet | Unscoped, with a warning in the log |
 | Net-new findings shown to the developer | Scoped to their ids through `issue-ids` |
+| Net-new findings shown, none with an id (no `origin` remote) | Unscoped, with a warning in the log |
 | Nothing net-new shown | No run, empty `files` |
 
-**Decision.** The id set comes from the folder's display filter (`FilterIssues` over its issues and `DisplayableIssueTypes`), not from the raw net-new cache. The display filter also drops ignored findings and those hidden by severity, risk score, issue view options or issue type, so the patch addresses exactly what the developer was shown. For Snyk Code the finding id is the fingerprint Remy matches `issue-ids` against, so it passes through unchanged. The root is matched by exact path, because containment would also match a parent folder and use that folder's findings. An empty set skips the run because Remy reads an empty `issue-ids` as no filter. A scoped run that Remy reports as partly fixed still returns its patch, which can be empty.
+**Decision.** The id set comes from the folder's display filter (`FilterIssues` over its issues and `DisplayableIssueTypes`), not from the raw net-new cache. The display filter also drops ignored findings and those hidden by severity, risk score, issue view options or issue type, so the patch addresses exactly what the developer was shown. For Snyk Code the finding id is the fingerprint Remy matches `issue-ids` against, so it passes through unchanged. The root is matched by exact path, because containment would also match a parent folder and use that folder's findings. An empty set skips the run because Remy reads an empty `issue-ids` as no filter. The exception is a repository without an `origin` remote: Snyk Code then emits no asset fingerprint, so the shown findings have no id Remy can match, and the run falls back to unscoped rather than silently fixing nothing. A scoped run that Remy reports as partly fixed still returns its patch, which can be empty.
