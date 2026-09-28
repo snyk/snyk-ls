@@ -65,5 +65,5 @@ type FolderRemediator interface {
 	// FixFolder runs the fix workflow in place in root and returns one result per
 	// changed file. Returns an empty slice when the fix produced no changes. It
 	// does NOT apply changes; the caller lands them.
-	FixFolder(ctx context.Context, root types.FilePath) ([]types.FolderFixFileResult, error)
+	FixFolder(ctx context.Context, root types.FilePath, findingIDs []string) ([]types.FolderFixFileResult, error)
 }

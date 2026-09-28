@@ -60,17 +60,18 @@ func createDetachedWorktree(t *testing.T, mainRepo string) string {
 // TestFixFolder_ReturnsResultForChangedFile verifies that when the fake runner
 // modifies a tracked file, FixFolder returns one FolderFixFileResult whose
 // WorkspacePath == WorktreePath == <folder>/main.go and whose Diff contains
-// the changed content. The runner must be called with (folder, "").
+// the changed content. The runner must be called with (folder, nil).
 func TestFixFolder_ReturnsResultForChangedFile(t *testing.T) {
 	repo := initGitRepo(t)
 	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
 
 	mainAbs := filepath.Join(repo, "main.go")
 
-	var runnerDir, runnerFindingID string
-	runner := func(_ context.Context, _ workflow.Engine, root, findingID string) error {
+	var runnerDir string
+	var runnerFindingIDs []string
+	runner := func(_ context.Context, _ workflow.Engine, root string, findingIDs []string) error {
 		runnerDir = root
-		runnerFindingID = findingID
+		runnerFindingIDs = findingIDs
 		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0644)
 	}
 
@@ -78,7 +79,7 @@ func TestFixFolder_ReturnsResultForChangedFile(t *testing.T) {
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok, "remyProvider must implement FolderRemediator")
 
-	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo), nil)
 	require.NoError(t, err)
 	require.Len(t, results, 1, "expected one result for one changed file")
 
@@ -87,9 +88,8 @@ func TestFixFolder_ReturnsResultForChangedFile(t *testing.T) {
 	assert.Equal(t, mainAbs, r.WorkspacePath, "WorkspacePath must be <folder>/main.go")
 	assert.Contains(t, r.Diff, "var x = 2", "Diff must contain the changed line")
 
-	// Runner must be called with exactly the passed folder and empty findingID.
 	assert.Equal(t, repo, runnerDir, "runner must be called with the passed folder")
-	assert.Empty(t, runnerFindingID, "runner must be called with empty findingID for folder path")
+	assert.Empty(t, runnerFindingIDs, "runner must be called with no finding ids for an unscoped folder run")
 }
 
 // ---------------------------------------------------------------------------
@@ -104,7 +104,7 @@ func TestFixFolder_NoChangesReturnsEmpty(t *testing.T) {
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok)
 
-	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo), nil)
 	require.NoError(t, err)
 	assert.Empty(t, results, "no-change run must return empty slice")
 }
@@ -122,7 +122,7 @@ func TestFixFolder_PropagatesRunnerError(t *testing.T) {
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok)
 
-	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo), nil)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, sentinel)
 	assert.Nil(t, results)
@@ -134,7 +134,7 @@ func TestFixFolder_PropagatesRunnerError(t *testing.T) {
 
 func TestFixFolder_RejectsNonAbsolutePath(t *testing.T) {
 	var runnerCalled bool
-	trackingRunner := func(_ context.Context, _ workflow.Engine, _, _ string) error {
+	trackingRunner := func(_ context.Context, _ workflow.Engine, _ string, _ []string) error {
 		runnerCalled = true
 		return nil
 	}
@@ -144,14 +144,14 @@ func TestFixFolder_RejectsNonAbsolutePath(t *testing.T) {
 	require.True(t, ok)
 
 	// Relative path
-	results, err := fr.FixFolder(context.Background(), types.FilePath("relative/path"))
+	results, err := fr.FixFolder(context.Background(), types.FilePath("relative/path"), nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "absolute")
 	assert.Nil(t, results)
 	assert.False(t, runnerCalled, "runner must NOT be called on invalid path")
 
 	// Empty path
-	results2, err2 := fr.FixFolder(context.Background(), types.FilePath(""))
+	results2, err2 := fr.FixFolder(context.Background(), types.FilePath(""), nil)
 	require.Error(t, err2)
 	assert.Contains(t, err2.Error(), "absolute")
 	assert.Nil(t, results2)
@@ -168,7 +168,7 @@ func TestFixFolder_SubdirOfGitRoot_ReturnsError(t *testing.T) {
 	subdir := filepath.Join(repo, "sub")
 
 	var runnerCalled bool
-	runner := func(_ context.Context, _ workflow.Engine, _, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, _ string, _ []string) error {
 		runnerCalled = true
 		return nil
 	}
@@ -177,7 +177,7 @@ func TestFixFolder_SubdirOfGitRoot_ReturnsError(t *testing.T) {
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok)
 
-	results, err := fr.FixFolder(context.Background(), types.FilePath(subdir))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(subdir), nil)
 	require.Error(t, err, "FixFolder must return an error when passed a subdirectory of a git root")
 	assert.Nil(t, results)
 	assert.False(t, runnerCalled, "runner must NOT be called when the precondition guard fires")
@@ -191,7 +191,7 @@ func TestFixFolder_NonGitDirectory_ReturnsError(t *testing.T) {
 	nonGit := t.TempDir()
 
 	var runnerCalled bool
-	runner := func(_ context.Context, _ workflow.Engine, _, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, _ string, _ []string) error {
 		runnerCalled = true
 		return nil
 	}
@@ -200,7 +200,7 @@ func TestFixFolder_NonGitDirectory_ReturnsError(t *testing.T) {
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok)
 
-	results, err := fr.FixFolder(context.Background(), types.FilePath(nonGit))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(nonGit), nil)
 	require.Error(t, err)
 	assert.Nil(t, results)
 	assert.False(t, runnerCalled)
@@ -221,7 +221,7 @@ func TestFixFolder_TrackedFileModified_StillErrors(t *testing.T) {
 	require.NoError(t, err)
 
 	var runnerCalled bool
-	runner := func(_ context.Context, _ workflow.Engine, _, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, _ string, _ []string) error {
 		runnerCalled = true
 		return nil
 	}
@@ -230,7 +230,7 @@ func TestFixFolder_TrackedFileModified_StillErrors(t *testing.T) {
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok)
 
-	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo), nil)
 	require.Error(t, err)
 	assert.Nil(t, results)
 	assert.False(t, runnerCalled)
@@ -247,7 +247,7 @@ func TestFixFolder_UntrackedFileOnly_DoesNotError(t *testing.T) {
 	err := os.WriteFile(filepath.Join(repo, "artifact.bin"), []byte("binary"), 0644)
 	require.NoError(t, err)
 
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0644)
 	}
 
@@ -255,7 +255,7 @@ func TestFixFolder_UntrackedFileOnly_DoesNotError(t *testing.T) {
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok)
 
-	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo), nil)
 	require.NoError(t, err, "FixFolder must not error when the only dirty state is untracked files")
 	assert.NotEmpty(t, results, "FixFolder must return results when the runner modifies a tracked file")
 }
@@ -282,7 +282,7 @@ func TestFixFolder_SymlinkPath_KeyedUnderPassedPath(t *testing.T) {
 		t.Skipf("cannot create symlink (os restriction): %v", symlinkErr)
 	}
 
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0644)
 	}
 
@@ -290,7 +290,7 @@ func TestFixFolder_SymlinkPath_KeyedUnderPassedPath(t *testing.T) {
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok)
 
-	results, err := fr.FixFolder(context.Background(), types.FilePath(linkDir))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(linkDir), nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, results, "FixFolder must return results when a file was modified")
 
@@ -313,7 +313,7 @@ func TestFixFolder_MultiFile_OneResultPerFile(t *testing.T) {
 	commitFile(t, repo, "b.go", "package main\nvar b = 1\n")
 	commitFile(t, repo, "c.go", "package main\nvar c = 1\n")
 
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		_ = os.WriteFile(filepath.Join(root, "a.go"), []byte("package main\nvar a = 2\n"), 0644)
 		_ = os.WriteFile(filepath.Join(root, "b.go"), []byte("package main\nvar b = 2\n"), 0644)
 		_ = os.WriteFile(filepath.Join(root, "c.go"), []byte("package main\nvar c = 2\n"), 0644)
@@ -324,7 +324,7 @@ func TestFixFolder_MultiFile_OneResultPerFile(t *testing.T) {
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok)
 
-	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo), nil)
 	require.NoError(t, err)
 	require.Len(t, results, 3, "must return one result per changed file")
 
@@ -347,7 +347,7 @@ func TestFixFolder_RunsDirectlyInPassedFolder(t *testing.T) {
 	commitFile(t, repo, "main.go", "package main\n")
 
 	var invokedWith string
-	trackingRunner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	trackingRunner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		invokedWith = root
 		return nil
 	}
@@ -356,7 +356,7 @@ func TestFixFolder_RunsDirectlyInPassedFolder(t *testing.T) {
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok)
 
-	_, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	_, err := fr.FixFolder(context.Background(), types.FilePath(repo), nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, repo, invokedWith, "runner must be invoked with the passed folder, not a child dir")
@@ -378,7 +378,7 @@ func TestFixFolder_CleanWorktree_Succeeds(t *testing.T) {
 	repo := initGitRepo(t)
 	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
 
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0644)
 	}
 
@@ -386,7 +386,7 @@ func TestFixFolder_CleanWorktree_Succeeds(t *testing.T) {
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok)
 
-	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo), nil)
 	require.NoError(t, err, "FixFolder must succeed on a clean worktree")
 	assert.NotEmpty(t, results, "FixFolder must return results when the runner modifies files")
 }
@@ -403,7 +403,7 @@ func TestFixFolder_UncommittedChanges_ReturnsError(t *testing.T) {
 	require.NoError(t, err)
 
 	var runnerCalled bool
-	runner := func(_ context.Context, _ workflow.Engine, _, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, _ string, _ []string) error {
 		runnerCalled = true
 		return nil
 	}
@@ -412,7 +412,7 @@ func TestFixFolder_UncommittedChanges_ReturnsError(t *testing.T) {
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok)
 
-	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo), nil)
 	require.Error(t, err)
 	assert.Nil(t, results)
 	assert.False(t, runnerCalled)
@@ -438,7 +438,7 @@ func TestFixFolder_RunnerConsumesContextBudget_ResultsStillReturned(t *testing.T
 	const runnerDelay = 120 * time.Millisecond
 	const callerBudget = 80 * time.Millisecond
 
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		// Write the fix first, then sleep past the caller budget.
 		// This simulates a real runner that completes its work but whose context
 		// has expired by the time it returns — the fix IS done, so the results
@@ -457,7 +457,7 @@ func TestFixFolder_RunnerConsumesContextBudget_ResultsStillReturned(t *testing.T
 	ctx, cancel := context.WithTimeout(context.Background(), callerBudget)
 	defer cancel()
 
-	results, err := fr.FixFolder(ctx, types.FilePath(repo))
+	results, err := fr.FixFolder(ctx, types.FilePath(repo), nil)
 	require.NoError(t, err,
 		"FixFolder must return results even when the runner exhausts the caller context: "+
 			"git enumeration must use its own fresh context, not the expired caller context")
@@ -486,7 +486,7 @@ func TestFixFolder_AllChangedFilesPresent_NoSilentDrop(t *testing.T) {
 	commitFile(t, repo, "b.go", "package main\nvar b = 1\n")
 	commitFile(t, repo, "c.go", "package main\nvar c = 1\n")
 
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		_ = os.WriteFile(filepath.Join(root, "a.go"), []byte("package main\nvar a = 2\n"), 0644)
 		_ = os.WriteFile(filepath.Join(root, "b.go"), []byte("package main\nvar b = 2\n"), 0644)
 		_ = os.WriteFile(filepath.Join(root, "c.go"), []byte("package main\nvar c = 2\n"), 0644)
@@ -496,7 +496,7 @@ func TestFixFolder_AllChangedFilesPresent_NoSilentDrop(t *testing.T) {
 	p := remediation.NewRemyProvider(nil, runner)
 	fr := p.(remediation.FolderRemediator)
 
-	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo), nil)
 	require.NoError(t, err)
 	require.Len(t, results, 3, "all three changed files must appear in results; none silently dropped")
 
@@ -527,14 +527,14 @@ func TestFixFolder_DeletedFile_HasEmptyWorktreePath(t *testing.T) {
 	repo := initGitRepo(t)
 	commitFile(t, repo, "todelete.go", "package main\nvar x = 1\n")
 
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		return os.Remove(filepath.Join(root, "todelete.go"))
 	}
 
 	p := remediation.NewRemyProvider(nil, runner)
 	fr := p.(remediation.FolderRemediator)
 
-	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo), nil)
 	require.NoError(t, err)
 	require.Len(t, results, 1, "deleted file must produce exactly one result entry")
 
@@ -569,14 +569,14 @@ func TestFixFolder_ColorDiffConfig_ReturnsValidDiff(t *testing.T) {
 	configOut, configErr := configCmd.CombinedOutput()
 	require.NoError(t, configErr, "git config color.diff always: %s", string(configOut))
 
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0o644)
 	}
 
 	p := remediation.NewRemyProvider(nil, runner)
 	fr := p.(remediation.FolderRemediator)
 
-	results, err := fr.FixFolder(context.Background(), types.FilePath(wt))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(wt), nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, results, "color.diff=always must not suppress results; --no-color must be used")
 
@@ -606,14 +606,14 @@ func TestFixFolder_ExternalDiffConfig_ReturnsValidDiff(t *testing.T) {
 	configOut, configErr := configCmd.CombinedOutput()
 	require.NoError(t, configErr, "git config diff.external /bin/false: %s", string(configOut))
 
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0o644)
 	}
 
 	p := remediation.NewRemyProvider(nil, runner)
 	fr := p.(remediation.FolderRemediator)
 
-	results, err := fr.FixFolder(context.Background(), types.FilePath(wt))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(wt), nil)
 	require.NoError(t, err, "--no-ext-diff must bypass the external differ; FixFolder must not error")
 	require.NotEmpty(t, results, "diff.external config must not suppress results")
 
@@ -635,14 +635,14 @@ func TestFixFolder_Rename_OldPathIsDeletedEntry(t *testing.T) {
 	commitFile(t, mainRepo, "old.go", "package main\nvar x = 1\n")
 	wt := createDetachedWorktree(t, mainRepo)
 
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		return os.Rename(filepath.Join(root, "old.go"), filepath.Join(root, "new.go"))
 	}
 
 	p := remediation.NewRemyProvider(nil, runner)
 	fr := p.(remediation.FolderRemediator)
 
-	results, err := fr.FixFolder(context.Background(), types.FilePath(wt))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(wt), nil)
 	require.NoError(t, err)
 
 	// old.go must appear as a deletion (WorktreePath=="").
@@ -672,14 +672,14 @@ func TestFixFolder_NonASCIIFilename_CorrectEditEntry(t *testing.T) {
 	commitFile(t, mainRepo, "café.go", "package main\nvar x = 1\n")
 	wt := createDetachedWorktree(t, mainRepo)
 
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		return os.WriteFile(filepath.Join(root, "café.go"), []byte("package main\nvar x = 2\n"), 0o644)
 	}
 
 	p := remediation.NewRemyProvider(nil, runner)
 	fr := p.(remediation.FolderRemediator)
 
-	results, err := fr.FixFolder(context.Background(), types.FilePath(wt))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(wt), nil)
 	require.NoError(t, err)
 
 	var cafeEntry *types.FolderFixFileResult
@@ -726,7 +726,7 @@ func TestFixFolder_TextconvIgnored_FileAppearsInResults(t *testing.T) {
 	require.NoError(t, configErr, "git config diff.testconv.textconv: %s", string(configOut))
 
 	// Runner modifies the tracked file.
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0o644)
 	}
 
@@ -734,7 +734,7 @@ func TestFixFolder_TextconvIgnored_FileAppearsInResults(t *testing.T) {
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok)
 
-	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo), nil)
 	require.NoError(t, err,
 		"FixFolder must not error when a textconv is configured; --no-textconv must bypass the filter")
 	require.Len(t, results, 1, "modified file must appear in results despite textconv configuration")
@@ -759,7 +759,7 @@ func TestFixFolder_CancelledCallerContext_GuardsStillSucceed(t *testing.T) {
 	repo := initGitRepo(t)
 	commitFile(t, repo, "main.go", "package main\nvar x = 1\n")
 
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0644)
 	}
 
@@ -771,7 +771,7 @@ func TestFixFolder_CancelledCallerContext_GuardsStillSucceed(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	results, err := fr.FixFolder(ctx, types.FilePath(repo))
+	results, err := fr.FixFolder(ctx, types.FilePath(repo), nil)
 	require.NoError(t, err,
 		"FixFolder's git integrity guards must not be tied to the caller context: "+
 			"an already-canceled caller context must not prevent the pre-flight guards from running")
@@ -816,7 +816,7 @@ func TestFixFolder_StatCleanSameSize_StillDetected(t *testing.T) {
 	fr, ok := p.(remediation.FolderRemediator)
 	require.True(t, ok, "remyProvider must implement FolderRemediator")
 
-	results, err := fr.FixFolder(context.Background(), types.FilePath(repo))
+	results, err := fr.FixFolder(context.Background(), types.FilePath(repo), nil)
 	require.NoError(t, err)
 	require.Len(t, results, 1,
 		"content-changed file must produce a result even when git stat cache sees mtime+size unchanged (IDE-2289 regression guard)")

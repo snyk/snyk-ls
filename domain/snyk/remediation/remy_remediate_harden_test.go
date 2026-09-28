@@ -62,7 +62,7 @@ func TestRemediate_EnumCtx_SurvivesCallerDeadline(t *testing.T) {
 	// Canceling explicitly (rather than waiting out a short provider timeout)
 	// keeps the expiry independent of machine speed: slow pre-runner git ops on a
 	// loaded Windows agent can no longer consume the budget before the runner runs.
-	runner := func(ctx context.Context, _ workflow.Engine, root string, _ string) error {
+	runner := func(ctx context.Context, _ workflow.Engine, root string, _ []string) error {
 		if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0o644); err != nil {
 			return err
 		}
@@ -113,7 +113,7 @@ func TestRemediate_Rename_ProducesDeletionEdit(t *testing.T) {
 
 	// The runner stages a rename (git mv) in the worktree so git diff HEAD sees
 	// both the deletion and the addition with rename detection enabled.
-	runner := func(_ context.Context, _ workflow.Engine, root string, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		cmd := exec.Command("git", "-c", "core.checkStat=minimal", "-C", root, "mv", "old.go", "new.go")
 		if mvOut, mvErr := cmd.CombinedOutput(); mvErr != nil {
 			return fmt.Errorf("git mv: %w (%s)", mvErr, string(mvOut))
@@ -160,7 +160,7 @@ func TestRemediate_EmptyFile_ProducesInsertionEdit(t *testing.T) {
 	commitFile(t, repoRoot, "empty.go", "")
 	absPath := filepath.Join(repoRoot, "empty.go")
 
-	runner := func(_ context.Context, _ workflow.Engine, root string, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		return os.WriteFile(filepath.Join(root, "empty.go"), []byte("package main\nvar x = 1\n"), 0o644)
 	}
 
@@ -213,7 +213,7 @@ func TestRemediate_ColorDiffAlways_ProducesEdit(t *testing.T) {
 	commitFile(t, repoRoot, "main.go", "package main\nvar x = 1\n")
 	absPath := filepath.Join(repoRoot, "main.go")
 
-	runner := func(_ context.Context, _ workflow.Engine, root string, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		return os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nvar x = 2\n"), 0o644)
 	}
 

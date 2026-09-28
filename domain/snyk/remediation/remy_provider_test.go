@@ -41,21 +41,21 @@ import (
 // ---------------------------------------------------------------------------
 
 // noopRunner is a fake remyRunner that makes no file changes.
-func noopRunner(_ context.Context, _ workflow.Engine, _, _ string) error {
+func noopRunner(_ context.Context, _ workflow.Engine, _ string, _ []string) error {
 	return nil
 }
 
 // modifyRunner returns a fake remyRunner that overwrites name with content
 // inside the worktree root passed to the runner.
-func modifyRunner(name, content string) func(context.Context, workflow.Engine, string, string) error {
-	return func(_ context.Context, _ workflow.Engine, root, _ string) error {
+func modifyRunner(name, content string) func(context.Context, workflow.Engine, string, []string) error {
+	return func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		return os.WriteFile(filepath.Join(root, name), []byte(content), 0644)
 	}
 }
 
 // errRunner returns a fake remyRunner that always returns the given error.
-func errRunner(err error) func(context.Context, workflow.Engine, string, string) error {
-	return func(_ context.Context, _ workflow.Engine, _, _ string) error {
+func errRunner(err error) func(context.Context, workflow.Engine, string, []string) error {
+	return func(_ context.Context, _ workflow.Engine, _ string, _ []string) error {
 		return err
 	}
 }
@@ -194,7 +194,7 @@ func TestRemediate_CacheHit_DoesNotInvokeRunner(t *testing.T) {
 	barAbs := filepath.Join(repo, "bar.go")
 
 	var callCount int32
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		atomic.AddInt32(&callCount, 1)
 		// Modify both files so there is something to cache for bar.go.
 		if err := os.WriteFile(filepath.Join(root, "foo.go"), []byte("package main\nvar x = 2\n"), 0644); err != nil {
@@ -240,7 +240,7 @@ func TestTryServeFromCache_LastFileEvictsEntry(t *testing.T) {
 	bAbs := filepath.Join(repo, "b.go")
 	cAbs := filepath.Join(repo, "c.go")
 
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		// Modify a.go, b.go, c.go — so changes for b.go and c.go are cached
 		// when a.go is the requested file.
 		if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package main\nvar a = 2\n"), 0644); err != nil {
@@ -316,7 +316,7 @@ func TestInvalidateFile_RemovesCachedEdits(t *testing.T) {
 	barAbs := filepath.Join(repo, "bar.go")
 
 	var callCount int32
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		atomic.AddInt32(&callCount, 1)
 		if err := os.WriteFile(filepath.Join(root, "foo.go"), []byte("package main\nvar x = 2\n"), 0644); err != nil {
 			return err
@@ -362,7 +362,7 @@ func TestInvalidateFile_EvictsEmptyEntry(t *testing.T) {
 	barAbs := filepath.Join(repo, "bar.go")
 
 	var callCount int32
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		atomic.AddInt32(&callCount, 1)
 		if err := os.WriteFile(filepath.Join(root, "foo.go"), []byte("package main\nvar x = 2\n"), 0644); err != nil {
 			return err
@@ -407,7 +407,7 @@ func TestGetOrCreateRootMu_ConcurrentSameRoot(t *testing.T) {
 	commitFile(t, repo, "foo.go", "package main\nvar x = 1\n")
 
 	var callCount int32
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		atomic.AddInt32(&callCount, 1)
 		return nil
 	}
@@ -503,7 +503,7 @@ func TestCacheValid_SameSizeContentChange(t *testing.T) {
 	barAbs := filepath.Join(repo, "bar.go")
 
 	var callCount int32
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		atomic.AddInt32(&callCount, 1)
 		if err := os.WriteFile(filepath.Join(root, "foo.go"), []byte("package main\nvar x = 2\n"), 0644); err != nil {
 			return err
@@ -549,7 +549,7 @@ func TestCacheValid_StaleFile(t *testing.T) {
 	barAbs := filepath.Join(repo, "bar.go")
 
 	var callCount int32
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		atomic.AddInt32(&callCount, 1)
 		if err := os.WriteFile(filepath.Join(root, "foo.go"), []byte("package main\nvar x = 2\n"), 0644); err != nil {
 			return err
@@ -598,7 +598,7 @@ func TestRemediate_StaleSiblingDoesNotEvictRequestedFile(t *testing.T) {
 	bazAbs := filepath.Join(repo, "baz.go")
 
 	var callCount int32
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		atomic.AddInt32(&callCount, 1)
 		if err := os.WriteFile(filepath.Join(root, "foo.go"), []byte("package main\nvar x = 2\n"), 0644); err != nil {
 			return err
@@ -651,7 +651,7 @@ func TestRemediate_CRLFWorkspaceMatchesLFBaseline(t *testing.T) {
 	barAbs := filepath.Join(repo, "bar.go")
 
 	var callCount int32
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		atomic.AddInt32(&callCount, 1)
 		if err := os.WriteFile(filepath.Join(root, "foo.go"), []byte("package main\nvar x = 2\n"), 0644); err != nil {
 			return err
@@ -715,7 +715,7 @@ func TestRemediate_TransientReadErrorDoesNotEvictCache(t *testing.T) {
 	barAbs := filepath.Join(repo, "bar.go")
 
 	var callCount int32
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		atomic.AddInt32(&callCount, 1)
 		if err := os.WriteFile(filepath.Join(root, "foo.go"), []byte("package main\nvar x = 2\n"), 0644); err != nil {
 			return err
@@ -796,7 +796,7 @@ func TestRemediate_DeletedFileReRunsRunner(t *testing.T) {
 	barAbs := filepath.Join(repo, "bar.go")
 
 	var callCount int32
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		atomic.AddInt32(&callCount, 1)
 		if err := os.WriteFile(filepath.Join(root, "foo.go"), []byte("package main\nvar x = 2\n"), 0644); err != nil {
 			return err
@@ -850,7 +850,7 @@ func TestRemediate_LoneCRChangeDetectedAsCacheMiss(t *testing.T) {
 	barAbs := filepath.Join(repo, "bar.go")
 
 	var callCount int32
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		atomic.AddInt32(&callCount, 1)
 		if err := os.WriteFile(filepath.Join(root, "foo.go"), []byte("package main\nvar x = 2\n"), 0644); err != nil {
 			return err
@@ -906,7 +906,7 @@ func TestRemediate_ConcurrentEditDuringRun_SecondaryFileCacheMiss(t *testing.T) 
 	barAbs := filepath.Join(repo, "bar.go")
 
 	var callCount int32
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		atomic.AddInt32(&callCount, 1)
 		// remy modifies both files inside its isolated worktree.
 		if err := os.WriteFile(filepath.Join(root, "foo.go"), []byte("package main\nvar x = 2\n"), 0644); err != nil {
@@ -1058,7 +1058,7 @@ func TestCacheValid_MissingStoredHash_TreatsEntryAsStale(t *testing.T) {
 	barAbs := filepath.Join(repo, "bar.go")
 
 	var callCount int32
-	runner := func(_ context.Context, _ workflow.Engine, root, _ string) error {
+	runner := func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
 		atomic.AddInt32(&callCount, 1)
 		if err := os.WriteFile(filepath.Join(root, "foo.go"), []byte("package main\nvar x = 2\n"), 0644); err != nil {
 			return err
