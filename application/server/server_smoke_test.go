@@ -1618,7 +1618,7 @@ app.get('/unique_subfolder_test', function(req, res) {
 	waitForDeltaScan(t, scanAggregator)
 
 	// Verify scan completed successfully — before the fix, this would fail with
-	// "repository not found" or "must specify reference for delta scans"
+	// "repository not found" or a missing delta reference
 	checkForScanParams(t, jsonRPCRecorder, subfolder, product.ProductCode)
 
 	newVulnFilePath := filepath.Clean(filepath.Join(subfolder, "vulns.js"))

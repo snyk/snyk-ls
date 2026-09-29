@@ -1644,6 +1644,8 @@ func TestBuildTree_ProductNode_ScanError_UsesErrorCatalogTreeSuffix(t *testing.T
 		{utils.ErrSnykCodeNotEnabled, "(disabled at Snyk)", product.ProductOpenSource, product.FilterableIssueTypeOpenSource},
 		{utils.ErrSnykSecretsNotEnabled, "(disabled at Snyk)", product.ProductSecrets, product.FilterableIssueTypeSecrets},
 		{utils.ErrNoReferenceBranch, "(no reference branch)", product.ProductOpenSource, product.FilterableIssueTypeOpenSource},
+		{utils.ErrBaseBranchNotFound, "(base branch not found)", product.ProductOpenSource, product.FilterableIssueTypeOpenSource},
+		{utils.ErrNotGitRepo, "(not a git repository)", product.ProductOpenSource, product.FilterableIssueTypeOpenSource},
 		{utils.ErrNoRepo, "(repository not found)", product.ProductOpenSource, product.FilterableIssueTypeOpenSource},
 	}
 	for _, tc := range cases {
