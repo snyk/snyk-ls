@@ -43,7 +43,7 @@ import (
 func TestBuildRemyFixConfig_SelectsSastAgenticFlow(t *testing.T) {
 	const contentRoot = "/work/repo-root"
 
-	conf := buildRemyFixConfig(configuration.NewWithOpts(), contentRoot, nil)
+	conf := buildRemyFixConfig(configuration.NewWithOpts(), contentRoot, nil, nil)
 
 	assert.True(t, conf.GetBool("agentic"), "agentic must be enabled")
 	assert.True(t, conf.GetBool("sast"), "sast must be enabled to select the Snyk Code agentic flow")
@@ -67,7 +67,7 @@ func TestBuildRemyFixConfig_ForwardsPersistedLlmProviderAndModel(t *testing.T) {
 	types.SetGlobalUser(base, types.SettingLlmProvider, "ollama")
 	types.SetGlobalUser(base, types.SettingLlmModel, "llama3.1")
 
-	conf := buildRemyFixConfig(base, contentRoot, nil)
+	conf := buildRemyFixConfig(base, contentRoot, nil, nil)
 
 	assert.Equal(t, "ollama", conf.GetString("provider"))
 	assert.Equal(t, "llama3.1", conf.GetString("model"))
@@ -78,7 +78,7 @@ func TestBuildRemyFixConfig_ForwardsPersistedLlmProviderAndModel(t *testing.T) {
 // have "provider"/"model" keys set at all, matching the empty-string-key
 // discipline the other flags already follow.
 func TestBuildRemyFixConfig_NoProviderChosen(t *testing.T) {
-	conf := buildRemyFixConfig(configuration.NewWithOpts(), "/work/repo-root", nil)
+	conf := buildRemyFixConfig(configuration.NewWithOpts(), "/work/repo-root", nil, nil)
 
 	assert.False(t, conf.IsSet("provider"), "provider must not be set when the developer never chose one")
 	assert.False(t, conf.IsSet("model"), "model must not be set when the developer never chose a provider")
@@ -90,7 +90,7 @@ func TestBuildRemyFixConfig_ProviderWithoutModel(t *testing.T) {
 	base := configuration.NewWithOpts()
 	types.SetGlobalUser(base, types.SettingLlmProvider, "anthropic")
 
-	conf := buildRemyFixConfig(base, "/work/repo-root", nil)
+	conf := buildRemyFixConfig(base, "/work/repo-root", nil, nil)
 
 	assert.Equal(t, "anthropic", conf.GetString("provider"))
 	assert.False(t, conf.IsSet("model"), "model must not be set when the developer never chose one")
@@ -103,7 +103,7 @@ func TestBuildRemyFixConfig_ModelWithoutProvider(t *testing.T) {
 	base := configuration.NewWithOpts()
 	types.SetGlobalUser(base, types.SettingLlmModel, "llama3.1")
 
-	conf := buildRemyFixConfig(base, "/work/repo-root", nil)
+	conf := buildRemyFixConfig(base, "/work/repo-root", nil, nil)
 
 	assert.False(t, conf.IsSet(remyProviderConfigKey), "provider must not be set when the developer never chose one")
 	assert.Equal(t, "llama3.1", conf.GetString("model"))
@@ -117,12 +117,12 @@ func TestBuildRemyFixConfig_ProviderSwitchDoesNotLeakStaleModel(t *testing.T) {
 	first := configuration.NewWithOpts()
 	types.SetGlobalUser(first, types.SettingLlmProvider, "ollama")
 	types.SetGlobalUser(first, types.SettingLlmModel, "llama3.1")
-	_ = buildRemyFixConfig(first, "/work/repo-root", nil)
+	_ = buildRemyFixConfig(first, "/work/repo-root", nil, nil)
 
 	second := configuration.NewWithOpts()
 	types.SetGlobalUser(second, types.SettingLlmProvider, "anthropic")
 
-	conf := buildRemyFixConfig(second, "/work/repo-root", nil)
+	conf := buildRemyFixConfig(second, "/work/repo-root", nil, nil)
 
 	assert.Equal(t, "anthropic", conf.GetString("provider"))
 	assert.False(t, conf.IsSet("model"), "switching provider must not leak the previous provider's model")
@@ -168,7 +168,7 @@ func TestBuildRemyFixConfig_ForwardsSeverityFilter(t *testing.T) {
 	sf := types.NewSeverityFilter(true, true, false, false)
 	types.SetSeverityFilterOnConfig(base, &sf, &logger)
 
-	conf := buildRemyFixConfig(base, "/work/repo-root", nil)
+	conf := buildRemyFixConfig(base, "/work/repo-root", nil, nil)
 
 	assert.Equal(t, "critical,high", conf.GetString(remySeverityFilterConfigKey))
 }
@@ -179,7 +179,7 @@ func TestBuildRemyFixConfig_ForwardsEverySeverityWhenNothingFiltered(t *testing.
 	sf := types.DefaultSeverityFilter()
 	types.SetSeverityFilterOnConfig(base, &sf, &logger)
 
-	conf := buildRemyFixConfig(base, "/work/repo-root", nil)
+	conf := buildRemyFixConfig(base, "/work/repo-root", nil, nil)
 
 	assert.Equal(t, "critical,high,medium,low", conf.GetString(remySeverityFilterConfigKey))
 }
@@ -197,7 +197,7 @@ func TestBuildRemyFixConfig_SeverityFilterCriticalOnly(t *testing.T) {
 	sf := types.NewSeverityFilter(true, false, false, false)
 	types.SetSeverityFilterOnConfig(base, &sf, &logger)
 
-	conf := buildRemyFixConfig(base, "/work/repo-root", nil)
+	conf := buildRemyFixConfig(base, "/work/repo-root", nil, nil)
 
 	assert.Equal(t, "critical", conf.GetString(remySeverityFilterConfigKey))
 }
@@ -210,7 +210,7 @@ func TestBuildRemyFixConfig_SeverityFilterKeepsGaps(t *testing.T) {
 	sf := types.NewSeverityFilter(true, false, true, false)
 	types.SetSeverityFilterOnConfig(base, &sf, &logger)
 
-	conf := buildRemyFixConfig(base, "/work/repo-root", nil)
+	conf := buildRemyFixConfig(base, "/work/repo-root", nil, nil)
 
 	assert.Equal(t, "critical,medium", conf.GetString(remySeverityFilterConfigKey))
 }
@@ -226,7 +226,7 @@ func TestBuildRemyFixConfig_ClearsInheritedSeverityThreshold(t *testing.T) {
 	sf := types.DefaultSeverityFilter()
 	types.SetSeverityFilterOnConfig(base, &sf, &logger)
 
-	conf := buildRemyFixConfig(base, "/work/repo-root", nil)
+	conf := buildRemyFixConfig(base, "/work/repo-root", nil, nil)
 
 	assert.Equal(t, "critical,high,medium,low", conf.GetString(remySeverityFilterConfigKey))
 	assert.Empty(t, conf.GetString(configuration.FLAG_SEVERITY_THRESHOLD))
@@ -245,7 +245,7 @@ func TestGafRunner_SkipsInvocationWhenEverySeverityDisabled(t *testing.T) {
 	mockEngine.EXPECT().GetConfiguration().Return(base).AnyTimes()
 	mockEngine.EXPECT().Invoke(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 
-	assert.NoError(t, gafRunner(context.Background(), mockEngine, "/work/repo-root", nil))
+	assert.NoError(t, gafRunner(context.Background(), mockEngine, "/work/repo-root", nil, nil))
 }
 
 func TestGafRunner_InvokesWhenSomeSeverityEnabled(t *testing.T) {
@@ -259,11 +259,11 @@ func TestGafRunner_InvokesWhenSomeSeverityEnabled(t *testing.T) {
 	mockEngine.EXPECT().GetConfiguration().Return(base).AnyTimes()
 	mockEngine.EXPECT().Invoke(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
 
-	assert.NoError(t, gafRunner(context.Background(), mockEngine, "/work/repo-root", nil))
+	assert.NoError(t, gafRunner(context.Background(), mockEngine, "/work/repo-root", nil, nil))
 }
 
 func TestBuildRemyFixConfig_ScopesToRequestedFindingIDs(t *testing.T) {
-	conf := buildRemyFixConfig(configuration.NewWithOpts(), "/work/repo-root", []string{"finding-1", "finding-2"})
+	conf := buildRemyFixConfig(configuration.NewWithOpts(), "/work/repo-root", []string{"finding-1", "finding-2"}, nil)
 
 	assert.Equal(t, "finding-1,finding-2", conf.GetString(remyIssueIDsConfigKey))
 	assert.True(t, conf.GetBool("auto-approve"), "issue-ids only takes effect with auto-approve")
@@ -272,7 +272,7 @@ func TestBuildRemyFixConfig_ScopesToRequestedFindingIDs(t *testing.T) {
 func TestBuildRemyFixConfig_NoFindingIDsLeavesIssueIDsUnset(t *testing.T) {
 	for name, ids := range map[string][]string{"nil": nil, "empty": {}} {
 		t.Run(name, func(t *testing.T) {
-			conf := buildRemyFixConfig(configuration.NewWithOpts(), "/work/repo-root", ids)
+			conf := buildRemyFixConfig(configuration.NewWithOpts(), "/work/repo-root", ids, nil)
 			assert.False(t, conf.IsSet(remyIssueIDsConfigKey), "issue-ids must stay unset")
 		})
 	}
@@ -296,7 +296,7 @@ func TestGafRunner_DropsScopeWhenWorkflowHasNoIssueIDsFlag(t *testing.T) {
 				got = conf
 			})
 
-			require.NoError(t, gafRunner(context.Background(), eng, "/work/repo-root", []string{"finding-1", "finding-2"}))
+			require.NoError(t, gafRunner(context.Background(), eng, "/work/repo-root", []string{"finding-1", "finding-2"}, nil))
 
 			require.NotNil(t, got, "the fix workflow must have been invoked")
 			assert.Equal(t, tt.wantScopedSet, got.IsSet(remyIssueIDsConfigKey))
@@ -344,5 +344,41 @@ func TestGafRunner_DropsScopeWhenWorkflowIsNotRegistered(t *testing.T) {
 	mockEngine.EXPECT().GetWorkflow(gomock.Any()).Return(nil, false).AnyTimes()
 	mockEngine.EXPECT().Invoke(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
 
-	assert.NoError(t, gafRunner(context.Background(), mockEngine, "/work/repo-root", []string{"finding-1"}))
+	assert.NoError(t, gafRunner(context.Background(), mockEngine, "/work/repo-root", []string{"finding-1"}, nil))
+}
+
+func TestBuildRemyFixConfig_FolderSeverityFilterOverridesGlobal(t *testing.T) {
+	logger := zerolog.Nop()
+	base := configuration.NewWithOpts()
+	global := types.NewSeverityFilter(true, true, false, false)
+	types.SetSeverityFilterOnConfig(base, &global, &logger)
+	folder := types.NewSeverityFilter(true, true, true, false)
+
+	conf := buildRemyFixConfig(base, "/work/repo-root", nil, &folder)
+
+	assert.Equal(t, "critical,high,medium", conf.GetString(remySeverityFilterConfigKey))
+}
+
+func TestGafRunner_FolderSeverityFilterDecidesWhetherToRun(t *testing.T) {
+	tests := []struct {
+		name        string
+		global      types.SeverityFilter
+		folder      types.SeverityFilter
+		wantInvokes int
+	}{
+		{name: "folder enables what global disables", global: types.NewSeverityFilter(false, false, false, false), folder: types.NewSeverityFilter(false, false, true, false), wantInvokes: 1},
+		{name: "folder disables what global enables", global: types.DefaultSeverityFilter(), folder: types.NewSeverityFilter(false, false, false, false), wantInvokes: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := zerolog.Nop()
+			base := configuration.NewWithOpts()
+			types.SetSeverityFilterOnConfig(base, &tt.global, &logger)
+			mockEngine := gafMocks.NewMockEngine(gomock.NewController(t))
+			mockEngine.EXPECT().GetConfiguration().Return(base).AnyTimes()
+			mockEngine.EXPECT().Invoke(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(tt.wantInvokes)
+
+			assert.NoError(t, gafRunner(context.Background(), mockEngine, "/work/repo-root", nil, &tt.folder))
+		})
+	}
 }

@@ -73,17 +73,25 @@ func (cmd *remediationFixFolderCommand) Execute(ctx context.Context) (any, error
 		return nil, fmt.Errorf("snyk.remediationAgent.fixFolder: remediation agent is not enabled")
 	}
 
-	findingIDs, scoped, err := cmd.resolveScope(args)
+	folder, rootURIStr, err := cmd.registeredFolder(args)
 	if err != nil {
 		return nil, err
 	}
+	findingIDs, scoped := cmd.resolveScope(folder, rootURIStr)
 	// Remy reads an empty issue-ids value as no filter at all, so a folder with
 	// nothing net-new must skip the run rather than hand it the whole folder.
 	if scoped && len(findingIDs) == 0 {
 		return types.FolderFixResult{Files: []types.FolderFixFileResult{}}, nil
 	}
+	// The tree's severity toggle writes per-folder overrides, so the global
+	// filter can disagree with what the developer was shown.
+	var severity *types.SeverityFilter
+	if folder != nil {
+		sf := folder.FilterSeverity()
+		severity = &sf
+	}
 
-	files, err := cmd.provider.FixFolder(ctx, path, findingIDs)
+	files, err := cmd.provider.FixFolder(ctx, path, findingIDs, severity)
 	if err != nil {
 		return nil, fmt.Errorf("snyk.remediationAgent.fixFolder: %w", err)
 	}
@@ -94,32 +102,39 @@ func (cmd *remediationFixFolderCommand) Execute(ctx context.Context) (any, error
 	return types.FolderFixResult{Files: files}, nil
 }
 
-// resolveScope fails open to an unscoped run when the root matches no registered
-// folder, delta is off, there is no baseline yet, or no net-new finding has an id.
-func (cmd *remediationFixFolderCommand) resolveScope(args []any) (findingIDs []string, scoped bool, err error) {
+// registeredFolder returns nil when the optional workspace root argument is
+// absent or matches no registered folder.
+func (cmd *remediationFixFolderCommand) registeredFolder(args []any) (folder types.Folder, rootURIStr string, err error) {
 	if len(args) < 2 {
-		return nil, false, nil
+		return nil, "", nil
 	}
 	rootURIStr, ok := args[1].(string)
 	if !ok || rootURIStr == "" {
-		return nil, false, fmt.Errorf("snyk.remediationAgent.fixFolder: workspace root URI argument must be a non-empty string")
+		return nil, "", fmt.Errorf("snyk.remediationAgent.fixFolder: workspace root URI argument must be a non-empty string")
 	}
-
-	folder := cmd.folderForRoot(uri.PathFromUri(sglsp.DocumentURI(rootURIStr)))
+	folder = cmd.folderForRoot(uri.PathFromUri(sglsp.DocumentURI(rootURIStr)))
 	if folder == nil {
 		cmd.logger.Warn().Str("root", rootURIStr).Msg("snyk.remediationAgent.fixFolder: no registered folder for the given workspace root, running unscoped")
-		return nil, false, nil
+	}
+	return folder, rootURIStr, nil
+}
+
+// resolveScope fails open to an unscoped run when there is no registered
+// folder, delta is off, there is no baseline yet, or no net-new finding has an id.
+func (cmd *remediationFixFolderCommand) resolveScope(folder types.Folder, rootURIStr string) (findingIDs []string, scoped bool) {
+	if folder == nil {
+		return nil, false
 	}
 	if !folder.IsDeltaAppliedForProduct(product.ProductCode) {
 		if folder.IsDeltaFindingsEnabled() {
 			cmd.logger.Warn().Str("root", rootURIStr).Msg("snyk.remediationAgent.fixFolder: delta scoping requested but no baseline is available, running unscoped")
 		}
-		return nil, false, nil
+		return nil, false
 	}
 	fip, ok := folder.(snyk.FilteringIssueProvider)
 	if !ok {
 		cmd.logger.Warn().Str("root", rootURIStr).Msg("snyk.remediationAgent.fixFolder: folder cannot filter its findings, running unscoped")
-		return nil, false, nil
+		return nil, false
 	}
 	// The display filter drops non-net-new findings when delta applies, so this is
 	// exactly the net-new set the developer was shown.
@@ -127,7 +142,7 @@ func (cmd *remediationFixFolderCommand) resolveScope(args []any) (findingIDs []s
 	if withoutID > 0 && len(ids) == 0 {
 		cmd.logger.Warn().Str("root", rootURIStr).Int("findingsWithoutID", withoutID).
 			Msg("snyk.remediationAgent.fixFolder: net-new findings have no asset fingerprint, which Snyk Code only emits for a repository with an origin remote, running unscoped")
-		return nil, false, nil
+		return nil, false
 	}
 	if withoutID > 0 {
 		cmd.logger.Warn().Str("root", rootURIStr).Int("findingsWithoutID", withoutID).
@@ -135,7 +150,7 @@ func (cmd *remediationFixFolderCommand) resolveScope(args []any) (findingIDs []s
 	}
 	cmd.logger.Info().Str("root", rootURIStr).Int("netNewFindings", len(ids)).
 		Msg("snyk.remediationAgent.fixFolder: scoping the fix to the folder's net-new findings")
-	return ids, true, nil
+	return ids, true
 }
 
 // Exact match, not containment: containment would also hit a parent folder and

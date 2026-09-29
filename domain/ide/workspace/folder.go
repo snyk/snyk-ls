@@ -1009,6 +1009,11 @@ func (f *Folder) DisplayableIssueTypesFromConfig(cfg *types.FolderConfig) map[pr
 	return f.displayableIssueTypesForFolder(cfg)
 }
 
+// FilterSeverity returns the severity filter for this folder, respecting folder-level overrides.
+func (f *Folder) FilterSeverity() types.SeverityFilter {
+	return f.filterSeverityForFolder(f.FolderConfigReadOnly())
+}
+
 // IssueViewOptions returns the issue view options for this folder, respecting folder-level overrides.
 func (f *Folder) IssueViewOptions() types.IssueViewOptions {
 	return f.issueViewOptionsForFolder(f.FolderConfigReadOnly())

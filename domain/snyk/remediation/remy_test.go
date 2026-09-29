@@ -82,8 +82,8 @@ func commitFile(t *testing.T, repoRoot, relPath, content string) {
 
 // fakeRunner is a test remyRunner that accepts (and ignores) a nil engine.
 // fn is the actual test logic to run.
-func fakeRunner(fn func(ctx context.Context, root string, findingIDs []string) error) func(ctx context.Context, eng workflow.Engine, root string, findingIDs []string) error {
-	return func(ctx context.Context, _ workflow.Engine, root string, findingIDs []string) error {
+func fakeRunner(fn func(ctx context.Context, root string, findingIDs []string) error) func(ctx context.Context, eng workflow.Engine, root string, findingIDs []string, _ *types.SeverityFilter) error {
+	return func(ctx context.Context, _ workflow.Engine, root string, findingIDs []string, _ *types.SeverityFilter) error {
 		return fn(ctx, root, findingIDs)
 	}
 }
@@ -102,8 +102,8 @@ func fakeRunner(fn func(ctx context.Context, root string, findingIDs []string) e
 // gitChangedFiles) and TestFixFolder_StatCleanSameSize_StillDetected
 // (FixFolder / collectFileDiffs): both exercise the same invalidateStatCache
 // call against the same fixture shape.
-func statCleanRunner(relPath, newContent string) func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
-	return func(_ context.Context, _ workflow.Engine, root string, _ []string) error {
+func statCleanRunner(relPath, newContent string) func(_ context.Context, _ workflow.Engine, root string, _ []string, _ *types.SeverityFilter) error {
+	return func(_ context.Context, _ workflow.Engine, root string, _ []string, _ *types.SeverityFilter) error {
 		worktreeFile := filepath.Join(root, relPath)
 
 		// Capture the mtime git recorded in the index at checkout time.

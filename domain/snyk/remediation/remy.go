@@ -47,7 +47,8 @@ import (
 //
 // eng is the workflow engine used for GAF invocation (nil in tests).
 // contentRoot is the absolute path of the git worktree to operate on.
-type remyRunner func(ctx context.Context, eng workflow.Engine, contentRoot string, findingIDs []string) error
+// severity is the folder's severity filter; nil falls back to the global one.
+type remyRunner func(ctx context.Context, eng workflow.Engine, contentRoot string, findingIDs []string, severity *types.SeverityFilter) error
 
 // remyOptions controls the behavior of the concrete remy-backed provider.
 type remyOptions struct {
@@ -136,13 +137,13 @@ func WithLLMProviderEnvLock(fn func()) {
 // the Go Application Framework engine. The remy fix workflow is a Go extension
 // registered under the "fix" workflow ID — invoke it directly, not via legacycli.
 // auto-approve suppresses interactive prompts required for non-interactive LS use.
-func gafRunner(ctx context.Context, eng workflow.Engine, contentRoot string, findingIDs []string) error {
+func gafRunner(ctx context.Context, eng workflow.Engine, contentRoot string, findingIDs []string, severity *types.SeverityFilter) error {
 	llmProviderEnvMu.RLock()
 	defer llmProviderEnvMu.RUnlock()
 	base := eng.GetConfiguration()
 	// Remy treats an empty severity-filter as no filter at all, so an all-off
 	// client filter must skip the run rather than fix every severity.
-	if !anySeverityEnabled(types.GetFilterSeverityFromConfig(base)) {
+	if !anySeverityEnabled(effectiveSeverityFilter(base, severity)) {
 		return nil
 	}
 	remyWorkflowID := workflow.NewWorkflowIdentifier("fix")
@@ -151,7 +152,7 @@ func gafRunner(ctx context.Context, eng workflow.Engine, contentRoot string, fin
 			Msg("remy: the bundled fix workflow has no issue-ids flag, so this run cannot be scoped to the requested findings")
 		findingIDs = nil
 	}
-	conf := buildRemyFixConfig(base, contentRoot, findingIDs)
+	conf := buildRemyFixConfig(base, contentRoot, findingIDs, severity)
 	_, err := eng.Invoke(remyWorkflowID, workflow.WithContext(ctx), workflow.WithConfig(conf))
 	return err
 }
@@ -190,6 +191,13 @@ func acceptsIssueIDs(eng workflow.Engine, id workflow.Identifier) bool {
 	return opts != nil && opts.GetConfigurationOptionType(remyIssueIDsConfigKey) != ""
 }
 
+func effectiveSeverityFilter(base configuration.Configuration, severity *types.SeverityFilter) types.SeverityFilter {
+	if severity != nil {
+		return *severity
+	}
+	return types.GetFilterSeverityFromConfig(base)
+}
+
 func anySeverityEnabled(sf types.SeverityFilter) bool {
 	return sf.Critical || sf.High || sf.Medium || sf.Low
 }
@@ -221,7 +229,7 @@ func remySeverityFilter(sf types.SeverityFilter) string {
 // so the exact config the runner hands to the workflow can be asserted in a unit
 // test — the regression guard that keeps the product flow from silently reverting
 // to a no-op.
-func buildRemyFixConfig(base configuration.Configuration, contentRoot string, findingIDs []string) configuration.Configuration {
+func buildRemyFixConfig(base configuration.Configuration, contentRoot string, findingIDs []string, severity *types.SeverityFilter) configuration.Configuration {
 	conf := base.Clone()
 	conf.Set("agentic", true)
 	conf.Set("auto-approve", true)
@@ -238,7 +246,7 @@ func buildRemyFixConfig(base configuration.Configuration, contentRoot string, fi
 		conf.Set(remyModelConfigKey, model)
 	}
 	// Remy scans independently and would otherwise fix findings the client hides.
-	if filter := remySeverityFilter(types.GetFilterSeverityFromConfig(base)); filter != "" {
+	if filter := remySeverityFilter(effectiveSeverityFilter(base, severity)); filter != "" {
 		conf.Set(remySeverityFilterConfigKey, filter)
 		// The CLI's output flags default severity-threshold to "low", and remy
 		// rejects any threshold next to severity-filter.
@@ -515,13 +523,13 @@ func editsToEdit(filePath string, edits []types.TextEdit) *types.WorkspaceEdit {
 // collectFixEdits snapshots tracked files in runDir, runs the fix workflow there,
 // and builds TextEdits keyed under keyRoot. The run is unscoped: the code action
 // it serves already hangs off a delta-filtered diagnostic.
-func (p *remyProvider) collectFixEdits(ctx context.Context, runDir, keyRoot string) (map[string][]types.TextEdit, map[string]string, error) {
+func (p *remyProvider) collectFixEdits(ctx context.Context, runDir, keyRoot string, severity *types.SeverityFilter) (map[string][]types.TextEdit, map[string]string, error) {
 	snapshot, err := snapshotGitFiles(ctx, runDir)
 	if err != nil {
 		p.log.Debug().Err(err).Str("root", runDir).Msg("remy: failed to snapshot tracked files")
 		return nil, nil, fmt.Errorf("remy: snapshot: %w", err)
 	}
-	if err = p.runner(ctx, p.engine, runDir, nil); err != nil {
+	if err = p.runner(ctx, p.engine, runDir, nil, severity); err != nil {
 		return nil, nil, err
 	}
 	return buildWorkspaceEdits(p.log, runDir, keyRoot, snapshot)
@@ -563,7 +571,7 @@ func (p *remyProvider) runRemyInWorktree(ctx context.Context, root string, req R
 		_ = exec.CommandContext(cleanupCtx, "git", "-C", gitRoot, "worktree", "remove", "--force", worktreeDir).Run()
 		_ = os.RemoveAll(tmpParent)
 	}()
-	return p.collectFixEdits(ctx, worktreeDir, gitRoot)
+	return p.collectFixEdits(ctx, worktreeDir, gitRoot, req.SeverityFilter)
 }
 
 // FixFolder runs the remediation fix workflow directly in root (which must
@@ -580,7 +588,7 @@ func (p *remyProvider) runRemyInWorktree(ctx context.Context, root string, req R
 // Precondition: root must be the git repository root (not a subdirectory).
 // Passing a subdirectory is rejected so the fix runner cannot silently escape
 // its isolation boundary.
-func (p *remyProvider) FixFolder(ctx context.Context, root types.FilePath, findingIDs []string) ([]types.FolderFixFileResult, error) {
+func (p *remyProvider) FixFolder(ctx context.Context, root types.FilePath, findingIDs []string, severity *types.SeverityFilter) ([]types.FolderFixFileResult, error) {
 	r := string(root)
 	if r == "" || !filepath.IsAbs(r) {
 		return nil, fmt.Errorf("remy: FixFolder requires an absolute path, got %q", r)
@@ -620,7 +628,7 @@ func (p *remyProvider) FixFolder(ctx context.Context, root types.FilePath, findi
 	// so a hung fix cannot stall the caller indefinitely.
 	ctx, cancel := context.WithTimeout(ctx, p.opts.Timeout)
 	defer cancel()
-	return p.collectFileDiffs(ctx, r, findingIDs)
+	return p.collectFileDiffs(ctx, r, findingIDs, severity)
 }
 
 // gitEnumerationTimeout is the budget given to the git diff enumeration phase
@@ -700,8 +708,8 @@ func parseNameStatus(out []byte) ([]nameStatusRecord, error) {
 //
 // An error is returned on ANY git failure or on an unexpected empty diff — files are
 // never silently dropped.
-func (p *remyProvider) collectFileDiffs(ctx context.Context, runDir string, findingIDs []string) ([]types.FolderFixFileResult, error) {
-	if err := p.runner(ctx, p.engine, runDir, findingIDs); err != nil {
+func (p *remyProvider) collectFileDiffs(ctx context.Context, runDir string, findingIDs []string, severity *types.SeverityFilter) ([]types.FolderFixFileResult, error) {
+	if err := p.runner(ctx, p.engine, runDir, findingIDs, severity); err != nil {
 		// Remy fails a partly-fixed scoped run so a CLI exits nonzero, but the
 		// patch it produced is still usable.
 		if len(findingIDs) == 0 || !isPartialFix(err) {

@@ -48,7 +48,7 @@ type fakeFolderRemediator struct {
 	err     error
 }
 
-func (f *fakeFolderRemediator) FixFolder(_ context.Context, _ types.FilePath, _ []string) ([]types.FolderFixFileResult, error) {
+func (f *fakeFolderRemediator) FixFolder(_ context.Context, _ types.FilePath, _ []string, _ *types.SeverityFilter) ([]types.FolderFixFileResult, error) {
 	return f.results, f.err
 }
 
@@ -229,7 +229,7 @@ type trackingFolderRemediator struct {
 	fn func(ctx context.Context, root types.FilePath) ([]types.FolderFixFileResult, error)
 }
 
-func (tr *trackingFolderRemediator) FixFolder(ctx context.Context, root types.FilePath, _ []string) ([]types.FolderFixFileResult, error) {
+func (tr *trackingFolderRemediator) FixFolder(ctx context.Context, root types.FilePath, _ []string, _ *types.SeverityFilter) ([]types.FolderFixFileResult, error) {
 	return tr.fn(ctx, root)
 }
 
