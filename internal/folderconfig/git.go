@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/go-git/go-git/v5"
@@ -43,21 +44,23 @@ func getBaseBranch(repository *git.Repository, localBranches []string) (string, 
 		return "", err
 	}
 
-	// Try the default branch ...
-	baseBranch := repoConfig.Init.DefaultBranch
-
-	// ... fall back to common defaults if no default branch is set
-	if baseBranch == "" {
-		if slices.Contains(localBranches, "main") {
-			baseBranch = "main"
-		} else if slices.Contains(localBranches, "master") {
-			baseBranch = "master"
-		} else {
-			return "", fmt.Errorf("could not determine base branch")
+	// A candidate must exist locally: the baseline scan clones refs/heads/<name>.
+	candidates := []string{repoConfig.Init.DefaultBranch, originHeadBranch(repository), "main", "master"}
+	for _, candidate := range candidates {
+		if candidate != "" && slices.Contains(localBranches, candidate) {
+			return candidate, nil
 		}
 	}
+	return "", fmt.Errorf("could not determine base branch")
+}
 
-	return baseBranch, nil
+func originHeadBranch(repository *git.Repository) string {
+	// Resolving would return the commit hash, and fail outright when the target is dangling.
+	ref, err := repository.Reference(plumbing.NewRemoteHEADReferenceName("origin"), false)
+	if err != nil || ref.Type() != plumbing.SymbolicReference {
+		return ""
+	}
+	return strings.TrimPrefix(ref.Target().String(), "refs/remotes/origin/")
 }
 
 func getLocalBranches(repository *git.Repository) ([]string, error) {

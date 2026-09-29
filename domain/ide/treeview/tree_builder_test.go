@@ -1644,6 +1644,8 @@ func TestBuildTree_ProductNode_ScanError_UsesErrorCatalogTreeSuffix(t *testing.T
 		{utils.ErrSnykCodeNotEnabled, "(disabled at Snyk)", product.ProductOpenSource, product.FilterableIssueTypeOpenSource},
 		{utils.ErrSnykSecretsNotEnabled, "(disabled at Snyk)", product.ProductSecrets, product.FilterableIssueTypeSecrets},
 		{utils.ErrNoReferenceBranch, "(no reference branch)", product.ProductOpenSource, product.FilterableIssueTypeOpenSource},
+		{utils.ErrBaseBranchNotFound, "(base branch not found)", product.ProductOpenSource, product.FilterableIssueTypeOpenSource},
+		{utils.ErrNotGitRepo, "(not a git repository)", product.ProductOpenSource, product.FilterableIssueTypeOpenSource},
 		{utils.ErrNoRepo, "(repository not found)", product.ProductOpenSource, product.FilterableIssueTypeOpenSource},
 	}
 	for _, tc := range cases {
@@ -1727,7 +1729,7 @@ func TestBuildTree_SingleFolder_DeltaEnabled_FolderNodeCarriesBranchData(t *test
 	assert.True(t, folderNode.DeltaEnabled, "folder node should carry DeltaEnabled")
 }
 
-func TestBuildTree_SingleFolder_DeltaEnabled_NoBaseBranch_EmptyDescription(t *testing.T) {
+func TestBuildTree_SingleFolder_DeltaEnabled_NoReference_DescriptionPointsToPicker(t *testing.T) {
 	builder := newBuilderWithCompletedScans()
 
 	data := builder.BuildTreeFromFolderData([]FolderData{{
@@ -1741,7 +1743,7 @@ func TestBuildTree_SingleFolder_DeltaEnabled_NoBaseBranch_EmptyDescription(t *te
 
 	require.Equal(t, 1, len(data.Nodes))
 	folderNode := data.Nodes[0]
-	assert.Empty(t, folderNode.Description, "no base branch should result in empty description")
+	assert.Equal(t, "base: none, click to pick", folderNode.Description)
 	assert.Empty(t, folderNode.BaseBranch)
 }
 
