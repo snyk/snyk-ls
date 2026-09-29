@@ -50,12 +50,14 @@ type deltaFolder struct {
 type recordingRunner struct {
 	calls      int
 	findingIDs []string
+	severity   *types.SeverityFilter
 	fn         func(root string) error
 }
 
-func (r *recordingRunner) run(_ context.Context, _ workflow.Engine, root string, findingIDs []string) error {
+func (r *recordingRunner) run(_ context.Context, _ workflow.Engine, root string, findingIDs []string, severity *types.SeverityFilter) error {
 	r.calls++
 	r.findingIDs = findingIDs
+	r.severity = severity
 	if r.fn == nil {
 		return nil
 	}
@@ -75,6 +77,7 @@ func newDeltaFolder(t *testing.T, path string, deltaEnabled, baseline bool, cach
 	mf.EXPECT().IsDeltaFindingsEnabled().Return(deltaEnabled).AnyTimes()
 	mf.EXPECT().IsDeltaAppliedForProduct(product.ProductCode).Return(deltaEnabled && baseline).AnyTimes()
 	mf.EXPECT().DisplayableIssueTypes().Return(displayable).AnyTimes()
+	mf.EXPECT().FilterSeverity().Return(types.DefaultSeverityFilter()).AnyTimes()
 	fip := mock_snyk.NewMockFilteringIssueProvider(ctrl)
 	fip.EXPECT().Issues().Return(cached).AnyTimes()
 	fip.EXPECT().FilterIssues(cached, displayable).Return(shown).AnyTimes()
@@ -349,4 +352,50 @@ func TestFixFolder_Execute_NetNewFindingsWithoutIDs_RunsUnscopedAndWarns(t *test
 	require.True(t, ok)
 	assert.Contains(t, logs.String(), `"findingsWithoutID":2`)
 	assert.Contains(t, logs.String(), "origin remote")
+}
+
+func TestFixFolder_Execute_PassesTheFolderSeverityFilter(t *testing.T) {
+	medium := types.NewSeverityFilter(false, false, true, false)
+	tests := []struct {
+		name         string
+		deltaEnabled bool
+	}{
+		{name: "scoped run", deltaEnabled: true},
+		{name: "unscoped run", deltaEnabled: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := initGitRepoForCmd(t)
+			issues := snyk.IssuesByFile{"main.go": {newIssue("finding-1")}}
+			ctrl := gomock.NewController(t)
+			mf := mock_types.NewMockFolder(ctrl)
+			mf.EXPECT().Path().Return(types.FilePath(repo)).AnyTimes()
+			mf.EXPECT().IsDeltaFindingsEnabled().Return(tt.deltaEnabled).AnyTimes()
+			mf.EXPECT().IsDeltaAppliedForProduct(product.ProductCode).Return(tt.deltaEnabled).AnyTimes()
+			mf.EXPECT().DisplayableIssueTypes().Return(nil).AnyTimes()
+			mf.EXPECT().FilterSeverity().Return(medium).AnyTimes()
+			fip := mock_snyk.NewMockFilteringIssueProvider(ctrl)
+			fip.EXPECT().Issues().Return(issues).AnyTimes()
+			fip.EXPECT().FilterIssues(issues, gomock.Any()).Return(issues).AnyTimes()
+			runner := &recordingRunner{}
+
+			_, err := executeScopedFixFolder(t, []any{repoURI(repo), repoURI(repo)}, runner,
+				workspaceWith(t, &deltaFolder{MockFolder: mf, MockFilteringIssueProvider: fip}))
+
+			require.NoError(t, err)
+			require.Equal(t, 1, runner.calls)
+			require.NotNil(t, runner.severity, "remy must receive the folder's filter, not fall back to the global one")
+			assert.Equal(t, medium, *runner.severity)
+		})
+	}
+}
+
+func TestFixFolder_Execute_NoRegisteredFolder_FallsBackToGlobalSeverityFilter(t *testing.T) {
+	repo := initGitRepoForCmd(t)
+	runner := &recordingRunner{}
+
+	_, err := executeScopedFixFolder(t, []any{repoURI(repo), repoURI(repo)}, runner, workspaceWith(t))
+
+	require.NoError(t, err)
+	assert.Nil(t, runner.severity)
 }

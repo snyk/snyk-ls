@@ -31,6 +31,8 @@ type RemediationRequest struct {
 	ContentRoot types.FilePath
 	Range       types.Range
 	Product     product.Product
+	// SeverityFilter is the folder's filter; nil falls back to the global one.
+	SeverityFilter *types.SeverityFilter
 }
 
 // RemediationProvider computes an autonomous fix for a single finding.
@@ -65,5 +67,5 @@ type FolderRemediator interface {
 	// FixFolder runs the fix workflow in place in root and returns one result per
 	// changed file. Returns an empty slice when the fix produced no changes. It
 	// does NOT apply changes; the caller lands them.
-	FixFolder(ctx context.Context, root types.FilePath, findingIDs []string) ([]types.FolderFixFileResult, error)
+	FixFolder(ctx context.Context, root types.FilePath, findingIDs []string, severity *types.SeverityFilter) ([]types.FolderFixFileResult, error)
 }

@@ -1939,3 +1939,19 @@ func TestFolder_IssueViewOptions(t *testing.T) {
 		assert.True(t, got.IgnoredIssues, "folder override: IgnoredIssues should be true (folder-level wins)")
 	})
 }
+
+func TestFolder_FilterSeverity_FolderOverrideWinsOverGlobal(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	global := types.NewSeverityFilter(true, true, false, false)
+	types.SetSeverityFilterOnConfig(conf, &global, engine.GetLogger())
+	resolver := defaultResolver(engine)
+	folderPath := types.FilePath(t.TempDir())
+	types.SetUserFolder(conf, folderPath, types.SettingSeverityFilterMedium, true)
+	f := NewFolder(conf, engine.GetLogger(), folderPath, "test", scanner.NewTestScanner(),
+		hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(),
+		persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(),
+		featureflag.NewFakeService(), resolver, engine)
+
+	assert.Equal(t, types.NewSeverityFilter(true, true, true, false), f.FilterSeverity())
+}

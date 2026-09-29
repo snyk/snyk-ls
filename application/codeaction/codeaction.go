@@ -140,17 +140,18 @@ func (c *CodeActionsService) GetCodeActions(params types.CodeActionParams) []typ
 		updatedIssues = filteredIssues
 	}
 
-	remediationActions := c.remediationCodeActions(updatedIssues, path, folder.Path(), r)
+	remediationActions := c.remediationCodeActions(updatedIssues, path, folder, r)
 	actions := converter.ToCodeActions(updatedIssues, folder.Path())
 	actions = append(actions, remediationActions...)
 	c.logger.Debug().Msg(fmt.Sprint("Returning ", len(actions), " code actions"))
 	return actions
 }
 
-func (c *CodeActionsService) remediationCodeActions(issues []types.Issue, path types.FilePath, folderPath types.FilePath, r types.Range) []types.LSPCodeAction {
+func (c *CodeActionsService) remediationCodeActions(issues []types.Issue, path types.FilePath, folder types.Folder, r types.Range) []types.LSPCodeAction {
 	if c.remediationProvider == nil {
 		return nil
 	}
+	folderPath := folder.Path()
 	// Gate behind the same feature flag that controls whether RemediationAgentFixFolderCommand
 	// is advertised in server capabilities. When the flag is off, neither the command nor the
 	// code action is surfaced, keeping the two entry-points consistent.
@@ -198,12 +199,15 @@ func (c *CodeActionsService) remediationCodeActions(issues []types.Issue, path t
 		issueRange := r
 		provider := c.remediationProvider
 		deferredEdit := func(ctx context.Context) *types.WorkspaceEdit {
+			// Read at resolve time: the tree may have toggled a severity since the action was listed.
+			severity := folder.FilterSeverity()
 			edit, err := provider.Remediate(ctx, remediation.RemediationRequest{
-				FindingId:   issueFindingId,
-				FilePath:    path,
-				ContentRoot: folderPath,
-				Range:       issueRange,
-				Product:     issueProduct,
+				FindingId:      issueFindingId,
+				FilePath:       path,
+				ContentRoot:    folderPath,
+				Range:          issueRange,
+				Product:        issueProduct,
+				SeverityFilter: &severity,
 			})
 			if err != nil {
 				c.logger.Error().Err(err).Str("findingId", issueFindingId).Msg("remediation provider returned error")
