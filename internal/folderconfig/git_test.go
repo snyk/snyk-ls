@@ -164,3 +164,42 @@ func Test_getBaseBranch_FallsBackToMasterWhenMainNotPresent(t *testing.T) {
 	// Assert we fall back to master (since it exists) and init.defaultBranch & main are not present
 	assert.Equal(t, "master", baseBranch)
 }
+
+func Test_GetOrCreateFolderConfig_DetectsFirstExistingLocalBaseBranchCandidate(t *testing.T) {
+	tests := []struct {
+		name               string
+		branches           []string
+		initDefaultBranch  string
+		originHeadTarget   string
+		expectedBaseBranch string
+	}{
+		{name: "init.defaultBranch present", branches: []string{"main", "develop", "trunk"}, initDefaultBranch: "trunk", originHeadTarget: "develop", expectedBaseBranch: "trunk"},
+		{name: "init.defaultBranch missing locally", branches: []string{"main", "develop"}, initDefaultBranch: "gone", originHeadTarget: "develop", expectedBaseBranch: "develop"},
+		{name: "origin/HEAD points at existing local branch", branches: []string{"main", "develop"}, originHeadTarget: "develop", expectedBaseBranch: "develop"},
+		{name: "origin/HEAD points at missing local branch", branches: []string{"master", "feature"}, originHeadTarget: "trunk", expectedBaseBranch: "master"},
+		{name: "main", branches: []string{"master", "main"}, expectedBaseBranch: "main"},
+		{name: "master", branches: []string{"master", "feature"}, expectedBaseBranch: "master"},
+		{name: "none", branches: []string{"feature", "develop"}, initDefaultBranch: "gone", originHeadTarget: "trunk", expectedBaseBranch: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			initializeTestGitRepo(t, dir, tt.branches)
+			if tt.initDefaultBranch != "" {
+				testsupport.RunGitForTestRepo(t, dir, "config", "init.defaultBranch", tt.initDefaultBranch)
+			}
+			if tt.originHeadTarget != "" {
+				remoteRef := "refs/remotes/origin/" + tt.originHeadTarget
+				testsupport.RunGitForTestRepo(t, dir, "update-ref", remoteRef, "HEAD")
+				testsupport.RunGitForTestRepo(t, dir, "symbolic-ref", "refs/remotes/origin/HEAD", remoteRef)
+			}
+			conf, _ := SetupConfigurationWithStorage(t)
+			logger := zerolog.New(zerolog.NewTestWriter(t))
+
+			_, err := GetOrCreateFolderConfig(conf, types.FilePath(dir), &logger)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.expectedBaseBranch, types.ReadFolderConfigSnapshot(conf, types.FilePath(dir)).BaseBranch)
+		})
+	}
+}
