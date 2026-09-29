@@ -18,6 +18,9 @@ package scanner
 
 import (
 	"context"
+	"errors"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 
@@ -29,6 +32,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
+	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/persistence/mock_persistence"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -339,6 +343,80 @@ func TestScan_MissingDeltaReference_LogsNoError(t *testing.T) {
 			for _, msg := range errorLogs {
 				assert.NotRegexp(t, `(?i)base branch|reference`, msg)
 			}
+		})
+	}
+}
+
+func TestScan_DeltaOn_WorkingTreeResultCarriesCurrentReferenceState(t *testing.T) {
+	cloneFailed := errors.New("clone failed")
+	testCases := []struct {
+		name            string
+		gitRepo         bool
+		baseBranch      string
+		referenceFolder bool
+		fileSave        bool
+		previousRefErr  error
+		want            error
+	}{
+		{name: "first scan of a folder that isn't a git repository", want: ErrNotGitRepo},
+		{name: "first scan of a git repository without a base branch", gitRepo: true, want: ErrMissingDeltaReference},
+		{name: "first scan with a saved base branch missing locally", gitRepo: true, baseBranch: "deleted-branch", want: ErrBaseBranchNotFound},
+		{name: "file save in a git repository without a base branch", gitRepo: true, fileSave: true, want: ErrMissingDeltaReference},
+		{name: "full scan with a usable reference after a failed reference scan", referenceFolder: true, previousRefErr: cloneFailed, want: nil},
+		{name: "full scan with a picked base branch after a missing one", gitRepo: true, baseBranch: "main", previousRefErr: ErrMissingDeltaReference, want: nil},
+		{name: "file save with a usable reference keeps the last reference result", referenceFolder: true, fileSave: true, previousRefErr: cloneFailed, want: cloneFailed},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			engine, tokenService := testutil.UnitTestWithEngine(t)
+
+			dir := t.TempDir()
+			if tc.gitRepo {
+				testsupport.InitTestGitRepo(t, dir)
+			}
+			folderPath := types.FilePath(dir)
+			opts := &syncFolderOpts{BaseBranch: tc.baseBranch, UserOverrides: map[string]any{types.SettingScanNetNew: true}}
+			if tc.referenceFolder {
+				refDir := t.TempDir()
+				require.NoError(t, os.WriteFile(filepath.Join(refDir, "baseline.txt"), []byte("baseline"), 0o600))
+				opts.ReferenceFolderPath = types.FilePath(refDir)
+			}
+			folderConfig := &types.FolderConfig{FolderPath: folderPath}
+			syncFolderToConfig(t, engine, folderConfig, opts)
+			resolver := defaultResolver(t, engine)
+			require.True(t, resolver.IsDeltaFindingsEnabledForFolder(folderConfig))
+
+			agg := scanstates.NewScanStateAggregator(engine.GetConfiguration(), engine.GetLogger(), &scanstates.NoopEmitter{}, resolver, engine)
+			agg.Init([]types.FilePath{folderPath})
+			if tc.previousRefErr != nil {
+				agg.SetScanDone(folderPath, product.ProductCode, true, tc.previousRefErr)
+			}
+
+			ctrl := gomock.NewController(t)
+			mockScanner := mock_types.NewMockProductScanner(ctrl)
+			mockScanner.EXPECT().Product().Return(product.ProductCode).AnyTimes()
+			mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
+			mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).AnyTimes()
+			sc, _ := setupScannerWithResolverAndAgg(t, engine, tokenService, resolver, agg, mockScanner)
+
+			var published bool
+			var refErrAtPublish error
+			captureProcessor := func(_ context.Context, data types.ScanData) {
+				if !data.IsReferenceScan {
+					published = true
+					refErrAtPublish = agg.GetScanErr(folderPath, product.ProductCode, true)
+				}
+			}
+
+			pathToScan := folderPath
+			if tc.fileSave {
+				pathToScan = types.FilePath(filepath.Join(dir, "main.go"))
+			}
+			sc.Scan(ctx2.NewContextWithFolderConfig(t.Context(), folderConfig), pathToScan, captureProcessor, nil)
+
+			require.True(t, published)
+			assert.Equal(t, tc.want, refErrAtPublish, "the working-tree $/snyk.scan reports the current reference state")
 		})
 	}
 }

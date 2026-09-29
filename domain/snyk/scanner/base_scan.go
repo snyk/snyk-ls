@@ -28,6 +28,7 @@ import (
 
 	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/vcs"
 )
@@ -157,6 +158,24 @@ func (sc *DelegatingConcurrentScanner) deltaReferenceErr(folderConfig *types.Fol
 		return ErrBaseBranchNotFound
 	}
 	return err
+}
+
+func (sc *DelegatingConcurrentScanner) deltaReferenceErrIfEnabled(folderConfig *types.FolderConfig) error {
+	if !sc.configResolver.IsDeltaFindingsEnabledForFolder(folderConfig) {
+		return nil
+	}
+	return sc.deltaReferenceErr(folderConfig)
+}
+
+// markReferenceStateBeforePublish runs before the working-tree publish, which sends the reference
+// state with delta on, so the result never carries the previous scan's reference outcome.
+func (sc *DelegatingConcurrentScanner) markReferenceStateBeforePublish(folderPath types.FilePath, p product.Product, isFullScan bool, refErr error) {
+	switch {
+	case refErr != nil:
+		sc.scanStateAggregator.SetScanDone(folderPath, p, true, refErr)
+	case isFullScan:
+		sc.scanStateAggregator.SetScanInProgress(folderPath, p, true)
+	}
 }
 
 func referenceScanErrLevel(err error) zerolog.Level {
