@@ -268,6 +268,8 @@ func (b *TreeBuilder) buildTreeBody(folders []FolderData, forceFolderNodes bool)
 				} else if folder.BaseBranch != "" {
 					opts = append(opts, WithDescription(fmt.Sprintf("base: %s", folder.BaseBranch)))
 					opts = append(opts, WithBaseBranch(folder.BaseBranch))
+				} else {
+					opts = append(opts, WithDescription("base: none, click to pick"))
 				}
 			}
 			folderNode := NewTreeNode(NodeTypeFolder, folder.FolderName, opts...)
