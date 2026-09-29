@@ -18,9 +18,11 @@ package scanner
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -30,6 +32,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/persistence/mock_persistence"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
@@ -237,6 +240,105 @@ func TestScanBaseBranch_AllProducts_UseCorrectOrgFromFolderConfig(t *testing.T) 
 
 			// Check that there was no error. Note the actual test behavior is verified by the mock scanner.
 			require.NoError(t, err)
+		})
+	}
+}
+
+func TestScanBaseBranch_ClassifiesMissingReference(t *testing.T) {
+	gitRepo := func(t *testing.T) types.FilePath {
+		t.Helper()
+		dir := t.TempDir()
+		testsupport.InitTestGitRepo(t, dir)
+		return types.FilePath(dir)
+	}
+	plainDir := func(t *testing.T) types.FilePath {
+		t.Helper()
+		return types.FilePath(t.TempDir())
+	}
+
+	testCases := []struct {
+		name       string
+		folder     func(t *testing.T) types.FilePath
+		baseBranch string
+		want       error
+	}{
+		{name: "folder that isn't a git repository", folder: plainDir, want: ErrNotGitRepo},
+		{name: "git repository without a base branch", folder: gitRepo, want: ErrMissingDeltaReference},
+		{name: "saved base branch missing locally", folder: gitRepo, baseBranch: "deleted-branch", want: ErrBaseBranchNotFound},
+		{name: "saved base branch exists locally", folder: gitRepo, baseBranch: "main", want: nil},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			engine, tokenService := testutil.UnitTestWithEngine(t)
+			ctrl := gomock.NewController(t)
+
+			folderConfig := &types.FolderConfig{FolderPath: tc.folder(t)}
+			syncFolderToConfig(t, engine, folderConfig, &syncFolderOpts{BaseBranch: tc.baseBranch})
+
+			mockScanner := mock_types.NewMockProductScanner(ctrl)
+			mockScanner.EXPECT().Product().Return(product.ProductCode).AnyTimes()
+			mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Times(0)
+
+			mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
+			mockPersister.EXPECT().Exists(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+
+			dcs := setupScannerWithMock(t, engine, tokenService, mockScanner)
+			dcs.scanPersister = mockPersister
+
+			err := dcs.scanBaseBranch(t.Context(), mockScanner, folderConfig, nil)
+
+			assert.Equal(t, tc.want, err, "classification matches the exact, unwrapped error")
+		})
+	}
+}
+
+func TestScan_MissingDeltaReference_LogsNoError(t *testing.T) {
+	testCases := []struct {
+		name       string
+		gitRepo    bool
+		baseBranch string
+	}{
+		{name: "folder that isn't a git repository"},
+		{name: "git repository without a base branch", gitRepo: true},
+		{name: "saved base branch missing locally", gitRepo: true, baseBranch: "deleted-branch"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			engine, tokenService := testutil.UnitTestWithEngine(t)
+			var mu sync.Mutex
+			var errorLogs []string
+			logger := engine.GetLogger().Hook(zerolog.HookFunc(func(_ *zerolog.Event, level zerolog.Level, msg string) {
+				if level >= zerolog.ErrorLevel {
+					mu.Lock()
+					defer mu.Unlock()
+					errorLogs = append(errorLogs, msg)
+				}
+			}))
+			engine.SetLogger(&logger)
+
+			dir := t.TempDir()
+			if tc.gitRepo {
+				testsupport.InitTestGitRepo(t, dir)
+			}
+			folderConfig := &types.FolderConfig{FolderPath: types.FilePath(dir)}
+			syncFolderToConfig(t, engine, folderConfig, &syncFolderOpts{BaseBranch: tc.baseBranch})
+
+			ctrl := gomock.NewController(t)
+			mockScanner := mock_types.NewMockProductScanner(ctrl)
+			mockScanner.EXPECT().Product().Return(product.ProductCode).AnyTimes()
+			mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
+			mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Return([]types.Issue{}, nil).Times(1)
+			sc, _ := setupScanner(t, engine, tokenService, mockScanner)
+
+			sc.Scan(ctx2.NewContextWithFolderConfig(t.Context(), folderConfig), folderConfig.FolderPath, types.NoopResultProcessor, nil)
+
+			mu.Lock()
+			defer mu.Unlock()
+			for _, msg := range errorLogs {
+				assert.NotRegexp(t, `(?i)base branch|reference`, msg)
+			}
 		})
 	}
 }

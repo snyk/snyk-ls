@@ -379,7 +379,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 					sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), true)
 					err = sc.scanBaseBranch(refScanCtx, s, workspaceFolderConfig, gitCheckoutHandler)
 					if err != nil {
-						refLogger.Error().Err(err).Msgf("couldn't scan base branch for folder %s for product %s", folderPath, s.Product())
+						refLogger.WithLevel(referenceScanErrLevel(err)).Err(err).Msgf("couldn't scan base branch for folder %s for product %s", folderPath, s.Product())
 					}
 					sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), true, err)
 				} else {
