@@ -752,10 +752,15 @@ func (a *AuthenticationServiceImpl) CancelOngoingAuth() {
 }
 
 func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
+	a.logoutInternal(ctx, true)
+}
+
+func (a *AuthenticationServiceImpl) logoutInternal(ctx context.Context, notifyIDE bool) {
 	a.engine.GetConfiguration().ClearCache()
 	a.engine.GetLogger().Info().
 		Str("method", "AuthenticationService.logout").
 		Bool("token_empty", config.GetToken(a.engine.GetConfiguration()) == "").
+		Bool("notify_ide", notifyIDE).
 		Str("authentication_method", string(config.GetAuthenticationMethodFromConfig(a.engine.GetConfiguration()))).
 		Msg("clearing authentication credentials")
 
@@ -773,7 +778,7 @@ func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 			a.errorReporter.CaptureError(err)
 		}
 	}
-	a.updateCredentials("", true, false)
+	a.updateCredentials("", notifyIDE, false)
 	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())
 
 	a.lastUsedTokenMu.Lock()
@@ -1000,7 +1005,7 @@ func isPermanentOAuthRefreshError(errMsg string) bool {
 func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLegacyToken bool, invalidToken oauth2.Token) {
 	logger.Info().Msg("could not authenticate user with current credentials, API returned empty user object")
 	logger.Info().Msg("logging out, empty user response")
-	a.logout(context.Background())
+	a.logoutInternal(context.Background(), false)
 
 	// determine the right error message
 	if !isLegacyToken {
