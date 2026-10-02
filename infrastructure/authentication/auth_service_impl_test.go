@@ -691,6 +691,67 @@ func TestHandleInvalidCredentials(t *testing.T) {
 	})
 }
 
+func Test_HandleEmptyUser_DoesNotNotifyIDEWithEmptyToken(t *testing.T) {
+	t.Run("expired OAuth token clears local state without notifying IDE", func(t *testing.T) {
+		engine, ts := testutil.UnitTestWithEngine(t)
+		mockNotifier := notification.NewMockNotifier()
+		provider := &FakeAuthenticationProvider{IsAuthenticated: false, Engine: engine}
+		ts.SetToken(engine.GetConfiguration(), "pre-existing-token")
+		cut := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+
+		expiredToken := oauth2.Token{Expiry: time.Now().Add(-time.Hour)}
+		logger := engine.GetLogger()
+
+		cut.handleEmptyUser(*logger, false, expiredToken)
+
+		for _, msg := range mockNotifier.SentMessages() {
+			if authParams, ok := msg.(types.AuthenticationParams); ok {
+				assert.NotEmpty(t, authParams.Token,
+					"handleEmptyUser must not send an empty hasAuthenticated to the IDE")
+			}
+		}
+		assert.Empty(t, config.GetToken(engine.GetConfiguration()), "local credentials must be cleared")
+	})
+
+	t.Run("invalid legacy token clears local state without notifying IDE", func(t *testing.T) {
+		engine, ts := testutil.UnitTestWithEngine(t)
+		mockNotifier := notification.NewMockNotifier()
+		provider := &FakeAuthenticationProvider{IsAuthenticated: false, Engine: engine}
+		ts.SetToken(engine.GetConfiguration(), "pre-existing-token")
+		cut := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+
+		logger := engine.GetLogger()
+
+		cut.handleEmptyUser(*logger, true, oauth2.Token{})
+
+		for _, msg := range mockNotifier.SentMessages() {
+			if authParams, ok := msg.(types.AuthenticationParams); ok {
+				assert.NotEmpty(t, authParams.Token,
+					"handleEmptyUser must not send an empty hasAuthenticated to the IDE")
+			}
+		}
+		assert.Empty(t, config.GetToken(engine.GetConfiguration()), "local credentials must be cleared")
+	})
+
+	t.Run("explicit Logout still notifies IDE with empty token", func(t *testing.T) {
+		engine, ts := testutil.UnitTestWithEngine(t)
+		mockNotifier := notification.NewMockNotifier()
+		provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
+		ts.SetToken(engine.GetConfiguration(), "token-to-clear")
+		service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+
+		service.Logout(t.Context())
+
+		var gotEmptyAuth bool
+		for _, msg := range mockNotifier.SentMessages() {
+			if authParams, ok := msg.(types.AuthenticationParams); ok && authParams.Token == "" {
+				gotEmptyAuth = true
+			}
+		}
+		assert.True(t, gotEmptyAuth, "explicit Logout must send empty hasAuthenticated to IDE")
+	})
+}
+
 func Test_Logout_NilProvider_DoesNotPanic(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine))
