@@ -432,11 +432,15 @@ func TestIsAuthenticated_ConcurrentCallsAllReturnSharedResult(t *testing.T) {
 // errorFakeAuthProvider's check function always fails with a configurable error,
 // simulating the whoami call failing because the OAuth token could not be refreshed.
 type errorFakeAuthProvider struct {
-	err error
+	err       error
+	callCount int32
 }
 
 func (p *errorFakeAuthProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
-	return func(_ workflow.Engine) (string, error) { return "", p.err }
+	return func(_ workflow.Engine) (string, error) {
+		atomic.AddInt32(&p.callCount, 1)
+		return "", p.err
+	}
 }
 func (p *errorFakeAuthProvider) Authenticate(_ context.Context) (string, error) { return "", nil }
 func (p *errorFakeAuthProvider) ClearAuthentication(_ context.Context) error    { return nil }
@@ -506,6 +510,81 @@ func Test_IsAuthenticated(t *testing.T) {
 		isAuthenticated := service.IsAuthenticated()
 
 		assert.False(t, isAuthenticated)
+	})
+}
+
+func Test_IsAuthenticated_FailedTokenIsReportedOnce(t *testing.T) {
+	const deadToken = "invalidCreds"
+	permanentErr := buildWhoamiErr(fmt.Errorf("API request failed (status: 401)"))
+
+	setup := func(t *testing.T) (*AuthenticationServiceImpl, *errorFakeAuthProvider, *notification.MockNotifier, types.TokenService) {
+		t.Helper()
+		engine, ts := testutil.UnitTestWithEngine(t)
+		provider := &errorFakeAuthProvider{err: permanentErr}
+		notifier := notification.NewMockNotifier()
+		ts.SetToken(engine.GetConfiguration(), deadToken)
+		service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notifier, testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+		return service, provider, notifier, ts
+	}
+
+	reAuthRequests := func(notifier *notification.MockNotifier) int {
+		count := 0
+		for _, msg := range notifier.SentMessages() {
+			if _, ok := msg.(types.ShowMessageRequest); ok {
+				count++
+			}
+		}
+		return count
+	}
+
+	t.Run("same token pushed again is not rechecked and not reprompted", func(t *testing.T) {
+		service, provider, notifier, ts := setup(t)
+
+		assert.False(t, service.IsAuthenticated())
+		ts.SetToken(service.engine.GetConfiguration(), deadToken)
+		assert.False(t, service.IsAuthenticated())
+
+		assert.Equal(t, int32(1), atomic.LoadInt32(&provider.callCount))
+		assert.Equal(t, 1, reAuthRequests(notifier))
+	})
+
+	t.Run("different token is checked and reported again", func(t *testing.T) {
+		service, provider, notifier, ts := setup(t)
+
+		assert.False(t, service.IsAuthenticated())
+		ts.SetToken(service.engine.GetConfiguration(), "otherCreds")
+		assert.False(t, service.IsAuthenticated())
+
+		assert.Equal(t, int32(2), atomic.LoadInt32(&provider.callCount))
+		assert.Equal(t, 2, reAuthRequests(notifier))
+	})
+
+	t.Run("concurrent callers sharing one failed check prompt once", func(t *testing.T) {
+		service, _, notifier, _ := setup(t)
+
+		var wg sync.WaitGroup
+		for i := 0; i < 5; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				service.IsAuthenticated()
+			}()
+		}
+		wg.Wait()
+
+		assert.Equal(t, 1, reAuthRequests(notifier))
+	})
+
+	t.Run("explicit logout allows the same token to be checked again", func(t *testing.T) {
+		service, provider, notifier, ts := setup(t)
+
+		assert.False(t, service.IsAuthenticated())
+		service.Logout(t.Context())
+		ts.SetToken(service.engine.GetConfiguration(), deadToken)
+		assert.False(t, service.IsAuthenticated())
+
+		assert.Equal(t, int32(2), atomic.LoadInt32(&provider.callCount))
+		assert.Equal(t, 2, reAuthRequests(notifier))
 	})
 }
 

@@ -80,6 +80,8 @@ type AuthenticationServiceImpl struct {
 	// concurrent writers here.
 	lastUsedToken               string
 	lastUsedTokenMu             sync.Mutex
+	lastFailedToken             string
+	lastFailedTokenMu           sync.Mutex
 	m                           sync.RWMutex
 	previousAuthCtxCancelFunc   context.CancelFunc
 	previousAuthCtxCancelFuncMu sync.Mutex
@@ -740,6 +742,7 @@ func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
 	a.m.Lock()
 	defer a.m.Unlock()
 
+	a.clearFailedToken()
 	a.logout(ctx)
 }
 
@@ -807,7 +810,34 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 		return false
 	}
 
+	if a.isKnownFailedToken(token) {
+		logger.Info().Msg("skipping auth check, token already failed in this session")
+		return false
+	}
+
 	return a.doAuthCheck(conf, logger)
+}
+
+func (a *AuthenticationServiceImpl) isKnownFailedToken(token string) bool {
+	a.lastFailedTokenMu.Lock()
+	defer a.lastFailedTokenMu.Unlock()
+	return token != "" && a.lastFailedToken == token
+}
+
+func (a *AuthenticationServiceImpl) markTokenFailed(token string) (alreadyMarked bool) {
+	a.lastFailedTokenMu.Lock()
+	defer a.lastFailedTokenMu.Unlock()
+	if a.lastFailedToken == token {
+		return true
+	}
+	a.lastFailedToken = token
+	return false
+}
+
+func (a *AuthenticationServiceImpl) clearFailedToken() {
+	a.lastFailedTokenMu.Lock()
+	a.lastFailedToken = ""
+	a.lastFailedTokenMu.Unlock()
 }
 
 type authCheckResult struct {
@@ -856,12 +886,18 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 			return false
 		}
 
+		if a.markTokenFailed(token) {
+			logger.Info().Msg("auth check already failed for this token, not prompting again")
+			return false
+		}
+
 		invalidOAuth2Token, isLegacyTokenErr := config.ParseOAuthToken(token, a.engine.GetLogger())
 		isLegacyToken := isLegacyTokenErr != nil
 
 		a.handleEmptyUser(logger, isLegacyToken, invalidOAuth2Token)
 		return false
 	}
+	a.clearFailedToken()
 	// We cache the API auth ok for up to 1 minute after last access. If more than a minute has passed, a new check is
 	// performed.
 	//
