@@ -399,6 +399,7 @@ func (a *AuthenticationServiceImpl) finishAuthenticate(provider AuthenticationPr
 
 	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification)
 	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())
+	a.clearLastFailedToken()
 	a.sendAuthenticationAnalytics()
 	return token, err
 }
@@ -742,7 +743,7 @@ func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
 	a.m.Lock()
 	defer a.m.Unlock()
 
-	a.clearFailedToken()
+	a.clearLastFailedToken()
 	a.logout(ctx)
 }
 
@@ -834,7 +835,7 @@ func (a *AuthenticationServiceImpl) markTokenFailed(token string) (alreadyMarked
 	return false
 }
 
-func (a *AuthenticationServiceImpl) clearFailedToken() {
+func (a *AuthenticationServiceImpl) clearLastFailedToken() {
 	a.lastFailedTokenMu.Lock()
 	a.lastFailedToken = ""
 	a.lastFailedTokenMu.Unlock()
@@ -897,7 +898,7 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 		a.handleEmptyUser(logger, isLegacyToken, invalidOAuth2Token)
 		return false
 	}
-	a.clearFailedToken()
+	a.clearLastFailedToken()
 	// We cache the API auth ok for up to 1 minute after last access. If more than a minute has passed, a new check is
 	// performed.
 	//
