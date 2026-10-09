@@ -35,6 +35,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -73,7 +74,7 @@ func Test_Code_Html_getCodeDetailsHtml_WithInlineIgnores_WithoutIAW(t *testing.T
 	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 
 	assert.NoError(t, err)
-	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(t.Context(), issue)
 
 	// assert injectable style
 	assert.Contains(t, codePanelHtml, "${ideStyle}")
@@ -142,7 +143,7 @@ func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
 	// invoke method under test
 	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
-	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(t.Context(), issue)
 	// assert Fixes section
 	assert.Contains(t, codePanelHtml, ` id="ai-fix-wrapper" class="">`)
 	assert.Contains(t, codePanelHtml, `✨ Generate AI fix`)
@@ -169,7 +170,7 @@ func Test_Code_Html_getCodeDetailsHtml_withAIfix_rendersExplanation(t *testing.T
 	// this, the next GetDetailsHtml call below would look like a switch to a "different"
 	// issue (resetAiFixCacheIfDifferent) and wipe the fix result before it can be read -
 	// this exact ordering is required by real IDE usage: view, then fix, then view again.
-	htmlRenderer.GetDetailsHtml(issue)
+	htmlRenderer.GetDetailsHtml(t.Context(), issue)
 
 	// The explanation is a plain passthrough field on the autofix suggestion,
 	// populated by code-client-go. Includes an apostrophe so the assertion below can't
@@ -183,7 +184,7 @@ func Test_Code_Html_getCodeDetailsHtml_withAIfix_rendersExplanation(t *testing.T
 		},
 	}, nil, nil)
 
-	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(t.Context(), issue)
 
 	assert.Contains(t, html.UnescapeString(codePanelHtml), wantExplanation)
 }
@@ -226,7 +227,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	// invoke method under test
 	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
-	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(t.Context(), issue)
 
 	// assert Header section
 	assert.Contains(t, codePanelHtml, "Priority score: 0")
@@ -280,7 +281,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignore_pending(t *testing.T) {
 	// invoke method under test
 	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
-	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(t.Context(), issue)
 
 	// assert Header section
 	assert.Contains(t, codePanelHtml, "Priority score: 0")
@@ -325,7 +326,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_expired(t *testing.T) {
 	// invoke method under test
 	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
-	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(t.Context(), issue)
 
 	// assert Ignore Details section
 	// Asserting an expired date to prevent the test from breaking in the future as the current date changes
@@ -374,7 +375,7 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
 	// invoke method under test
 	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
-	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(t.Context(), issue)
 
 	// assert Ignore Details section - Ignore link must be the custom endpoint
 	assert.Containsf(t, codePanelHtml, customEndpoint, "HTML does not contain link to custom endpoint %s", codePanelHtml)
@@ -446,7 +447,7 @@ func Test_Code_Html_getCodeDetailsHtml_hasCSS(t *testing.T) {
 	// invoke method under test
 	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
-	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(t.Context(), issue)
 	// assert Fixes section
 	assert.Contains(t, codePanelHtml, "--default-font: \"SF Pro Text\", \"Segoe UI\", \"Ubuntu\", Geneva, Verdana, Tahoma, sans-serif;\n")
 }
@@ -465,7 +466,7 @@ func Test_Code_Html_ignoreForm_hasReasonErrorBadge(t *testing.T) {
 
 	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
-	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(t.Context(), issue)
 
 	// Form and error badge should be present in the HTML
 	assert.Contains(t, codePanelHtml, `id="ignore-form-container"`)
@@ -487,7 +488,7 @@ func Test_Code_Html_hasErrorBadgeCSS(t *testing.T) {
 	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
-	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(t.Context(), issue)
 	assert.Contains(t, codePanelHtml, ".sn-error-badge")
 }
 
@@ -510,7 +511,7 @@ func Test_Code_Html_hiddenClassIsImportant(t *testing.T) {
 	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
-	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(t.Context(), issue)
 	assert.Regexp(t, `\.hidden\s*\{\s*display:\s*none\s*!important\s*;?\s*\}`, codePanelHtml)
 }
 
@@ -533,7 +534,7 @@ func Test_Code_Html_formInputsDoNotUseBorderAsBackground(t *testing.T) {
 	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	assert.NoError(t, err)
 
-	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(t.Context(), issue)
 
 	assert.Regexp(t, `\.sn-select[^}]*background-color:\s*var\(--input-background\)`, codePanelHtml)
 	assert.Regexp(t, `\.sn-input[^}]*background-color:\s*var\(--input-background\)`, codePanelHtml)
@@ -793,7 +794,7 @@ func Test_Code_Html_CreateIgnoreDisabled_whenNotGitRepo(t *testing.T) {
 	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	require.NoError(t, err)
 
-	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(t.Context(), issue)
 
 	assert.Contains(t, codePanelHtml, createIgnoreDisabledButtonMarkup)
 	assert.Contains(t, codePanelHtml, htmlIgnore.CreateIgnoreUnavailableReason)
@@ -820,7 +821,35 @@ func Test_Code_Html_CreateIgnoreEnabled_whenGitRepoWithOrigin(t *testing.T) {
 	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
 	require.NoError(t, err)
 
-	codePanelHtml := htmlRenderer.GetDetailsHtml(issue)
+	codePanelHtml := htmlRenderer.GetDetailsHtml(t.Context(), issue)
+
+	assert.NotContains(t, codePanelHtml, createIgnoreDisabledButtonMarkup)
+}
+
+func Test_Code_Html_CreateIgnoreEnabled_whenNonGitFolderWithRemoteRepoUrlOverrideInContext(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	nonGitDir := t.TempDir()
+	types.SetFolderUserSetting(engine.GetConfiguration(), types.FilePath(nonGitDir), types.SettingAdditionalParameters,
+		[]string{"--remote-repo-url=https://github.com/example/repo.git"})
+
+	issue := &snyk.Issue{
+		ID:          "java/DontUsePrintStackTrace",
+		Severity:    2,
+		ContentRoot: types.FilePath(nonGitDir),
+		AdditionalData: snyk.CodeIssueData{
+			Title: "Test issue",
+		},
+	}
+
+	fakeFeatureFlagService := featureflag.NewFakeService()
+	fakeFeatureFlagService.Flags[featureflag.SnykCodeConsistentIgnores] = true
+
+	htmlRenderer, err := GetHTMLRenderer(engine, fakeFeatureFlagService)
+	require.NoError(t, err)
+
+	ctx := ctx2.NewContextWithConfigResolver(t.Context(), testutil.DefaultConfigResolver(engine))
+	codePanelHtml := htmlRenderer.GetDetailsHtml(ctx, issue)
 
 	assert.NotContains(t, codePanelHtml, createIgnoreDisabledButtonMarkup)
 }

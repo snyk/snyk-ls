@@ -18,6 +18,7 @@ package code
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -36,6 +37,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/html"
 	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -145,7 +147,7 @@ func (renderer *HtmlRenderer) determineFolderPath(conf configuration.Configurati
 	return ""
 }
 
-func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
+func (renderer *HtmlRenderer) GetDetailsHtml(ctx context.Context, issue types.Issue) string {
 	autoTriggerAiFix := renderer.AiFixHandler.GetAutoTriggerAiFix()
 	renderer.AiFixHandler.resetAiFixCacheIfDifferent(issue)
 	conf := renderer.engine.GetConfiguration()
@@ -207,7 +209,8 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	}
 
 	contentRoot := string(issue.GetContentRoot())
-	canCreateIgnore := htmlIgnore.CanCreateIgnore(contentRoot)
+	configResolver, _ := ctx2.ConfigResolverFromContext(ctx)
+	canCreateIgnore := htmlIgnore.CanCreateIgnore(contentRoot, configResolver)
 
 	data := map[string]any{
 		"IssueTitle":                    additionalData.Title,

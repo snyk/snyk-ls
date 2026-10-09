@@ -18,6 +18,7 @@ package secrets
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"fmt"
 	"html/template"
@@ -29,6 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/html"
 	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
 	"github.com/snyk/snyk-ls/internal/product"
@@ -100,7 +102,7 @@ func (renderer *HtmlRenderer) updateFeatureFlags(folder types.FilePath) {
 	renderer.cciEnabled = renderer.featureFlagService.GetFromFolderConfig(folder, featureflag.SnykCodeConsistentIgnores)
 }
 
-func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
+func (renderer *HtmlRenderer) GetDetailsHtml(ctx context.Context, issue types.Issue) string {
 	logger := renderer.engine.GetLogger()
 	additionalData, ok := issue.GetAdditionalData().(snyk.SecretsIssueData)
 	if !ok {
@@ -139,7 +141,8 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	}
 
 	contentRoot := string(issue.GetContentRoot())
-	canCreateIgnore := htmlIgnore.CanCreateIgnore(contentRoot)
+	configResolver, _ := ctx2.ConfigResolverFromContext(ctx)
+	canCreateIgnore := htmlIgnore.CanCreateIgnore(contentRoot, configResolver)
 
 	data := map[string]any{
 		"IssueTitle":                    additionalData.Title,

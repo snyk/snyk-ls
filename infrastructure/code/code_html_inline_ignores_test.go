@@ -43,7 +43,7 @@ func Test_Code_Html_InlineIgnores_Enabled(t *testing.T) {
 	issue := createTestIssue()
 
 	// Get the HTML output
-	htmlOutput := htmlRenderer.GetDetailsHtml(issue)
+	htmlOutput := htmlRenderer.GetDetailsHtml(t.Context(), issue)
 
 	// Verify that the inline ignores feature is enabled
 	assert.True(t, htmlRenderer.inlineIgnoresEnabled, "InlineIgnores should be enabled")
@@ -71,7 +71,7 @@ func Test_Code_Html_InlineIgnores_Disabled(t *testing.T) {
 	issue := createTestIssue()
 
 	// Get the HTML output
-	htmlOutput := htmlRenderer.GetDetailsHtml(issue)
+	htmlOutput := htmlRenderer.GetDetailsHtml(t.Context(), issue)
 
 	// Verify that the InlineIgnoresEnabled flag is passed to the template
 	// This check should be based on the actual HTML output content

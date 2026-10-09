@@ -31,6 +31,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/iac"
 	"github.com/snyk/snyk-ls/infrastructure/oss"
 	"github.com/snyk/snyk-ls/infrastructure/secrets"
+	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -40,13 +41,14 @@ type generateIssueDescription struct {
 	issueProvider      snyk.IssueProvider
 	featureFlagService featureflag.Service
 	engine             workflow.Engine
+	configResolver     types.ConfigResolverInterface
 }
 
 func (cmd *generateIssueDescription) Command() types.CommandData {
 	return cmd.command
 }
 
-func (cmd *generateIssueDescription) Execute(_ context.Context) (any, error) {
+func (cmd *generateIssueDescription) Execute(ctx context.Context) (any, error) {
 	logger := cmd.engine.GetLogger().With().Str("method", "generateIssueDescription.Execute").Logger()
 	args := cmd.command.Arguments
 
@@ -60,14 +62,16 @@ func (cmd *generateIssueDescription) Execute(_ context.Context) (any, error) {
 		return nil, errors.New("failed to find issue")
 	}
 
+	ctx = ctx2.NewContextWithConfigResolver(ctx, cmd.configResolver)
+
 	if issue.GetProduct() == product.ProductInfrastructureAsCode {
 		return getIacHtml(cmd.engine.GetConfiguration(), logger, issue)
 	} else if issue.GetProduct() == product.ProductCode {
-		return cmd.getCodeHtml(cmd.engine, logger, issue)
+		return cmd.getCodeHtml(ctx, cmd.engine, logger, issue)
 	} else if issue.GetProduct() == product.ProductOpenSource {
 		return getOssHtml(cmd.engine, logger, issue)
 	} else if issue.GetProduct() == product.ProductSecrets {
-		return cmd.getSecretsHtml(cmd.engine, logger, issue)
+		return cmd.getSecretsHtml(ctx, cmd.engine, logger, issue)
 	}
 
 	return nil, nil
@@ -83,23 +87,23 @@ func getOssHtml(engine workflow.Engine, logger zerolog.Logger, issue types.Issue
 	return html, nil
 }
 
-func (cmd *generateIssueDescription) getCodeHtml(engine workflow.Engine, logger zerolog.Logger, issue types.Issue) (string, error) {
+func (cmd *generateIssueDescription) getCodeHtml(ctx context.Context, engine workflow.Engine, logger zerolog.Logger, issue types.Issue) (string, error) {
 	htmlRender, err := code.GetHTMLRenderer(engine, cmd.featureFlagService)
 	if err != nil {
 		logger.Err(err).Msg("Cannot create Code HTML render")
 		return "", err
 	}
-	html := htmlRender.GetDetailsHtml(issue)
+	html := htmlRender.GetDetailsHtml(ctx, issue)
 	return html, nil
 }
 
-func (cmd *generateIssueDescription) getSecretsHtml(engine workflow.Engine, logger zerolog.Logger, issue types.Issue) (string, error) {
+func (cmd *generateIssueDescription) getSecretsHtml(ctx context.Context, engine workflow.Engine, logger zerolog.Logger, issue types.Issue) (string, error) {
 	htmlRender, err := secrets.NewHtmlRenderer(engine, cmd.featureFlagService)
 	if err != nil {
 		logger.Err(err).Msg("Cannot create Secrets HTML render")
 		return "", err
 	}
-	html := htmlRender.GetDetailsHtml(issue)
+	html := htmlRender.GetDetailsHtml(ctx, issue)
 	return html, nil
 }
 
