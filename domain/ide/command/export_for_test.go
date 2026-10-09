@@ -17,6 +17,8 @@
 package command
 
 import (
+	"github.com/rs/zerolog"
+
 	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -27,9 +29,26 @@ import (
 func NewRemediationFixFolderCommand(
 	cmd types.CommandData,
 	provider remediation.FolderRemediator,
+	w types.Workspace,
 ) types.Command {
 	return &remediationFixFolderCommand{
-		command:  cmd,
-		provider: provider,
+		command:   cmd,
+		provider:  provider,
+		workspace: w,
+	}
+}
+
+// NewRemediationFixFolderCommandWithLogger is NewRemediationFixFolderCommand with a logger.
+func NewRemediationFixFolderCommandWithLogger(
+	cmd types.CommandData,
+	provider remediation.FolderRemediator,
+	w types.Workspace,
+	logger zerolog.Logger,
+) types.Command {
+	return &remediationFixFolderCommand{
+		command:   cmd,
+		provider:  provider,
+		workspace: w,
+		logger:    logger,
 	}
 }
