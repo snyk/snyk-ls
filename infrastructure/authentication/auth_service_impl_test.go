@@ -662,6 +662,46 @@ func Test_IsAuthenticated_StaleFailedCheckDoesNotLogOutReplacementToken(t *testi
 	assert.Equal(t, freshToken, config.GetToken(engine.GetConfiguration()))
 }
 
+func Test_IsAuthenticated_StaleFailureDoesNotRearmLastFailedToken(t *testing.T) {
+	const token = "same-token"
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &blockingErrorAuthProvider{
+		err:     buildWhoamiErr(fmt.Errorf("API request failed (status: 401)")),
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	ts.SetToken(engine.GetConfiguration(), token)
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+
+	done := make(chan bool, 1)
+	go func() {
+		done <- service.IsAuthenticated()
+	}()
+
+	select {
+	case <-provider.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("auth check did not start")
+	}
+
+	service.Logout(t.Context())
+	service.m.Lock()
+	service.updateCredentials(token, false, false, true)
+	service.clearLastFailedToken()
+	service.m.Unlock()
+	close(provider.release)
+
+	select {
+	case authenticated := <-done:
+		assert.False(t, authenticated)
+	case <-time.After(5 * time.Second):
+		t.Fatal("IsAuthenticated did not return")
+	}
+
+	assert.Equal(t, token, config.GetToken(engine.GetConfiguration()))
+	assert.False(t, service.isKnownFailedToken(token))
+}
+
 // buildWhoamiErr simulates the real production error wrapping chain:
 // http.Client.Get returns *url.Error → wrapped by GAF whoami workflow →
 // pkgerrors.Wrap("failed to invoke whoami workflow") → pkgerrors.Wrap("failed to get active user")

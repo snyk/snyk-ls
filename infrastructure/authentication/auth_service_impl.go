@@ -1011,14 +1011,13 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 	// Coalesce concurrent auth API calls: all in-flight callers share one result.
 	// Re-read after provider reset: that path can clear the token, and an empty
 	// token must not be sent to whoami or turned into a re-auth prompt.
-	token := config.GetToken(conf)
+	// Token and generation are one snapshot. UpdateCredentials writes both
+	// under a.m; reading them separately lets a login land between the loads
+	// and attribute the old token's failure to the new generation.
+	token, checkedGeneration := a.snapshotCredentials(conf)
 	if token == "" {
 		return false
 	}
-	// syncGeneration advances on UpdateCredentials / logout, not on the OAuth
-	// storage bridge. A refresh during this check rewrites the token string
-	// without advancing the generation, and must still be allowed to log out.
-	checkedGeneration := a.syncGeneration.Load()
 	v, _, _ := a.authCheckGroup.Do(token, a.authCheck(token))
 	ar, ok := v.(*authCheckResult)
 	if !ok {
@@ -1052,15 +1051,10 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 			return false
 		}
 
-		if a.markTokenFailed(token) {
-			logger.Info().Msg("auth check already failed for this token, not prompting again")
-			return false
-		}
-
 		invalidOAuth2Token, isLegacyTokenErr := config.ParseOAuthToken(token, a.engine.GetLogger())
 		isLegacyToken := isLegacyTokenErr != nil
 
-		a.handleEmptyUser(logger, isLegacyToken, invalidOAuth2Token, checkedGeneration)
+		a.handleEmptyUser(logger, isLegacyToken, invalidOAuth2Token, checkedGeneration, token)
 		return false
 	}
 	a.clearLastFailedToken()
@@ -1203,7 +1197,13 @@ func isPermanentOAuthRefreshError(errMsg string) bool {
 		strings.Contains(errMsg, "token_inactive")
 }
 
-func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLegacyToken bool, invalidToken oauth2.Token, checkedGeneration uint64) {
+func (a *AuthenticationServiceImpl) snapshotCredentials(conf configuration.Configuration) (string, uint64) {
+	a.m.RLock()
+	defer a.m.RUnlock()
+	return config.GetToken(conf), a.syncGeneration.Load()
+}
+
+func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLegacyToken bool, invalidToken oauth2.Token, checkedGeneration uint64, token string) {
 	logger.Info().Msg("could not authenticate user with current credentials, API returned empty user object")
 	// IsAuthenticated releases a.m before doAuthCheck; take the write lock here so logout can
 	// flushCredentialUpdates without deadlocking the credentialUpdateWorker (which needs a.m.Lock).
@@ -1211,6 +1211,13 @@ func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLeg
 	defer a.m.Unlock()
 	if a.syncGeneration.Load() != checkedGeneration {
 		logger.Info().Msg("auth check finished for a token that is no longer current, not logging out")
+		return
+	}
+	// Mark only after the generation check. A whoami that started on an older
+	// generation can otherwise re-arm lastFailedToken after Logout or
+	// finishAuthenticate cleared it, and the restored token then skips whoami.
+	if a.markTokenFailed(token) {
+		logger.Info().Msg("auth check already failed for this token, not prompting again")
 		return
 	}
 	logger.Info().Msg("logging out, empty user response")
