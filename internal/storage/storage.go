@@ -80,16 +80,18 @@ func (s *storage) Refresh(config configuration.Configuration, key string) error 
 
 func (s *storage) WatchFileForWritesByOtherProcesses(ctx context.Context, interval time.Duration) {
 	s.rememberCurrentValues()
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			s.runCallbacksForWritesByOtherProcesses()
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				s.runCallbacksForWritesByOtherProcesses()
+			}
 		}
-	}
+	}()
 }
 
 func (s *storage) rememberCurrentValues() {
@@ -97,9 +99,6 @@ func (s *storage) rememberCurrentValues() {
 	defer s.mutex.Unlock()
 	if doc, err := s.readFile(); err == nil {
 		for key := range s.callbacks {
-			if _, known := s.valuesKnownToThisProcess[key]; known {
-				continue
-			}
 			if value, ok := doc[key]; ok {
 				s.valuesKnownToThisProcess[key] = value
 			}

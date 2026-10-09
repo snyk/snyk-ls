@@ -645,7 +645,7 @@ func Test_RegisterOAuthStorageBridge_TokenWrittenByAnotherProcessReachesTheIde(t
 	RegisterOAuthStorageBridge(storageWithCallbacks, service)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	go storageWithCallbacks.WatchFileForWritesByOtherProcesses(ctx, 10*time.Millisecond)
+	storageWithCallbacks.WatchFileForWritesByOtherProcesses(ctx, 10*time.Millisecond)
 
 	tokenBytes, err := json.Marshal(oauth2.Token{
 		AccessToken:  "other-window-access",

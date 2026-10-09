@@ -126,7 +126,7 @@ func Test_WatchFileForWritesByOtherProcesses_FiresCallbackForValuesWrittenByAnot
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	go watcher.WatchFileForWritesByOtherProcesses(ctx, 10*time.Millisecond)
+	watcher.WatchFileForWritesByOtherProcesses(ctx, 10*time.Millisecond)
 
 	require.NoError(t, other.Set(key, "external"))
 
@@ -160,7 +160,7 @@ func Test_WatchFileForWritesByOtherProcesses_DoesNotFireForValuesPresentAtStart(
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	go watcher.WatchFileForWritesByOtherProcesses(ctx, 10*time.Millisecond)
+	watcher.WatchFileForWritesByOtherProcesses(ctx, 10*time.Millisecond)
 
 	select {
 	case value := <-received:
@@ -196,7 +196,7 @@ func Test_WatchFileForWritesByOtherProcesses_OwnStructValueIsNotReportedBack(t *
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	go watcher.WatchFileForWritesByOtherProcesses(ctx, 10*time.Millisecond)
+	watcher.WatchFileForWritesByOtherProcesses(ctx, 10*time.Millisecond)
 
 	require.NoError(t, watcher.Set(key, folderConfig{Path: "/p", Enabled: true, Tags: []string{"a"}}))
 	<-received

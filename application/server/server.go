@@ -739,7 +739,7 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		// (queued until SettingIsLspInitialized turns true).
 		// withContext guarantees AuthenticationService is non-nil before any handler runs.
 		authentication.RegisterOAuthStorageBridge(storage, mustAuthenticationServiceFromContext(ctx))
-		go storage.WatchFileForWritesByOtherProcesses(scanCtx, storageWatchInterval)
+		storage.WatchFileForWritesByOtherProcesses(scanCtx, storageWatchInterval)
 
 		if err := addWorkspaceFolders(ctx, conf, &logger, engine, params); err != nil {
 			return nil, err
