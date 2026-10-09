@@ -319,7 +319,7 @@ func initHandlers(srv *jrpc2.Server, handlers handler.Map, conf configuration.Co
 	scanCtx := deps.ScanCtx
 	scanCancel := deps.ScanCancel
 	bgInit := &backgroundInit{}
-	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv, progressStopChan))
+	handlers["initialize"] = enrich(initializeHandler(conf, engine, srv, progressStopChan, scanCtx))
 	handlers["initialized"] = enrich(initializedHandler(conf, engine, srv, bgInit))
 	var onFileChange func(types.FilePath)
 	if deps.RemediationNotifier != nil {
@@ -709,7 +709,9 @@ func initNetworkAccessHeaders(engine workflow.Engine) {
 	engine.GetNetworkAccess().AddHeaderField("User-Agent", ua.String())
 }
 
-func initializeHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server, progressStopChan <-chan bool) handler.Func {
+const storageWatchInterval = 2 * time.Second
+
+func initializeHandler(conf configuration.Configuration, engine workflow.Engine, srv *jrpc2.Server, progressStopChan <-chan bool, scanCtx context.Context) handler.Func {
 	return handler.New(func(ctx context.Context, params types.InitializeParams) (any, error) {
 		method := "initializeHandler"
 		logger := ctx2.LoggerFromContext(ctx).With().Str("method", method).Logger()
@@ -737,6 +739,7 @@ func initializeHandler(conf configuration.Configuration, engine workflow.Engine,
 		// (queued until SettingIsLspInitialized turns true).
 		// withContext guarantees AuthenticationService is non-nil before any handler runs.
 		authentication.RegisterOAuthStorageBridge(storage, mustAuthenticationServiceFromContext(ctx))
+		go storage.WatchFileForWritesByOtherProcesses(scanCtx, storageWatchInterval)
 
 		if err := addWorkspaceFolders(ctx, conf, &logger, engine, params); err != nil {
 			return nil, err

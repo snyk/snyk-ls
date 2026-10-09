@@ -514,6 +514,32 @@ func Test_oauthStorageBridgeCallback_DropsEmptyToken(t *testing.T) {
 	)
 }
 
+func Test_oauthStorageBridgeCallback_DropsTokenThatAlreadyFailed(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+
+	service := NewAuthenticationService(
+		engine,
+		tokenService,
+		nil,
+		error_reporting.NewTestErrorReporter(engine),
+		notification.NewNotifier(),
+		testutil.DefaultConfigResolver(engine),
+	).(*AuthenticationServiceImpl)
+	t.Cleanup(func() { service.Shutdown() })
+
+	service.markTokenFailed("failed-token")
+
+	newOAuthStorageBridgeCallback(service)("", "failed-token")
+
+	require.Never(t,
+		func() bool { return config.GetToken(conf) == "failed-token" },
+		time.Second, time.Millisecond,
+		"a token that already failed in this session must not be re-adopted from storage",
+	)
+}
+
 func Test_RegisterOAuthStorageBridge_PreInitRefreshIsBufferedForIde(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
@@ -582,6 +608,67 @@ func Test_RegisterOAuthStorageBridge_PreInitRefreshIsBufferedForIde(t *testing.T
 		assert.Equal(t, rotatedToken, authParams.Token)
 	case <-time.After(2 * time.Second):
 		t.Fatal("expected rotated OAuth token to be delivered after LSP initialization")
+	}
+}
+
+func Test_RegisterOAuthStorageBridge_TokenWrittenByAnotherProcessReachesTheIde(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	storageFile := filepath.Join(t.TempDir(), "ls-config.json")
+	storageWithCallbacks, err := storage2.NewStorageWithCallbacks(storage2.WithStorageFile(storageFile))
+	require.NoError(t, err)
+	conf.SetStorage(storageWithCallbacks)
+	conf.PersistInStorage(auth.CONFIG_KEY_OAUTH_TOKEN)
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+	conf.Set(types.SettingIsLspInitialized, true)
+
+	notifier := notification.NewNotifier()
+	service := NewAuthenticationService(
+		engine,
+		tokenService,
+		nil,
+		error_reporting.NewTestErrorReporter(engine),
+		notifier,
+		testutil.DefaultConfigResolver(engine),
+	)
+	t.Cleanup(func() { service.Shutdown() })
+
+	receivedCh := make(chan types.AuthenticationParams, 4)
+	notifier.CreateListener(func(p any) {
+		if authParams, ok := p.(types.AuthenticationParams); ok {
+			receivedCh <- authParams
+		}
+	})
+	t.Cleanup(notifier.DisposeListener)
+
+	RegisterOAuthStorageBridge(storageWithCallbacks, service)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	go storageWithCallbacks.WatchFileForWritesByOtherProcesses(ctx, 10*time.Millisecond)
+
+	tokenBytes, err := json.Marshal(oauth2.Token{
+		AccessToken:  "other-window-access",
+		RefreshToken: "other-window-refresh",
+		TokenType:    "Bearer",
+		Expiry:       time.Now().Add(time.Hour),
+	})
+	require.NoError(t, err)
+	tokenFromOtherWindow := string(tokenBytes)
+
+	otherProcessStorage, err := storage2.NewStorageWithCallbacks(storage2.WithStorageFile(storageFile))
+	require.NoError(t, err)
+	require.NoError(t, otherProcessStorage.Set(auth.CONFIG_KEY_OAUTH_TOKEN, tokenFromOtherWindow))
+
+	require.Eventuallyf(t, func() bool {
+		return config.GetToken(conf) == tokenFromOtherWindow
+	}, 5*time.Second, time.Millisecond, "token written by another process must be applied")
+
+	select {
+	case authParams := <-receivedCh:
+		assert.Equal(t, tokenFromOtherWindow, authParams.Token)
+	case <-time.After(5 * time.Second):
+		t.Fatal("expected $/snyk.hasAuthenticated with the token written by another process")
 	}
 }
 

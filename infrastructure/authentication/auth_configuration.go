@@ -188,6 +188,12 @@ func newOAuthStorageBridgeCallback(authenticationService AuthenticationService) 
 		// Queue the update for sequential processing instead of spawning a goroutine
 		// directly. This prevents race conditions where older tokens overwrite newer ones.
 		if serviceImpl, ok := authenticationService.(*AuthenticationServiceImpl); ok {
+			if serviceImpl.isKnownFailedToken(newToken) {
+				if logger != nil {
+					logger.Debug().Msg("oauth storage bridge ignoring token that already failed in this session")
+				}
+				return
+			}
 			serviceImpl.QueueCredentialUpdate(newToken, true, false)
 		} else {
 			// Fallback to direct goroutine for non-impl types (should not happen in practice)
