@@ -450,6 +450,35 @@ func (p *errorFakeAuthProvider) AuthenticationMethod() types.AuthenticationMetho
 	return types.FakeAuthentication
 }
 
+// blockingErrorAuthProvider holds the whoami call until release is closed, so a
+// test can replace the token while the check of the old token is still in flight.
+type blockingErrorAuthProvider struct {
+	err       error
+	started   chan struct{}
+	release   chan struct{}
+	callCount int32
+}
+
+func (p *blockingErrorAuthProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
+	return func(_ workflow.Engine) (string, error) {
+		atomic.AddInt32(&p.callCount, 1)
+		select {
+		case <-p.started:
+		default:
+			close(p.started)
+		}
+		<-p.release
+		return "", p.err
+	}
+}
+func (p *blockingErrorAuthProvider) Authenticate(_ context.Context) (string, error) { return "", nil }
+func (p *blockingErrorAuthProvider) ClearAuthentication(_ context.Context) error    { return nil }
+func (p *blockingErrorAuthProvider) AuthURL(_ context.Context) string               { return "" }
+func (p *blockingErrorAuthProvider) setAuthUrl(_ string)                            {}
+func (p *blockingErrorAuthProvider) AuthenticationMethod() types.AuthenticationMethod {
+	return types.FakeAuthentication
+}
+
 // TestIsAuthenticated_PermanentAuthErrorStillTriggersReAuthNotification proves the
 // notification/logout side effect that the deleted reentrant IsAuthenticated() call in
 // the OAuth refresher (auth_configuration.go) used to trigger on refresh failure is still
@@ -575,6 +604,15 @@ func Test_IsAuthenticated_FailedTokenIsReportedOnce(t *testing.T) {
 		assert.Equal(t, 1, reAuthRequests(notifier))
 	})
 
+	t.Run("empty token is not sent to the provider and is not prompted", func(t *testing.T) {
+		service, provider, notifier, ts := setup(t)
+		ts.SetToken(service.engine.GetConfiguration(), "")
+
+		assert.False(t, service.doAuthCheck(service.engine.GetConfiguration(), *service.engine.GetLogger()))
+		assert.Equal(t, int32(0), atomic.LoadInt32(&provider.callCount))
+		assert.Equal(t, 0, reAuthRequests(notifier))
+	})
+
 	t.Run("explicit logout allows the same token to be checked again", func(t *testing.T) {
 		service, provider, notifier, ts := setup(t)
 
@@ -586,6 +624,42 @@ func Test_IsAuthenticated_FailedTokenIsReportedOnce(t *testing.T) {
 		assert.Equal(t, int32(2), atomic.LoadInt32(&provider.callCount))
 		assert.Equal(t, 2, reAuthRequests(notifier))
 	})
+}
+
+func Test_IsAuthenticated_StaleFailedCheckDoesNotLogOutReplacementToken(t *testing.T) {
+	const deadToken = "invalidCreds"
+	const freshToken = "fresh-token"
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &blockingErrorAuthProvider{
+		err:     buildWhoamiErr(fmt.Errorf("API request failed (status: 401)")),
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	ts.SetToken(engine.GetConfiguration(), deadToken)
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+
+	done := make(chan bool, 1)
+	go func() {
+		done <- service.IsAuthenticated()
+	}()
+
+	select {
+	case <-provider.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("auth check did not start")
+	}
+
+	service.UpdateCredentials(freshToken, false, false)
+	close(provider.release)
+
+	select {
+	case authenticated := <-done:
+		assert.False(t, authenticated)
+	case <-time.After(5 * time.Second):
+		t.Fatal("IsAuthenticated did not return")
+	}
+
+	assert.Equal(t, freshToken, config.GetToken(engine.GetConfiguration()))
 }
 
 // buildWhoamiErr simulates the real production error wrapping chain:
