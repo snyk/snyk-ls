@@ -2502,8 +2502,6 @@ func Test_UpdateCredentials_HookCanAcquireLock(t *testing.T) {
 // before the notification is actually sent.
 func Test_UpdateCredentials_SkipsStaleNotification(t *testing.T) {
 	t.Parallel()
-	engine, ts := testutil.UnitTestWithEngine(t)
-	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
 
 	// Subtest 1: stale notification suppression
 	// Hook calls UpdateCredentials with a different token, advancing the generation
@@ -2512,6 +2510,8 @@ func Test_UpdateCredentials_SkipsStaleNotification(t *testing.T) {
 	// has moved past what the outer call captured.
 	t.Run("stale generation suppresses notification", func(t *testing.T) {
 		t.Parallel()
+		engine, ts := testutil.UnitTestWithEngine(t)
+		provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
 		mockNotifier := notification.NewMockNotifier()
 		service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
 
@@ -2556,6 +2556,8 @@ func Test_UpdateCredentials_SkipsStaleNotification(t *testing.T) {
 	// Without concurrent advancement of syncGeneration, the notification should send normally.
 	t.Run("current generation sends notification", func(t *testing.T) {
 		t.Parallel()
+		engine, ts := testutil.UnitTestWithEngine(t)
+		provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
 		mockNotifier := notification.NewMockNotifier()
 		service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
 

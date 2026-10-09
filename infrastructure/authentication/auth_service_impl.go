@@ -1012,6 +1012,9 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 	// Re-read after provider reset: that path can clear the token, and an empty
 	// token must not be sent to whoami or turned into a re-auth prompt.
 	token := config.GetToken(conf)
+	if token == "" {
+		return false
+	}
 	// syncGeneration advances on UpdateCredentials / logout, not on the OAuth
 	// storage bridge. A refresh during this check rewrites the token string
 	// without advancing the generation, and must still be allowed to log out.
