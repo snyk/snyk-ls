@@ -97,6 +97,9 @@ func (s *storage) rememberCurrentValues() {
 	defer s.mutex.Unlock()
 	if doc, err := s.readFile(); err == nil {
 		for key := range s.callbacks {
+			if _, known := s.valuesKnownToThisProcess[key]; known {
+				continue
+			}
 			if value, ok := doc[key]; ok {
 				s.valuesKnownToThisProcess[key] = value
 			}
