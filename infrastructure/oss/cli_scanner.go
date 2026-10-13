@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/cli-extension-dep-graph/v2/pkg/ecosystems/python/uv"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/subosito/gotenv"
 	"golang.org/x/exp/slices"
@@ -52,6 +53,8 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
+
+const allProjectsParam = "--all-projects"
 
 var (
 	lockFilesToManifestMap = map[string]string{ //nolint:gochecknoglobals // effectively a package-level constant — immutable after init
@@ -286,7 +289,7 @@ func (cliScanner *CLIScanner) scanInternal(ctx context.Context, commandFunc func
 	}
 
 	// determine which scanner to use, mirroring cli-extension-os-flows ShouldUseLegacyFlow
-	useLegacyScan, reason := shouldUseLegacyScan(folderConfig, cmd)
+	useLegacyScan, reason := shouldUseLegacyScan(&logger, folderConfig, cmd)
 
 	// do actual scan
 	var output any
@@ -393,7 +396,6 @@ func (cliScanner *CLIScanner) updateSDKs(workDir types.FilePath) ([]string, gote
 
 func (cliScanner *CLIScanner) prepareScanCommand(args []string, parameterBlacklist map[string]bool, path types.FilePath, folderConfig *types.FolderConfig) ([]string, gotenv.Env) {
 	allProjectsParamAllowed := true
-	allProjectsParam := "--all-projects"
 
 	cliPath := cliScanner.configResolver.GetString(types.SettingCliPath, nil)
 	if cliPath != "" {
@@ -659,15 +661,18 @@ var newFeatureFlags = map[string]bool{ //nolint:gochecknoglobals // effectively 
 // shouldUseLegacyScan determines whether the scan should use the legacy CLI path.
 // This mirrors the routing logic in cli-extension-os-flows ShouldUseLegacyFlow.
 // Returns (useLegacy, reason).
-func shouldUseLegacyScan(folderConfig *types.FolderConfig, cmd []string) (bool, string) {
+func shouldUseLegacyScan(logger *zerolog.Logger, folderConfig *types.FolderConfig, cmd []string) (bool, string) {
 	if isForceLegacyCLI() {
 		return true, "SNYK_FORCE_LEGACY_CLI env var set"
 	}
 	if flag := findLegacyOnlyFlag(cmd); flag != "" {
 		return true, fmt.Sprintf("legacy-only flag: %s", flag)
 	}
-	if matchedFeature := findNewFeature(folderConfig, cmd); matchedFeature != "" {
+	if matchedFeature := findNewFeature(logger, folderConfig, cmd); matchedFeature != "" {
 		return false, fmt.Sprintf("new ostest workflow (matched: %s)", matchedFeature)
+	}
+	if !folderConfig.GetFeatureFlag(featureflag.EnableUvCLI) {
+		return true, "no new features required (enableUvCLI off)"
 	}
 	return true, "no new features required"
 }
@@ -689,7 +694,7 @@ func findLegacyOnlyFlag(cmd []string) string {
 
 // findNewFeature returns the first feature flag or command arg that requires the new ostest workflow,
 // or an empty string if none matched.
-func findNewFeature(folderConfig *types.FolderConfig, cmd []string) string {
+func findNewFeature(logger *zerolog.Logger, folderConfig *types.FolderConfig, cmd []string) string {
 	if folderConfig == nil {
 		return ""
 	}
@@ -708,7 +713,24 @@ func findNewFeature(folderConfig *types.FolderConfig, cmd []string) string {
 		}
 	}
 
+	if folderConfig.GetFeatureFlag(featureflag.EnableUvCLI) &&
+		uv.HasUvLockFile(string(folderConfig.FolderPath), fileParamValue(cmd), slices.Contains(cmd, allProjectsParam), logger) {
+		return featureflag.EnableUvCLI
+	}
+
 	return ""
+}
+
+func fileParamValue(cmd []string) string {
+	value := ""
+	for i, arg := range cmd {
+		if v, ok := strings.CutPrefix(arg, "--file="); ok {
+			value = v
+		} else if arg == "--file" && i+1 < len(cmd) {
+			value = cmd[i+1]
+		}
+	}
+	return value
 }
 
 func (cliScanner *CLIScanner) enrichContext(ctx context.Context) context.Context {

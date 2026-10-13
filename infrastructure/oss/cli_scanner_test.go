@@ -491,52 +491,54 @@ func Test_findLegacyOnlyFlag(t *testing.T) {
 }
 
 func Test_findNewFeature(t *testing.T) {
+	logger := zerolog.Nop()
 	t.Run("returns FF name when risk score FF is set", func(t *testing.T) {
 		fc := folderConfigWithFlags(map[string]bool{featureflag.UseExperimentalRiskScoreInCLI: true})
-		assert.Equal(t, featureflag.UseExperimentalRiskScoreInCLI, findNewFeature(fc, []string{"snyk", "test"}))
+		assert.Equal(t, featureflag.UseExperimentalRiskScoreInCLI, findNewFeature(&logger, fc, []string{"snyk", "test"}))
 	})
 	t.Run("returns FF name when ostest FF is set", func(t *testing.T) {
 		fc := folderConfigWithFlags(map[string]bool{featureflag.UseOsTest: true})
-		assert.Equal(t, featureflag.UseOsTest, findNewFeature(fc, []string{"snyk", "test"}))
+		assert.Equal(t, featureflag.UseOsTest, findNewFeature(&logger, fc, []string{"snyk", "test"}))
 	})
 	t.Run("returns flag when --reachability in cmd", func(t *testing.T) {
 		fc := folderConfigWithFlags(map[string]bool{})
-		assert.Equal(t, "--reachability", findNewFeature(fc, []string{"snyk", "test", "--reachability"}))
+		assert.Equal(t, "--reachability", findNewFeature(&logger, fc, []string{"snyk", "test", "--reachability"}))
 	})
 	t.Run("returns flag when --sbom in cmd", func(t *testing.T) {
 		fc := folderConfigWithFlags(map[string]bool{})
-		assert.Equal(t, "--sbom", findNewFeature(fc, []string{"snyk", "test", "--sbom"}))
+		assert.Equal(t, "--sbom", findNewFeature(&logger, fc, []string{"snyk", "test", "--sbom"}))
 	})
 	t.Run("returns empty when no new features", func(t *testing.T) {
 		fc := folderConfigWithFlags(map[string]bool{})
-		assert.Empty(t, findNewFeature(fc, []string{"snyk", "test"}))
+		assert.Empty(t, findNewFeature(&logger, fc, []string{"snyk", "test"}))
 	})
 }
 
 func Test_shouldUseLegacyScan(t *testing.T) {
+	logger := zerolog.Nop()
 	t.Run("legacy when SNYK_FORCE_LEGACY_CLI set", func(t *testing.T) {
 		t.Setenv("SNYK_FORCE_LEGACY_CLI", "1")
 		fc := folderConfigWithFlags(map[string]bool{featureflag.UseOsTest: true})
-		useLegacy, reason := shouldUseLegacyScan(fc, []string{"snyk", "test"})
+		useLegacy, reason := shouldUseLegacyScan(&logger, fc, []string{"snyk", "test"})
 		assert.True(t, useLegacy)
 		assert.Contains(t, reason, "SNYK_FORCE_LEGACY_CLI")
 	})
 	t.Run("legacy when --unmanaged flag", func(t *testing.T) {
 		fc := folderConfigWithFlags(map[string]bool{featureflag.UseOsTest: true})
-		useLegacy, reason := shouldUseLegacyScan(fc, []string{"snyk", "test", "--unmanaged"})
+		useLegacy, reason := shouldUseLegacyScan(&logger, fc, []string{"snyk", "test", "--unmanaged"})
 		assert.True(t, useLegacy)
 		assert.Contains(t, reason, "--unmanaged")
 	})
 	t.Run("legacy when no new features required", func(t *testing.T) {
 		fc := folderConfigWithFlags(map[string]bool{})
-		useLegacy, reason := shouldUseLegacyScan(fc, []string{"snyk", "test"})
+		useLegacy, reason := shouldUseLegacyScan(&logger, fc, []string{"snyk", "test"})
 		assert.True(t, useLegacy)
 		assert.Contains(t, reason, "no new features")
 	})
 	t.Run("new flow when feature flags present", func(t *testing.T) {
 		fc := folderConfigWithFlags(map[string]bool{featureflag.UseOsTest: true})
 		dir := t.TempDir()
-		useLegacy, reason := shouldUseLegacyScan(fc, []string{"snyk", "test", dir})
+		useLegacy, reason := shouldUseLegacyScan(&logger, fc, []string{"snyk", "test", dir})
 		assert.False(t, useLegacy)
 		assert.Contains(t, reason, "ostest")
 		assert.Contains(t, reason, featureflag.UseOsTest)
@@ -544,14 +546,63 @@ func Test_shouldUseLegacyScan(t *testing.T) {
 	t.Run("force legacy overrides feature flags", func(t *testing.T) {
 		t.Setenv("SNYK_FORCE_LEGACY_CLI", "true")
 		fc := folderConfigWithFlags(map[string]bool{featureflag.UseOsTest: true, featureflag.UseExperimentalRiskScoreInCLI: true})
-		useLegacy, _ := shouldUseLegacyScan(fc, []string{"snyk", "test"})
+		useLegacy, _ := shouldUseLegacyScan(&logger, fc, []string{"snyk", "test"})
 		assert.True(t, useLegacy)
 	})
 	t.Run("legacy-only flag overrides feature flags", func(t *testing.T) {
 		fc := folderConfigWithFlags(map[string]bool{featureflag.UseOsTest: true})
-		useLegacy, _ := shouldUseLegacyScan(fc, []string{"snyk", "test", "--print-graph"})
+		useLegacy, _ := shouldUseLegacyScan(&logger, fc, []string{"snyk", "test", "--print-graph"})
 		assert.True(t, useLegacy)
 	})
+}
+
+func Test_shouldUseLegacyScan_uv(t *testing.T) {
+	logger := zerolog.Nop()
+	const newFlow = "new ostest workflow (matched: enableUvCLI)"
+	const noNewFeatures = "no new features required"
+	tests := []struct {
+		name           string
+		enableUvCLI    bool
+		files          []string
+		args           []string
+		forceLegacy    bool
+		expectLegacy   bool
+		expectedReason string
+	}{
+		{name: "root uv.lock with --all-projects", enableUvCLI: true, files: []string{"uv.lock"}, args: []string{"--all-projects"}, expectedReason: newFlow},
+		{name: "nested uv.lock with --all-projects", enableUvCLI: true, files: []string{"svc/api/uv.lock"}, args: []string{"--all-projects"}, expectedReason: newFlow},
+		{name: "uv.lock only under node_modules", enableUvCLI: true, files: []string{"node_modules/pkg/uv.lock"}, args: []string{"--all-projects"}, expectLegacy: true, expectedReason: noNewFeatures},
+		{name: "no uv.lock", enableUvCLI: true, files: []string{"pyproject.toml"}, args: []string{"--all-projects"}, expectLegacy: true, expectedReason: noNewFeatures},
+		{name: "flag off with uv.lock", enableUvCLI: false, files: []string{"uv.lock"}, args: []string{"--all-projects"}, expectLegacy: true, expectedReason: "no new features required (enableUvCLI off)"},
+		{name: "--file non-uv manifest, root has no uv.lock", enableUvCLI: true, files: []string{"sub/uv.lock", "requirements.txt"}, args: []string{"--file=requirements.txt"}, expectLegacy: true, expectedReason: noNewFeatures},
+		{name: "--file=<path> pointing at uv.lock", enableUvCLI: true, files: []string{"sub/uv.lock"}, args: []string{"--file=sub/uv.lock"}, expectedReason: newFlow},
+		{name: "--file <path> pointing at uv.lock", enableUvCLI: true, files: []string{"sub/uv.lock"}, args: []string{"--file", "sub/uv.lock"}, expectedReason: newFlow},
+		{name: "--file as last arg without value falls back to root", enableUvCLI: true, files: []string{"uv.lock"}, args: []string{"--file"}, expectedReason: newFlow},
+		{name: "last --file wins", enableUvCLI: true, files: []string{"sub/uv.lock", "requirements.txt"}, args: []string{"--file", "requirements.txt", "--file=sub/uv.lock"}, expectedReason: newFlow},
+		{name: "SNYK_FORCE_LEGACY_CLI wins over uv", enableUvCLI: true, files: []string{"uv.lock"}, args: []string{"--all-projects"}, forceLegacy: true, expectLegacy: true, expectedReason: "SNYK_FORCE_LEGACY_CLI env var set"},
+		{name: "legacy-only flag wins over uv", enableUvCLI: true, files: []string{"uv.lock"}, args: []string{"--all-projects", "--print-graph"}, expectLegacy: true, expectedReason: "legacy-only flag: --print-graph"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.forceLegacy {
+				t.Setenv("SNYK_FORCE_LEGACY_CLI", "1")
+			}
+			dir := t.TempDir()
+			for _, f := range tc.files {
+				p := filepath.Join(dir, f)
+				require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+				require.NoError(t, os.WriteFile(p, []byte{}, 0o600))
+			}
+			fc := folderConfigWithFlags(nil)
+			fc.FolderPath = types.FilePath(dir)
+			fc.SetFeatureFlag(featureflag.EnableUvCLI, tc.enableUvCLI)
+
+			useLegacy, reason := shouldUseLegacyScan(&logger, fc, append([]string{"snyk", "test", "--json"}, tc.args...))
+
+			assert.Equal(t, tc.expectLegacy, useLegacy)
+			assert.Equal(t, tc.expectedReason, reason)
+		})
+	}
 }
 
 // Test_NewCLIScanner_ProgressChannelIsolation verifies that the tracker created
