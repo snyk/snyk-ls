@@ -39,6 +39,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	storage2 "github.com/snyk/snyk-ls/internal/storage"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -664,12 +665,8 @@ func Test_RegisterOAuthStorageBridge_TokenWrittenByAnotherProcessReachesTheIde(t
 		return config.GetToken(conf) == tokenFromOtherWindow
 	}, 5*time.Second, time.Millisecond, "token written by another process must be applied")
 
-	select {
-	case authParams := <-receivedCh:
-		assert.Equal(t, tokenFromOtherWindow, authParams.Token)
-	case <-time.After(5 * time.Second):
-		t.Fatal("expected $/snyk.hasAuthenticated with the token written by another process")
-	}
+	authParams := testsupport.RequireEventuallyReceive(t, receivedCh, 5*time.Second, time.Millisecond, "expected $/snyk.hasAuthenticated with the token written by another process")
+	assert.Equal(t, tokenFromOtherWindow, authParams.Token)
 }
 
 func Test_NewOauthProvider_oauthProvider_created_with_injected_refreshMethod(t *testing.T) {

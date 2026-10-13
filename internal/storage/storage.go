@@ -147,18 +147,6 @@ func (s *storage) readFile() (map[string]any, error) {
 	return doc, nil
 }
 
-func asJsonValue(value any) any {
-	encoded, err := json.Marshal(value)
-	if err != nil {
-		return value
-	}
-	var decoded any
-	if json.Unmarshal(encoded, &decoded) != nil {
-		return value
-	}
-	return decoded
-}
-
 // KeysByPrefix reads the storage file and returns all keys matching the given prefix.
 func (s *storage) KeysByPrefix(prefix string) ([]string, error) {
 	s.mutex.RLock()
@@ -220,7 +208,7 @@ func (s *storage) Set(key string, value any) error {
 		return err
 	}
 
-	s.valuesKnownToThisProcess[key] = asJsonValue(value)
+	s.valuesKnownToThisProcess[key] = value
 
 	callback := s.callbacks[key]
 	if callback != nil {
