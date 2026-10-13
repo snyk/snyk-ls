@@ -55,13 +55,7 @@ type storage struct {
 func (s *storage) Refresh(config configuration.Configuration, key string) error {
 	s.mutex.Lock()
 
-	contents, err := os.ReadFile(s.storageFile)
-	if err != nil {
-		s.mutex.Unlock()
-		return err
-	}
-	doc := map[string]interface{}{}
-	err = json.Unmarshal(contents, &doc)
+	doc, err := s.readFile()
 	if err != nil {
 		s.mutex.Unlock()
 		return err

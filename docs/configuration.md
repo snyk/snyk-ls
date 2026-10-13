@@ -582,15 +582,8 @@ sequenceDiagram
     LS_B->>IDE_B: $/snyk.hasAuthenticated {token}
 ```
 
-See also: [configuration-credentials-other-process.mmd](diagrams/configuration-credentials-other-process.mmd).
-
 Not propagated this way: empty values (an explicit logout stays in its window; the bridge drops them,
 see IDE-2179), PAT and legacy tokens (no callback on their keys).
-
-Tested scenarios: `internal/storage/storage_test.go` (`Test_WatchFileForWritesByOtherProcesses_*`),
-`infrastructure/authentication/auth_configuration_test.go`
-(`Test_RegisterOAuthStorageBridge_TokenWrittenByAnotherProcessReachesTheIde`,
-`Test_oauthStorageBridgeCallback_DropsTokenThatAlreadyFailed`).
 
 ---
 
