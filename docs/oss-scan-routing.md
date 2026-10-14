@@ -43,10 +43,7 @@ Feature flags come from the folder's organization and live on the folder config,
 
 snyk-ls checks `enableUvCLI` before it touches the filesystem. Organizations without the flag pay nothing for the uv rule.
 
-With the flag on, `uv.HasUvLockFile` from cli-extension-dep-graph does the search. os-flows calls the same helper, so the two agree on edge cases. Its inputs come from the final command:
-
-- With `--all-projects`, it walks the folder recursively, skips `node_modules` and `.build`, and stops at the first `uv.lock`.
-- Without `--all-projects`, it checks the `--file` target if that file is named `uv.lock`, and the folder root otherwise. If the command has more than one `--file`, the last one counts, as in the CLI.
+With the flag on, snyk-ls passes the folder path, the last `--file` value and whether `--all-projects` is set to `uv.HasUvLockFile` from cli-extension-dep-graph. os-flows calls the same helper, so the two agree on which directories count. See cli-extension-dep-graph for the search rules.
 
 ### Flags passed to the ostest workflow
 
