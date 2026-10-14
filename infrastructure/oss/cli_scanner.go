@@ -31,6 +31,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/snyk/cli-extension-dep-graph/v2/pkg/ecosystems/python/uv"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/spf13/pflag"
 	"github.com/subosito/gotenv"
 	"golang.org/x/exp/slices"
 
@@ -722,15 +723,12 @@ func findNewFeature(logger *zerolog.Logger, folderConfig *types.FolderConfig, cm
 }
 
 func fileParamValue(cmd []string) string {
-	value := ""
-	for i, arg := range cmd {
-		if v, ok := strings.CutPrefix(arg, "--file="); ok {
-			value = v
-		} else if arg == "--file" && i+1 < len(cmd) {
-			value = cmd[i+1]
-		}
-	}
-	return value
+	fs := pflag.NewFlagSet("file-param", pflag.ContinueOnError)
+	fs.ParseErrorsAllowlist.UnknownFlags = true
+	file := fs.String("file", "", "")
+	// A dangling --file errors but keeps earlier values; an empty value makes HasUvLockFile check the folder root.
+	_ = fs.Parse(cmd)
+	return *file
 }
 
 func (cliScanner *CLIScanner) enrichContext(ctx context.Context) context.Context {

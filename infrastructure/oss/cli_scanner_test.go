@@ -578,6 +578,8 @@ func Test_shouldUseLegacyScan_uv(t *testing.T) {
 		{name: "--file=<path> pointing at uv.lock", enableUvCLI: true, files: []string{"sub/uv.lock"}, args: []string{"--file=sub/uv.lock"}, expectedReason: newFlow},
 		{name: "--file <path> pointing at uv.lock", enableUvCLI: true, files: []string{"sub/uv.lock"}, args: []string{"--file", "sub/uv.lock"}, expectedReason: newFlow},
 		{name: "--file as last arg without value falls back to root", enableUvCLI: true, files: []string{"uv.lock"}, args: []string{"--file"}, expectedReason: newFlow},
+		{name: "--file after unknown flags with values", enableUvCLI: true, files: []string{"sub/uv.lock"}, args: []string{"--org", "my-org", "--severity-threshold=high", "--file", "sub/uv.lock"}, expectedReason: newFlow},
+		{name: "--file after -- belongs to the build tool", enableUvCLI: true, files: []string{"sub/uv.lock"}, args: []string{"--", "--file=sub/uv.lock"}, expectLegacy: true, expectedReason: noUvLock},
 		{name: "last --file wins", enableUvCLI: true, files: []string{"sub/uv.lock", "requirements.txt"}, args: []string{"--file", "requirements.txt", "--file=sub/uv.lock"}, expectedReason: newFlow},
 		{name: "SNYK_FORCE_LEGACY_CLI wins over uv", enableUvCLI: true, files: []string{"uv.lock"}, args: []string{"--all-projects"}, forceLegacy: true, expectLegacy: true, expectedReason: "SNYK_FORCE_LEGACY_CLI env var set"},
 		{name: "legacy-only flag wins over uv", enableUvCLI: true, files: []string{"uv.lock"}, args: []string{"--all-projects", "--print-graph"}, expectLegacy: true, expectedReason: "legacy-only flag: --print-graph"},
