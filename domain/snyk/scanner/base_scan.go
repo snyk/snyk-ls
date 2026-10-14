@@ -20,11 +20,14 @@ package scanner
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/gosimple/hashdir"
 	"github.com/rs/zerolog"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
@@ -117,12 +120,9 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 	var results []types.Issue
 	logger.Debug().Msg("scanBaseBranch: scanning reference folder")
 	// For a base branch scan, the scan root is the temporary base branch directory.
-	// Copy prefix key values so the base scan config inherits all settings.
 	baseScanConfig := *folderConfig
 	baseScanConfig.FolderPath = baseFolderPath
-	if conf := folderConfig.Conf(); conf != nil {
-		types.CopyFolderConfigValues(conf, folderConfig.FolderPath, baseFolderPath)
-	}
+	inheritFolderConfig(folderConfig, baseFolderPath)
 	// Put the modified config in context for the base scan
 	baseScanCtx := ctx2.NewContextWithFolderConfig(ctx, &baseScanConfig)
 	results, err = s.Scan(baseScanCtx, baseFolderPath)
@@ -134,6 +134,30 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 	sc.persistScanResults(folderConfig, results, s)
 
 	return nil
+}
+
+// inheritFolderConfig skips open workspace folders: their keys are persisted, so a copy would overwrite them on disk.
+func inheritFolderConfig(folderConfig *types.FolderConfig, referencePath types.FilePath) {
+	conf := folderConfig.Conf()
+	if conf == nil || isWorkspaceFolder(conf, referencePath) {
+		return
+	}
+	types.CopyFolderConfigValues(conf, folderConfig.FolderPath, referencePath)
+}
+
+func isWorkspaceFolder(conf configuration.Configuration, path types.FilePath) bool {
+	w, ok := conf.Get(types.SettingWorkspace).(types.Workspace)
+	if !ok || w == nil {
+		return false
+	}
+	key := string(types.PathKey(path))
+	for _, f := range w.Folders() {
+		// configuration keys are case-insensitive, so a case variant would still overwrite the folder's values
+		if strings.EqualFold(string(types.PathKey(f.Path())), key) {
+			return true
+		}
+	}
+	return false
 }
 
 // deltaReferenceErr returns nil when the folder has a usable delta reference. It doesn't hash the
