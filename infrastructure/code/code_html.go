@@ -168,13 +168,13 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 	exampleCommits := prepareExampleCommits(additionalData.ExampleCommitFixes)
 	commitFixes := parseExampleCommitsToTemplateJS(exampleCommits, logger)
 	dataFlowKeys, dataFlowTable := prepareDataFlowTable(additionalData)
+	aiFixDiffStatus, aiFixDiffResult, aiFixDiffErr := renderer.AiFixHandler.GetAiFixDiffSnapshot()
 	var aiFixErr string
-	if aiFixDiffErr := renderer.AiFixHandler.GetAiFixDiffError(); aiFixDiffErr != nil {
+	if aiFixDiffErr != nil {
 		aiFixErr = aiFixDiffErr.Error()
 	}
 
 	// Agent Fix only ever produces one suggestion.
-	aiFixDiffResult := renderer.AiFixHandler.GetAiFixDiffResult()
 	if len(aiFixDiffResult) > 0 && aiFixDiffResult[0].Explanation == "" {
 		logger.Warn().Msgf("autofix suggestion %s has no explanation", aiFixDiffResult[0].FixId)
 	}
@@ -206,50 +206,55 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		}
 	}
 
+	contentRoot := string(issue.GetContentRoot())
+	canCreateIgnore := htmlIgnore.CanCreateIgnore(contentRoot)
+
 	data := map[string]any{
-		"IssueTitle":           additionalData.Title,
-		"IssueMessage":         additionalData.Message,
-		"IssueType":            getIssueType(),
-		"SeverityIcon":         html.SeverityIcon(issue),
-		"CWEs":                 issue.GetCWEs(),
-		"IssueOverview":        html.MarkdownToHTML(additionalData.Text),
-		"IsIgnored":            issue.GetIsIgnored(),
-		"IsPending":            isPending,
-		"IgnoreDetails":        ignoreDetailsRow,
-		"IgnoreReason":         ignoreReason,
-		"CCIEnabled":           renderer.cciEnabled,
-		"InlineIgnoresEnabled": renderer.inlineIgnoresEnabled,
-		"DataFlow":             additionalData.DataFlow,
-		"DataFlowKeys":         dataFlowKeys,
-		"DataFlowTable":        dataFlowTable,
-		"RepoCount":            additionalData.RepoDatasetSize,
-		"ExampleCount":         len(additionalData.ExampleCommitFixes),
-		"ExampleCommitFixes":   exampleCommits,
-		"CommitFixes":          commitFixes,
-		"PriorityScore":        additionalData.PriorityScore,
-		"SnykWebUrl":           appLink,
-		"LessonUrl":            issue.GetLessonUrl(),
-		"LessonIcon":           html.LessonIcon(),
-		"IgnoreLineAction":     getLineToIgnoreAction(issue),
-		"HasAIFix":             additionalData.HasAIFix,
-		"ExternalIcon":         html.ExternalIcon(),
-		"ScanAnimation":        html.ScanAnimation(),
-		"GitHubIcon":           html.GitHubIcon(),
-		"ArrowLeftDark":        html.ArrowLeftDark(),
-		"ArrowLeftLight":       html.ArrowLeftLight(),
-		"ArrowRightDark":       html.ArrowRightDark(),
-		"ArrowRightLight":      html.ArrowRightLight(),
-		"FileIcon":             html.FileIcon(),
-		"FolderPath":           string(folderPath),
-		"FilePath":             string(issue.GetAffectedFilePath()),
-		"IssueId":              issue.GetAdditionalData().GetKey(),
-		"Styles":               template.CSS(panelStylesTemplate + "\n" + htmlIgnore.Styles()),
-		"Scripts":              template.JS(htmlIgnore.Scripts() + "\n" + customScripts),
-		"Nonce":                nonce,
-		"AiFixResult":          aiFixResult,
-		"AiFixDiffStatus":      renderer.AiFixHandler.GetAiFixDiffStatus(),
-		"AiFixError":           aiFixErr,
-		"AutoTriggerAiFix":     autoTriggerAiFix,
+		"IssueTitle":                    additionalData.Title,
+		"IssueMessage":                  additionalData.Message,
+		"IssueType":                     getIssueType(),
+		"SeverityIcon":                  html.SeverityIcon(issue),
+		"CWEs":                          issue.GetCWEs(),
+		"IssueOverview":                 html.MarkdownToHTML(additionalData.Text),
+		"IsIgnored":                     issue.GetIsIgnored(),
+		"IsPending":                     isPending,
+		"IgnoreDetails":                 ignoreDetailsRow,
+		"IgnoreReason":                  ignoreReason,
+		"CCIEnabled":                    renderer.cciEnabled,
+		"CanCreateIgnore":               canCreateIgnore,
+		"CreateIgnoreUnavailableReason": htmlIgnore.CreateIgnoreUnavailableReason,
+		"InlineIgnoresEnabled":          renderer.inlineIgnoresEnabled,
+		"DataFlow":                      additionalData.DataFlow,
+		"DataFlowKeys":                  dataFlowKeys,
+		"DataFlowTable":                 dataFlowTable,
+		"RepoCount":                     additionalData.RepoDatasetSize,
+		"ExampleCount":                  len(additionalData.ExampleCommitFixes),
+		"ExampleCommitFixes":            exampleCommits,
+		"CommitFixes":                   commitFixes,
+		"PriorityScore":                 additionalData.PriorityScore,
+		"SnykWebUrl":                    appLink,
+		"LessonUrl":                     issue.GetLessonUrl(),
+		"LessonIcon":                    html.LessonIcon(),
+		"IgnoreLineAction":              getLineToIgnoreAction(issue),
+		"HasAIFix":                      additionalData.HasAIFix,
+		"ExternalIcon":                  html.ExternalIcon(),
+		"ScanAnimation":                 html.ScanAnimation(),
+		"GitHubIcon":                    html.GitHubIcon(),
+		"ArrowLeftDark":                 html.ArrowLeftDark(),
+		"ArrowLeftLight":                html.ArrowLeftLight(),
+		"ArrowRightDark":                html.ArrowRightDark(),
+		"ArrowRightLight":               html.ArrowRightLight(),
+		"FileIcon":                      html.FileIcon(),
+		"FolderPath":                    string(folderPath),
+		"FilePath":                      string(issue.GetAffectedFilePath()),
+		"IssueId":                       issue.GetAdditionalData().GetKey(),
+		"Styles":                        template.CSS(panelStylesTemplate + "\n" + htmlIgnore.Styles()),
+		"Scripts":                       template.JS(htmlIgnore.Scripts() + "\n" + customScripts),
+		"Nonce":                         nonce,
+		"AiFixResult":                   aiFixResult,
+		"AiFixDiffStatus":               aiFixDiffStatus,
+		"AiFixError":                    aiFixErr,
+		"AutoTriggerAiFix":              autoTriggerAiFix,
 	}
 	renderer.AiFixHandler.SetAutoTriggerAiFix(false)
 

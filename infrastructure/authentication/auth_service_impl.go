@@ -59,6 +59,11 @@ type credentialUpdate struct {
 	token            string
 	sendNotification bool
 	updateApiUrl     bool
+	// done, when non-nil, marks this item as a flush barrier rather than a real
+	// credential update: credentialUpdateWorker signals it (without touching conf) once
+	// every update enqueued strictly before the barrier has been applied. See
+	// flushCredentialUpdates.
+	done chan struct{}
 }
 
 type AuthenticationServiceImpl struct {
@@ -75,6 +80,8 @@ type AuthenticationServiceImpl struct {
 	// concurrent writers here.
 	lastUsedToken               string
 	lastUsedTokenMu             sync.Mutex
+	lastFailedToken             string
+	lastFailedTokenMu           sync.Mutex
 	m                           sync.RWMutex
 	previousAuthCtxCancelFunc   context.CancelFunc
 	previousAuthCtxCancelFuncMu sync.Mutex
@@ -95,7 +102,10 @@ type AuthenticationServiceImpl struct {
 	// credentialUpdateChan serializes credential updates from the OAuth storage bridge
 	// to prevent race conditions where older tokens overwrite newer ones during rapid rotations.
 	credentialUpdateChan chan credentialUpdate
-	// credentialUpdateCancel cancels the credential update worker on shutdown.
+	// credentialUpdateCtx and credentialUpdateCancel control the credentialUpdateWorker
+	// goroutine's lifetime. credentialUpdateCtx also lets flushCredentialUpdates return
+	// instead of blocking forever if Shutdown has already stopped the worker.
+	credentialUpdateCtx    context.Context
 	credentialUpdateCancel context.CancelFunc
 	// writingToken holds a pointer to the token string that the credentialUpdateWorker
 	// is currently writing to conf via updateCredentials → tokenService.SetToken →
@@ -127,6 +137,7 @@ func NewAuthenticationService(engine workflow.Engine, tokenService types.TokenSe
 		configResolver:         configResolver,
 		authCache:              cache,
 		credentialUpdateChan:   updateChan,
+		credentialUpdateCtx:    ctx,
 		credentialUpdateCancel: cancel,
 	}
 
@@ -149,6 +160,14 @@ func (a *AuthenticationServiceImpl) credentialUpdateWorker(ctx context.Context) 
 		case <-ctx.Done():
 			return
 		case update := <-a.credentialUpdateChan:
+			if update.done != nil {
+				// Flush barrier: every real update enqueued strictly before this one has
+				// just been applied by the loop iterations above (the channel is FIFO and
+				// this worker is the sole consumer). Signal without treating it as a
+				// credential write. See flushCredentialUpdates.
+				close(update.done)
+				continue
+			}
 			// Advertise which token we are about to write so QueueCredentialUpdate can
 			// recognize and drop the re-entrant callback that fires when
 			// WriteTokenToConfig calls conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, …) and
@@ -161,6 +180,34 @@ func (a *AuthenticationServiceImpl) credentialUpdateWorker(ctx context.Context) 
 				a.updateCredentials(update.token, update.sendNotification, update.updateApiUrl)
 			}()
 		}
+	}
+}
+
+// flushCredentialUpdates blocks until every credential update already queued on
+// credentialUpdateChan has been applied by credentialUpdateWorker.
+//
+// logout calls this before its own synchronous clear (ClearAuthentication +
+// updateCredentials("")): without it, a credential update queued earlier - e.g. by the
+// OAuth storage bridge reacting to GAF's syncTokenRefresh resyncing the in-memory token
+// from on-disk storage during the very request whose failure is about to trigger this
+// logout - can be drained by the worker AFTER logout's clear, resurrecting the token
+// logout just removed (IDE-2402).
+//
+// Because credentialUpdateChan is a single FIFO channel drained by exactly one worker
+// goroutine, enqueueing a barrier item and waiting for it to be signaled guarantees every
+// item enqueued strictly before this call has already been fully applied by the time
+// Flush returns - no sleeps or polling required.
+func (a *AuthenticationServiceImpl) flushCredentialUpdates() {
+	done := make(chan struct{})
+	select {
+	case a.credentialUpdateChan <- credentialUpdate{done: done}:
+	case <-a.credentialUpdateCtx.Done():
+		// Worker already stopped (Shutdown); nothing left to flush.
+		return
+	}
+	select {
+	case <-done:
+	case <-a.credentialUpdateCtx.Done():
 	}
 }
 
@@ -352,6 +399,7 @@ func (a *AuthenticationServiceImpl) finishAuthenticate(provider AuthenticationPr
 
 	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification)
 	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())
+	a.clearLastFailedToken()
 	a.sendAuthenticationAnalytics()
 	return token, err
 }
@@ -695,6 +743,7 @@ func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
 	a.m.Lock()
 	defer a.m.Unlock()
 
+	a.clearLastFailedToken()
 	a.logout(ctx)
 }
 
@@ -713,6 +762,13 @@ func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 		Bool("token_empty", config.GetToken(a.engine.GetConfiguration()) == "").
 		Str("authentication_method", string(config.GetAuthenticationMethodFromConfig(a.engine.GetConfiguration()))).
 		Msg("clearing authentication credentials")
+
+	// Drain any credential update already queued (e.g. by GAF's syncTokenRefresh
+	// resyncing the token from on-disk storage during the request that just failed and
+	// triggered this logout) before applying our own authoritative clear below. Without
+	// this, credentialUpdateWorker could apply that stale, queued-but-not-yet-drained
+	// update after our clear, resurrecting the token this logout removes (IDE-2402).
+	a.flushCredentialUpdates()
 
 	if a.authProvider != nil {
 		err := a.authProvider.ClearAuthentication(ctx)
@@ -755,7 +811,34 @@ func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 		return false
 	}
 
+	if a.isKnownFailedToken(token) {
+		logger.Info().Msg("skipping auth check, token already failed in this session")
+		return false
+	}
+
 	return a.doAuthCheck(conf, logger)
+}
+
+func (a *AuthenticationServiceImpl) isKnownFailedToken(token string) bool {
+	a.lastFailedTokenMu.Lock()
+	defer a.lastFailedTokenMu.Unlock()
+	return token != "" && a.lastFailedToken == token
+}
+
+func (a *AuthenticationServiceImpl) markTokenFailed(token string) (alreadyMarked bool) {
+	a.lastFailedTokenMu.Lock()
+	defer a.lastFailedTokenMu.Unlock()
+	if a.lastFailedToken == token {
+		return true
+	}
+	a.lastFailedToken = token
+	return false
+}
+
+func (a *AuthenticationServiceImpl) clearLastFailedToken() {
+	a.lastFailedTokenMu.Lock()
+	a.lastFailedToken = ""
+	a.lastFailedTokenMu.Unlock()
 }
 
 type authCheckResult struct {
@@ -804,12 +887,18 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 			return false
 		}
 
+		if a.markTokenFailed(token) {
+			logger.Info().Msg("auth check already failed for this token, not prompting again")
+			return false
+		}
+
 		invalidOAuth2Token, isLegacyTokenErr := config.ParseOAuthToken(token, a.engine.GetLogger())
 		isLegacyToken := isLegacyTokenErr != nil
 
 		a.handleEmptyUser(logger, isLegacyToken, invalidOAuth2Token)
 		return false
 	}
+	a.clearLastFailedToken()
 	// We cache the API auth ok for up to 1 minute after last access. If more than a minute has passed, a new check is
 	// performed.
 	//

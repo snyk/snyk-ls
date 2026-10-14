@@ -89,6 +89,8 @@ type Folder interface {
 	// DisplayableIssueTypesFromConfig is like DisplayableIssueTypes but accepts a pre-fetched
 	// FolderConfig to avoid a redundant FolderConfigReadOnly() call.
 	DisplayableIssueTypesFromConfig(cfg *FolderConfig) map[product.FilterableIssueType]bool
+	// FilterSeverity returns the severity filter for this folder, respecting folder-level overrides.
+	FilterSeverity() SeverityFilter
 	// IssueViewOptions returns the issue view options for this folder, respecting folder-level overrides.
 	IssueViewOptions() IssueViewOptions
 	// IssueViewOptionsFromConfig is like IssueViewOptions but accepts a pre-fetched FolderConfig

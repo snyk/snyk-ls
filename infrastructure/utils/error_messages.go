@@ -29,7 +29,9 @@ const (
 	// ErrSnykOssNotEnabledForFolder is when Open Source is turned off for this workspace folder in the IDE / config.
 	ErrSnykOssNotEnabledForFolder = "Snyk Open Source is not enabled for this workspace folder"
 	ErrSastSettingsNotAvailable   = "SAST settings not available"
-	ErrNoReferenceBranch          = "must specify reference for delta scans"
+	ErrNoReferenceBranch          = "No base branch, showing all issues. Pick one in the issues list."
+	ErrBaseBranchNotFound         = "Base branch not found, showing all issues. Pick another in the issues list."
+	ErrNotGitRepo                 = "Not a git repository, showing all issues. Set a reference folder in the issues list."
 	ErrNoRepo                     = "repository does not exist"
 	// ErrFolderConfigNotInContext is returned when FolderConfig is missing from the scan context (configuration bug).
 	ErrFolderConfigNotInContext = "FolderConfig not found in context"
@@ -78,6 +80,14 @@ var ErrorConfig = map[string]ErrorMetadata{ //nolint:gochecknoglobals // effecti
 		ShowNotification: false,
 		TreeRootSuffix:   "(no reference branch)",
 	},
+	ErrBaseBranchNotFound: {
+		ShowNotification: false,
+		TreeRootSuffix:   "(base branch not found)",
+	},
+	ErrNotGitRepo: {
+		ShowNotification: false,
+		TreeRootSuffix:   "(not a git repository)",
+	},
 	ErrNoRepo: {
 		ShowNotification: false,
 		TreeRootSuffix:   "(repository not found)",
@@ -98,6 +108,9 @@ var nonFailingScanErrors = map[string]bool{ //nolint:gochecknoglobals // effecti
 	ErrSnykSecretsNotEnabledForFolder: true,
 	ErrSnykCodeNotEnabled:             true,
 	ErrSnykSecretsNotEnabled:          true,
+	ErrNoReferenceBranch:              true,
+	ErrBaseBranchNotFound:             true,
+	ErrNotGitRepo:                     true,
 }
 
 func IsNonFailingScanError(errorMessage string) bool {

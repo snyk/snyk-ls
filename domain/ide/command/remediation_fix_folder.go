@@ -20,10 +20,14 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"slices"
 
+	"github.com/rs/zerolog"
 	sglsp "github.com/sourcegraph/go-lsp"
 
+	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/domain/snyk/remediation"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
@@ -36,8 +40,10 @@ import (
 // duration. It does NOT send workspace/applyEdit; the daemon lands changes by
 // copying each WorktreePath over the corresponding workspace file.
 type remediationFixFolderCommand struct {
-	command  types.CommandData
-	provider remediation.FolderRemediator // nil when feature is off
+	command   types.CommandData
+	provider  remediation.FolderRemediator // nil when feature is off
+	workspace types.Workspace              // nil when no workspace is registered
+	logger    zerolog.Logger
 }
 
 func (cmd *remediationFixFolderCommand) Command() types.CommandData {
@@ -46,8 +52,8 @@ func (cmd *remediationFixFolderCommand) Command() types.CommandData {
 
 func (cmd *remediationFixFolderCommand) Execute(ctx context.Context) (any, error) {
 	args := cmd.command.Arguments
-	if len(args) != 1 {
-		return nil, fmt.Errorf("snyk.remediationAgent.fixFolder: expected exactly one folder URI argument, got %d", len(args))
+	if len(args) != 1 && len(args) != 2 {
+		return nil, fmt.Errorf("snyk.remediationAgent.fixFolder: expected one folder URI argument and an optional workspace root URI, got %d", len(args))
 	}
 	folderURIStr, ok := args[0].(string)
 	if !ok || folderURIStr == "" {
@@ -67,7 +73,25 @@ func (cmd *remediationFixFolderCommand) Execute(ctx context.Context) (any, error
 		return nil, fmt.Errorf("snyk.remediationAgent.fixFolder: remediation agent is not enabled")
 	}
 
-	files, err := cmd.provider.FixFolder(ctx, path)
+	folder, rootURIStr, err := cmd.registeredFolder(args)
+	if err != nil {
+		return nil, err
+	}
+	findingIDs, scoped := cmd.resolveScope(folder, rootURIStr)
+	// Remy reads an empty issue-ids value as no filter at all, so a folder with
+	// nothing net-new must skip the run rather than hand it the whole folder.
+	if scoped && len(findingIDs) == 0 {
+		return types.FolderFixResult{Files: []types.FolderFixFileResult{}}, nil
+	}
+	// The tree's severity toggle writes per-folder overrides, so the global
+	// filter can disagree with what the developer was shown.
+	var severity *types.SeverityFilter
+	if folder != nil {
+		sf := folder.FilterSeverity()
+		severity = &sf
+	}
+
+	files, err := cmd.provider.FixFolder(ctx, path, findingIDs, severity)
 	if err != nil {
 		return nil, fmt.Errorf("snyk.remediationAgent.fixFolder: %w", err)
 	}
@@ -76,4 +100,91 @@ func (cmd *remediationFixFolderCommand) Execute(ctx context.Context) (any, error
 		files = []types.FolderFixFileResult{}
 	}
 	return types.FolderFixResult{Files: files}, nil
+}
+
+// registeredFolder returns nil when the optional workspace root argument is
+// absent or matches no registered folder.
+func (cmd *remediationFixFolderCommand) registeredFolder(args []any) (folder types.Folder, rootURIStr string, err error) {
+	if len(args) < 2 {
+		return nil, "", nil
+	}
+	rootURIStr, ok := args[1].(string)
+	if !ok || rootURIStr == "" {
+		return nil, "", fmt.Errorf("snyk.remediationAgent.fixFolder: workspace root URI argument must be a non-empty string")
+	}
+	folder = cmd.folderForRoot(uri.PathFromUri(sglsp.DocumentURI(rootURIStr)))
+	if folder == nil {
+		cmd.logger.Warn().Str("root", rootURIStr).Msg("snyk.remediationAgent.fixFolder: no registered folder for the given workspace root, running unscoped")
+	}
+	return folder, rootURIStr, nil
+}
+
+// resolveScope fails open to an unscoped run when there is no registered
+// folder, delta is off, there is no baseline yet, or no net-new finding has an id.
+func (cmd *remediationFixFolderCommand) resolveScope(folder types.Folder, rootURIStr string) (findingIDs []string, scoped bool) {
+	if folder == nil {
+		return nil, false
+	}
+	if !folder.IsDeltaAppliedForProduct(product.ProductCode) {
+		if folder.IsDeltaFindingsEnabled() {
+			cmd.logger.Warn().Str("root", rootURIStr).Msg("snyk.remediationAgent.fixFolder: delta scoping requested but no baseline is available, running unscoped")
+		}
+		return nil, false
+	}
+	fip, ok := folder.(snyk.FilteringIssueProvider)
+	if !ok {
+		cmd.logger.Warn().Str("root", rootURIStr).Msg("snyk.remediationAgent.fixFolder: folder cannot filter its findings, running unscoped")
+		return nil, false
+	}
+	// The display filter drops non-net-new findings when delta applies, so this is
+	// exactly the net-new set the developer was shown.
+	ids, withoutID := codeFindingIDs(fip.FilterIssues(fip.Issues(), folder.DisplayableIssueTypes()))
+	if withoutID > 0 && len(ids) == 0 {
+		cmd.logger.Warn().Str("root", rootURIStr).Int("findingsWithoutID", withoutID).
+			Msg("snyk.remediationAgent.fixFolder: net-new findings have no asset fingerprint, which Snyk Code only emits for a repository with an origin remote, running unscoped")
+		return nil, false
+	}
+	if withoutID > 0 {
+		cmd.logger.Warn().Str("root", rootURIStr).Int("findingsWithoutID", withoutID).
+			Msg("snyk.remediationAgent.fixFolder: some net-new findings have no asset fingerprint, so remy cannot target them")
+	}
+	cmd.logger.Info().Str("root", rootURIStr).Int("netNewFindings", len(ids)).
+		Msg("snyk.remediationAgent.fixFolder: scoping the fix to the folder's net-new findings")
+	return ids, true
+}
+
+// Exact match, not containment: containment would also hit a parent folder and
+// scope the run to a different folder's net-new set.
+func (cmd *remediationFixFolderCommand) folderForRoot(root types.FilePath) types.Folder {
+	if cmd.workspace == nil {
+		return nil
+	}
+	// PathKey is how a folder's own path was normalized when it was registered.
+	key := types.PathKey(root)
+	for _, folder := range cmd.workspace.Folders() {
+		if types.PathKey(folder.Path()) == key {
+			return folder
+		}
+	}
+	return nil
+}
+
+// For Snyk Code the finding identifier is the asset fingerprint remy matches
+// issue-ids against, so it needs no translation.
+func codeFindingIDs(issues snyk.IssuesByFile) (ids []string, withoutID int) {
+	ids = make([]string, 0, len(issues))
+	for _, fileIssues := range issues {
+		for _, issue := range fileIssues {
+			if issue.GetProduct() != product.ProductCode {
+				continue
+			}
+			if id := issue.GetFindingId(); id != "" {
+				ids = append(ids, id)
+			} else {
+				withoutID++
+			}
+		}
+	}
+	slices.Sort(ids)
+	return slices.Compact(ids), withoutID
 }

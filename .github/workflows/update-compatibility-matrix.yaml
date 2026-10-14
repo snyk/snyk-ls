@@ -33,8 +33,12 @@ permissions:
 
 jobs:
   update-matrix:
-    name: Update Compatibility Matrix
+    name: Update Compatibility Matrix (${{ matrix.repo }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        repo: [snyk/user-docs, snyk/user-docs-internal]
     steps:
       - name: Checkout snyk-ls repository
         uses: actions/checkout@v4
@@ -66,27 +70,28 @@ jobs:
             ./build/compatibility-matrix -output output/compatibility-matrix.md
           fi
 
-      - name: Checkout user-docs repository
+      - name: Checkout ${{ matrix.repo }} repository
         if: github.event.inputs.dry_run != 'true'
         uses: actions/checkout@v4
         with:
-          repository: snyk/user-docs
-          path: user-docs
+          repository: ${{ matrix.repo }}
+          path: docs-repo
           token: ${{ secrets.TEAM_IDE_PAT }}
 
-      - name: Update compatibility matrix in user-docs
+      - name: Update compatibility matrix in ${{ matrix.repo }}
         if: github.event.inputs.dry_run != 'true'
         run: |
-          mkdir -p user-docs/developer-tools/snyk-ide-plugins-and-extensions
-          cp output/compatibility-matrix.md user-docs/developer-tools/snyk-ide-plugins-and-extensions/compatibility-matrix.md
+          mkdir -p docs-repo/developer-tools/snyk-ide-plugins-and-extensions
+          cp output/compatibility-matrix.md docs-repo/developer-tools/snyk-ide-plugins-and-extensions/compatibility-matrix.md
 
       - name: Create pull request
         if: github.event.inputs.dry_run != 'true'
         env:
           GH_TOKEN: ${{ secrets.TEAM_IDE_PAT }}
           PUB_SIGNING_KEY: ${{ secrets.TEAM_IDE_USER_SSH_PUB }}
+          DOCS_REPO: ${{ matrix.repo }}
         run: |
-          cd user-docs
+          cd docs-repo
 
           # Configure git identity. Must match the account that owns the SSH
           # signing key below so GitHub marks the commit as Verified.
@@ -148,17 +153,17 @@ jobs:
 
           # jq '.[0].number' yields the string "null" on an empty result, which
           # would defeat the -z test; '// empty' makes it a true empty string.
-          PR=$(gh pr list --repo snyk/user-docs --head "$BRANCH_NAME" --state open --json number --jq '.[0].number // empty' || true)
+          PR=$(gh pr list --repo "$DOCS_REPO" --head "$BRANCH_NAME" --state open --json number --jq '.[0].number // empty' || true)
           if [[ -z "$PR" ]]; then
             gh pr create \
               --title "$PR_TITLE" \
               --body "$PR_BODY" \
               --base main \
               --head "$BRANCH_NAME" \
-              --repo snyk/user-docs
+              --repo "$DOCS_REPO"
           else
             echo "PR #$PR already exists — updating"
-            gh pr edit "$PR" --repo snyk/user-docs --title "$PR_TITLE" --body "$PR_BODY"
+            gh pr edit "$PR" --repo "$DOCS_REPO" --title "$PR_TITLE" --body "$PR_BODY"
           fi
 
           # enable auto merge

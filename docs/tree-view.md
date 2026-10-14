@@ -327,6 +327,8 @@ All JS is ES5 (no arrow functions, no `const`/`let`, no template literals). CSS 
 
 When delta scanning is enabled for a folder, the folder node becomes visible (even in single-folder workspaces) and provides an interactive reference picker to change either the base branch or reference folder path. **Only one can be active at a time** — selecting a branch clears the folder, and vice versa.
 
+The folder node's description names the active reference, `ref: <path>` for a reference folder or `base: <branch>` for a base branch. When neither is set it reads `base: none, click to pick`, which tells the developer that the node opens the picker. A saved base branch that no longer exists locally still shows `base: <branch>`.
+
 **Data flow:**
 
 1. `BuildTree` reads `BaseBranch`, `LocalBranches`, and `ReferenceFolderPath` from the folder's folderConfig via `FolderConfigReadOnly()`

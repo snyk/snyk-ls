@@ -258,6 +258,8 @@ func Test_UpdateCredentials(t *testing.T) {
 		mockNotifier := notification.NewMockNotifier()
 		service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
 
+		config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), config.DefaultSnykApiUrl)
+
 		token := "some_other_token"
 		service.UpdateCredentials(token, true, true)
 
@@ -311,6 +313,9 @@ func Test_Authenticate(t *testing.T) {
 	t.Run("Get endpoint from config and set in snyk-ls configuration ", func(t *testing.T) {
 		apiEndpoint := "https://api.eu.snyk.io"
 		engine, ts := testutil.UnitTestWithEngine(t)
+		// The engine URL is only adopted while the user has not customized the
+		// endpoint themselves, so the default is part of the scenario.
+		config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), config.DefaultSnykApiUrl)
 		engine.GetConfiguration().Set(configuration.API_URL, apiEndpoint)
 
 		provider := FakeAuthenticationProvider{Engine: engine}
@@ -427,11 +432,15 @@ func TestIsAuthenticated_ConcurrentCallsAllReturnSharedResult(t *testing.T) {
 // errorFakeAuthProvider's check function always fails with a configurable error,
 // simulating the whoami call failing because the OAuth token could not be refreshed.
 type errorFakeAuthProvider struct {
-	err error
+	err       error
+	callCount int32
 }
 
 func (p *errorFakeAuthProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
-	return func(_ workflow.Engine) (string, error) { return "", p.err }
+	return func(_ workflow.Engine) (string, error) {
+		atomic.AddInt32(&p.callCount, 1)
+		return "", p.err
+	}
 }
 func (p *errorFakeAuthProvider) Authenticate(_ context.Context) (string, error) { return "", nil }
 func (p *errorFakeAuthProvider) ClearAuthentication(_ context.Context) error    { return nil }
@@ -501,6 +510,81 @@ func Test_IsAuthenticated(t *testing.T) {
 		isAuthenticated := service.IsAuthenticated()
 
 		assert.False(t, isAuthenticated)
+	})
+}
+
+func Test_IsAuthenticated_FailedTokenIsReportedOnce(t *testing.T) {
+	const deadToken = "invalidCreds"
+	permanentErr := buildWhoamiErr(fmt.Errorf("API request failed (status: 401)"))
+
+	setup := func(t *testing.T) (*AuthenticationServiceImpl, *errorFakeAuthProvider, *notification.MockNotifier, types.TokenService) {
+		t.Helper()
+		engine, ts := testutil.UnitTestWithEngine(t)
+		provider := &errorFakeAuthProvider{err: permanentErr}
+		notifier := notification.NewMockNotifier()
+		ts.SetToken(engine.GetConfiguration(), deadToken)
+		service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notifier, testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+		return service, provider, notifier, ts
+	}
+
+	reAuthRequests := func(notifier *notification.MockNotifier) int {
+		count := 0
+		for _, msg := range notifier.SentMessages() {
+			if _, ok := msg.(types.ShowMessageRequest); ok {
+				count++
+			}
+		}
+		return count
+	}
+
+	t.Run("same token pushed again is not rechecked and not reprompted", func(t *testing.T) {
+		service, provider, notifier, ts := setup(t)
+
+		assert.False(t, service.IsAuthenticated())
+		ts.SetToken(service.engine.GetConfiguration(), deadToken)
+		assert.False(t, service.IsAuthenticated())
+
+		assert.Equal(t, int32(1), atomic.LoadInt32(&provider.callCount))
+		assert.Equal(t, 1, reAuthRequests(notifier))
+	})
+
+	t.Run("different token is checked and reported again", func(t *testing.T) {
+		service, provider, notifier, ts := setup(t)
+
+		assert.False(t, service.IsAuthenticated())
+		ts.SetToken(service.engine.GetConfiguration(), "otherCreds")
+		assert.False(t, service.IsAuthenticated())
+
+		assert.Equal(t, int32(2), atomic.LoadInt32(&provider.callCount))
+		assert.Equal(t, 2, reAuthRequests(notifier))
+	})
+
+	t.Run("concurrent callers sharing one failed check prompt once", func(t *testing.T) {
+		service, _, notifier, _ := setup(t)
+
+		var wg sync.WaitGroup
+		for i := 0; i < 5; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				service.IsAuthenticated()
+			}()
+		}
+		wg.Wait()
+
+		assert.Equal(t, 1, reAuthRequests(notifier))
+	})
+
+	t.Run("explicit logout allows the same token to be checked again", func(t *testing.T) {
+		service, provider, notifier, ts := setup(t)
+
+		assert.False(t, service.IsAuthenticated())
+		service.Logout(t.Context())
+		ts.SetToken(service.engine.GetConfiguration(), deadToken)
+		assert.False(t, service.IsAuthenticated())
+
+		assert.Equal(t, int32(2), atomic.LoadInt32(&provider.callCount))
+		assert.Equal(t, 2, reAuthRequests(notifier))
 	})
 }
 
@@ -716,6 +800,146 @@ func Test_Logout_ResetsLastUsedToken(t *testing.T) {
 	service.Logout(t.Context())
 
 	assert.Empty(t, service.lastUsedToken, "Logout() must reset lastUsedToken so re-auth with the same token is treated as new")
+}
+
+// Test_flushCredentialUpdates_WaitsForQueuedUpdateToApply is a unit test for the
+// flushCredentialUpdates helper introduced for IDE-2402: it must not return until
+// credentialUpdateWorker has actually applied everything queued before it was called.
+// Because that is the guarantee flushCredentialUpdates makes, this assertion needs no
+// polling or sleep - unlike the end-to-end regression test below, a single check
+// immediately after flushCredentialUpdates returns is sufficient and deterministic.
+func Test_flushCredentialUpdates_WaitsForQueuedUpdateToApply(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+	t.Cleanup(service.Shutdown)
+
+	tokenBytes, err := json.Marshal(oauth2.Token{
+		AccessToken:  "flush-access",
+		RefreshToken: "flush-refresh",
+		TokenType:    "Bearer",
+		Expiry:       time.Now().Add(time.Hour),
+	})
+	require.NoError(t, err)
+	token := string(tokenBytes)
+
+	service.QueueCredentialUpdate(token, true, false)
+	service.flushCredentialUpdates()
+
+	assert.Equal(t, token, config.GetToken(conf),
+		"flushCredentialUpdates must not return until the queued update has been applied")
+}
+
+// Test_flushCredentialUpdates_NoPendingUpdates_ReturnsWithoutBlocking guards against a
+// regression where flushCredentialUpdates would hang when the queue is already idle
+// (e.g. logout() calling it when no OAuth storage resync happened).
+func Test_flushCredentialUpdates_NoPendingUpdates_ReturnsWithoutBlocking(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+	t.Cleanup(service.Shutdown)
+
+	done := make(chan struct{})
+	go func() {
+		service.flushCredentialUpdates()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("flushCredentialUpdates must not block when the queue is idle")
+	}
+}
+
+// Test_flushCredentialUpdates_AfterShutdown_ReturnsWithoutBlocking guards against a
+// regression where flushCredentialUpdates would hang forever if Shutdown() already
+// stopped credentialUpdateWorker (e.g. Logout() called during teardown).
+func Test_flushCredentialUpdates_AfterShutdown_ReturnsWithoutBlocking(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+	service.Shutdown()
+
+	done := make(chan struct{})
+	go func() {
+		service.flushCredentialUpdates()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("flushCredentialUpdates must not block forever once the worker has been shut down")
+	}
+}
+
+// Test_Logout_DiscardsStaleQueuedCredentialUpdate is the deterministic regression test
+// for IDE-2402.
+//
+// Root cause: GAF's oAuth2Authenticator resyncs the in-memory OAuth token from on-disk
+// storage (storage.Refresh, inside syncTokenRefresh) before every token-refresh attempt.
+// Because config.SetupStorage/NewOAuthProvider mark auth.CONFIG_KEY_OAUTH_TOKEN as
+// persisted, that resync's conf.Set writes back to storage, which fires the registered
+// OAuth storage-bridge callback again and calls QueueCredentialUpdate with the resynced
+// (unchanged, possibly stale/expired) token - unconditionally, since the bridge only
+// special-cases *empty* echoes (IDE-2179) and the writingToken guard only special-cases
+// *re-entrant* echoes of the token the worker is CURRENTLY writing (IDE-2104). A
+// resync-triggered enqueue is neither: it lands on the channel before the worker has
+// picked up anything, so writingToken is nil and the item is queued normally.
+//
+// If the request that triggered the resync then fails (e.g. invalid_grant),
+// doAuthCheck synchronously calls logout(), which is supposed to be the final,
+// authoritative clear. But credentialUpdateWorker, running concurrently, may not have
+// drained the earlier-queued stale item yet - if it drains it AFTER logout's synchronous
+// clear, the stale token gets written right back into config, resurrecting credentials
+// logout just removed. This is exactly what
+// Test_IsAuthenticated_DoesNotUseOAuth2ProviderCustomRefresherFunc observed flakily in
+// CI (oauth_refresher_reachability_test.go).
+//
+// This test reproduces the ordering bug directly and deterministically, without any
+// HTTP mocking or timing dependency: it enqueues a stale update via QueueCredentialUpdate
+// (the same entrypoint the storage bridge uses) immediately before Logout(), then polls
+// for 2 seconds to give credentialUpdateWorker every opportunity to apply the stale
+// write. Without a fix, the stale write reliably lands within milliseconds (reliable
+// RED, matching the polling rationale already established by
+// Test_RegisterOAuthStorageBridge_LastWriteWins_WithReentrancy and
+// Test_RegisterOAuthStorageBridge_EmptyStorageUpdateDoesNotClearAppliedToken); with the
+// fix (logout flushes the queue before its own authoritative clear) the token stays
+// empty for the full window (reliable GREEN), across -race and all GOMAXPROCS values.
+func Test_Logout_DiscardsStaleQueuedCredentialUpdate(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+	t.Cleanup(service.Shutdown)
+	// Use the real OAuth2Provider (as production does) rather than FakeAuthenticationProvider:
+	// its ClearAuthentication is what actually clears auth.CONFIG_KEY_OAUTH_TOKEN on logout,
+	// which is the exact key the original flaky test observed being resurrected.
+	service.SetProvider(Default(engine, service))
+
+	staleTokenBytes, err := json.Marshal(oauth2.Token{
+		AccessToken:  "stale-access",
+		RefreshToken: "stale-refresh",
+		TokenType:    "Bearer",
+		Expiry:       time.Now().Add(-time.Hour),
+	})
+	require.NoError(t, err)
+	staleToken := string(staleTokenBytes)
+
+	// Simulate the resync-triggered enqueue that happens inside GAF's syncTokenRefresh,
+	// queued immediately before the synchronous logout that must win.
+	service.QueueCredentialUpdate(staleToken, true, false)
+	service.Logout(t.Context())
+
+	require.Never(t,
+		func() bool { return conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN) == staleToken },
+		2*time.Second, time.Millisecond,
+		"a credential update queued before Logout() must not resurrect the OAuth token logout cleared",
+	)
+	assert.Empty(t, conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN), "logout must leave the OAuth token cleared")
+	assert.Empty(t, config.GetToken(conf), "logout must leave the general token cleared")
 }
 
 func Test_ConfigureProviders_CredentialMismatch_CallsClearAuthentication(t *testing.T) {

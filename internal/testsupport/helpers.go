@@ -59,6 +59,14 @@ func SkipUnlessBenchmarkRealScanMonorepo(t *testing.T) {
 	}
 }
 
+// GitUnsigned prefixes git arguments with the flags that keep a fixture's
+// commits and tags unsigned. A developer's global commit.gpgsign applies to
+// every repository a test creates, and signing then fails wherever the
+// configured signing program is unreachable.
+func GitUnsigned(args ...string) []string {
+	return append([]string{"-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false"}, args...)
+}
+
 // GitEnvWithoutInheritedRepoConfig returns env without Git repository/config overrides
 // that can make temp-repo tests operate on the outer worktree or inherit host config.
 func GitEnvWithoutInheritedRepoConfig(env []string) []string {
