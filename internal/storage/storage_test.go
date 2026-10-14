@@ -17,6 +17,7 @@
 package storage
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -107,6 +108,68 @@ func Test_StorageCallsRegisterCallbacks_InvalidJsonContent_ShouldClean(t *testin
 	require.Eventuallyf(t, func() bool {
 		return <-called
 	}, 5*time.Second, time.Millisecond, "callback was not called")
+}
+
+func Test_WatchFileForWritesByOtherProcesses_FiresCallbackForValuesWrittenByAnotherStorage(t *testing.T) {
+	file := filepath.Join(t.TempDir(), testsupport.PathSafeTestName(t))
+	key := "token"
+	received := make(chan any, 10)
+
+	watcher, err := NewStorageWithCallbacks(WithStorageFile(file))
+	require.NoError(t, err)
+	watcher.RegisterCallback(key, func(_ string, value any) { received <- value })
+	require.NoError(t, watcher.Set(key, "own"))
+	testsupport.RequireEventuallyReceive(t, received, 5*time.Second, time.Millisecond, "callback was not called for the own write")
+
+	other, err := NewStorageWithCallbacks(WithStorageFile(file))
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	watcher.WatchFileForWritesByOtherProcesses(ctx, 10*time.Millisecond)
+
+	require.NoError(t, other.Set(key, "external"))
+
+	value := testsupport.RequireEventuallyReceive(t, received, 5*time.Second, time.Millisecond, "callback was not called for the external change")
+	assert.Equal(t, "external", value)
+
+	require.NoError(t, other.Set("unrelated", "value"))
+	require.NoError(t, watcher.Set(key, "own again"))
+	assert.Equal(t, "own again", testsupport.RequireEventuallyReceive(t, received, 5*time.Second, time.Millisecond, "callback was not called for the second own write"))
+
+	select {
+	case value := <-received:
+		t.Fatalf("unexpected callback with value %v", value)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+func Test_WatchFileForWritesByOtherProcesses_DoesNotFireForValuesPresentAtStart(t *testing.T) {
+	file := filepath.Join(t.TempDir(), testsupport.PathSafeTestName(t))
+	key := "token"
+	require.NoError(t, os.WriteFile(file, []byte(`{"token":"existing"}`), 0644))
+
+	received := make(chan any, 10)
+	watcher, err := NewStorageWithCallbacks(WithStorageFile(file))
+	require.NoError(t, err)
+	watcher.RegisterCallback(key, func(_ string, value any) { received <- value })
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	watcher.WatchFileForWritesByOtherProcesses(ctx, 10*time.Millisecond)
+
+	select {
+	case value := <-received:
+		t.Fatalf("unexpected callback with value %v", value)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	other, err := NewStorageWithCallbacks(WithStorageFile(file))
+	require.NoError(t, err)
+	require.NoError(t, other.Set(key, "external"))
+
+	value := testsupport.RequireEventuallyReceive(t, received, 5*time.Second, time.Millisecond, "callback was not called for the external change")
+	assert.Equal(t, "external", value)
 }
 
 func Test_ParallelFileLocking(t *testing.T) {
