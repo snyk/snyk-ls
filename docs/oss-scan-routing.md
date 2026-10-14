@@ -68,5 +68,5 @@ Each scan logs which path it took with a `reason` field:
 | `SNYK_FORCE_LEGACY_CLI env var set` | The environment variable forced legacy. |
 | `legacy-only flag: --print-graph` | The command has a flag only legacy supports. |
 | `new ostest workflow (matched: enableUvCLI)` | The named flag or argument selected ostest. |
-| `no new features required (enableUvCLI off)` | Legacy, and the folder org has `enableUvCLI` off, so a `uv.lock` cannot select ostest. |
-| `no new features required` | Legacy. `enableUvCLI` is on, but no `uv.lock` was found. |
+| `no new features required (enableUvCLI on, but no uv.lock)` | Legacy. The folder org has `enableUvCLI` on, but no `uv.lock` was found. |
+| `no new features required` | Legacy. No rule selected ostest. |

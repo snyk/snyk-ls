@@ -559,7 +559,7 @@ func Test_shouldUseLegacyScan(t *testing.T) {
 func Test_shouldUseLegacyScan_uv(t *testing.T) {
 	logger := zerolog.Nop()
 	const newFlow = "new ostest workflow (matched: enableUvCLI)"
-	const noNewFeatures = "no new features required"
+	const noUvLock = "no new features required (enableUvCLI on, but no uv.lock)"
 	tests := []struct {
 		name           string
 		enableUvCLI    bool
@@ -571,10 +571,10 @@ func Test_shouldUseLegacyScan_uv(t *testing.T) {
 	}{
 		{name: "root uv.lock with --all-projects", enableUvCLI: true, files: []string{"uv.lock"}, args: []string{"--all-projects"}, expectedReason: newFlow},
 		{name: "nested uv.lock with --all-projects", enableUvCLI: true, files: []string{"svc/api/uv.lock"}, args: []string{"--all-projects"}, expectedReason: newFlow},
-		{name: "uv.lock only under node_modules", enableUvCLI: true, files: []string{"node_modules/pkg/uv.lock"}, args: []string{"--all-projects"}, expectLegacy: true, expectedReason: noNewFeatures},
-		{name: "no uv.lock", enableUvCLI: true, files: []string{"pyproject.toml"}, args: []string{"--all-projects"}, expectLegacy: true, expectedReason: noNewFeatures},
-		{name: "flag off with uv.lock", enableUvCLI: false, files: []string{"uv.lock"}, args: []string{"--all-projects"}, expectLegacy: true, expectedReason: "no new features required (enableUvCLI off)"},
-		{name: "--file non-uv manifest, root has no uv.lock", enableUvCLI: true, files: []string{"sub/uv.lock", "requirements.txt"}, args: []string{"--file=requirements.txt"}, expectLegacy: true, expectedReason: noNewFeatures},
+		{name: "uv.lock only under node_modules", enableUvCLI: true, files: []string{"node_modules/pkg/uv.lock"}, args: []string{"--all-projects"}, expectLegacy: true, expectedReason: noUvLock},
+		{name: "no uv.lock", enableUvCLI: true, files: []string{"pyproject.toml"}, args: []string{"--all-projects"}, expectLegacy: true, expectedReason: noUvLock},
+		{name: "flag off with uv.lock", enableUvCLI: false, files: []string{"uv.lock"}, args: []string{"--all-projects"}, expectLegacy: true, expectedReason: "no new features required"},
+		{name: "--file non-uv manifest, root has no uv.lock", enableUvCLI: true, files: []string{"sub/uv.lock", "requirements.txt"}, args: []string{"--file=requirements.txt"}, expectLegacy: true, expectedReason: noUvLock},
 		{name: "--file=<path> pointing at uv.lock", enableUvCLI: true, files: []string{"sub/uv.lock"}, args: []string{"--file=sub/uv.lock"}, expectedReason: newFlow},
 		{name: "--file <path> pointing at uv.lock", enableUvCLI: true, files: []string{"sub/uv.lock"}, args: []string{"--file", "sub/uv.lock"}, expectedReason: newFlow},
 		{name: "--file as last arg without value falls back to root", enableUvCLI: true, files: []string{"uv.lock"}, args: []string{"--file"}, expectedReason: newFlow},

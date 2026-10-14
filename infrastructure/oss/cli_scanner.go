@@ -671,8 +671,8 @@ func shouldUseLegacyScan(logger *zerolog.Logger, folderConfig *types.FolderConfi
 	if matchedFeature := findNewFeature(logger, folderConfig, cmd); matchedFeature != "" {
 		return false, fmt.Sprintf("new ostest workflow (matched: %s)", matchedFeature)
 	}
-	if !folderConfig.GetFeatureFlag(featureflag.EnableUvCLI) {
-		return true, "no new features required (enableUvCLI off)"
+	if folderConfig.GetFeatureFlag(featureflag.EnableUvCLI) {
+		return true, "no new features required (enableUvCLI on, but no uv.lock)"
 	}
 	return true, "no new features required"
 }
