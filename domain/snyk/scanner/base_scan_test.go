@@ -21,6 +21,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -29,6 +30,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
@@ -36,6 +39,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/persistence/mock_persistence"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/product"
+	"github.com/snyk/snyk-ls/internal/storage"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -426,4 +430,192 @@ func setupScannerWithMock(t *testing.T, engine workflow.Engine, tokenService typ
 	t.Helper()
 	scanner, _ := setupScanner(t, engine, tokenService, mockScanner)
 	return scanner.(*DelegatingConcurrentScanner)
+}
+
+const referenceScanOrg = "org-of-the-workspace-folder"
+
+// seedWorkspaceFolderForReferenceScan gives the folder a feature flag and a locked LDX-Sync org-folder value, the
+// two key families a reference scan has to inherit beyond the plain user settings.
+func seedWorkspaceFolderForReferenceScan(t *testing.T, engine workflow.Engine, folderConfig *types.FolderConfig, opts syncFolderOpts) {
+	t.Helper()
+	opts.PreferredOrg = referenceScanOrg
+	opts.OrgSetByUser = true
+	syncFolderToConfig(t, engine, folderConfig, &opts)
+	folderConfig.ConfigResolver = defaultResolver(t, engine)
+	folderConfig.SetFeatureFlag("enableUvCLI", true)
+	types.WriteFolderConfigToConfiguration(engine.GetConfiguration(), referenceScanOrg, folderConfig.FolderPath, map[string]*types.LDXSyncField{
+		types.SettingSeverityFilterCritical: {Value: false, IsLocked: true},
+	})
+}
+
+func assertInheritsWorkspaceFolderConfig(t *testing.T, workspace, reference *types.FolderConfig) {
+	t.Helper()
+	assert.True(t, reference.GetFeatureFlag("enableUvCLI"), "the reference scan reads the workspace folder's feature flag")
+	val, source := reference.ConfigResolver.GetValue(types.SettingSeverityFilterCritical, reference)
+	wantVal, wantSource := workspace.ConfigResolver.GetValue(types.SettingSeverityFilterCritical, workspace)
+	assert.Equal(t, wantVal, val)
+	assert.Equal(t, wantSource, source)
+	assert.Equal(t, configresolver.ConfigSourceRemoteLocked, source, "the locked LDX-Sync org-folder value wins")
+}
+
+func TestScanBaseBranch_ReferenceFolder_InheritsFeatureFlagsAndLockedRemoteSettings(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	ctrl := gomock.NewController(t)
+
+	folderConfig := &types.FolderConfig{FolderPath: types.FilePath(t.TempDir())}
+	referenceFolder := types.FilePath(t.TempDir())
+	seedWorkspaceFolderForReferenceScan(t, engine, folderConfig, syncFolderOpts{ReferenceFolderPath: referenceFolder})
+
+	mockScanner := mock_types.NewMockProductScanner(ctrl)
+	mockScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
+	mockScanner.EXPECT().Scan(gomock.Any(), referenceFolder).DoAndReturn(func(ctx context.Context, _ types.FilePath) ([]types.Issue, error) {
+		cfg, ok := ctx2.FolderConfigFromContext(ctx)
+		require.True(t, ok)
+		assert.Equal(t, referenceFolder, cfg.FolderPath)
+		assertInheritsWorkspaceFolderConfig(t, folderConfig, cfg)
+		return []types.Issue{}, nil
+	}).Times(1)
+	dcs := setupScannerWithMock(t, engine, tokenService, mockScanner)
+
+	require.NoError(t, dcs.scanBaseBranch(t.Context(), mockScanner, folderConfig, nil))
+}
+
+func TestScan_BaseBranchCheckout_InheritsFolderConfigAndClearsItOnCleanup(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	ctrl := gomock.NewController(t)
+	conf := engine.GetConfiguration()
+	storageFile := useStorageFile(t, conf)
+
+	dir := t.TempDir()
+	testsupport.InitTestGitRepo(t, dir)
+	folderConfig := &types.FolderConfig{FolderPath: types.FilePath(dir)}
+	seedWorkspaceFolderForReferenceScan(t, engine, folderConfig, syncFolderOpts{BaseBranch: "main"})
+
+	var checkoutPath types.FilePath
+	mockScanner := mock_types.NewMockProductScanner(ctrl)
+	mockScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
+	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
+	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, path types.FilePath) ([]types.Issue, error) {
+		if path == folderConfig.FolderPath {
+			return []types.Issue{}, nil
+		}
+		cfg, ok := ctx2.FolderConfigFromContext(ctx)
+		require.True(t, ok)
+		checkoutPath = cfg.FolderPath
+		assertInheritsWorkspaceFolderConfig(t, folderConfig, cfg)
+		return []types.Issue{}, nil
+	}).Times(2)
+	sc, _ := setupScanner(t, engine, tokenService, mockScanner)
+
+	sc.Scan(ctx2.NewContextWithFolderConfig(t.Context(), folderConfig), folderConfig.FolderPath, types.NoopResultProcessor, nil)
+
+	require.NotEmpty(t, checkoutPath, "the reference scan ran on the base branch checkout")
+	checkoutKeys := folderKeys(conf, checkoutPath)
+	assert.NotEmpty(t, checkoutKeys, "the reference scan wrote folder config under the checkout path")
+	for key := range checkoutKeys {
+		assert.Nil(t, conf.Get(key), key)
+		assert.False(t, conf.IsSet(key), key)
+	}
+	fp := strings.ToLower(string(types.PathKey(checkoutPath)))
+	stored, err := os.ReadFile(storageFile)
+	require.NoError(t, err)
+	assert.NotContains(t, strings.ToLower(string(stored)), fp)
+	assert.True(t, folderConfig.GetFeatureFlag("enableUvCLI"), "cleanup leaves the workspace folder alone")
+}
+
+// folderKeys returns every key whose folder part is exactly folder, with its current value.
+func folderKeys(conf configuration.Configuration, folder types.FilePath) map[string]any {
+	fp := ":" + strings.ToLower(string(types.PathKey(folder))) + ":"
+	out := map[string]any{}
+	for _, key := range conf.AllKeys() {
+		if strings.Contains(key, fp) {
+			out[key] = conf.Get(key)
+		}
+	}
+	return out
+}
+
+func useStorageFile(t *testing.T, conf configuration.Configuration) string {
+	t.Helper()
+	storageFile := filepath.Join(t.TempDir(), "ls-config.json")
+	require.NoError(t, os.WriteFile(storageFile, []byte("{}"), 0o600))
+	s, err := storage.NewStorageWithCallbacks(storage.WithStorageFile(storageFile))
+	require.NoError(t, err)
+	conf.SetStorage(s)
+	return storageFile
+}
+
+func TestScanBaseBranch_ReferenceFolderIsOpenWorkspaceFolder_KeepsItsOwnSettings(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	ctrl := gomock.NewController(t)
+	conf := engine.GetConfiguration()
+	storageFile := useStorageFile(t, conf)
+
+	second := &types.FolderConfig{FolderPath: types.FilePath(t.TempDir())}
+	syncFolderToConfig(t, engine, second, &syncFolderOpts{BaseBranch: "release", PreferredOrg: "second-org", OrgSetByUser: true})
+	second.ConfigResolver = defaultResolver(t, engine)
+	second.SetFeatureFlag("enableUvCLI", false)
+	secondFolder := mock_types.NewMockFolder(ctrl)
+	secondFolder.EXPECT().Path().Return(types.FilePath(strings.ToUpper(string(second.FolderPath)) + "/")).AnyTimes()
+	workspace := mock_types.NewMockWorkspace(ctrl)
+	workspace.EXPECT().Folders().Return([]types.Folder{secondFolder}).AnyTimes()
+	config.SetWorkspace(conf, workspace)
+
+	first := &types.FolderConfig{FolderPath: types.FilePath(t.TempDir())}
+	seedWorkspaceFolderForReferenceScan(t, engine, first, syncFolderOpts{ReferenceFolderPath: second.FolderPath, BaseBranch: "main"})
+
+	wantInMemory := folderKeys(conf, second.FolderPath)
+	wantStored, err := os.ReadFile(storageFile)
+	require.NoError(t, err)
+
+	mockScanner := mock_types.NewMockProductScanner(ctrl)
+	mockScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
+	mockScanner.EXPECT().Scan(gomock.Any(), second.FolderPath).DoAndReturn(func(ctx context.Context, _ types.FilePath) ([]types.Issue, error) {
+		cfg, ok := ctx2.FolderConfigFromContext(ctx)
+		require.True(t, ok)
+		assert.False(t, cfg.GetFeatureFlag("enableUvCLI"), "the reference scan reads the open folder's own flag")
+		assert.Equal(t, "second-org", cfg.PreferredOrg())
+		return []types.Issue{}, nil
+	}).Times(1)
+	dcs := setupScannerWithMock(t, engine, tokenService, mockScanner)
+
+	require.NoError(t, dcs.scanBaseBranch(t.Context(), mockScanner, first, nil))
+
+	assert.Equal(t, wantInMemory, folderKeys(conf, second.FolderPath))
+	gotStored, err := os.ReadFile(storageFile)
+	require.NoError(t, err)
+	assert.JSONEq(t, string(wantStored), string(gotStored))
+	assert.Equal(t, "release", types.ReadFolderConfigSnapshot(conf, second.FolderPath).BaseBranch)
+}
+
+func TestScan_ReferenceFolderNotInWorkspace_InheritsAndIsNotCleared(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	ctrl := gomock.NewController(t)
+	conf := engine.GetConfiguration()
+
+	folderConfig := &types.FolderConfig{FolderPath: types.FilePath(t.TempDir())}
+	referenceFolder := types.FilePath(t.TempDir())
+	seedWorkspaceFolderForReferenceScan(t, engine, folderConfig, syncFolderOpts{ReferenceFolderPath: referenceFolder})
+	workspaceFolder := mock_types.NewMockFolder(ctrl)
+	workspaceFolder.EXPECT().Path().Return(folderConfig.FolderPath).AnyTimes()
+	workspace := mock_types.NewMockWorkspace(ctrl)
+	workspace.EXPECT().Folders().Return([]types.Folder{workspaceFolder}).AnyTimes()
+	config.SetWorkspace(conf, workspace)
+
+	mockScanner := mock_types.NewMockProductScanner(ctrl)
+	mockScanner.EXPECT().Product().Return(product.ProductOpenSource).AnyTimes()
+	mockScanner.EXPECT().IsEnabledForFolder(gomock.Any()).Return(true).AnyTimes()
+	mockScanner.EXPECT().Scan(gomock.Any(), folderConfig.FolderPath).Return([]types.Issue{}, nil).Times(1)
+	mockScanner.EXPECT().Scan(gomock.Any(), referenceFolder).DoAndReturn(func(ctx context.Context, _ types.FilePath) ([]types.Issue, error) {
+		cfg, ok := ctx2.FolderConfigFromContext(ctx)
+		require.True(t, ok)
+		assertInheritsWorkspaceFolderConfig(t, folderConfig, cfg)
+		return []types.Issue{}, nil
+	}).Times(1)
+	sc, _ := setupScanner(t, engine, tokenService, mockScanner)
+
+	sc.Scan(ctx2.NewContextWithFolderConfig(t.Context(), folderConfig), folderConfig.FolderPath, types.NoopResultProcessor, nil)
+
+	reference := &types.FolderConfig{FolderPath: referenceFolder, ConfigResolver: folderConfig.ConfigResolver}
+	assertInheritsWorkspaceFolderConfig(t, folderConfig, reference)
 }
