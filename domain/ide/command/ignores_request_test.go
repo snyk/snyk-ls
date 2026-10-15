@@ -651,6 +651,209 @@ func Test_submitIgnoreRequest_NilTreeRefresher_DoesNotPanic(t *testing.T) {
 	})
 }
 
+func Test_validateIgnoreRequest__allows_non_git_folder_when_remote_repo_url_override_configured(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	nonGitDir := types.FilePath(t.TempDir())
+	_, _ = workspaceutil.SetupWorkspace(t, engine, nonGitDir)
+	types.SetFolderUserSetting(engine.GetConfiguration(), nonGitDir, types.SettingAdditionalParameters,
+		[]string{"--remote-repo-url=https://github.com/example/repo.git"})
+
+	mockNotifier := notification.NewMockNotifier()
+	cmd := &submitIgnoreRequest{
+		engine:         engine,
+		notifier:       mockNotifier,
+		configResolver: testutil.DefaultConfigResolver(engine),
+	}
+
+	logger := engine.GetLogger().With().Str("method", "test").Logger()
+	err := cmd.validateIgnoreRequest(logger, nonGitDir)
+
+	require.NoError(t, err, "validateIgnoreRequest should not error when a --remote-repo-url override is configured")
+	assert.Empty(t, mockNotifier.SentMessages(), "no warning should be sent when the override lets validation succeed")
+}
+
+func Test_submitIgnoreRequest_initializeCreateConfiguration_SetsRemoteRepoUrlFromOverride(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	folderPaths := []types.FilePath{types.FilePath("/fake/test-folder-remote-repo-url-config")}
+	_, _ = workspaceutil.SetupWorkspace(t, engine, folderPaths...)
+	contentRoot := folderPaths[0]
+
+	engineConf := engine.GetConfiguration()
+	types.SetPreferredOrgAndOrgSetByUser(engineConf, contentRoot, "test-org", true)
+	types.SetFolderUserSetting(engineConf, contentRoot, types.SettingAdditionalParameters,
+		[]string{"--remote-repo-url=https://github.com/example/repo.git"})
+
+	cmd := &submitIgnoreRequest{
+		command: types.CommandData{
+			Arguments: []any{"create", "issueId", "wont_fix", "reason", "expiration"},
+		},
+		engine:         engine,
+		configResolver: testutil.DefaultConfigResolver(engine),
+	}
+
+	resultConfig, err := cmd.initializeCreateConfiguration(engineConf, "finding123", contentRoot)
+	require.NoError(t, err)
+	assert.Equal(t, "https://github.com/example/repo.git", resultConfig.Get(ignore_workflow.RemoteRepoUrlKey))
+}
+
+func Test_submitIgnoreRequest_CreateIgnore_SucceedsForNonGitFolder_WithRemoteRepoUrlOverride(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
+
+	nonGitFolder := types.FilePath(t.TempDir())
+	issue := testutil.NewMockIssue("issueId", types.FilePath(filepath.Join(string(nonGitFolder), "test.cbl")))
+	issue.ContentRoot = nonGitFolder
+	_, _ = workspaceutil.SetupWorkspace(t, mockEngine, nonGitFolder)
+	types.SetPreferredOrgAndOrgSetByUser(mockConf, nonGitFolder, "test-org", true)
+	types.SetFolderUserSetting(mockConf, nonGitFolder, types.SettingAdditionalParameters,
+		[]string{"--remote-repo-url=https://github.com/example/repo.git"})
+
+	issueProvider := mock_snyk.NewMockIssueProvider(ctrl)
+	issueProvider.EXPECT().Issue("issueId").Return(issue).AnyTimes()
+
+	var capturedConfig configuration.Configuration
+	mockEngine.EXPECT().InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gomock.Any()).
+		Do(func(_ workflow.Identifier, cfg configuration.Configuration) {
+			capturedConfig = cfg
+		}).
+		Return([]workflow.Data{workflow.NewData(workflow.NewTypeIdentifier(ignore_workflow.WORKFLOWID_IGNORE_CREATE, "test"), "json", []byte(`{"id":"ignoreId"}`))}, nil).
+		Times(1)
+	mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
+		Return(nil, nil).AnyTimes()
+
+	server := mock_types.NewMockServer(ctrl)
+	server.EXPECT().Callback(gomock.Any(), "window/showDocument", gomock.Any()).Return(nil, nil).AnyTimes()
+	notifier := notification.NewMockNotifier()
+
+	cmd := &submitIgnoreRequest{
+		command:        types.CommandData{Arguments: []any{"create", "issueId", "wont_fix", "reason", "2099-01-01"}},
+		issueProvider:  issueProvider,
+		notifier:       notifier,
+		srv:            server,
+		engine:         mockEngine,
+		configResolver: testutil.DefaultConfigResolver(mockEngine),
+	}
+
+	_, err := cmd.Execute(t.Context())
+
+	require.NoError(t, err, "ignore create should succeed for a non-Git folder when a --remote-repo-url override is configured")
+	assert.Empty(t, notifier.SentMessages(), "no warning should be sent when the override lets validation succeed")
+	require.NotNil(t, capturedConfig, "ignore workflow should have been invoked")
+	assert.Equal(t, "https://github.com/example/repo.git", capturedConfig.Get(ignore_workflow.RemoteRepoUrlKey),
+		"the ignore workflow should receive the same --remote-repo-url used by the CLI workaround")
+}
+
+// Test_submitIgnoreRequest_CreateIgnore_SucceedsForNonGitFolder_WithGlobalRemoteRepoUrlOverride
+// covers VS Code's storage shape: applyCliConfig files Additional Parameters as one global
+// string under SettingCliAdditionalOssParameters rather than IntelliJ's per-folder setting.
+func Test_submitIgnoreRequest_CreateIgnore_SucceedsForNonGitFolder_WithGlobalRemoteRepoUrlOverride(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
+
+	nonGitFolder := types.FilePath(t.TempDir())
+	issue := testutil.NewMockIssue("issueId", types.FilePath(filepath.Join(string(nonGitFolder), "test.cbl")))
+	issue.ContentRoot = nonGitFolder
+	_, _ = workspaceutil.SetupWorkspace(t, mockEngine, nonGitFolder)
+	types.SetPreferredOrgAndOrgSetByUser(mockConf, nonGitFolder, "test-org", true)
+	types.SetGlobalDeferredFolderScope(mockConf, types.SettingCliAdditionalOssParameters,
+		[]string{"--remote-repo-url=https://github.com/example/repo.git"})
+
+	issueProvider := mock_snyk.NewMockIssueProvider(ctrl)
+	issueProvider.EXPECT().Issue("issueId").Return(issue).AnyTimes()
+
+	var capturedConfig configuration.Configuration
+	mockEngine.EXPECT().InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gomock.Any()).
+		Do(func(_ workflow.Identifier, cfg configuration.Configuration) {
+			capturedConfig = cfg
+		}).
+		Return([]workflow.Data{workflow.NewData(workflow.NewTypeIdentifier(ignore_workflow.WORKFLOWID_IGNORE_CREATE, "test"), "json", []byte(`{"id":"ignoreId"}`))}, nil).
+		Times(1)
+	mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
+		Return(nil, nil).AnyTimes()
+
+	server := mock_types.NewMockServer(ctrl)
+	server.EXPECT().Callback(gomock.Any(), "window/showDocument", gomock.Any()).Return(nil, nil).AnyTimes()
+	notifier := notification.NewMockNotifier()
+
+	cmd := &submitIgnoreRequest{
+		command:        types.CommandData{Arguments: []any{"create", "issueId", "wont_fix", "reason", "2099-01-01"}},
+		issueProvider:  issueProvider,
+		notifier:       notifier,
+		srv:            server,
+		engine:         mockEngine,
+		configResolver: testutil.DefaultConfigResolver(mockEngine),
+	}
+
+	_, err := cmd.Execute(t.Context())
+
+	require.NoError(t, err, "ignore create should succeed for a non-Git folder when VS Code's global --remote-repo-url override is configured")
+	assert.Empty(t, notifier.SentMessages(), "no warning should be sent when the override lets validation succeed")
+	require.NotNil(t, capturedConfig, "ignore workflow should have been invoked")
+	assert.Equal(t, "https://github.com/example/repo.git", capturedConfig.Get(ignore_workflow.RemoteRepoUrlKey),
+		"the ignore workflow should receive the --remote-repo-url configured under VS Code's global setting key")
+}
+
+// Test_submitIgnoreRequest_CreateIgnore_FolderOverrideTakesPrecedenceOverGlobal covers the
+// case where both storage shapes are populated at once: the per-folder (IntelliJ) value must win.
+func Test_submitIgnoreRequest_CreateIgnore_FolderOverrideTakesPrecedenceOverGlobal(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	ctrl := gomock.NewController(t)
+	t.Cleanup(ctrl.Finish)
+
+	mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
+
+	nonGitFolder := types.FilePath(t.TempDir())
+	issue := testutil.NewMockIssue("issueId", types.FilePath(filepath.Join(string(nonGitFolder), "test.cbl")))
+	issue.ContentRoot = nonGitFolder
+	_, _ = workspaceutil.SetupWorkspace(t, mockEngine, nonGitFolder)
+	types.SetPreferredOrgAndOrgSetByUser(mockConf, nonGitFolder, "test-org", true)
+	types.SetGlobalDeferredFolderScope(mockConf, types.SettingCliAdditionalOssParameters,
+		[]string{"--remote-repo-url=https://global.example/wrong"})
+	types.SetFolderUserSetting(mockConf, nonGitFolder, types.SettingAdditionalParameters,
+		[]string{"--remote-repo-url=https://github.com/example/repo.git"})
+
+	issueProvider := mock_snyk.NewMockIssueProvider(ctrl)
+	issueProvider.EXPECT().Issue("issueId").Return(issue).AnyTimes()
+
+	var capturedConfig configuration.Configuration
+	mockEngine.EXPECT().InvokeWithConfig(ignore_workflow.WORKFLOWID_IGNORE_CREATE, gomock.Any()).
+		Do(func(_ workflow.Identifier, cfg configuration.Configuration) {
+			capturedConfig = cfg
+		}).
+		Return([]workflow.Data{workflow.NewData(workflow.NewTypeIdentifier(ignore_workflow.WORKFLOWID_IGNORE_CREATE, "test"), "json", []byte(`{"id":"ignoreId"}`))}, nil).
+		Times(1)
+	mockEngine.EXPECT().InvokeWithInputAndConfig(localworkflows.WORKFLOWID_REPORT_ANALYTICS, gomock.Any(), gomock.Any()).
+		Return(nil, nil).AnyTimes()
+
+	server := mock_types.NewMockServer(ctrl)
+	server.EXPECT().Callback(gomock.Any(), "window/showDocument", gomock.Any()).Return(nil, nil).AnyTimes()
+	notifier := notification.NewMockNotifier()
+
+	cmd := &submitIgnoreRequest{
+		command:        types.CommandData{Arguments: []any{"create", "issueId", "wont_fix", "reason", "2099-01-01"}},
+		issueProvider:  issueProvider,
+		notifier:       notifier,
+		srv:            server,
+		engine:         mockEngine,
+		configResolver: testutil.DefaultConfigResolver(mockEngine),
+	}
+
+	_, err := cmd.Execute(t.Context())
+
+	require.NoError(t, err)
+	require.NotNil(t, capturedConfig, "ignore workflow should have been invoked")
+	assert.Equal(t, "https://github.com/example/repo.git", capturedConfig.Get(ignore_workflow.RemoteRepoUrlKey),
+		"the per-folder override should win over the global one")
+}
+
 func Test_validateIgnoreRequest__notifies_user_when_repo_URL_cannot_be_determined(t *testing.T) {
 	engine := testutil.UnitTest(t)
 

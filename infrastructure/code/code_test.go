@@ -245,6 +245,87 @@ func TestUploadAndAnalyze(t *testing.T) {
 	)
 }
 
+func TestUploadAndAnalyze_RepositoryUrlOverride(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	channel := make(chan types.ProgressParams, 10000)
+	cancelChannel := make(chan bool, 1)
+	testTracker := progress.NewTestTask(channel, cancelChannel, engine.GetLogger())
+
+	newScannerWithFake := func(t *testing.T) (*Scanner, *FakeCodeScannerClient) {
+		t.Helper()
+		fake := &FakeCodeScannerClient{}
+		scanner := New(engine,
+			performance.NewInstrumentor(),
+			&snyk_api.FakeApiClient{CodeEnabled: true},
+			newTestCodeErrorReporter(),
+			setupMockLearnServiceNoLessons(t),
+			featureflag.NewFakeService(),
+			notification.NewNotifier(),
+			NewCodeInstrumentor(),
+			newTestCodeErrorReporter(),
+			func(*Scanner, *types.FolderConfig) (codeClient.CodeScanner, error) { return fake, nil },
+			defaultResolver(engine),
+			testutil.NewDrainedProgressTracker())
+		return scanner, fake
+	}
+
+	t.Run("non-Git folder with the override uses it and keys the finding off it", func(t *testing.T) {
+		scanner, fake := newScannerWithFake(t)
+		filePath, folderPath := TempWorkdirWithIssues(t)
+		defer func(path string) { _ = os.RemoveAll(path) }(string(folderPath))
+		require.NoError(t, os.RemoveAll(filepath.Join(string(folderPath), ".git")))
+
+		const override = "https://mainframe.example/payroll"
+		engineConfig := engine.GetConfiguration()
+		types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, "test-org", true)
+		types.SetFolderUserSetting(engineConfig, folderPath, types.SettingAdditionalParameters, []string{"--remote-repo-url=" + override})
+		folderConfig := &types.FolderConfig{FolderPath: folderPath, ConfigResolver: defaultResolver(engine)}
+
+		issues, err := scanner.UploadAndAnalyze(t.Context(), folderPath, folderConfig, sliceToChannel([]string{string(filePath)}), map[types.FilePath]bool{}, false, testTracker)
+		require.NoError(t, err)
+
+		assert.Equal(t, override, fake.RepositoryUrl)
+		require.NotEmpty(t, issues)
+		assert.Equal(t, deriveFindingId(override, issues[0].GetID()), issues[0].GetFindingId())
+	})
+
+	t.Run("Git repo with the override, the override wins over the Git remote", func(t *testing.T) {
+		scanner, fake := newScannerWithFake(t)
+		filePath, folderPath := TempWorkdirWithIssues(t)
+		defer func(path string) { _ = os.RemoveAll(path) }(string(folderPath))
+
+		const override = "https://mainframe.example/payroll"
+		engineConfig := engine.GetConfiguration()
+		types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, "test-org", true)
+		types.SetFolderUserSetting(engineConfig, folderPath, types.SettingAdditionalParameters, []string{"--remote-repo-url=" + override})
+		folderConfig := &types.FolderConfig{FolderPath: folderPath, ConfigResolver: defaultResolver(engine)}
+
+		issues, err := scanner.UploadAndAnalyze(t.Context(), folderPath, folderConfig, sliceToChannel([]string{string(filePath)}), map[types.FilePath]bool{}, false, testTracker)
+		require.NoError(t, err)
+
+		assert.Equal(t, override, fake.RepositoryUrl)
+		require.NotEmpty(t, issues)
+		assert.Equal(t, deriveFindingId(override, issues[0].GetID()), issues[0].GetFindingId())
+	})
+
+	t.Run("Git repo without the override keeps today's Git remote", func(t *testing.T) {
+		scanner, fake := newScannerWithFake(t)
+		filePath, folderPath := TempWorkdirWithIssues(t)
+		defer func(path string) { _ = os.RemoveAll(path) }(string(folderPath))
+
+		engineConfig := engine.GetConfiguration()
+		types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, "test-org", true)
+		folderConfig := &types.FolderConfig{FolderPath: folderPath, ConfigResolver: defaultResolver(engine)}
+
+		issues, err := scanner.UploadAndAnalyze(t.Context(), folderPath, folderConfig, sliceToChannel([]string{string(filePath)}), map[types.FilePath]bool{}, false, testTracker)
+		require.NoError(t, err)
+
+		assert.Equal(t, "https://dummy.dummy.io/gitty.git", fake.RepositoryUrl)
+		require.NotEmpty(t, issues)
+		assert.Equal(t, deriveFindingId(fake.RepositoryUrl, issues[0].GetID()), issues[0].GetFindingId())
+	})
+}
+
 func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	filePath, workDir := TempWorkdirWithIssues(t)
@@ -496,7 +577,7 @@ func Test_enhanceIssuesDetails(t *testing.T) {
 	// invoke method under test
 	htmlRenderer, err := GetHTMLRenderer(engine, featureflag.New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine)))
 	assert.Nil(t, err)
-	html := htmlRenderer.GetDetailsHtml(issues[0])
+	html := htmlRenderer.GetDetailsHtml(t.Context(), issues[0])
 	// Assert
 	assert.Equal(t, expectedLessonUrl, issues[0].GetLessonUrl())
 	assert.Contains(t, html, `href="https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide"`)

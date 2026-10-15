@@ -29,6 +29,7 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -37,7 +38,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/ignore_workflow"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/local_models"
-	"github.com/snyk/go-application-framework/pkg/utils/git"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 )
@@ -171,6 +171,11 @@ func (cmd *submitIgnoreRequest) initializeCreateConfiguration(engineConfig confi
 
 	engineConfig = initializeBaseConfiguration(engineConfig, contentRoot)
 	engineConfig = addCreateAndUpdateConfiguration(engineConfig, ignoreType, reason, expiration)
+
+	folderConfig := &types.FolderConfig{FolderPath: contentRoot, ConfigResolver: cmd.configResolver}
+	if remoteRepoUrl := folderconfig.RemoteRepoUrlOverride(cmd.configResolver, folderConfig); remoteRepoUrl != "" {
+		engineConfig.Set(ignore_workflow.RemoteRepoUrlKey, remoteRepoUrl)
+	}
 
 	return engineConfig, nil
 }
@@ -349,13 +354,15 @@ func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, wo
 	return nil
 }
 
-// validateIgnoreRequest checks that a repository URL can be resolved for contentRoot
-// using the same resolver as GAF's ignore workflow (git.RepoUrlFromDir) so the two
-// agree. If not, it sends a user-facing warning notification and returns an error.
-// The raw error from go-git is kept in the structured log only, to avoid leaking
+// validateIgnoreRequest checks that a repository URL can be resolved for contentRoot,
+// via folderconfig.RepoUrlForIgnores (a configured --remote-repo-url override, matching the
+// CLI's workaround for non-Git projects, or else the same Git remote GAF's ignore workflow
+// uses). If neither is available, it sends a user-facing warning notification and returns an
+// error. The raw error from go-git is kept in the structured log only, to avoid leaking
 // filesystem paths.
 func (cmd *submitIgnoreRequest) validateIgnoreRequest(logger zerolog.Logger, contentRoot types.FilePath) error {
-	if _, err := git.RepoUrlFromDir(string(contentRoot)); err != nil {
+	folderConfig := &types.FolderConfig{FolderPath: contentRoot, ConfigResolver: cmd.configResolver}
+	if _, err := folderconfig.RepoUrlForIgnores(cmd.configResolver, folderConfig); err != nil {
 		logger.Warn().Err(err).Str("contentRoot", string(contentRoot)).Msg("could not determine repository URL for ignore request")
 		if cmd.notifier != nil {
 			cmd.notifier.SendShowMessage(sglsp.MTWarning, htmlIgnore.CreateIgnoreUnavailableReason)
