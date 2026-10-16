@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -43,6 +44,14 @@ type Initializer struct {
 	conf           configuration.Configuration
 	configResolver types.ConfigResolverInterface
 	logger         *zerolog.Logger
+	// mutex guards this Initializer instance's own Init/updateCli execution. It is
+	// intentionally per-instance, not process-global: each server/engine constructs
+	// its own Initializer over its own config/installer, and concurrent downloads to
+	// a shared target CLI path are already serialized cross-process by the installer's
+	// own lock file (see install.Downloader's lockFileTTL/createLockFile). A
+	// process-global mutex here would serialize unrelated Initializer instances (e.g.
+	// every parallel test in a package) behind one another for no correctness reason.
+	mutex sync.Mutex
 }
 
 func NewInitializer(conf configuration.Configuration, logger *zerolog.Logger, errorReporter error_reporting.ErrorReporter,
@@ -64,8 +73,8 @@ func NewInitializer(conf configuration.Configuration, logger *zerolog.Logger, er
 }
 
 func (i *Initializer) Init(ctx context.Context) error {
-	Mutex.Lock()
-	defer Mutex.Unlock()
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
 
 	logger := i.logger.With().Str("method", "cli.Init").Logger()
 	cliInstalled := config.CliInstalled(i.conf)
@@ -155,8 +164,8 @@ func (i *Initializer) handleInstallerError(err error) {
 }
 
 func (i *Initializer) updateCli(ctx context.Context) {
-	Mutex.Lock()
-	defer Mutex.Unlock()
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
 	updated, err := i.installer.Update(ctx)
 	if err != nil {
 		i.logger.Err(err).Str("method", "updateCli").Msg("Failed to update CLI")

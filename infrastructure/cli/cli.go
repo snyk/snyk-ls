@@ -23,7 +23,6 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -49,8 +48,6 @@ type SnykCli struct {
 	engine         workflow.Engine
 	configResolver types.ConfigResolverInterface
 }
-
-var Mutex = &sync.Mutex{} //nolint:gochecknoglobals // process-global CLI concurrency limiter
 
 var concurrencyLimit = calcConcurrencyLimit() //nolint:gochecknoglobals // process-global CLI concurrency limiter
 
