@@ -1139,9 +1139,9 @@ func TestConfigHtmlRenderer_HidesAmbientCanaryAndLlmEvenWhenConfigured(t *testin
 	}
 
 	html := renderer.GetConfigHtml(map[string]any{
-		types.SettingLlmProvider: "ollama",
-		types.SettingLlmBaseUrl:  "http://localhost:11434",
-		types.SettingLlmModel:    "llama3.1",
+		types.SettingLlmProvider:           "ollama",
+		types.SettingLlmBaseUrl:            "http://localhost:11434",
+		types.SettingLlmModel:              "llama3.1",
 		types.SettingAmbientCanaryAutonomy: "autonomous_fixes",
 	}, folderConfigs)
 
