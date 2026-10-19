@@ -1,22 +1,21 @@
-Feature: Choose the LLM provider used by autonomous remediation
-  A developer can tell the Snyk Remediation Agent which LLM backend to use,
-  and optionally point it at a self-hosted endpoint, from the existing Snyk
-  configuration dialog. The setting exists, persists, is reflected back in
-  the dialog, and is actually used by autonomous remediation when it runs.
+Feature: LLM provider settings for autonomous remediation
+  A developer can configure which LLM backend autonomous remediation uses
+  via language-server settings (config file, environment, or LSP). Those
+  settings persist and are used when an autonomous fix runs, but they are
+  deliberately not exposed in the IDE configuration dialog.
 
   # maps: IDE-2274-M1, IDE-2274-M2
-  Scenario: The chosen provider and endpoint survive reopening the dialog
+  Scenario: Saved LLM settings are not exposed in the configuration dialog
     Given a running language server
     When a developer saves "ollama" as the LLM provider with custom API endpoint "http://localhost:11434"
     And the developer reopens the Snyk configuration dialog
-    Then the configuration dialog shows "ollama" as the selected LLM provider
-    And the configuration dialog shows "http://localhost:11434" as the custom LLM provider's API endpoint
+    Then the configuration dialog does not expose LLM provider settings
 
   # maps: IDE-2274-M5
-  Scenario: A developer who has never chosen a provider sees no forced default
+  Scenario: The configuration dialog has no LLM provider field
     Given a running language server
     When a developer reopens the Snyk configuration dialog without ever choosing an LLM provider
-    Then the configuration dialog shows no LLM provider selected
+    Then the configuration dialog does not expose LLM provider settings
 
   # maps: IDE-2274-M4
   Scenario: The configuration dialog never asks for or displays an LLM API key
@@ -25,11 +24,11 @@ Feature: Choose the LLM provider used by autonomous remediation
     Then the configuration dialog contains no field for an LLM API key
 
   # maps: IDE-2274-M1
-  Scenario: A provider that requires an explicit model persists and applies the chosen model
+  Scenario: A chosen LLM provider and model persist via LSP without appearing in the dialog
     Given a running language server
     When a developer saves "ollama" as the LLM provider with model "llama3.1"
     And the developer reopens the Snyk configuration dialog
-    Then the configuration dialog shows "llama3.1" as the selected LLM model
+    Then the configuration dialog does not expose LLM provider settings
 
   # maps: IDE-2274-CP-2
   Scenario: An autonomous fix run uses the developer's chosen LLM provider and model

@@ -189,17 +189,8 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	sc.When(`^a developer reopens the Snyk configuration dialog without ever choosing an LLM provider$`, func(ctx context.Context) error {
 		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperReopensTheConfigurationDialog(ctx) })
 	})
-	sc.Then(`^the configuration dialog shows "([^"]*)" as the selected LLM provider$`, func(provider string) error {
-		return s.runOnScenarioGoroutine(func() error { return s.theDialogShowsTheSelectedLlmProvider(provider) })
-	})
-	sc.Then(`^the configuration dialog shows "([^"]*)" as the custom (?:API endpoint|LLM provider's API endpoint)$`, func(endpoint string) error {
-		return s.runOnScenarioGoroutine(func() error { return s.theDialogShowsTheCustomApiEndpoint(endpoint) })
-	})
-	sc.Then(`^the configuration dialog shows "([^"]*)" as the selected LLM model$`, func(model string) error {
-		return s.runOnScenarioGoroutine(func() error { return s.theDialogShowsTheSelectedLlmModel(model) })
-	})
-	sc.Then(`^the configuration dialog shows no LLM provider selected$`, func() error {
-		return s.runOnScenarioGoroutine(s.theDialogShowsNoLlmProviderSelected)
+	sc.Then(`^the configuration dialog does not expose LLM provider settings$`, func() error {
+		return s.runOnScenarioGoroutine(s.theDialogDoesNotExposeLlmProviderSettings)
 	})
 	sc.Then(`^the configuration dialog contains no field for an LLM API key$`, func() error {
 		return s.runOnScenarioGoroutine(s.theDialogContainsNoLlmApiKeyField)
@@ -514,53 +505,21 @@ func (s *bddSteps) theDeveloperReopensTheConfigurationDialog(ctx context.Context
 	return nil
 }
 
-func (s *bddSteps) theDialogShowsTheSelectedLlmProvider(provider string) error {
-	needle := `id="llm_provider"`
-	idx := strings.Index(s.dialogHTML, needle)
-	if idx == -1 {
-		return fmt.Errorf("expected an llm_provider field in the configuration dialog HTML")
+// theDialogDoesNotExposeLlmProviderSettings asserts that the IDE HTML
+// configuration dialog deliberately omits LLM provider / model / endpoint
+// controls and the Autonomous remediation section. The settings remain
+// registered and settable outside the dialog.
+func (s *bddSteps) theDialogDoesNotExposeLlmProviderSettings() error {
+	forbidden := []string{
+		"llm_provider",
+		"llm_model",
+		"llm_base_url",
+		"Autonomous remediation",
 	}
-	// The selected <option> for the chosen provider must carry "selected" within
-	// the llm_provider <select> element.
-	selectEnd := strings.Index(s.dialogHTML[idx:], "</select>")
-	if selectEnd == -1 {
-		return fmt.Errorf("expected a closing </select> for the llm_provider field")
-	}
-	selectHTML := s.dialogHTML[idx : idx+selectEnd]
-	optionNeedle := fmt.Sprintf(`value="%s" selected`, provider)
-	if !strings.Contains(selectHTML, optionNeedle) {
-		return fmt.Errorf("expected provider %q to be selected in the llm_provider field, got: %s", provider, selectHTML)
-	}
-	return nil
-}
-
-func (s *bddSteps) theDialogShowsTheCustomApiEndpoint(endpoint string) error {
-	if !strings.Contains(s.dialogHTML, endpoint) {
-		return fmt.Errorf("expected custom API endpoint %q to be shown in the configuration dialog HTML", endpoint)
-	}
-	return nil
-}
-
-func (s *bddSteps) theDialogShowsTheSelectedLlmModel(model string) error {
-	if !strings.Contains(s.dialogHTML, model) {
-		return fmt.Errorf("expected model %q to be shown in the configuration dialog HTML", model)
-	}
-	return nil
-}
-
-func (s *bddSteps) theDialogShowsNoLlmProviderSelected() error {
-	needle := `id="llm_provider"`
-	idx := strings.Index(s.dialogHTML, needle)
-	if idx == -1 {
-		return fmt.Errorf("expected an llm_provider field in the configuration dialog HTML")
-	}
-	selectEnd := strings.Index(s.dialogHTML[idx:], "</select>")
-	if selectEnd == -1 {
-		return fmt.Errorf("expected a closing </select> for the llm_provider field")
-	}
-	selectHTML := s.dialogHTML[idx : idx+selectEnd]
-	if !strings.Contains(selectHTML, "selected") {
-		return fmt.Errorf("expected an option to be selected in the llm_provider field")
+	for _, needle := range forbidden {
+		if strings.Contains(s.dialogHTML, needle) {
+			return fmt.Errorf("configuration dialog must not expose %q", needle)
+		}
 	}
 	return nil
 }
