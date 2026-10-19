@@ -5,11 +5,12 @@ Feature: LLM provider settings for autonomous remediation
   deliberately not exposed in the IDE configuration dialog.
 
   # maps: IDE-2274-M1, IDE-2274-M2
-  Scenario: Saved LLM settings are not exposed in the configuration dialog
+  Scenario: Saved LLM settings persist via LSP without appearing in the dialog
     Given a running language server
     When a developer saves "ollama" as the LLM provider with custom API endpoint "http://localhost:11434"
     And the developer reopens the Snyk configuration dialog
-    Then the configuration dialog does not expose LLM provider settings
+    Then the language server has persisted the chosen LLM provider and endpoint
+    And the configuration dialog does not expose LLM provider settings
 
   # maps: IDE-2274-M5
   Scenario: The configuration dialog has no LLM provider field
@@ -28,7 +29,8 @@ Feature: LLM provider settings for autonomous remediation
     Given a running language server
     When a developer saves "ollama" as the LLM provider with model "llama3.1"
     And the developer reopens the Snyk configuration dialog
-    Then the configuration dialog does not expose LLM provider settings
+    Then the language server has persisted the chosen LLM provider and model
+    And the configuration dialog does not expose LLM provider settings
 
   # maps: IDE-2274-CP-2
   Scenario: An autonomous fix run uses the developer's chosen LLM provider and model

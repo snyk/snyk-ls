@@ -78,6 +78,7 @@ type bddSteps struct {
 
 	savedLlmProvider    string
 	savedLlmModel       string
+	savedLlmBaseUrl     string
 	fixCapturedProvider string
 	fixCapturedModel    string
 	fixCapturedIssueIDs string
@@ -191,6 +192,12 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	})
 	sc.Then(`^the configuration dialog does not expose LLM provider settings$`, func() error {
 		return s.runOnScenarioGoroutine(s.theDialogDoesNotExposeLlmProviderSettings)
+	})
+	sc.Then(`^the language server has persisted the chosen LLM provider and model$`, func() error {
+		return s.runOnScenarioGoroutine(s.theLanguageServerHasPersistedTheChosenLlmProviderAndModel)
+	})
+	sc.Then(`^the language server has persisted the chosen LLM provider and endpoint$`, func() error {
+		return s.runOnScenarioGoroutine(s.theLanguageServerHasPersistedTheChosenLlmProviderAndEndpoint)
 	})
 	sc.Then(`^the configuration dialog contains no field for an LLM API key$`, func() error {
 		return s.runOnScenarioGoroutine(s.theDialogContainsNoLlmApiKeyField)
@@ -454,6 +461,8 @@ func (s *bddSteps) aDeveloperSavesTheLlmProviderAndEndpoint(ctx context.Context,
 	if _, err := s.loc.Client.Call(ctx, "workspace/didChangeConfiguration", params); err != nil {
 		return fmt.Errorf("workspace/didChangeConfiguration call failed: %w", err)
 	}
+	s.savedLlmProvider = provider
+	s.savedLlmBaseUrl = endpoint
 	return nil
 }
 
@@ -507,19 +516,53 @@ func (s *bddSteps) theDeveloperReopensTheConfigurationDialog(ctx context.Context
 
 // theDialogDoesNotExposeLlmProviderSettings asserts that the IDE HTML
 // configuration dialog deliberately omits LLM provider / model / endpoint
-// controls and the Autonomous remediation section. The settings remain
-// registered and settable outside the dialog.
+// controls, the Autonomous remediation section, and Ambient Canary autonomy
+// controls. The settings remain registered and settable outside the dialog.
 func (s *bddSteps) theDialogDoesNotExposeLlmProviderSettings() error {
 	forbidden := []string{
 		"llm_provider",
 		"llm_model",
 		"llm_base_url",
+		"LLM provider",
 		"Autonomous remediation",
+		"Ambient Canary",
+		"ambient_canary_autonomy",
 	}
 	for _, needle := range forbidden {
 		if strings.Contains(s.dialogHTML, needle) {
 			return fmt.Errorf("configuration dialog must not expose %q", needle)
 		}
+	}
+	return nil
+}
+
+// theLanguageServerHasPersistedTheChosenLlmProviderAndModel reads the
+// persisted LLM settings back from configuration after a
+// workspace/didChangeConfiguration save.
+func (s *bddSteps) theLanguageServerHasPersistedTheChosenLlmProviderAndModel() error {
+	conf := s.engine.GetConfiguration()
+	gotProvider := types.GetGlobalString(conf, types.SettingLlmProvider)
+	gotModel := types.GetGlobalString(conf, types.SettingLlmModel)
+	if gotProvider != s.savedLlmProvider {
+		return fmt.Errorf("expected persisted LLM provider %q, got %q", s.savedLlmProvider, gotProvider)
+	}
+	if gotModel != s.savedLlmModel {
+		return fmt.Errorf("expected persisted LLM model %q, got %q", s.savedLlmModel, gotModel)
+	}
+	return nil
+}
+
+// theLanguageServerHasPersistedTheChosenLlmProviderAndEndpoint reads the
+// persisted LLM provider and custom API endpoint back from configuration.
+func (s *bddSteps) theLanguageServerHasPersistedTheChosenLlmProviderAndEndpoint() error {
+	conf := s.engine.GetConfiguration()
+	gotProvider := types.GetGlobalString(conf, types.SettingLlmProvider)
+	gotEndpoint := types.GetGlobalString(conf, types.SettingLlmBaseUrl)
+	if gotProvider != s.savedLlmProvider {
+		return fmt.Errorf("expected persisted LLM provider %q, got %q", s.savedLlmProvider, gotProvider)
+	}
+	if gotEndpoint != s.savedLlmBaseUrl {
+		return fmt.Errorf("expected persisted LLM endpoint %q, got %q", s.savedLlmBaseUrl, gotEndpoint)
 	}
 	return nil
 }
