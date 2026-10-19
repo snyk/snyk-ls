@@ -4238,8 +4238,8 @@ func TestApplyLlmProviderConfig_ProcessNeverAppliedEnv_DoesNotUnsetDeveloperValu
 }
 
 // TestUpdateSettings_LlmProviderPersistsToConfiguration proves provider and
-// endpoint values saved via UpdateSettings stick in configuration. Dialog HTML
-// round-trip coverage was removed because those controls are no longer shown.
+// endpoint values saved via UpdateSettings stick in configuration. Ambient
+// Canary reads these settings; the IDE HTML settings page does not render them.
 func TestUpdateSettings_LlmProviderPersistsToConfiguration(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
@@ -4258,8 +4258,8 @@ func TestUpdateSettings_LlmProviderPersistsToConfiguration(t *testing.T) {
 
 // TestUpdateSettings_LlmModelPersistsToConfiguration proves a saved model
 // sticks in configuration via UpdateSettings. ollama and litellm have no
-// default model, so persistence of an explicit choice remains important even
-// though the dialog no longer surfaces the field.
+// default model, so an explicit choice has to persist. Ambient Canary reads
+// this setting; the IDE HTML settings page does not render it.
 func TestUpdateSettings_LlmModelPersistsToConfiguration(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()

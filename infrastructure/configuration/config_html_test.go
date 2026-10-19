@@ -1035,7 +1035,7 @@ func TestGetCliReleaseChannel(t *testing.T) {
 // renderFolderPaneWithEffectiveConfig renders the config dialog for a single folder whose
 // EffectiveConfig is exactly what the test supplies (bypassing computeEffectiveConfig), matching
 // the pattern used by TestConfigHtmlRenderer_SourceIndicatorsInOutput.
-func renderFolderPaneWithEffectiveConfig(t *testing.T, effectiveConfig map[string]types.EffectiveValue) string {
+func renderFolderPaneWithEffectiveConfig(t *testing.T, settings map[string]any, effectiveConfig map[string]types.EffectiveValue) string {
 	t.Helper()
 	engine := testutil.UnitTest(t)
 
@@ -1063,17 +1063,16 @@ func renderFolderPaneWithEffectiveConfig(t *testing.T, effectiveConfig map[strin
 		},
 	}
 
-	return renderer.GetConfigHtml(map[string]any{}, folderConfigs)
+	return renderer.GetConfigHtml(settings, folderConfigs)
 }
 
-func assertConfigHtmlHidesAmbientCanaryAutonomy(t *testing.T, html string) {
+func assertConfigHtmlDoesNotRenderAmbientCanaryAutonomy(t *testing.T, html string) {
 	t.Helper()
 	assert.NotContains(t, html, "ambient_canary_autonomy")
-	assert.NotContains(t, html, "folder_0_ambient_canary_autonomy")
 	assert.NotContains(t, html, "Ambient Canary autonomy")
 }
 
-func assertConfigHtmlHidesAutonomousRemediation(t *testing.T, html string) {
+func assertConfigHtmlDoesNotRenderAutonomousRemediation(t *testing.T, html string) {
 	t.Helper()
 	assert.NotContains(t, html, "<h2>Autonomous remediation</h2>")
 	assert.NotContains(t, html, `id="llm_provider"`)
@@ -1082,69 +1081,22 @@ func assertConfigHtmlHidesAutonomousRemediation(t *testing.T, html string) {
 	assert.NotContains(t, html, "never stored or sent by Snyk")
 }
 
-// TestConfigHtmlRenderer_HidesAmbientCanaryAutonomy asserts Ambient Canary
-// autonomy controls are absent from the HTML dialog (project defaults and
-// per-folder), matching the Secure At Inception integration gate style.
-func TestConfigHtmlRenderer_HidesAmbientCanaryAutonomy(t *testing.T) {
-	html := renderFolderPaneWithEffectiveConfig(t, map[string]types.EffectiveValue{})
-	assertConfigHtmlHidesAmbientCanaryAutonomy(t, html)
-}
-
-// TestConfigHtmlRenderer_HidesAutonomousRemediation asserts the Autonomous
-// remediation / LLM provider section is absent from the HTML dialog.
-func TestConfigHtmlRenderer_HidesAutonomousRemediation(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
-	require.NoError(t, err)
-
-	html := renderer.GetConfigHtml(map[string]any{
-		types.SettingLlmProvider: "",
-		types.SettingLlmBaseUrl:  "",
-		types.SettingLlmModel:    "",
-	}, []types.FolderConfig{})
-
-	assertConfigHtmlHidesAutonomousRemediation(t, html)
-}
-
-// TestConfigHtmlRenderer_HidesAmbientCanaryAndLlmEvenWhenConfigured is the
-// regression guard: even when LLM and per-folder ambient values are present
-// in the input data, the rendered HTML must not expose those controls.
-func TestConfigHtmlRenderer_HidesAmbientCanaryAndLlmEvenWhenConfigured(t *testing.T) {
-	engine := testutil.UnitTest(t)
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockWorkspace := mock_types.NewMockWorkspace(ctrl)
-	mockFolder := mock_types.NewMockFolder(ctrl)
-
-	folderPath := types.FilePath("/path/to/a_folder")
-	mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
-	mockFolder.EXPECT().Name().Return("a_folder").AnyTimes()
-	mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
-	mockWorkspace.EXPECT().GetFolderContaining(folderPath).Return(mockFolder).AnyTimes()
-	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
-
-	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
-	require.NoError(t, err)
-
-	folderConfigs := []types.FolderConfig{
-		{
-			FolderPath:     folderPath,
-			ConfigResolver: testutil.DefaultConfigResolver(engine),
-			EffectiveConfig: map[string]types.EffectiveValue{
-				types.SettingAmbientCanaryAutonomy: {Value: "notify_only", Source: "user-override"},
-			},
+// TestConfigHtmlRenderer_DoesNotRenderAmbientCanaryOrLlmSettings checks the
+// IDE HTML settings page. Ambient Canary still reads these settings and
+// supplies them itself; this page does not render the controls.
+func TestConfigHtmlRenderer_DoesNotRenderAmbientCanaryOrLlmSettings(t *testing.T) {
+	html := renderFolderPaneWithEffectiveConfig(t,
+		map[string]any{
+			types.SettingLlmProvider:           "ollama",
+			types.SettingLlmBaseUrl:            "http://localhost:11434",
+			types.SettingLlmModel:              "llama3.1",
+			types.SettingAmbientCanaryAutonomy: "autonomous_fixes",
 		},
-	}
+		map[string]types.EffectiveValue{
+			types.SettingAmbientCanaryAutonomy: {Value: "notify_only", Source: "user-override"},
+		},
+	)
 
-	html := renderer.GetConfigHtml(map[string]any{
-		types.SettingLlmProvider:           "ollama",
-		types.SettingLlmBaseUrl:            "http://localhost:11434",
-		types.SettingLlmModel:              "llama3.1",
-		types.SettingAmbientCanaryAutonomy: "autonomous_fixes",
-	}, folderConfigs)
-
-	assertConfigHtmlHidesAmbientCanaryAutonomy(t, html)
-	assertConfigHtmlHidesAutonomousRemediation(t, html)
+	assertConfigHtmlDoesNotRenderAmbientCanaryAutonomy(t, html)
+	assertConfigHtmlDoesNotRenderAutonomousRemediation(t, html)
 }

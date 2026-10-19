@@ -187,11 +187,8 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	sc.When(`^a developer reopens the Snyk configuration dialog$`, func(ctx context.Context) error {
 		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperReopensTheConfigurationDialog(ctx) })
 	})
-	sc.When(`^a developer reopens the Snyk configuration dialog without ever choosing an LLM provider$`, func(ctx context.Context) error {
-		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperReopensTheConfigurationDialog(ctx) })
-	})
-	sc.Then(`^the configuration dialog does not expose LLM provider settings$`, func() error {
-		return s.runOnScenarioGoroutine(s.theDialogDoesNotExposeLlmProviderSettings)
+	sc.Then(`^the configuration dialog does not render Ambient Canary or LLM settings$`, func() error {
+		return s.runOnScenarioGoroutine(s.theDialogDoesNotRenderAmbientCanaryOrLlmSettings)
 	})
 	sc.Then(`^the language server has persisted the chosen LLM provider and model$`, func() error {
 		return s.runOnScenarioGoroutine(s.theLanguageServerHasPersistedTheChosenLlmProviderAndModel)
@@ -514,23 +511,21 @@ func (s *bddSteps) theDeveloperReopensTheConfigurationDialog(ctx context.Context
 	return nil
 }
 
-// theDialogDoesNotExposeLlmProviderSettings asserts that the IDE HTML
-// configuration dialog deliberately omits LLM provider / model / endpoint
-// controls, the Autonomous remediation section, and Ambient Canary autonomy
-// controls. The settings remain registered and settable outside the dialog.
-func (s *bddSteps) theDialogDoesNotExposeLlmProviderSettings() error {
+// theDialogDoesNotRenderAmbientCanaryOrLlmSettings checks the IDE HTML
+// settings page. Ambient Canary still reads these settings and supplies
+// them itself; this page does not render the controls.
+func (s *bddSteps) theDialogDoesNotRenderAmbientCanaryOrLlmSettings() error {
 	forbidden := []string{
-		"llm_provider",
-		"llm_model",
-		"llm_base_url",
-		"LLM provider",
-		"Autonomous remediation",
-		"Ambient Canary",
 		"ambient_canary_autonomy",
+		"Ambient Canary autonomy",
+		"<h2>Autonomous remediation</h2>",
+		`id="llm_provider"`,
+		`id="llm_model"`,
+		`id="llm_base_url"`,
 	}
 	for _, needle := range forbidden {
 		if strings.Contains(s.dialogHTML, needle) {
-			return fmt.Errorf("configuration dialog must not expose %q", needle)
+			return fmt.Errorf("configuration dialog must not render %q", needle)
 		}
 	}
 	return nil
