@@ -1066,126 +1066,85 @@ func renderFolderPaneWithEffectiveConfig(t *testing.T, effectiveConfig map[strin
 	return renderer.GetConfigHtml(map[string]any{}, folderConfigs)
 }
 
-func TestConfigHtml_FolderAutonomyRendersTwoOptionsOnly(t *testing.T) {
+func assertConfigHtmlHidesAmbientCanaryAutonomy(t *testing.T, html string) {
+	t.Helper()
+	assert.NotContains(t, html, "ambient_canary_autonomy")
+	assert.NotContains(t, html, "folder_0_ambient_canary_autonomy")
+	assert.NotContains(t, html, "Ambient Canary autonomy")
+}
+
+func assertConfigHtmlHidesAutonomousRemediation(t *testing.T, html string) {
+	t.Helper()
+	assert.NotContains(t, html, "<h2>Autonomous remediation</h2>")
+	assert.NotContains(t, html, `id="llm_provider"`)
+	assert.NotContains(t, html, `id="llm_model"`)
+	assert.NotContains(t, html, `id="llm_base_url"`)
+	assert.NotContains(t, html, "never stored or sent by Snyk")
+}
+
+// TestConfigHtmlRenderer_HidesAmbientCanaryAutonomy asserts Ambient Canary
+// autonomy controls are absent from the HTML dialog (project defaults and
+// per-folder), matching the Secure At Inception integration gate style.
+func TestConfigHtmlRenderer_HidesAmbientCanaryAutonomy(t *testing.T) {
 	html := renderFolderPaneWithEffectiveConfig(t, map[string]types.EffectiveValue{})
-
-	re := regexp.MustCompile(`(?s)<select id="folder_0_ambient_canary_autonomy".*?</select>`)
-	match := re.FindString(html)
-	require.NotEmpty(t, match, "expected an ambient_canary_autonomy select in the rendered HTML")
-
-	optionCount := strings.Count(match, "<option")
-	assert.Equal(t, 2, optionCount, "control must offer exactly two options, no unset/use-default option")
-	assert.Contains(t, match, `value="notify_only"`)
-	assert.Contains(t, match, `value="autonomous_fixes"`)
+	assertConfigHtmlHidesAmbientCanaryAutonomy(t, html)
 }
 
-func TestConfigHtml_AutonomySelectionPersistsPerFolder(t *testing.T) {
-	html := renderFolderPaneWithEffectiveConfig(t, map[string]types.EffectiveValue{
-		"ambient_canary_autonomy": {Value: "notify_only", Source: "user-override"},
-	})
-
-	re := regexp.MustCompile(`(?s)<select id="folder_0_ambient_canary_autonomy".*?</select>`)
-	match := re.FindString(html)
-	require.NotEmpty(t, match)
-
-	notifyOpt := regexp.MustCompile(`<option value="notify_only"[^>]*>`).FindString(match)
-	autonomousOpt := regexp.MustCompile(`<option value="autonomous_fixes"[^>]*>`).FindString(match)
-	assert.Contains(t, notifyOpt, "selected", "the explicitly-saved choice must still be selected on reopen")
-	assert.NotContains(t, autonomousOpt, "selected")
-}
-
-func TestConfigHtml_ExplicitFolderAutonomyShowsUserOverrideIndicator(t *testing.T) {
-	html := renderFolderPaneWithEffectiveConfig(t, map[string]types.EffectiveValue{
-		"ambient_canary_autonomy": {Value: "notify_only", Source: "user-override"},
-	})
-
-	re := regexp.MustCompile(`(?s)<div class="override-indicator-wrapper[^"]*"[^>]*>\s*<div class="form-group half-width">\s*<label for="folder_0_ambient_canary_autonomy".*?</div>\s*</div>`)
-	block := re.FindString(html)
-	require.NotEmpty(t, block, "expected the ambient_canary_autonomy wrapper block")
-
-	assert.Contains(t, block, "source-user-override", "explicit choice must render the user-override wrapper class")
-	assert.Contains(t, block, "👤", "explicit choice must render the per-project source indicator")
-}
-
-func TestConfigHtml_UnsetFolderAutonomyShowsNoOverrideIndicator(t *testing.T) {
-	html := renderFolderPaneWithEffectiveConfig(t, map[string]types.EffectiveValue{})
-
-	re := regexp.MustCompile(`(?s)<div class="override-indicator-wrapper[^"]*"[^>]*>\s*<div class="form-group half-width">\s*<label for="folder_0_ambient_canary_autonomy".*?</div>\s*</div>`)
-	block := re.FindString(html)
-	require.NotEmpty(t, block, "expected the ambient_canary_autonomy wrapper block")
-
-	assert.NotContains(t, block, "source-user-override")
-	assert.NotContains(t, block, "source-org")
-	assert.NotContains(t, block, "source-indicator", "an untouched folder must show no source indicator at all")
-}
-
-func TestConfigHtml_UnsetFolderAutonomyDoesNotSelectAutonomousFixes(t *testing.T) {
-	html := renderFolderPaneWithEffectiveConfig(t, map[string]types.EffectiveValue{})
-
-	re := regexp.MustCompile(`(?s)<select id="folder_0_ambient_canary_autonomy".*?</select>`)
-	match := re.FindString(html)
-	require.NotEmpty(t, match)
-
-	autonomousOpt := regexp.MustCompile(`<option value="autonomous_fixes"[^>]*>`).FindString(match)
-	assert.NotContains(t, autonomousOpt, "selected", "an unset folder must not render an explicit choice; the registry default is empty, not autonomous_fixes")
-}
-
-func TestConfigHtml_LockedFolderAutonomyIsDisabled(t *testing.T) {
-	html := renderFolderPaneWithEffectiveConfig(t, map[string]types.EffectiveValue{
-		"ambient_canary_autonomy": {Value: "notify_only", Source: "ldx-sync-locked"},
-	})
-
-	re := regexp.MustCompile(`(?s)<select id="folder_0_ambient_canary_autonomy".*?</select>`)
-	match := re.FindString(html)
-	require.NotEmpty(t, match)
-
-	assert.Contains(t, match, "disabled", "org-locked folder autonomy control must be disabled")
-}
-
-// TestConfigHtmlRenderer_RendersLlmProviderSection verifies the "Autonomous
-// remediation" section, all five provider options, the custom-endpoint input,
-// and the "key comes from your environment" note are all present in the
-// rendered dialog.
-func TestConfigHtmlRenderer_RendersLlmProviderSection(t *testing.T) {
+// TestConfigHtmlRenderer_HidesAutonomousRemediation asserts the Autonomous
+// remediation / LLM provider section is absent from the HTML dialog.
+func TestConfigHtmlRenderer_HidesAutonomousRemediation(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	require.NoError(t, err)
 
-	settings := map[string]any{
+	html := renderer.GetConfigHtml(map[string]any{
 		types.SettingLlmProvider: "",
 		types.SettingLlmBaseUrl:  "",
 		types.SettingLlmModel:    "",
-	}
+	}, []types.FolderConfig{})
 
-	html := renderer.GetConfigHtml(settings, []types.FolderConfig{})
-
-	assert.Contains(t, html, "Autonomous remediation")
-	assert.Contains(t, html, `id="llm_provider"`)
-	assert.Contains(t, html, `id="llm_base_url"`)
-	assert.Contains(t, html, `id="llm_model"`)
-	for _, option := range []string{"Automatic", "Anthropic", "OpenAI", "Ollama", "Vertex AI", "LiteLLM"} {
-		assert.Contains(t, html, option, "provider option %q must be present", option)
-	}
-	assert.Contains(t, html, "never stored or sent by Snyk", "the API-key-comes-from-your-environment note must be present")
+	assertConfigHtmlHidesAutonomousRemediation(t, html)
 }
 
-// TestConfigHtmlRenderer_LlmProviderSelectionRoundTrips proves a previously
-// saved provider comes back marked selected in the re-rendered <select>,
-// which is what "the choice survives reopening the dialog" depends on.
-func TestConfigHtmlRenderer_LlmProviderSelectionRoundTrips(t *testing.T) {
+// TestConfigHtmlRenderer_HidesAmbientCanaryAndLlmEvenWhenConfigured is the
+// regression guard: even when LLM and per-folder ambient values are present
+// in the input data, the rendered HTML must not expose those controls.
+func TestConfigHtmlRenderer_HidesAmbientCanaryAndLlmEvenWhenConfigured(t *testing.T) {
 	engine := testutil.UnitTest(t)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockWorkspace := mock_types.NewMockWorkspace(ctrl)
+	mockFolder := mock_types.NewMockFolder(ctrl)
+
+	folderPath := types.FilePath("/path/to/a_folder")
+	mockFolder.EXPECT().Path().Return(folderPath).AnyTimes()
+	mockFolder.EXPECT().Name().Return("a_folder").AnyTimes()
+	mockWorkspace.EXPECT().Folders().Return([]types.Folder{mockFolder}).AnyTimes()
+	mockWorkspace.EXPECT().GetFolderContaining(folderPath).Return(mockFolder).AnyTimes()
+	config.SetWorkspace(engine.GetConfiguration(), mockWorkspace)
+
 	renderer, err := NewConfigHtmlRenderer(engine, testutil.DefaultConfigResolver(engine))
 	require.NoError(t, err)
 
-	settings := map[string]any{
+	folderConfigs := []types.FolderConfig{
+		{
+			FolderPath:     folderPath,
+			ConfigResolver: testutil.DefaultConfigResolver(engine),
+			EffectiveConfig: map[string]types.EffectiveValue{
+				types.SettingAmbientCanaryAutonomy: {Value: "notify_only", Source: "user-override"},
+			},
+		},
+	}
+
+	html := renderer.GetConfigHtml(map[string]any{
 		types.SettingLlmProvider: "ollama",
 		types.SettingLlmBaseUrl:  "http://localhost:11434",
 		types.SettingLlmModel:    "llama3.1",
-	}
+		types.SettingAmbientCanaryAutonomy: "autonomous_fixes",
+	}, folderConfigs)
 
-	html := renderer.GetConfigHtml(settings, []types.FolderConfig{})
-
-	assert.Contains(t, html, `value="ollama" selected`)
-	assert.Contains(t, html, `value="http://localhost:11434"`)
-	assert.Contains(t, html, `value="llama3.1"`)
+	assertConfigHtmlHidesAmbientCanaryAutonomy(t, html)
+	assertConfigHtmlHidesAutonomousRemediation(t, html)
 }

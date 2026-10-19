@@ -69,11 +69,10 @@ func TestConstructSettingsFromConfig_AdditionalParamsAndEnv(t *testing.T) {
 	assert.Equal(t, "A=B;C=D", envVal)
 }
 
-// Test_computeEffectiveConfig_IncludesAmbientCanaryAutonomy guards computeEffectiveConfig
-// as the one non-generic place a new per-folder dialog setting must be registered —
-// omitting it here renders the setting blank in the dialog even though
-// registration/storage/transmission are all otherwise correct.
-func Test_computeEffectiveConfig_IncludesAmbientCanaryAutonomy(t *testing.T) {
+// Test_computeEffectiveConfig_ExcludesAmbientCanaryAutonomy asserts ambient
+// canary autonomy is not prepared for HTML dialog display. Folder LSP
+// persistence remains covered by folder_handler / config_resolver tests.
+func Test_computeEffectiveConfig_ExcludesAmbientCanaryAutonomy(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	fc := &types.FolderConfig{FolderPath: "/path/to/folder"}
 	fc.ConfigResolver = testutil.DefaultConfigResolver(engine)
@@ -81,5 +80,5 @@ func Test_computeEffectiveConfig_IncludesAmbientCanaryAutonomy(t *testing.T) {
 	effectiveConfig := computeEffectiveConfig(fc)
 
 	_, ok := effectiveConfig[types.SettingAmbientCanaryAutonomy]
-	assert.True(t, ok, "computeEffectiveConfig must include ambient_canary_autonomy so the dialog can render it")
+	assert.False(t, ok, "computeEffectiveConfig must not include ambient_canary_autonomy; it is not shown in the dialog")
 }

@@ -53,7 +53,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	"github.com/snyk/snyk-ls/infrastructure/analytics"
 	"github.com/snyk/snyk-ls/infrastructure/authentication"
-	infraconfig "github.com/snyk/snyk-ls/infrastructure/configuration"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
@@ -4238,11 +4237,10 @@ func TestApplyLlmProviderConfig_ProcessNeverAppliedEnv_DoesNotUnsetDeveloperValu
 	assert.Equal(t, "https://vertex.example", os.Getenv("VERTEX_BASE_URL"))
 }
 
-// TestUpdateSettings_LlmProviderRoundTripsToConfigDialog exercises the real
-// UpdateSettings -> ConstructSettingsFromConfig -> ConfigHtmlRenderer chain,
-// nothing mocked, proving the provider and endpoint a developer saves come
-// back selected in the re-rendered dialog HTML.
-func TestUpdateSettings_LlmProviderRoundTripsToConfigDialog(t *testing.T) {
+// TestUpdateSettings_LlmProviderPersistsToConfiguration proves provider and
+// endpoint values saved via UpdateSettings stick in configuration. Dialog HTML
+// round-trip coverage was removed because those controls are no longer shown.
+func TestUpdateSettings_LlmProviderPersistsToConfiguration(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	cr := testutil.DefaultConfigResolver(engine)
@@ -4254,22 +4252,15 @@ func TestUpdateSettings_LlmProviderRoundTripsToConfigDialog(t *testing.T) {
 	}
 	UpdateSettings(ctx, conf, engine, engine.GetLogger(), settings, nil, analytics.TriggerSourceTest, cr)
 
-	m, folderConfigs := command.ConstructSettingsFromConfig(engine, cr)
-	assert.Equal(t, "ollama", m[types.SettingLlmProvider])
-	assert.Equal(t, "http://localhost:11434", m[types.SettingLlmBaseUrl])
-
-	renderer, err := infraconfig.NewConfigHtmlRenderer(engine, cr)
-	require.NoError(t, err)
-	html := renderer.GetConfigHtml(m, folderConfigs)
-	require.NotEmpty(t, html)
-	assert.Contains(t, html, `value="ollama" selected`, "the saved provider must come back selected in the re-rendered dialog")
-	assert.Contains(t, html, "http://localhost:11434", "the saved endpoint must come back in the re-rendered dialog")
+	assert.Equal(t, "ollama", types.GetGlobalString(conf, types.SettingLlmProvider))
+	assert.Equal(t, "http://localhost:11434", types.GetGlobalString(conf, types.SettingLlmBaseUrl))
 }
 
-// TestUpdateSettings_LlmModelRoundTripsToConfigDialog covers the model field:
-// ollama and litellm have no default model in remy-cli-extension, so a saved
-// model must survive reopening the dialog exactly like provider and endpoint do.
-func TestUpdateSettings_LlmModelRoundTripsToConfigDialog(t *testing.T) {
+// TestUpdateSettings_LlmModelPersistsToConfiguration proves a saved model
+// sticks in configuration via UpdateSettings. ollama and litellm have no
+// default model, so persistence of an explicit choice remains important even
+// though the dialog no longer surfaces the field.
+func TestUpdateSettings_LlmModelPersistsToConfiguration(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	cr := testutil.DefaultConfigResolver(engine)
@@ -4281,12 +4272,5 @@ func TestUpdateSettings_LlmModelRoundTripsToConfigDialog(t *testing.T) {
 	}
 	UpdateSettings(ctx, conf, engine, engine.GetLogger(), settings, nil, analytics.TriggerSourceTest, cr)
 
-	m, folderConfigs := command.ConstructSettingsFromConfig(engine, cr)
-	assert.Equal(t, "llama3.1", m[types.SettingLlmModel])
-
-	renderer, err := infraconfig.NewConfigHtmlRenderer(engine, cr)
-	require.NoError(t, err)
-	html := renderer.GetConfigHtml(m, folderConfigs)
-	require.NotEmpty(t, html)
-	assert.Contains(t, html, "llama3.1", "the saved model must come back in the re-rendered dialog")
+	assert.Equal(t, "llama3.1", types.GetGlobalString(conf, types.SettingLlmModel))
 }
