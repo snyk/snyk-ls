@@ -292,8 +292,14 @@ func getIntroducingFinding(issue testapi.Issue, problem *testapi.SnykVulnProblem
 			}
 		}
 	}
-	// no findings found that are direct dependencies, we just take the first now
-	return findings[0], nil
+	shortest := findings[0]
+	shortestLen := len(extractDependencyPath(shortest))
+	for _, finding := range findings[1:] {
+		if l := len(extractDependencyPath(finding)); l < shortestLen {
+			shortest, shortestLen = finding, l
+		}
+	}
+	return shortest, nil
 }
 
 // buildMessage builds the short message for the issue

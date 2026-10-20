@@ -90,3 +90,41 @@ func setupDefaultFinderEnvForTesting() (ossIssue, types.FilePath, []byte) {
 	var testContent, _ = os.ReadFile(testPath)
 	return issue, types.FilePath(testPath), testContent
 }
+
+func Test_DefaultFinder_Go_SubPackageResolvesToContainingModule(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	content := []byte("module example.com/app\n\ngo 1.21\n\nrequire (\n\tgithub.com/gofiber/fiber/v2 v2.50.0\n\tgithub.com/gofiber/swagger v0.1.14\n)\n")
+
+	tests := []struct {
+		name         string
+		from         []string
+		expectedLine int
+	}{
+		{"sub-package maps to its module", []string{"example.com/app@0.0.0", "github.com/gofiber/fiber/v2/middleware/cors@2.50.0"}, 5},
+		{"module maps to itself", []string{"example.com/app@0.0.0", "github.com/gofiber/swagger@0.1.14", "github.com/gofiber/fiber/v2/utils@2.50.0"}, 6},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			node := getDependencyNode(engine.GetLogger(), "go.mod", "gomodules", tt.from, content, "")
+			assert.NotNil(t, node)
+			assert.Equal(t, tt.expectedLine, node.Line)
+		})
+	}
+}
+
+func Test_UniqueVulnerabilitiesWithShortestPath(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	vulnerabilities := []ossIssue{
+		{Id: "A", PackageName: "p", From: []string{"root", "swagger", "fiber/v2", "p"}},
+		{Id: "A", PackageName: "p", From: []string{"root", "fiber/v2", "p"}},
+		{Id: "A", PackageName: "p", From: []string{"root", "other", "fiber/v2", "p"}},
+		{Id: "B", PackageName: "p", From: []string{"root", "x", "p"}},
+		{Id: "C", PackageName: "p", From: []string{"root", "p"}, IsIgnored: true},
+	}
+
+	unique := uniqueVulnerabilitiesWithShortestPath(vulnerabilities, engine.GetLogger())
+
+	assert.Len(t, unique, 2)
+	assert.Equal(t, []string{"root", "fiber/v2", "p"}, unique[0].From)
+	assert.Equal(t, []string{"root", "x", "p"}, unique[1].From)
+}

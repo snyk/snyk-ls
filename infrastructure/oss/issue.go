@@ -25,6 +25,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/gomarkdown/markdown"
+	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/ast"
@@ -181,23 +182,34 @@ func getRangeFromNode(issueDepNode *ast.Node) types.Range {
 // to keep it close to the code that needs it.
 var packageIssueCacheMutex sync.Mutex //nolint:gochecknoglobals // required guard for mutable package state
 
+func uniqueVulnerabilitiesWithShortestPath(vulnerabilities []ossIssue, logger *zerolog.Logger) []ossIssue {
+	var unique []ossIssue
+	indexByKey := map[string]int{}
+	for _, vulnerability := range vulnerabilities {
+		if vulnerability.IsIgnored {
+			logger.Debug().Msgf("skipping ignored issue %s", vulnerability.Id)
+			continue
+		}
+		key := vulnerability.Id + "|" + vulnerability.PackageName
+		index, seen := indexByKey[key]
+		if !seen {
+			indexByKey[key] = len(unique)
+			unique = append(unique, vulnerability)
+		} else if len(vulnerability.From) < len(unique[index].From) {
+			unique[index] = vulnerability
+		}
+	}
+	return unique
+}
+
 func convertScanResultToIssues(engine workflow.Engine, configResolver types.ConfigResolverInterface, res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte, learnService learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue, format string, folderConfig *types.FolderConfig) []types.Issue {
 	logger := engine.GetLogger().With().Str("method", "convertScanResultToIssues").Logger()
 	var issues []types.Issue
 
-	duplicateCheckMap := map[string]bool{}
 	byID := vulnIndicesByID(res)
 
-	for _, ossLegacyIssue := range res.Vulnerabilities {
-		if ossLegacyIssue.IsIgnored {
-			logger.Debug().Msgf("skipping ignored issue %s", ossLegacyIssue.Id)
-			continue
-		}
+	for _, ossLegacyIssue := range uniqueVulnerabilitiesWithShortestPath(res.Vulnerabilities, &logger) {
 		packageKey := ossLegacyIssue.PackageName + "@" + ossLegacyIssue.Version
-		duplicateKey := string(targetFilePath) + "|" + ossLegacyIssue.Id + "|" + ossLegacyIssue.PackageName
-		if duplicateCheckMap[duplicateKey] {
-			continue
-		}
 		node := getDependencyNode(&logger, targetFilePath, ossLegacyIssue.PackageManager, ossLegacyIssue.From, fileContent, workDir)
 		sameID := byID[ossLegacyIssue.Id]
 		snykIssue := toIssue(engine, configResolver, workDir, targetFilePath, ossLegacyIssue, res, sameID, node, learnService, ep, format, folderConfig)
@@ -205,7 +217,6 @@ func convertScanResultToIssues(engine workflow.Engine, configResolver types.Conf
 		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
 		packageIssueCacheMutex.Unlock()
 		issues = append(issues, snykIssue)
-		duplicateCheckMap[duplicateKey] = true
 	}
 	return issues
 }
