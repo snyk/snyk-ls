@@ -34,7 +34,7 @@ func Test_DefaultFinder_FindRange(t *testing.T) {
 	issue, testPath, testContent := setupDefaultFinderEnvForTesting()
 	expectedRange := getExpectedRangeForDefaultFinderTests()
 
-	actualRange := getDependencyNode(engine.GetLogger(), testPath, issue.PackageManager, [][]string{issue.From}, testContent, "")
+	actualRange := getDependencyNode(engine.GetLogger(), testPath, issue.PackageManager, issue.From, testContent, "")
 
 	assert.Equal(t, expectedRange, getRangeFromNode(actualRange))
 }
@@ -105,55 +105,45 @@ func Test_DefaultFinder_Go_SubPackageResolvesToContainingModule(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			node := getDependencyNode(engine.GetLogger(), "go.mod", "gomodules", [][]string{tt.from}, content, "")
+			node := getDependencyNode(engine.GetLogger(), "go.mod", "gomodules", tt.from, content, "")
 			assert.NotNil(t, node)
 			assert.Equal(t, tt.expectedLine, node.Line)
 		})
 	}
 }
 
-func Test_GetDependencyNode_Go_PrefersDependencyContainingThePackage(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	content := []byte("module example.com/app\n\nrequire (\n\tgithub.com/gofiber/fiber/v2 v2.50.0\n\tgithub.com/gofiber/swagger v0.1.14\n)\n")
-	paths := [][]string{
-		{"example.com/app@0.0.0", "github.com/gofiber/swagger@0.1.14", "github.com/gofiber/fiber/v2/utils@2.50.0"},
-		{"example.com/app@0.0.0", "github.com/gofiber/fiber/v2@2.50.0", "github.com/gofiber/fiber/v2/utils@2.50.0"},
-		{"example.com/app@0.0.0", "github.com/gofiber/swagger@0.1.14", "github.com/gofiber/fiber/v2/middleware/filesystem@2.50.0", "github.com/gofiber/fiber/v2/utils@2.50.0"},
-	}
-	reversed := [][]string{paths[2], paths[1], paths[0]}
+func Test_PreferredPathIndex_Go_PrefersDependencyContainingThePackage(t *testing.T) {
+	swaggerPath := []string{"example.com/app@0.0.0", "github.com/gofiber/swagger@0.1.14", "github.com/gofiber/fiber/v2/utils@2.50.0"}
+	fiberPath := []string{"example.com/app@0.0.0", "github.com/gofiber/fiber/v2@2.50.0", "github.com/gofiber/fiber/v2/utils@2.50.0"}
+	longerSwaggerPath := []string{"example.com/app@0.0.0", "github.com/gofiber/swagger@0.1.14", "github.com/gofiber/fiber/v2/middleware/filesystem@2.50.0", "github.com/gofiber/fiber/v2/utils@2.50.0"}
 
-	node := getDependencyNode(engine.GetLogger(), "go.mod", "gomodules", paths, content, "")
-	nodeFromReversedOrder := getDependencyNode(engine.GetLogger(), "go.mod", "gomodules", reversed, content, "")
+	index, ok := preferredPathIndex("gomodules", [][]string{swaggerPath, fiberPath, longerSwaggerPath})
+	reversedIndex, _ := preferredPathIndex("gomodules", [][]string{longerSwaggerPath, fiberPath, swaggerPath})
 
-	assert.Equal(t, node.Line, nodeFromReversedOrder.Line)
-
-	assert.NotNil(t, node)
-	assert.Equal(t, 3, node.Line)
+	assert.True(t, ok)
+	assert.Equal(t, 1, index)
+	assert.Equal(t, 1, reversedIndex)
 }
 
-func Test_GetDependencyNode_NonGo_UsesFirstPath(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	content := []byte("{\n  \"dependencies\": {\n    \"errorhandler\": \"1.2.0\",\n    \"st\": \"0.2.4\"\n  }\n}\n")
-	paths := [][]string{
-		{"goof@1.0.1", "errorhandler@1.2.0", "negotiator@0.4.9"},
-		{"goof@1.0.1", "st@0.2.4", "negotiator@0.2.8"},
+func Test_PreferredPathIndex_NonGo_HasNoPreference(t *testing.T) {
+	for _, packageManager := range []string{"npm", "maven", "golangdep", "govendor", "pip"} {
+		_, ok := preferredPathIndex(packageManager, [][]string{{"a", "b"}, {"a", "c"}})
+
+		assert.False(t, ok, packageManager)
 	}
-
-	node := getDependencyNode(engine.GetLogger(), "package.json", "npm", paths, content, "")
-
-	assert.NotNil(t, node)
-	assert.Equal(t, 2, node.Line)
 }
 
-func Test_GroupVulnerabilities_KeepsFirstIssueAndAllPaths(t *testing.T) {
+func Test_VulnerabilityGroup_PreferredIssue_FollowsThePreferredPath(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	first := ossIssue{Id: "A", PackageName: "p", Version: "1", From: []string{"root", "x", "p"}}
-	second := ossIssue{Id: "A", PackageName: "p", Version: "2", From: []string{"root", "p"}}
-	ignored := ossIssue{Id: "B", PackageName: "p", From: []string{"root", "p"}, IsIgnored: true}
+	goFirst := ossIssue{Id: "A", PackageName: "github.com/gofiber/fiber/v2/utils", PackageManager: "gomodules", From: []string{"root", "github.com/gofiber/swagger@1", "github.com/gofiber/fiber/v2/utils@1"}}
+	goSecond := ossIssue{Id: "A", PackageName: "github.com/gofiber/fiber/v2/utils", PackageManager: "gomodules", From: []string{"root", "github.com/gofiber/fiber/v2@1", "github.com/gofiber/fiber/v2/utils@1"}}
+	npmFirst := ossIssue{Id: "B", PackageName: "q", PackageManager: "npm", From: []string{"root", "errorhandler@1", "q@1"}}
+	npmSecond := ossIssue{Id: "B", PackageName: "q", PackageManager: "npm", From: []string{"root", "q@1"}}
+	ignored := ossIssue{Id: "C", PackageName: "p", From: []string{"root", "p"}, IsIgnored: true}
 
-	groups := groupVulnerabilities([]ossIssue{first, second, ignored}, engine.GetLogger())
+	groups := groupVulnerabilities([]ossIssue{goFirst, goSecond, npmFirst, npmSecond, ignored}, engine.GetLogger())
 
-	assert.Len(t, groups, 1)
-	assert.Equal(t, first.Version, groups[0].issue.Version)
-	assert.Equal(t, [][]string{first.From, second.From}, groups[0].dependencyPaths)
+	assert.Len(t, groups, 2)
+	assert.Equal(t, goSecond, groups[0].preferredIssue())
+	assert.Equal(t, npmFirst, groups[1].preferredIssue())
 }

@@ -58,17 +58,20 @@ func (g *goRangeFinder) find(introducingPackageName string, introducingVersion s
 	return &ast.Node{Line: r.Start.Line, StartChar: r.Start.Character, EndChar: r.End.Character}, nil
 }
 
-func (g *goRangeFinder) chooseDependencyPath(paths [][]string) []string {
-	var closest []string
-	for _, path := range paths {
-		if len(path) > 0 && (closest == nil || g.isCloserPath(path, closest)) {
-			closest = path
+func (g *goRangeFinder) preferredPathIndex(paths [][]string) int {
+	preferred := 0
+	for i := 1; i < len(paths); i++ {
+		if g.isCloserPath(paths[i], paths[preferred]) {
+			preferred = i
 		}
 	}
-	return closest
+	return preferred
 }
 
 func (g *goRangeFinder) isCloserPath(candidate []string, current []string) bool {
+	if len(current) == 0 {
+		return len(candidate) > 0
+	}
 	candidateOwnsPackage := g.directDependencyContainsPackage(candidate)
 	if candidateOwnsPackage != g.directDependencyContainsPackage(current) {
 		return candidateOwnsPackage

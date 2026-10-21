@@ -101,7 +101,7 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 
 	problem := &vulnProblem
 
-	introducingFinding, err := getIntroducingFinding(trIssue, problem)
+	introducingFinding, err := getIntroducingFinding(trIssue, problem, ecosystemStr)
 	if err != nil {
 		logger.Warn().Err(err).Msg("failed to get introducing finding")
 		return nil
@@ -109,7 +109,7 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 
 	dependencyPath := extractDependencyPath(introducingFinding)
 	fileContent := getFileContent(affectedFilePath, true, logger)
-	dependencyNode := getDependencyNode(&logger, affectedFilePath, ecosystemStr, extractAllDependencyPaths(trIssue, dependencyPath), fileContent, workDir)
+	dependencyNode := getDependencyNode(&logger, affectedFilePath, ecosystemStr, dependencyPath, fileContent, workDir)
 	myRange := getRangeFromNode(dependencyNode)
 
 	title := trIssue.GetTitle()
@@ -276,10 +276,18 @@ func getAffectedFilePath(ctx context.Context, testResult testapi.TestResult) (ty
 }
 
 // FIXME needs to look at all evidences
-func getIntroducingFinding(issue testapi.Issue, problem *testapi.SnykVulnProblem) (*testapi.FindingData, error) {
+func getIntroducingFinding(issue testapi.Issue, problem *testapi.SnykVulnProblem, ecosystem string) (*testapi.FindingData, error) {
 	findings := issue.GetFindings()
 	if len(findings) == 0 {
 		return nil, fmt.Errorf("no findings found in issue")
+	}
+
+	dependencyPaths := make([][]string, len(findings))
+	for i, finding := range findings {
+		dependencyPaths[i] = extractDependencyPath(finding)
+	}
+	if index, ok := preferredPathIndex(ecosystem, dependencyPaths); ok {
+		return findings[index], nil
 	}
 
 	// we want to find the first finding, that is a direct dependency and introduces the problem
@@ -362,14 +370,6 @@ func buildRemediationAdvice(
 
 	// No remediation available
 	return "No remediation advice available"
-}
-
-func extractAllDependencyPaths(issue testapi.Issue, introducingPath []string) [][]string {
-	paths := [][]string{introducingPath}
-	for _, finding := range issue.GetFindings() {
-		paths = append(paths, extractDependencyPath(finding))
-	}
-	return paths
 }
 
 func extractDependencyPath(finding *testapi.FindingData) []string {

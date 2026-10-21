@@ -183,8 +183,18 @@ func getRangeFromNode(issueDepNode *ast.Node) types.Range {
 var packageIssueCacheMutex sync.Mutex //nolint:gochecknoglobals // required guard for mutable package state
 
 type vulnerabilityGroup struct {
-	issue           ossIssue
-	dependencyPaths [][]string
+	issues []ossIssue
+}
+
+func (g *vulnerabilityGroup) preferredIssue() ossIssue {
+	paths := make([][]string, len(g.issues))
+	for i, issue := range g.issues {
+		paths[i] = issue.From
+	}
+	if index, ok := preferredPathIndex(g.issues[0].PackageManager, paths); ok {
+		return g.issues[index]
+	}
+	return g.issues[0]
 }
 
 func groupVulnerabilities(vulnerabilities []ossIssue, logger *zerolog.Logger) []*vulnerabilityGroup {
@@ -198,11 +208,11 @@ func groupVulnerabilities(vulnerabilities []ossIssue, logger *zerolog.Logger) []
 		key := vulnerability.Id + "|" + vulnerability.PackageName
 		group, seen := groupByKey[key]
 		if !seen {
-			group = &vulnerabilityGroup{issue: vulnerability}
+			group = &vulnerabilityGroup{}
 			groupByKey[key] = group
 			groups = append(groups, group)
 		}
-		group.dependencyPaths = append(group.dependencyPaths, vulnerability.From)
+		group.issues = append(group.issues, vulnerability)
 	}
 	return groups
 }
@@ -214,9 +224,9 @@ func convertScanResultToIssues(engine workflow.Engine, configResolver types.Conf
 	byID := vulnIndicesByID(res)
 
 	for _, group := range groupVulnerabilities(res.Vulnerabilities, &logger) {
-		ossLegacyIssue := group.issue
+		ossLegacyIssue := group.preferredIssue()
 		packageKey := ossLegacyIssue.PackageName + "@" + ossLegacyIssue.Version
-		node := getDependencyNode(&logger, targetFilePath, ossLegacyIssue.PackageManager, group.dependencyPaths, fileContent, workDir)
+		node := getDependencyNode(&logger, targetFilePath, ossLegacyIssue.PackageManager, ossLegacyIssue.From, fileContent, workDir)
 		sameID := byID[ossLegacyIssue.Id]
 		snykIssue := toIssue(engine, configResolver, workDir, targetFilePath, ossLegacyIssue, res, sameID, node, learnService, ep, format, folderConfig)
 		packageIssueCacheMutex.Lock()
