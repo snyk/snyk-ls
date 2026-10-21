@@ -36,8 +36,8 @@ func (g *goRangeFinder) find(introducingPackageName string, introducingVersion s
 	longestModuleLine := -1
 	longestModule := ""
 	for i, line := range lines {
-		module := moduleOfRequireLine(line)
-		if !isPackageInModule(introducingPackageName, module) || len(module) <= len(longestModule) {
+		module := g.moduleOfRequireLine(line)
+		if !g.isPackageInModule(introducingPackageName, module) || len(module) <= len(longestModule) {
 			continue
 		}
 		longestModuleLine, longestModule = i, module
@@ -58,7 +58,37 @@ func (g *goRangeFinder) find(introducingPackageName string, introducingVersion s
 	return &ast.Node{Line: r.Start.Line, StartChar: r.Start.Character, EndChar: r.End.Character}, nil
 }
 
-func moduleOfRequireLine(line string) string {
+func (g *goRangeFinder) chooseDependencyPath(paths [][]string) []string {
+	var closest []string
+	for _, path := range paths {
+		if len(path) > 0 && (closest == nil || g.isCloserPath(path, closest)) {
+			closest = path
+		}
+	}
+	return closest
+}
+
+func (g *goRangeFinder) isCloserPath(candidate []string, current []string) bool {
+	candidateOwnsPackage := g.directDependencyContainsPackage(candidate)
+	if candidateOwnsPackage != g.directDependencyContainsPackage(current) {
+		return candidateOwnsPackage
+	}
+	return len(candidate) < len(current)
+}
+
+func (g *goRangeFinder) directDependencyContainsPackage(path []string) bool {
+	if len(path) < 2 {
+		return false
+	}
+	return g.isPackageInModule(g.withoutVersion(path[len(path)-1]), g.withoutVersion(path[1]))
+}
+
+func (g *goRangeFinder) withoutVersion(packageWithVersion string) string {
+	name, _, _ := strings.Cut(packageWithVersion, "@")
+	return name
+}
+
+func (g *goRangeFinder) moduleOfRequireLine(line string) string {
 	if isComment(line) {
 		return ""
 	}
@@ -69,6 +99,6 @@ func moduleOfRequireLine(line string) string {
 	return fields[0]
 }
 
-func isPackageInModule(packageName string, module string) bool {
+func (g *goRangeFinder) isPackageInModule(packageName string, module string) bool {
 	return module != "" && (packageName == module || strings.HasPrefix(packageName, module+"/"))
 }

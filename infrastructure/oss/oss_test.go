@@ -160,7 +160,7 @@ func Test_FindRange(t *testing.T) {
 	const content = "0\n1\n2\n  implementation 'a:test:4.17.4'"
 
 	var p = "build.gradle"
-	node := getDependencyNode(engine.GetLogger(), types.FilePath(p), issue.PackageManager, issue.From, []byte(content), "")
+	node := getDependencyNode(engine.GetLogger(), types.FilePath(p), issue.PackageManager, [][]string{issue.From}, []byte(content), "")
 	foundRange := getRangeFromNode(node)
 
 	assert.Equal(t, 3, foundRange.Start.Line)

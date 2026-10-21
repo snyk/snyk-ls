@@ -109,7 +109,7 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 
 	dependencyPath := extractDependencyPath(introducingFinding)
 	fileContent := getFileContent(affectedFilePath, true, logger)
-	dependencyNode := getDependencyNode(&logger, affectedFilePath, ecosystemStr, dependencyPath, fileContent, workDir)
+	dependencyNode := getDependencyNode(&logger, affectedFilePath, ecosystemStr, extractAllDependencyPaths(trIssue, dependencyPath), fileContent, workDir)
 	myRange := getRangeFromNode(dependencyNode)
 
 	title := trIssue.GetTitle()
@@ -292,14 +292,8 @@ func getIntroducingFinding(issue testapi.Issue, problem *testapi.SnykVulnProblem
 			}
 		}
 	}
-	shortest := findings[0]
-	shortestLen := len(extractDependencyPath(shortest))
-	for _, finding := range findings[1:] {
-		if l := len(extractDependencyPath(finding)); l < shortestLen {
-			shortest, shortestLen = finding, l
-		}
-	}
-	return shortest, nil
+	// no findings found that are direct dependencies, we just take the first now
+	return findings[0], nil
 }
 
 // buildMessage builds the short message for the issue
@@ -368,6 +362,14 @@ func buildRemediationAdvice(
 
 	// No remediation available
 	return "No remediation advice available"
+}
+
+func extractAllDependencyPaths(issue testapi.Issue, introducingPath []string) [][]string {
+	paths := [][]string{introducingPath}
+	for _, finding := range issue.GetFindings() {
+		paths = append(paths, extractDependencyPath(finding))
+	}
+	return paths
 }
 
 func extractDependencyPath(finding *testapi.FindingData) []string {

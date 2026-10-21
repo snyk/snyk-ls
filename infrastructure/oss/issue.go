@@ -182,24 +182,29 @@ func getRangeFromNode(issueDepNode *ast.Node) types.Range {
 // to keep it close to the code that needs it.
 var packageIssueCacheMutex sync.Mutex //nolint:gochecknoglobals // required guard for mutable package state
 
-func uniqueVulnerabilitiesWithShortestPath(vulnerabilities []ossIssue, logger *zerolog.Logger) []ossIssue {
-	var unique []ossIssue
-	indexByKey := map[string]int{}
+type vulnerabilityGroup struct {
+	issue           ossIssue
+	dependencyPaths [][]string
+}
+
+func groupVulnerabilities(vulnerabilities []ossIssue, logger *zerolog.Logger) []*vulnerabilityGroup {
+	var groups []*vulnerabilityGroup
+	groupByKey := map[string]*vulnerabilityGroup{}
 	for _, vulnerability := range vulnerabilities {
 		if vulnerability.IsIgnored {
 			logger.Debug().Msgf("skipping ignored issue %s", vulnerability.Id)
 			continue
 		}
 		key := vulnerability.Id + "|" + vulnerability.PackageName
-		index, seen := indexByKey[key]
+		group, seen := groupByKey[key]
 		if !seen {
-			indexByKey[key] = len(unique)
-			unique = append(unique, vulnerability)
-		} else if len(vulnerability.From) < len(unique[index].From) {
-			unique[index] = vulnerability
+			group = &vulnerabilityGroup{issue: vulnerability}
+			groupByKey[key] = group
+			groups = append(groups, group)
 		}
+		group.dependencyPaths = append(group.dependencyPaths, vulnerability.From)
 	}
-	return unique
+	return groups
 }
 
 func convertScanResultToIssues(engine workflow.Engine, configResolver types.ConfigResolverInterface, res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte, learnService learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue, format string, folderConfig *types.FolderConfig) []types.Issue {
@@ -208,9 +213,10 @@ func convertScanResultToIssues(engine workflow.Engine, configResolver types.Conf
 
 	byID := vulnIndicesByID(res)
 
-	for _, ossLegacyIssue := range uniqueVulnerabilitiesWithShortestPath(res.Vulnerabilities, &logger) {
+	for _, group := range groupVulnerabilities(res.Vulnerabilities, &logger) {
+		ossLegacyIssue := group.issue
 		packageKey := ossLegacyIssue.PackageName + "@" + ossLegacyIssue.Version
-		node := getDependencyNode(&logger, targetFilePath, ossLegacyIssue.PackageManager, ossLegacyIssue.From, fileContent, workDir)
+		node := getDependencyNode(&logger, targetFilePath, ossLegacyIssue.PackageManager, group.dependencyPaths, fileContent, workDir)
 		sameID := byID[ossLegacyIssue.Id]
 		snykIssue := toIssue(engine, configResolver, workDir, targetFilePath, ossLegacyIssue, res, sameID, node, learnService, ep, format, folderConfig)
 		packageIssueCacheMutex.Lock()

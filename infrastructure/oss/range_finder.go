@@ -29,6 +29,10 @@ type RangeFinder interface {
 	find(introducingPackageName string, introducingVersion string) (*ast.Node, *ast.Tree)
 }
 
+type dependencyPathChooser interface {
+	chooseDependencyPath(dependencyPaths [][]string) []string
+}
+
 type DefaultFinder struct {
 	path        types.FilePath
 	fileContent []byte
@@ -41,7 +45,7 @@ func getDependencyNode(
 	logger *zerolog.Logger,
 	path types.FilePath,
 	packageManager string,
-	dependencyPath []string,
+	dependencyPaths [][]string,
 	fileContent []byte,
 	rootPath types.FilePath,
 ) *ast.Node {
@@ -67,6 +71,8 @@ func getDependencyNode(
 		finder = &DefaultFinder{path: path, fileContent: fileContent, logger: logger}
 	}
 
+	dependencyPath := selectDependencyPath(finder, dependencyPaths)
+
 	introducingPackageName, introducingVersion := introducingPackageAndVersion(dependencyPath, packageManager)
 
 	currentDep, parsedTree := finder.find(introducingPackageName, introducingVersion)
@@ -75,16 +81,26 @@ func getDependencyNode(
 	// we go recurse to the parent of it
 	if currentDep == nil && parsedTree != nil && parsedTree.ParentTree != nil {
 		tree := parsedTree.ParentTree
-		currentDep = getDependencyNode(logger, types.FilePath(tree.Document), packageManager, dependencyPath, []byte(tree.Root.Value), rootPath)
+		currentDep = getDependencyNode(logger, types.FilePath(tree.Document), packageManager, dependencyPaths, []byte(tree.Root.Value), rootPath)
 	}
 
 	// recurse until a dependency with version was found
 	if currentDep != nil && currentDep.Value == "" && currentDep.Tree != nil && currentDep.Tree.ParentTree != nil {
 		tree := currentDep.Tree.ParentTree
-		currentDep.LinkedParentDependencyNode = getDependencyNode(logger, types.FilePath(tree.Document), packageManager, dependencyPath, []byte(tree.Root.Value), rootPath)
+		currentDep.LinkedParentDependencyNode = getDependencyNode(logger, types.FilePath(tree.Document), packageManager, dependencyPaths, []byte(tree.Root.Value), rootPath)
 	}
 
 	return currentDep
+}
+
+func selectDependencyPath(finder RangeFinder, dependencyPaths [][]string) []string {
+	if chooser, ok := finder.(dependencyPathChooser); ok {
+		return chooser.chooseDependencyPath(dependencyPaths)
+	}
+	if len(dependencyPaths) == 0 {
+		return nil
+	}
+	return dependencyPaths[0]
 }
 
 func (f *DefaultFinder) find(introducingPackageName string, introducingVersion string) (*ast.Node, *ast.Tree) {
