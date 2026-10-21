@@ -101,7 +101,7 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 
 	problem := &vulnProblem
 
-	introducingFinding, err := getIntroducingFinding(trIssue, problem, ecosystemStr)
+	introducingFinding, err := getIntroducingFinding(trIssue, problem)
 	if err != nil {
 		logger.Warn().Err(err).Msg("failed to get introducing finding")
 		return nil
@@ -276,18 +276,10 @@ func getAffectedFilePath(ctx context.Context, testResult testapi.TestResult) (ty
 }
 
 // FIXME needs to look at all evidences
-func getIntroducingFinding(issue testapi.Issue, problem *testapi.SnykVulnProblem, ecosystem string) (*testapi.FindingData, error) {
+func getIntroducingFinding(issue testapi.Issue, problem *testapi.SnykVulnProblem) (*testapi.FindingData, error) {
 	findings := issue.GetFindings()
 	if len(findings) == 0 {
 		return nil, fmt.Errorf("no findings found in issue")
-	}
-
-	dependencyPaths := make([][]string, len(findings))
-	for i, finding := range findings {
-		dependencyPaths[i] = extractDependencyPath(finding)
-	}
-	if index, ok := preferredPathIndex(ecosystem, dependencyPaths); ok {
-		return findings[index], nil
 	}
 
 	// we want to find the first finding, that is a direct dependency and introduces the problem

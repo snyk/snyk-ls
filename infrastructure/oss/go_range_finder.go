@@ -58,39 +58,6 @@ func (g *goRangeFinder) find(introducingPackageName string, introducingVersion s
 	return &ast.Node{Line: r.Start.Line, StartChar: r.Start.Character, EndChar: r.End.Character}, nil
 }
 
-func (g *goRangeFinder) preferredPathIndex(paths [][]string) int {
-	preferred := 0
-	for i := 1; i < len(paths); i++ {
-		if g.isCloserPath(paths[i], paths[preferred]) {
-			preferred = i
-		}
-	}
-	return preferred
-}
-
-func (g *goRangeFinder) isCloserPath(candidate []string, current []string) bool {
-	if len(current) == 0 {
-		return len(candidate) > 0
-	}
-	candidateOwnsPackage := g.directDependencyContainsPackage(candidate)
-	if candidateOwnsPackage != g.directDependencyContainsPackage(current) {
-		return candidateOwnsPackage
-	}
-	return len(candidate) < len(current)
-}
-
-func (g *goRangeFinder) directDependencyContainsPackage(path []string) bool {
-	if len(path) < 2 {
-		return false
-	}
-	return g.isPackageInModule(g.withoutVersion(path[len(path)-1]), g.withoutVersion(path[1]))
-}
-
-func (g *goRangeFinder) withoutVersion(packageWithVersion string) string {
-	name, _, _ := strings.Cut(packageWithVersion, "@")
-	return name
-}
-
 func (g *goRangeFinder) moduleOfRequireLine(line string) string {
 	if isComment(line) {
 		return ""

@@ -87,16 +87,6 @@ func getDependencyNode(
 	return currentDep
 }
 
-// Only Go prefers a path: for other package managers the first path was already a single location per issue,
-// even when several are reported, and choosing differently would move issues between dependencies.
-func preferredPathIndex(packageManager string, dependencyPaths [][]string) (int, bool) {
-	switch packageManager {
-	case "golang", "gomodules":
-		return (&goRangeFinder{}).preferredPathIndex(dependencyPaths), true
-	}
-	return 0, false
-}
-
 func (f *DefaultFinder) find(introducingPackageName string, introducingVersion string) (*ast.Node, *ast.Tree) {
 	lines := strings.Split(strings.ReplaceAll(string(f.fileContent), "\r", ""), "\n")
 	for i, line := range lines {

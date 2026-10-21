@@ -25,7 +25,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/gomarkdown/markdown"
-	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/ast"
@@ -182,50 +181,23 @@ func getRangeFromNode(issueDepNode *ast.Node) types.Range {
 // to keep it close to the code that needs it.
 var packageIssueCacheMutex sync.Mutex //nolint:gochecknoglobals // required guard for mutable package state
 
-type vulnerabilityGroup struct {
-	issues []ossIssue
-}
-
-func (g *vulnerabilityGroup) preferredIssue() ossIssue {
-	paths := make([][]string, len(g.issues))
-	for i, issue := range g.issues {
-		paths[i] = issue.From
-	}
-	if index, ok := preferredPathIndex(g.issues[0].PackageManager, paths); ok {
-		return g.issues[index]
-	}
-	return g.issues[0]
-}
-
-func groupVulnerabilities(vulnerabilities []ossIssue, logger *zerolog.Logger) []*vulnerabilityGroup {
-	var groups []*vulnerabilityGroup
-	groupByKey := map[string]*vulnerabilityGroup{}
-	for _, vulnerability := range vulnerabilities {
-		if vulnerability.IsIgnored {
-			logger.Debug().Msgf("skipping ignored issue %s", vulnerability.Id)
-			continue
-		}
-		key := vulnerability.Id + "|" + vulnerability.PackageName
-		group, seen := groupByKey[key]
-		if !seen {
-			group = &vulnerabilityGroup{}
-			groupByKey[key] = group
-			groups = append(groups, group)
-		}
-		group.issues = append(group.issues, vulnerability)
-	}
-	return groups
-}
-
 func convertScanResultToIssues(engine workflow.Engine, configResolver types.ConfigResolverInterface, res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte, learnService learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue, format string, folderConfig *types.FolderConfig) []types.Issue {
 	logger := engine.GetLogger().With().Str("method", "convertScanResultToIssues").Logger()
 	var issues []types.Issue
 
+	duplicateCheckMap := map[string]bool{}
 	byID := vulnIndicesByID(res)
 
-	for _, group := range groupVulnerabilities(res.Vulnerabilities, &logger) {
-		ossLegacyIssue := group.preferredIssue()
+	for _, ossLegacyIssue := range res.Vulnerabilities {
+		if ossLegacyIssue.IsIgnored {
+			logger.Debug().Msgf("skipping ignored issue %s", ossLegacyIssue.Id)
+			continue
+		}
 		packageKey := ossLegacyIssue.PackageName + "@" + ossLegacyIssue.Version
+		duplicateKey := string(targetFilePath) + "|" + ossLegacyIssue.Id + "|" + ossLegacyIssue.PackageName
+		if duplicateCheckMap[duplicateKey] {
+			continue
+		}
 		node := getDependencyNode(&logger, targetFilePath, ossLegacyIssue.PackageManager, ossLegacyIssue.From, fileContent, workDir)
 		sameID := byID[ossLegacyIssue.Id]
 		snykIssue := toIssue(engine, configResolver, workDir, targetFilePath, ossLegacyIssue, res, sameID, node, learnService, ep, format, folderConfig)
@@ -233,6 +205,7 @@ func convertScanResultToIssues(engine workflow.Engine, configResolver types.Conf
 		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
 		packageIssueCacheMutex.Unlock()
 		issues = append(issues, snykIssue)
+		duplicateCheckMap[duplicateKey] = true
 	}
 	return issues
 }
