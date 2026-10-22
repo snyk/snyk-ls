@@ -17,6 +17,8 @@
 package types
 
 import (
+	"strings"
+
 	"github.com/snyk/code-client-go/pkg/code/sast_contract"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
@@ -155,9 +157,8 @@ func SetPreferredOrgAndOrgSetByUser(conf configuration.Configuration, folderPath
 	SetFolderUserSetting(conf, folderPath, SettingOrgSetByUser, orgSetByUser)
 }
 
-// CopyFolderConfigValues copies all prefix key values from one folder path to another.
-// Used when creating a temporary folder config (e.g. for base branch scans) that should
-// inherit all settings from the original workspace folder.
+// CopyFolderConfigValues copies every value stored under srcPath to dstPath: user folder settings,
+// folder metadata (including feature flags) and LDX-Sync org-folder settings. The copies stay in memory.
 func CopyFolderConfigValues(conf configuration.Configuration, srcPath, dstPath FilePath) {
 	if conf == nil {
 		return
@@ -167,26 +168,88 @@ func CopyFolderConfigValues(conf configuration.Configuration, srcPath, dstPath F
 	if src == "" || dst == "" || src == dst {
 		return
 	}
-
-	userSettings := []string{
-		SettingBaseBranch, SettingReferenceBranch, SettingAdditionalParameters,
-		SettingAdditionalEnvironment, SettingReferenceFolder, SettingScanCommandConfig,
-		SettingPreferredOrg, SettingOrgSetByUser,
-	}
-	for _, name := range userSettings {
-		if v := conf.Get(configresolver.UserFolderKey(src, name)); v != nil {
-			key := configresolver.UserFolderKey(dst, name)
-			conf.Set(key, v)
+	for _, key := range folderConfigKeys(conf, src) {
+		if v := conf.Get(key.at(src)); v != nil {
+			conf.Set(key.at(dst), v)
 		}
 	}
+}
 
-	metaSettings := []string{SettingAutoDeterminedOrg, SettingLocalBranches, SettingSastSettings}
-	for _, name := range metaSettings {
-		if v := conf.Get(configresolver.FolderMetadataKey(src, name)); v != nil {
-			key := configresolver.FolderMetadataKey(dst, name)
-			conf.Set(key, v)
-		}
+// ClearFolderConfigValues sets every value stored under folderPath to nil without touching storage.
+// GAF has no in-memory delete, so AllKeys keeps listing the cleared names.
+func ClearFolderConfigValues(conf configuration.Configuration, folderPath FilePath) {
+	if conf == nil {
+		return
 	}
+	fp := string(PathKey(folderPath))
+	if fp == "" {
+		return
+	}
+	for _, key := range folderConfigKeys(conf, fp) {
+		conf.Set(key.at(fp), nil)
+	}
+}
+
+type folderConfigKey struct {
+	family, name string
+}
+
+func (k folderConfigKey) at(folderPath string) string {
+	return k.family + folderPath + ":" + k.name
+}
+
+// AllKeys returns keys lowercased and flattens map values (e.g. a LocalConfigField reloaded from storage)
+// into "<name>.<field>" leaves, so matching is case-insensitive and each setting is cut at its first dot.
+func folderConfigKeys(conf configuration.Configuration, folderPath string) []folderConfigKey {
+	fp := strings.ToLower(folderPath) + ":"
+	seen := map[folderConfigKey]bool{}
+	var keys []folderConfigKey
+	for _, key := range conf.AllKeys() {
+		family, rest, ok := cutFolderFamily(key)
+		if !ok {
+			continue
+		}
+		after, ok := strings.CutPrefix(rest, fp)
+		if !ok {
+			continue
+		}
+		name, _, _ := strings.Cut(after, ".")
+		if name == "" || strings.Contains(name, ":") {
+			continue
+		}
+		k := folderConfigKey{family: family, name: name}
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+func cutFolderFamily(key string) (family, rest string, ok bool) {
+	userFolder := configresolver.PrefixUser + ":" + configresolver.PrefixFolder + ":"
+	if rest, ok = strings.CutPrefix(key, userFolder); ok {
+		return userFolder, rest, true
+	}
+	folder := configresolver.PrefixFolder + ":"
+	if rest, ok = strings.CutPrefix(key, folder); ok {
+		return folder, rest, true
+	}
+	remote := configresolver.PrefixRemote + ":"
+	afterRemote, ok := strings.CutPrefix(key, remote)
+	if !ok {
+		return "", "", false
+	}
+	org, afterOrg, ok := strings.Cut(afterRemote, ":")
+	if !ok {
+		return "", "", false
+	}
+	remoteFolder := configresolver.PrefixFolder + ":"
+	if rest, ok = strings.CutPrefix(afterOrg, remoteFolder); ok {
+		return remote + org + ":" + remoteFolder, rest, true
+	}
+	return "", "", false
 }
 
 // GetSastSettings reads the SAST settings from configuration for a folder.

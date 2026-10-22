@@ -607,6 +607,22 @@ func Test_shouldUseLegacyScan_uv(t *testing.T) {
 	}
 }
 
+func Test_shouldUseLegacyScan_referenceScanInheritsEnableUvCLI(t *testing.T) {
+	logger := zerolog.Nop()
+	workspace := folderConfigWithFlags(nil)
+	workspace.FolderPath = types.FilePath(t.TempDir())
+	workspace.SetFeatureFlag(featureflag.EnableUvCLI, true)
+	referenceDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(referenceDir, "uv.lock"), []byte{}, 0o600))
+	reference := &types.FolderConfig{FolderPath: types.FilePath(referenceDir), ConfigResolver: workspace.ConfigResolver}
+
+	types.CopyFolderConfigValues(workspace.Conf(), workspace.FolderPath, reference.FolderPath)
+	useLegacy, reason := shouldUseLegacyScan(&logger, reference, []string{"snyk", "test", "--json"})
+
+	assert.False(t, useLegacy)
+	assert.Equal(t, "new ostest workflow (matched: enableUvCLI)", reason)
+}
+
 // Test_NewCLIScanner_ProgressChannelIsolation verifies that the tracker created
 // during scanInternal writes to the channel passed to NewCLIScanner() and to no
 // other scanner's channel (IDE-2036).

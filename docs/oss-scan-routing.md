@@ -37,7 +37,7 @@ flowchart TD
     G -- no --> L
 ```
 
-Feature flags come from the folder's organization and live on the folder config, so routing reads cached values and makes no network call.
+Feature flags come from the folder's organization and live on the folder config, so routing reads cached values and makes no network call. A delta reference scan reads the workspace folder's flags, copied to the reference path (see "Reference scans" in `configuration.md`), so it routes the same way as the working-tree scan.
 
 ### uv.lock detection
 

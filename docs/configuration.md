@@ -639,6 +639,45 @@ fc.UserOverrides()        // reads all folder-scope UserFolderKey overrides
 
 `ReadFolderConfigSnapshot(conf, folderPath)` reads all folder values from configuration into a `FolderConfigSnapshot` struct for comparison and analytics (e.g., detecting org changes, cache clearing).
 
+### Reference scans
+
+With delta findings on, each product scan of a workspace folder is followed by a reference scan. It runs on a temporary checkout of the base branch, or in place on the folder picked with the "reference folder" setting. The scanner hands the product scanner a copy of the workspace folder's `FolderConfig` whose `FolderPath` is the reference path, so every setting is read from keys under that path.
+
+`scanBaseBranch` fills those keys with `CopyFolderConfigValues(conf, workspacePath, referencePath)`. The function copies every value stored under the workspace path in all three per-folder families, without naming settings:
+
+| Family | Key shape | Holds |
+|--------|-----------|-------|
+| User folder settings | `user:folder:<path>:<name>` | Base branch, org, additional parameters, folder-scope overrides |
+| Folder metadata | `folder:<path>:<name>` | `auto_determined_org`, `local_branches`, SAST settings, every feature flag (`ff_<flag>`) |
+| LDX-Sync org-folder settings | `remote:<org>:folder:<path>:<name>` | Per-folder remote values, locked and unlocked |
+
+A setting or flag added later is copied with no code change. `AllKeys` returns keys lowercased, so the copy matches the workspace path without regard to case and builds each destination key from the reference path and the key's setting name. It matches up to the `:` after the path, so copying `/work/api` skips `/work/api-v2`. The copy uses plain `Set` on keys nobody has marked with `PersistInStorage`, so nothing reaches the storage file.
+
+What happens depends on the reference path:
+
+| Reference path | Copy | Cleanup |
+|----------------|------|---------|
+| Temporary base branch checkout | Yes | When the checkout is removed, `ClearFolderConfigValues` sets each key under the checkout path to `nil` |
+| Reference folder that is not open in the workspace | Yes | None. The path is the same on every scan, so each copy overwrites the last |
+| Reference folder that is also an open workspace folder | No | None. The reference scan uses that folder's own settings |
+
+The open-folder case covers a second checkout of the same repository opened next to the first. Its keys are persisted, so a copy would overwrite its saved settings on disk. The scanner compares `PathKey` of the reference path with each folder in `Workspace.Folders()`.
+
+Cleanup uses `Set(key, nil)` and not `Unset`, because `Unset` marks the key persisted and writes a deletion marker to the storage file. GAF has no in-memory delete, so `AllKeys` keeps listing a cleared key while `Get` returns `nil` and `IsSet` returns `false`.
+
+```mermaid
+flowchart TD
+    A[Reference scan for a workspace folder] --> B{Reference folder set?}
+    B -- no --> C[Clone base branch into a new temp directory]
+    C --> D[Copy workspace folder keys to the temp path]
+    D --> E[Scan the temp path]
+    E --> F[Checkout cleanup clears the temp path keys and deletes the directory]
+    B -- yes --> G{Reference folder open in the workspace?}
+    G -- yes --> H[Scan it with its own settings]
+    G -- no --> I[Copy workspace folder keys to the reference path]
+    I --> J[Scan the reference path]
+```
+
 ---
 
 ## Persistence

@@ -93,6 +93,7 @@ func (ch *CheckoutHandler) CheckoutBaseBranch(logger *zerolog.Logger, folderConf
 		if baseBranchFolderPath == "" {
 			return
 		}
+		types.ClearFolderConfigValues(ch.conf, types.FilePath(baseBranchFolderPath))
 		err = os.RemoveAll(baseBranchFolderPath)
 		logger.Info().Msg("removing base branch tmp dir " + baseBranchFolderPath)
 
