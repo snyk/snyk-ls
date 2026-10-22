@@ -111,3 +111,46 @@ func Test_DefaultFinder_Go_SubPackageResolvesToContainingModule(t *testing.T) {
 		})
 	}
 }
+
+func Test_DefaultFinder_Go_PicksLongestMatchingModule(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	shorterFirst := []byte("module example.com/app\n\nrequire (\n\tgithub.com/gofiber/fiber v1.0.0\n\tgithub.com/gofiber/fiber/v2 v2.50.0\n)\n")
+	longerFirst := []byte("module example.com/app\n\nrequire (\n\tgithub.com/gofiber/fiber/v2 v2.50.0\n\tgithub.com/gofiber/fiber v1.0.0\n)\n")
+	from := []string{"example.com/app@0.0.0", "github.com/gofiber/fiber/v2/utils@2.50.0"}
+
+	tests := []struct {
+		name         string
+		content      []byte
+		expectedLine int
+	}{
+		{"longer module listed after shorter one", shorterFirst, 4},
+		{"longer module listed before shorter one", longerFirst, 3},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			node := getDependencyNode(engine.GetLogger(), "go.mod", "gomodules", from, tt.content, "")
+			assert.NotNil(t, node)
+			assert.Equal(t, tt.expectedLine, node.Line)
+		})
+	}
+}
+
+func Test_DefaultFinder_Go_NoMatchingModuleReturnsNil(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	content := []byte("module example.com/app\n\nrequire (\n\tgithub.com/gofiber/fiber/v2 v2.50.0\n\t// github.com/other/lib v1.0.0\n)\n")
+
+	tests := []struct {
+		name string
+		from []string
+	}{
+		{"unrelated package", []string{"example.com/app@0.0.0", "github.com/unrelated/lib@1.0.0"}},
+		{"module path is only a text prefix", []string{"example.com/app@0.0.0", "github.com/gofiber/fiber/v22@2.0.0"}},
+		{"module is only in a comment", []string{"example.com/app@0.0.0", "github.com/other/lib@1.0.0"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			node := getDependencyNode(engine.GetLogger(), "go.mod", "gomodules", tt.from, content, "")
+			assert.Nil(t, node)
+		})
+	}
+}
