@@ -26,8 +26,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-const remoteRepoUrlFlag = configuration.FLAG_REMOTE_REPO_URL
-
 // RepoUrlUnavailableRemedy is the user-facing remedy appended to error messages when
 // neither a Git remote nor a --remote-repo-url override can be resolved for a folder.
 const RepoUrlUnavailableRemedy = "add a Git remote to the folder, or set --remote-repo-url in Additional parameters, then rescan"
@@ -64,10 +62,12 @@ func RepoUrlForIgnores(resolver types.ConfigResolverInterface, fc *types.FolderC
 // and unrelated Additional Parameters are ignored. An empty value counts as not set.
 func remoteRepoUrlFromArgs(args []string) string {
 	fs := pflag.NewFlagSet("additional-parameters", pflag.ContinueOnError)
-	fs.ParseErrorsWhitelist = pflag.ParseErrorsWhitelist{UnknownFlags: true}
+	fs.ParseErrorsAllowlist = pflag.ParseErrorsAllowlist{UnknownFlags: true}
 	fs.SetOutput(io.Discard)
+	// pflag aborts parsing on an undefined --help/-h; defining it lets parsing continue.
+	fs.BoolP("help", "h", false, "")
 	var remoteRepoUrl string
-	fs.StringVar(&remoteRepoUrl, remoteRepoUrlFlag, "", "")
+	fs.StringVar(&remoteRepoUrl, configuration.FLAG_REMOTE_REPO_URL, "", "")
 	_ = fs.Parse(args)
 	return remoteRepoUrl
 }

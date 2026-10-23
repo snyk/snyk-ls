@@ -188,6 +188,11 @@ func Test_remoteRepoUrlFromArgs(t *testing.T) {
 			expected: "",
 		},
 		{
+			name:     "help flag before the override",
+			args:     []string{"--help", "--remote-repo-url=https://github.com/example/repo.git"},
+			expected: "https://github.com/example/repo.git",
+		},
+		{
 			name:     "empty args",
 			args:     []string{},
 			expected: "",
