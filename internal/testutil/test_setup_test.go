@@ -19,9 +19,13 @@ package testutil
 import (
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -35,4 +39,22 @@ func Test_UnitTest_DoesNotPointAtTheRealAPI(t *testing.T) {
 
 	assert.NotEqual(t, types.DefaultSnykApiUrl, conf.GetString(configuration.API_URL))
 	assert.NotEqual(t, types.DefaultSnykApiUrl, types.GetGlobalString(conf, types.SettingApiEndpoint))
+}
+
+func Test_MockAndCaptureWorkflowInvocation_LateSendAfterCleanup_DoesNotPanic(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockEngine := mocks.NewMockEngine(ctrl)
+
+	workflowID := workflow.NewWorkflowIdentifier("test-late-send-workflow")
+	engineConfig := configuration.NewWithOpts(configuration.WithAutomaticEnv())
+	var lateInvoke func()
+
+	t.Run("subtest", func(t *testing.T) {
+		_ = MockAndCaptureWorkflowInvocation(t, mockEngine, workflowID, 1)
+		lateInvoke = func() {
+			_, _ = mockEngine.InvokeWithInputAndConfig(workflowID, []workflow.Data{}, engineConfig)
+		}
+	})
+
+	require.NotPanics(t, lateInvoke, "a late analytics send arriving after MockAndCaptureWorkflowInvocation's cleanup must not panic the whole test process")
 }
