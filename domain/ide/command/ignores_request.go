@@ -172,7 +172,7 @@ func (cmd *submitIgnoreRequest) initializeCreateConfiguration(engineConfig confi
 	engineConfig = initializeBaseConfiguration(engineConfig, contentRoot)
 	engineConfig = addCreateAndUpdateConfiguration(engineConfig, ignoreType, reason, expiration)
 
-	folderConfig := &types.FolderConfig{FolderPath: contentRoot, ConfigResolver: cmd.configResolver}
+	folderConfig := config.GetUnenrichedFolderConfigFromEngine(cmd.engine, cmd.configResolver, contentRoot, cmd.engine.GetLogger())
 	if remoteRepoUrl := folderconfig.RemoteRepoUrlOverride(cmd.configResolver, folderConfig); remoteRepoUrl != "" {
 		engineConfig.Set(ignore_workflow.RemoteRepoUrlKey, remoteRepoUrl)
 	}
@@ -361,7 +361,7 @@ func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, wo
 // error. The raw error from go-git is kept in the structured log only, to avoid leaking
 // filesystem paths.
 func (cmd *submitIgnoreRequest) validateIgnoreRequest(logger zerolog.Logger, contentRoot types.FilePath) error {
-	folderConfig := &types.FolderConfig{FolderPath: contentRoot, ConfigResolver: cmd.configResolver}
+	folderConfig := config.GetUnenrichedFolderConfigFromEngine(cmd.engine, cmd.configResolver, contentRoot, cmd.engine.GetLogger())
 	if _, err := folderconfig.RepoUrlForIgnores(cmd.configResolver, folderConfig); err != nil {
 		logger.Warn().Err(err).Str("contentRoot", string(contentRoot)).Msg("could not determine repository URL for ignore request")
 		if cmd.notifier != nil {
