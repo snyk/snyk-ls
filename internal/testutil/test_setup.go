@@ -409,13 +409,7 @@ func MockAndCaptureWorkflowInvocation(
 ) chan WorkflowCapture {
 	t.Helper()
 
-	// Deliberately never closed: production code (e.g. domain/ide/workspace's
-	// `go sendAnalytics(...)`) may still be racing to reach the Do() callback below
-	// after the test that created ch has already returned and its cleanups have run.
-	// Closing ch here would make that late send panic with "send on closed channel"
-	// and crash the whole test binary. An unclosed buffered channel that becomes
-	// unreferenced is simply garbage collected, and a late send into it (capacity ==
-	// times, never left full by normal usage) is a harmless no-op.
+	// Not closed: async senders may reach the Do() callback after the test's cleanups ran.
 	ch := make(chan WorkflowCapture, times)
 
 	mockEngine.EXPECT().InvokeWithInputAndConfig(workflowID, gomock.Any(), gomock.Any()).
