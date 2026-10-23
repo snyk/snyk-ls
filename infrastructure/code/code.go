@@ -476,7 +476,7 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fo
 	logger.Info().Str("requestId", requestId).Msg("Starting Code analysis.")
 
 	var target scan.Target
-	if remoteRepoUrl := folderconfig.RemoteRepoUrlOverride(sc.configResolver, folderConfig); remoteRepoUrl != "" {
+	if remoteRepoUrl := folderconfig.RemoteRepoUrlOverride(sc.getConfigResolver(ctx), folderConfig); remoteRepoUrl != "" {
 		target, err = scan.NewRepositoryTarget(string(path), scan.WithRepositoryUrl(remoteRepoUrl))
 	} else {
 		target, err = scan.NewRepositoryTarget(string(path))

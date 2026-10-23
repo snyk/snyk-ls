@@ -308,7 +308,7 @@ func TestUploadAndAnalyze_RepositoryUrlOverride(t *testing.T) {
 		assert.Equal(t, deriveFindingId(override, issues[0].GetID()), issues[0].GetFindingId())
 	})
 
-	t.Run("Git repo without the override keeps today's Git remote", func(t *testing.T) {
+	t.Run("Git repo without an override uses its configured Git remote", func(t *testing.T) {
 		scanner, fake := newScannerWithFake(t)
 		filePath, folderPath := TempWorkdirWithIssues(t)
 		defer func(path string) { _ = os.RemoveAll(path) }(string(folderPath))
@@ -323,6 +323,28 @@ func TestUploadAndAnalyze_RepositoryUrlOverride(t *testing.T) {
 		assert.Equal(t, "https://dummy.dummy.io/gitty.git", fake.RepositoryUrl)
 		require.NotEmpty(t, issues)
 		assert.Equal(t, deriveFindingId(fake.RepositoryUrl, issues[0].GetID()), issues[0].GetFindingId())
+	})
+
+	t.Run("override is read from the context resolver when it differs from the scanner's resolver", func(t *testing.T) {
+		scanner, fake := newScannerWithFake(t)
+		_, folderPath := TempWorkdirWithIssues(t)
+		defer func(path string) { _ = os.RemoveAll(path) }(string(folderPath))
+
+		const override = "https://mainframe.example/payroll"
+		contextEngine := testutil.UnitTest(t)
+		contextResolver := testutil.DefaultConfigResolver(contextEngine)
+		types.SetGlobalDeferredFolderScope(contextEngine.GetConfiguration(), types.SettingSnykCodeEnabled, true)
+		types.SetFolderUserSetting(contextEngine.GetConfiguration(), folderPath, types.SettingAdditionalParameters, []string{"--remote-repo-url=" + override})
+		types.SetPreferredOrgAndOrgSetByUser(contextEngine.GetConfiguration(), folderPath, "test-org", true)
+		types.SetSastSettings(contextEngine.GetConfiguration(), folderPath, &sast_contract.SastResponse{SastEnabled: true})
+		folderConfig := &types.FolderConfig{FolderPath: folderPath, ConfigResolver: contextResolver}
+		ctx := ctx2.NewContextWithConfigResolver(t.Context(), contextResolver)
+		ctx = ctx2.NewContextWithFolderConfig(ctx, folderConfig)
+
+		_, err := scanner.Scan(ctx, folderPath)
+		require.NoError(t, err)
+
+		assert.Equal(t, override, fake.RepositoryUrl)
 	})
 }
 

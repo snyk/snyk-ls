@@ -623,3 +623,40 @@ func TestScanner_Scan_SetsRemoteRepoUrlOverrideOnWorkflow(t *testing.T) {
 	require.NotNil(t, invokedConfig)
 	assert.Equal(t, override, invokedConfig.GetString(configuration.FLAG_REMOTE_REPO_URL))
 }
+
+func TestScanner_Scan_ReadsRemoteRepoUrlOverrideFromContextResolver(t *testing.T) {
+	const override = "https://mainframe.example/payroll"
+
+	engine := testutil.UnitTest(t)
+	mockEngine, mockConf := testutil.SetUpEngineMock(t, engine)
+	mockConf.Set(configresolver.UserGlobalKey(types.SettingSnykSecretsEnabled), true)
+
+	workspaceFolder := types.FilePath(t.TempDir())
+
+	contextEngine := testutil.UnitTest(t)
+	contextResolver := testutil.DefaultConfigResolver(contextEngine)
+	types.SetGlobalDeferredFolderScope(contextEngine.GetConfiguration(), types.SettingSnykSecretsEnabled, true)
+	types.SetFolderUserSetting(contextEngine.GetConfiguration(), workspaceFolder, types.SettingAdditionalParameters, []string{"--remote-repo-url=" + override})
+
+	var invokedConfig configuration.Configuration
+	workflowID := workflow.NewWorkflowIdentifier("secrets.test")
+	mockEngine.EXPECT().InvokeWithConfig(workflowID, gomock.Any()).
+		DoAndReturn(func(_ workflow.Identifier, conf configuration.Configuration) ([]workflow.Data, error) {
+			invokedConfig = conf
+			return []workflow.Data{}, nil
+		})
+
+	scanner := New(mockConf, mockEngine, engine.GetLogger(), performance.NewInstrumentor(),
+		&snyk_api.FakeApiClient{},
+		notification.NewMockNotifier(), defaultResolver(mockEngine))
+	folderConfig := secretsFolderConfig(workspaceFolder)
+	folderConfig.ConfigResolver = contextResolver
+	ctx := ctx2.NewContextWithConfigResolver(t.Context(), contextResolver)
+	ctx = ctx2.NewContextWithFolderConfig(ctx, folderConfig)
+
+	_, err := scanner.Scan(ctx, workspaceFolder)
+
+	require.NoError(t, err)
+	require.NotNil(t, invokedConfig)
+	assert.Equal(t, override, invokedConfig.GetString(configuration.FLAG_REMOTE_REPO_URL))
+}

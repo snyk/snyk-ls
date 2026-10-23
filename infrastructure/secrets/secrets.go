@@ -145,7 +145,7 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 	}
 
 	secretsConfig.Set(configuration.INPUT_DIRECTORY, string(scanPath))
-	if remoteRepoUrl := folderconfig.RemoteRepoUrlOverride(sc.configResolver, workspaceFolderConfig); remoteRepoUrl != "" {
+	if remoteRepoUrl := folderconfig.RemoteRepoUrlOverride(sc.getConfigResolver(ctx), workspaceFolderConfig); remoteRepoUrl != "" {
 		secretsConfig.Set(configuration.FLAG_REMOTE_REPO_URL, remoteRepoUrl)
 	}
 	result, err := sc.engine.InvokeWithConfig(workflow.NewWorkflowIdentifier("secrets.test"), secretsConfig)
