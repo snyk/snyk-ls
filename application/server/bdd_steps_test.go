@@ -1269,9 +1269,6 @@ func (s *bddSteps) theDeveloperSetsTheFoldersAdditionalParameter(ctx context.Con
 	return nil
 }
 
-// theDeveloperSavesAFileWithASecurityIssue saves the fixture file - without re-adding the
-// folder, aFolderThatIsNotAGitRepository already did that - and captures the scanned issue
-// and its rendered details before any ignore is filed.
 func (s *bddSteps) theDeveloperSavesAFileWithASecurityIssue(ctx context.Context) error {
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(s.deltaFilePath)},
@@ -1304,10 +1301,7 @@ func (s *bddSteps) theDeveloperSavesAFileWithASecurityIssue(ctx context.Context)
 	}
 	s.scannedFindingId = scannedIssue.GetFindingId()
 
-	// Captured now, before the ignore is filed below - once the issue is ignored, the
-	// footer that would show the button disappears entirely, so this is the only point
-	// in this composite step from which "the issue details offer an enabled \"Create ignore\" button" can
-	// still tell an enabled button apart from a button that no longer renders at all.
+	// Once the issue is ignored the footer disappears, so the button state must be captured before.
 	s.enableConsistentIgnoresForFolder()
 	s.scenarioT.Cleanup(code.ResetHTMLRenderer)
 	s.issueDetailsHtml, s.issueDetailsErr = s.fetchIssueDescriptionHtml(ctx, issueID)
