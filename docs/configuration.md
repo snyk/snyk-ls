@@ -385,7 +385,7 @@ See also: [configuration-precedence-folder.mmd](diagrams/configuration-precedenc
 - **Folder scope**: `additional_parameters` (IntelliJ stores Additional Parameters per folder).
 - **Global scope**: `cli_additional_oss_parameters` (VS Code sends one global string).
 
-If both are set, the folder value wins. The override applies to Snyk Code and Snyk Secrets scans and to `ignore create`. When neither the override nor a Git remote is available, Create ignore is disabled in the issue details.
+If both are set, the folder value wins. The override takes precedence over the repository's Git remote. The override applies to Snyk Code and Snyk Secrets scans and to `ignore create`. When neither the override nor a Git remote is available, Create ignore is disabled in the issue details.
 
 ---
 
