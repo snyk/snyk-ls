@@ -446,7 +446,7 @@ func Test_SmokePrecedence_MultiFolder_DifferentOrgs(t *testing.T) {
 	jsonRpcRecorder.ClearNotifications()
 
 	// Add a second folder
-	folder2, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "c32657c", engine.GetLogger(), false)
+	folder2, err := folderconfig.SetupCustomTestRepo(t, types.FilePath(t.TempDir()), testsupport.PythonGoof, "97e28b6", engine.GetLogger(), false)
 	require.NoError(t, err)
 
 	addWorkSpaceFolder(t, loc, types.WorkspaceFolder{

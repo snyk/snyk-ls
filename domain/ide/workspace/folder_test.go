@@ -37,6 +37,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
+	notification2 "github.com/snyk/snyk-ls/application/server/notification"
 	"github.com/snyk/snyk-ls/domain/ide/hover"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -936,6 +937,55 @@ func Test_processResults_NonFailingError_sendsScanErrorWithoutDiagnostics(t *tes
 	assert.Empty(t, scanNotifier.SuccessCalls())
 	assert.Len(t, scanNotifier.ErrorCalls(), 1)
 	assert.Equal(t, 0, notifier.SendErrorDiagnosticCount())
+}
+
+func Test_ProcessResults_MissingDeltaReference_SendsQuietScanErrorWithoutDiagnostic(t *testing.T) {
+	tests := []struct {
+		name    string
+		err     error
+		message string
+		suffix  string
+	}{
+		{"no base branch", scanner.ErrMissingDeltaReference, "No base branch, showing all issues. Pick one in the issues list.", "(no reference branch)"},
+		{"base branch not found", scanner.ErrBaseBranchNotFound, "Base branch not found, showing all issues. Pick another in the issues list.", "(base branch not found)"},
+		{"not a git repository", scanner.ErrNotGitRepo, "Not a git repository, showing all issues. Set a reference folder in the issues list.", "(not a git repository)"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			conf := engine.GetConfiguration()
+			types.SetGlobalUser(conf, types.SettingScanNetNew, true)
+			notifier := notification.NewMockNotifier()
+			scanNotifier, err := notification2.NewScanNotifier(notifier, defaultResolver(engine))
+			require.NoError(t, err)
+
+			folderPath := types.FilePath(t.TempDir())
+			agg := scanstates.NewScanStateAggregator(conf, engine.GetLogger(), &scanstates.NoopEmitter{}, defaultResolver(engine), engine)
+			agg.Init([]types.FilePath{folderPath})
+			agg.SetScanDone(folderPath, product.ProductCode, true, tt.err)
+
+			f := NewFolder(conf, engine.GetLogger(), folderPath, "test", scanner.NewTestScanner(), hover.NewFakeHoverService(),
+				scanNotifier, notifier, persistence.NewNopScanPersister(), agg, featureflag.NewFakeService(), defaultResolver(engine), engine)
+			setupWorkspaceWithFolder(engine, f, notifier)
+
+			f.ProcessResults(t.Context(), types.ScanData{Product: product.ProductCode, IsReferenceScan: true})
+
+			var scanParams []types.SnykScanParams
+			for _, msg := range notifier.SentMessages() {
+				if p, ok := msg.(types.SnykScanParams); ok {
+					scanParams = append(scanParams, p)
+				}
+			}
+			require.Len(t, scanParams, 1)
+			assert.Equal(t, types.ErrorStatus, scanParams[0].Status)
+			require.NotNil(t, scanParams[0].PresentableError)
+			assert.Equal(t, tt.message, scanParams[0].PresentableError.ErrorMessage)
+			assert.False(t, scanParams[0].PresentableError.ShowNotification)
+			assert.Equal(t, tt.suffix, scanParams[0].PresentableError.TreeNodeSuffix)
+			assert.Equal(t, 0, notifier.SendErrorDiagnosticCount(), "a missing delta reference is not a failed scan")
+		})
+	}
 }
 
 func Test_processResults_ShouldSendAnalyticsToAPI(t *testing.T) {
@@ -1938,4 +1988,20 @@ func TestFolder_IssueViewOptions(t *testing.T) {
 		assert.True(t, got.OpenIssues, "folder override: OpenIssues should be true (folder-level wins)")
 		assert.True(t, got.IgnoredIssues, "folder override: IgnoredIssues should be true (folder-level wins)")
 	})
+}
+
+func TestFolder_FilterSeverity_FolderOverrideWinsOverGlobal(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	conf := engine.GetConfiguration()
+	global := types.NewSeverityFilter(true, true, false, false)
+	types.SetSeverityFilterOnConfig(conf, &global, engine.GetLogger())
+	resolver := defaultResolver(engine)
+	folderPath := types.FilePath(t.TempDir())
+	types.SetUserFolder(conf, folderPath, types.SettingSeverityFilterMedium, true)
+	f := NewFolder(conf, engine.GetLogger(), folderPath, "test", scanner.NewTestScanner(),
+		hover.NewFakeHoverService(), scanner.NewMockScanNotifier(), notification.NewMockNotifier(),
+		persistence.NewNopScanPersister(), scanstates.NewNoopStateAggregator(),
+		featureflag.NewFakeService(), resolver, engine)
+
+	assert.Equal(t, types.NewSeverityFilter(true, true, true, false), f.FilterSeverity())
 }

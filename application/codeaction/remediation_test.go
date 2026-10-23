@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 	sglsp "github.com/sourcegraph/go-lsp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -86,7 +87,17 @@ func setupWithIssueAndProviderFlag(
 	remediationFlagEnabled bool,
 ) (*codeaction.CodeActionsService, types.CodeActionParams) {
 	t.Helper()
-	engine := testutil.UnitTest(t)
+	return setupWithEngine(t, testutil.UnitTest(t), issue, provider, remediationFlagEnabled)
+}
+
+func setupWithEngine(
+	t *testing.T,
+	engine workflow.Engine,
+	issue types.Issue,
+	provider remediation.RemediationProvider,
+	remediationFlagEnabled bool,
+) (*codeaction.CodeActionsService, types.CodeActionParams) {
+	t.Helper()
 	engine.GetConfiguration().Set("remediation_agent_enabled", remediationFlagEnabled)
 	r := exampleRange
 	uriPath := documentUriExample
@@ -431,13 +442,15 @@ func TestGetCodeActions_RemediationAgent_DedupsMultipleFixableIssues(t *testing.
 		"multiple fixable issues in the same range must yield exactly one remediation action (dedup by title)")
 }
 
-// recordingRemediationProvider captures the context passed to Remediate.
+// recordingRemediationProvider captures the context and request passed to Remediate.
 type recordingRemediationProvider struct {
 	receivedCtx context.Context
+	receivedReq remediation.RemediationRequest
 }
 
-func (r *recordingRemediationProvider) Remediate(ctx context.Context, _ remediation.RemediationRequest) (*types.WorkspaceEdit, error) {
+func (r *recordingRemediationProvider) Remediate(ctx context.Context, req remediation.RemediationRequest) (*types.WorkspaceEdit, error) {
 	r.receivedCtx = ctx
+	r.receivedReq = req
 	return &types.WorkspaceEdit{}, nil
 }
 
@@ -479,4 +492,28 @@ func TestResolveCodeAction_RemediationAgent_PropagatesContext(t *testing.T) {
 	default:
 		t.Fatal("provider received a non-canceled context; cancellation was not propagated")
 	}
+}
+
+func TestResolveCodeAction_RemediationAgent_PassesTheFolderSeverityFilter(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	global := types.NewSeverityFilter(true, true, false, false)
+	types.SetSeverityFilterOnConfig(engine.GetConfiguration(), &global, engine.GetLogger())
+	types.SetUserFolder(engine.GetConfiguration(), types.FilePath("/path/to"), types.SettingSeverityFilterMedium, true)
+	recorder := &recordingRemediationProvider{}
+	service, params := setupWithEngine(t, engine, buildFixableIssue("finding-severity"), recorder, true)
+
+	var remyAction *types.LSPCodeAction
+	for _, a := range service.GetCodeActions(params) {
+		if a.Kind == types.RemediationAgentQuickFix {
+			remyAction = &a
+			break
+		}
+	}
+	require.NotNil(t, remyAction, "expected RemediationAgentQuickFix action")
+
+	_, err := service.ResolveCodeAction(context.Background(), *remyAction)
+
+	require.NoError(t, err)
+	require.NotNil(t, recorder.receivedReq.SeverityFilter, "remy must receive the folder's filter, not fall back to the global one")
+	assert.Equal(t, types.NewSeverityFilter(true, true, true, false), *recorder.receivedReq.SeverityFilter)
 }

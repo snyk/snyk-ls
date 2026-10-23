@@ -22,6 +22,7 @@ import (
 
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/ide/treeview"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -159,8 +160,10 @@ func CreateFromCommandData(
 		return &feedbackBannerInteracted{command: commandData, engine: engine}, nil
 	case types.RemediationAgentFixFolderCommand:
 		return &remediationFixFolderCommand{
-			command:  commandData,
-			provider: remediationProvider,
+			command:   commandData,
+			provider:  remediationProvider,
+			workspace: config.GetWorkspace(conf),
+			logger:    *logger,
 		}, nil
 	}
 

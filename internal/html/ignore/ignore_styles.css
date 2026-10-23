@@ -139,6 +139,20 @@
   opacity: 0.9;
 }
 
+.ignore-button.secondary:disabled {
+  border-color: var(--disabled-foreground);
+  color: var(--disabled-foreground);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.ignore-button.secondary:disabled:hover,
+.ignore-button.secondary:disabled:active {
+  background: none;
+  color: var(--disabled-foreground);
+  opacity: 0.6;
+}
+
 /* - - - Ignore form (CCI) - - - */
 .sn-ignore-issue-container {
   display: flex;

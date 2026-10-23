@@ -32,6 +32,7 @@ import (
 	"github.com/snyk/snyk-ls/domain/ide/command"
 	"github.com/snyk/snyk-ls/domain/snyk/remediation"
 	noti "github.com/snyk/snyk-ls/internal/notification"
+	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
@@ -47,7 +48,7 @@ type fakeFolderRemediator struct {
 	err     error
 }
 
-func (f *fakeFolderRemediator) FixFolder(_ context.Context, _ types.FilePath) ([]types.FolderFixFileResult, error) {
+func (f *fakeFolderRemediator) FixFolder(_ context.Context, _ types.FilePath, _ []string, _ *types.SeverityFilter) ([]types.FolderFixFileResult, error) {
 	return f.results, f.err
 }
 
@@ -62,7 +63,7 @@ func initGitRepoForCmd(t *testing.T) string {
 	}
 	run := func(args ...string) {
 		t.Helper()
-		cmd := exec.Command("git", args...)
+		cmd := exec.Command("git", testsupport.GitUnsigned(args...)...)
 		cmd.Dir = dir
 		out, err := cmd.CombinedOutput()
 		require.NoError(t, err, "git %v: %s", args, string(out))
@@ -228,7 +229,7 @@ type trackingFolderRemediator struct {
 	fn func(ctx context.Context, root types.FilePath) ([]types.FolderFixFileResult, error)
 }
 
-func (tr *trackingFolderRemediator) FixFolder(ctx context.Context, root types.FilePath) ([]types.FolderFixFileResult, error) {
+func (tr *trackingFolderRemediator) FixFolder(ctx context.Context, root types.FilePath, _ []string, _ *types.SeverityFilter) ([]types.FolderFixFileResult, error) {
 	return tr.fn(ctx, root)
 }
 
@@ -269,10 +270,14 @@ func TestFixFolder_Acceptance_RunsInPassedFolderNoNestedWorktree(t *testing.T) {
 
 // newFixFolderCmd constructs a remediationFixFolderCommand for unit testing.
 func newFixFolderCmd(args []any, provider remediation.FolderRemediator) types.Command {
+	return newScopedFixFolderCmd(args, provider, nil)
+}
+
+func newScopedFixFolderCmd(args []any, provider remediation.FolderRemediator, w types.Workspace) types.Command {
 	return command.NewRemediationFixFolderCommand(types.CommandData{
 		CommandId: types.RemediationAgentFixFolderCommand,
 		Arguments: args,
-	}, provider)
+	}, provider, w)
 }
 
 // UNIT-120: wrong arg count → error.

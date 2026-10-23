@@ -59,8 +59,8 @@ The tool implements caching to avoid excessive API calls:
 
 The tool is run daily by a GitHub Action that:
 1. Generates the compatibility matrix
-2. Creates a PR to the `snyk/user-docs` repository
-3. Updates `/docs/cli-ide-and-ci-cd-integrations/compatibility-matrix.md`
+2. Creates a PR to the `snyk/user-docs-internal` repository
+3. Updates `docs/developer-tools/snyk-ide-plugins-and-extensions/compatibility-matrix.md`
 
 ## Environment Variables
 

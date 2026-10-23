@@ -1050,7 +1050,7 @@ curl -s -X DELETE -H "Authorization: token $SNYK_TOKEN" \
 
 | Setting | Expected Source | Notes |
 |---|---|---|
-| `base_branch` | `"folder"` | Auto-detected from Git (usually `main` or `master`) |
+| `base_branch` | `"folder"` | Auto-detected from Git: the first of the local `init.defaultBranch`, the `origin/HEAD` target, `main`, `master` that exists as a local branch. Never overwrites a saved value. |
 | `local_branches` | `"folder"` | List of local Git branches |
 | `auto_determined_org` | `"folder"` | If repo is monitored in Snyk |
 

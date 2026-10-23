@@ -20,6 +20,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/scanstates"
 	"github.com/snyk/snyk-ls/domain/snyk/mock_snyk"
+	htmlIgnore "github.com/snyk/snyk-ls/internal/html/ignore"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/testutil"
@@ -673,7 +674,7 @@ func Test_validateIgnoreRequest__notifies_user_when_repo_URL_cannot_be_determine
 	found := false
 	for _, msg := range messages {
 		if params, ok := msg.(sglsp.ShowMessageParams); ok {
-			if params.Type == sglsp.MTWarning && params.Message == userMsgCannotDetermineRepoURL {
+			if params.Type == sglsp.MTWarning && params.Message == htmlIgnore.CreateIgnoreUnavailableReason {
 				found = true
 				break
 			}

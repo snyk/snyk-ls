@@ -44,6 +44,7 @@ const (
 	UseExperimentalRiskScoreInCLI string = "useExperimentalRiskScoreInCLI"
 	UseExperimentalRiskScore      string = "useExperimentalRiskScore"
 	UseOsTest                     string = "useTestShimForOSCliTest"
+	EnableUvCLI                   string = "enableUvCLI"
 )
 
 // ffServiceResolvedFlags are platform feature flag names, each looked up by name on its own request.
@@ -53,6 +54,7 @@ var ffServiceResolvedFlags = []string{ //nolint:gochecknoglobals // a fixed list
 	UseExperimentalRiskScoreInCLI,
 	UseExperimentalRiskScore,
 	UseOsTest,
+	EnableUvCLI,
 }
 
 // gafConfigResolvedFlags are GAF configuration keys, not the feature flag names themselves.

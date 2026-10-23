@@ -331,6 +331,20 @@ func (mr *MockFolderMockRecorder) FilterAndPublishDiagnostics(arg0 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FilterAndPublishDiagnostics", reflect.TypeOf((*MockFolder)(nil).FilterAndPublishDiagnostics), arg0)
 }
 
+// FilterSeverity mocks base method.
+func (m *MockFolder) FilterSeverity() types.SeverityFilter {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FilterSeverity")
+	ret0, _ := ret[0].(types.SeverityFilter)
+	return ret0
+}
+
+// FilterSeverity indicates an expected call of FilterSeverity.
+func (mr *MockFolderMockRecorder) FilterSeverity() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FilterSeverity", reflect.TypeOf((*MockFolder)(nil).FilterSeverity))
+}
+
 // FolderConfigReadOnly mocks base method.
 func (m *MockFolder) FolderConfigReadOnly() *types.FolderConfig {
 	m.ctrl.T.Helper()

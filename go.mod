@@ -30,6 +30,7 @@ require (
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/samber/lo v1.52.0
 	github.com/shirou/gopsutil v3.21.11+incompatible
+	github.com/snyk/cli-extension-dep-graph/v2 v2.6.0
 	github.com/snyk/cli-extension-os-flows v0.0.0-20260625140351-2bb6cb470073
 	github.com/snyk/cli-extension-secrets v0.0.0-20260811115637-ee872c26b0cd
 	github.com/snyk/code-client-go v1.31.7
@@ -122,7 +123,6 @@ require (
 	github.com/sagikazarmark/locafero v0.7.0 // indirect
 	github.com/sergi/go-diff v1.4.0 // indirect
 	github.com/skeema/knownhosts v1.3.2 // indirect
-	github.com/snyk/cli-extension-dep-graph/v2 v2.6.0 // indirect
 	github.com/snyk/dep-graph/go v0.0.0-20260127160647-c836da762c62 // indirect
 	github.com/snyk/go-httpauth v0.0.0-20260810142636-0f6182aaccbc // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect

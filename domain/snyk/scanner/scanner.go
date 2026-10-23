@@ -296,6 +296,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 
 	sc.scanNotifier.SendInProgress(workspaceFolderConfig)
 	gitCheckoutHandler := vcs.NewCheckoutHandler(sc.engine.GetConfiguration())
+	refErr := sc.deltaReferenceErrIfEnabled(workspaceFolderConfig)
 
 	waitGroup := &sync.WaitGroup{}
 	referenceBranchScanWaitGroup := &sync.WaitGroup{}
@@ -362,6 +363,7 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 				SendAnalytics:     true,
 				UpdateGlobalCache: true,
 			}
+			sc.markReferenceStateBeforePublish(folderPath, s.Product(), pathToScan == folderPath, refErr)
 			processResults(span.Context(), data)
 
 			// trigger base scan in background
@@ -376,10 +378,9 @@ func (sc *DelegatingConcurrentScanner) Scan(ctx context.Context, pathToScan type
 				// single file scan, triggered by e.g. a file save
 				if !isSingleFileScan {
 					refLogger.Debug().Msg("Starting reference branch scan")
-					sc.scanStateAggregator.SetScanInProgress(folderPath, scanner.Product(), true)
 					err = sc.scanBaseBranch(refScanCtx, s, workspaceFolderConfig, gitCheckoutHandler)
 					if err != nil {
-						refLogger.Error().Err(err).Msgf("couldn't scan base branch for folder %s for product %s", folderPath, s.Product())
+						refLogger.WithLevel(referenceScanErrLevel(err)).Err(err).Msgf("couldn't scan base branch for folder %s for product %s", folderPath, s.Product())
 					}
 					sc.scanStateAggregator.SetScanDone(folderPath, scanner.Product(), true, err)
 				} else {

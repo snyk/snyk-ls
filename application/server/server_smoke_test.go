@@ -501,7 +501,7 @@ func initLocalFixtureRepo(t *testing.T, files map[string][]byte) types.FilePath 
 		require.NoError(t, os.WriteFile(filepath.Join(dir, name), content, 0600))
 	}
 	gitCmd := func(args ...string) *exec.Cmd {
-		cmd := exec.Command("git", args...)
+		cmd := exec.Command("git", testsupport.GitUnsigned(args...)...)
 		cmd.Dir = dir
 		cmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
 		return cmd
@@ -513,7 +513,7 @@ func initLocalFixtureRepo(t *testing.T, files map[string][]byte) types.FilePath 
 		out, err := gitCmd(args...).CombinedOutput()
 		require.NoErrorf(t, err, "git %v: %s", args, out)
 	}
-	commit := gitCmd("-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false", "commit", "-m", "init")
+	commit := gitCmd("commit", "-m", "init")
 	commit.Env = append(commit.Env,
 		"GIT_AUTHOR_NAME=Snyk LS Test",
 		"GIT_AUTHOR_EMAIL=snyk-ls-test@example.invalid",
@@ -1618,7 +1618,7 @@ app.get('/unique_subfolder_test', function(req, res) {
 	waitForDeltaScan(t, scanAggregator)
 
 	// Verify scan completed successfully — before the fix, this would fail with
-	// "repository not found" or "must specify reference for delta scans"
+	// "repository not found" or a missing delta reference
 	checkForScanParams(t, jsonRPCRecorder, subfolder, product.ProductCode)
 
 	newVulnFilePath := filepath.Clean(filepath.Join(subfolder, "vulns.js"))
@@ -2844,7 +2844,7 @@ func initializeGitRepoForMonorepoBenchmark(t *testing.T, repoDir string) {
 }
 
 func gitCommandForMonorepoBenchmark(dir string, args ...string) *exec.Cmd {
-	cmd := exec.Command("git", args...)
+	cmd := exec.Command("git", testsupport.GitUnsigned(args...)...)
 	cmd.Dir = dir
 	cmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
 	return cmd

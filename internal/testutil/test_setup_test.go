@@ -57,4 +57,20 @@ func Test_MockAndCaptureWorkflowInvocation_LateSendAfterCleanup_DoesNotPanic(t *
 	})
 
 	require.NotPanics(t, lateInvoke, "a late analytics send arriving after MockAndCaptureWorkflowInvocation's cleanup must not panic the whole test process")
+	"github.com/stretchr/testify/assert"
+
+	"github.com/snyk/go-application-framework/pkg/configuration"
+
+	"github.com/snyk/snyk-ls/internal/types"
+)
+
+// A unit test that reaches the real API passes or fails according to the
+// credentials the host or its proxy happens to supply. Both keys matter:
+// production code compares them to decide whether authentication redirected
+// the user elsewhere, so leaving either at the real endpoint reopens the hole.
+func Test_UnitTest_DoesNotPointAtTheRealAPI(t *testing.T) {
+	conf := UnitTest(t).GetConfiguration()
+
+	assert.NotEqual(t, types.DefaultSnykApiUrl, conf.GetString(configuration.API_URL))
+	assert.NotEqual(t, types.DefaultSnykApiUrl, types.GetGlobalString(conf, types.SettingApiEndpoint))
 }

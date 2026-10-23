@@ -21,15 +21,23 @@ import (
 	"context"
 	"errors"
 
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/gosimple/hashdir"
+	"github.com/rs/zerolog"
 
 	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
+	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/vcs"
 )
 
-var ErrMissingDeltaReference = errors.New(utils.ErrNoReferenceBranch)
+var (
+	ErrMissingDeltaReference = errors.New(utils.ErrNoReferenceBranch)
+	ErrBaseBranchNotFound    = errors.New(utils.ErrBaseBranchNotFound)
+	ErrNotGitRepo            = errors.New(utils.ErrNotGitRepo)
+)
 
 func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s types.ProductScanner, folderConfig *types.FolderConfig, checkoutHandler *vcs.CheckoutHandler) error {
 	logger := sc.engine.GetLogger().With().
@@ -66,6 +74,9 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 	logger = logger.With().Str("folderPath", string(folderPath)).Logger()
 
 	logger.Debug().Msg("scanBaseBranch: starting reference/base branch scan")
+	if err := sc.deltaReferenceErr(folderConfig); err != nil {
+		return err
+	}
 	persistHash, err := sc.getPersistHash(folderConfig)
 	if err != nil {
 		return err
@@ -123,6 +134,55 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 	sc.persistScanResults(folderConfig, results, s)
 
 	return nil
+}
+
+// deltaReferenceErr returns nil when the folder has a usable delta reference. It doesn't hash the
+// reference folder, which takes seconds on a large tree.
+func (sc *DelegatingConcurrentScanner) deltaReferenceErr(folderConfig *types.FolderConfig) error {
+	if sc.configResolver.GetString(types.SettingReferenceFolder, folderConfig) != "" {
+		return nil
+	}
+	repo, err := git.PlainOpenWithOptions(string(folderConfig.FolderPath), &git.PlainOpenOptions{DetectDotGit: true})
+	if errors.Is(err, git.ErrRepositoryNotExists) {
+		return ErrNotGitRepo
+	}
+	if err != nil {
+		return err
+	}
+	baseBranch := sc.configResolver.GetString(types.SettingBaseBranch, folderConfig)
+	if baseBranch == "" {
+		return ErrMissingDeltaReference
+	}
+	_, err = repo.Reference(plumbing.NewBranchReferenceName(baseBranch), true)
+	if errors.Is(err, plumbing.ErrReferenceNotFound) {
+		return ErrBaseBranchNotFound
+	}
+	return err
+}
+
+func (sc *DelegatingConcurrentScanner) deltaReferenceErrIfEnabled(folderConfig *types.FolderConfig) error {
+	if !sc.configResolver.IsDeltaFindingsEnabledForFolder(folderConfig) {
+		return nil
+	}
+	return sc.deltaReferenceErr(folderConfig)
+}
+
+// markReferenceStateBeforePublish runs before the working-tree publish, which sends the reference
+// state with delta on, so the result never carries the previous scan's reference outcome.
+func (sc *DelegatingConcurrentScanner) markReferenceStateBeforePublish(folderPath types.FilePath, p product.Product, isFullScan bool, refErr error) {
+	switch {
+	case refErr != nil:
+		sc.scanStateAggregator.SetScanDone(folderPath, p, true, refErr)
+	case isFullScan:
+		sc.scanStateAggregator.SetScanInProgress(folderPath, p, true)
+	}
+}
+
+func referenceScanErrLevel(err error) zerolog.Level {
+	if utils.IsNonFailingScanError(err.Error()) {
+		return zerolog.DebugLevel
+	}
+	return zerolog.ErrorLevel
 }
 
 func (sc *DelegatingConcurrentScanner) persistScanResults(

@@ -222,6 +222,7 @@ func TestGetCodeApiUrlForFolder(t *testing.T) {
 
 	t.Run("Default deeproxy url for code api", func(t *testing.T) {
 		engine := testutil.UnitTest(t)
+		config.UpdateApiEndpointsOnConfig(engine.GetConfiguration(), config.DefaultSnykApiUrl)
 
 		// Clear env since it takes priority over default deeproxy url.
 		t.Setenv(config.DeeproxyApiUrlKey, "")
