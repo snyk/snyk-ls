@@ -152,7 +152,7 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration(t *testing.T) {
 			}
 
 			engineConfig := engine.GetConfiguration()
-			config, err := cmd.initializeCreateConfiguration(engineConfig, "finding123", contentRoot)
+			config, err := cmd.initializeCreateConfiguration(engineConfig, "finding123", config.GetUnenrichedFolderConfigFromEngine(engine, cmd.configResolver, contentRoot, engine.GetLogger()))
 
 			if tt.expectedError != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
@@ -504,7 +504,7 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration_FallsBackToGlobalOrg
 
 	// Test initializeCreateConfiguration - when FolderOrganization returns the global org,
 	// it sets the org in the config (which is the global org)
-	engineConfig, err := cmd.initializeCreateConfiguration(engine.GetConfiguration().Clone(), "finding1", folderPath)
+	engineConfig, err := cmd.initializeCreateConfiguration(engine.GetConfiguration().Clone(), "finding1", config.GetUnenrichedFolderConfigFromEngine(engine, cmd.configResolver, folderPath, engine.GetLogger()))
 	require.NoError(t, err)
 	configOrg := engineConfig.GetString(configuration.ORGANIZATION)
 	// When FolderOrganization returns the global org, initializeCreateConfiguration sets it in the config
@@ -667,7 +667,7 @@ func Test_validateIgnoreRequest__allows_non_git_folder_when_remote_repo_url_over
 	}
 
 	logger := engine.GetLogger().With().Str("method", "test").Logger()
-	err := cmd.validateIgnoreRequest(logger, nonGitDir)
+	err := cmd.validateIgnoreRequest(logger, config.GetUnenrichedFolderConfigFromEngine(engine, cmd.configResolver, nonGitDir, engine.GetLogger()))
 
 	require.NoError(t, err, "validateIgnoreRequest should not error when a --remote-repo-url override is configured")
 	assert.Empty(t, mockNotifier.SentMessages(), "no warning should be sent when the override lets validation succeed")
@@ -693,7 +693,7 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration_SetsRemoteRepoUrlFro
 		configResolver: testutil.DefaultConfigResolver(engine),
 	}
 
-	resultConfig, err := cmd.initializeCreateConfiguration(engineConf, "finding123", contentRoot)
+	resultConfig, err := cmd.initializeCreateConfiguration(engineConf, "finding123", config.GetUnenrichedFolderConfigFromEngine(engine, cmd.configResolver, contentRoot, engine.GetLogger()))
 	require.NoError(t, err)
 	assert.Equal(t, "https://github.com/example/repo.git", resultConfig.Get(ignore_workflow.RemoteRepoUrlKey))
 }
@@ -867,7 +867,7 @@ func Test_validateIgnoreRequest__notifies_user_when_repo_URL_cannot_be_determine
 	}
 
 	logger := engine.GetLogger().With().Str("method", "test").Logger()
-	err := cmd.validateIgnoreRequest(logger, nonGitDir)
+	err := cmd.validateIgnoreRequest(logger, config.GetUnenrichedFolderConfigFromEngine(engine, cmd.configResolver, nonGitDir, engine.GetLogger()))
 
 	require.Error(t, err, "validateIgnoreRequest should return an error when repo URL cannot be determined")
 

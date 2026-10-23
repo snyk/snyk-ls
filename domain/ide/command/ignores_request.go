@@ -105,10 +105,11 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 
 	switch workflowType {
 	case "create":
-		if err := cmd.validateIgnoreRequest(logger, contentRoot); err != nil {
+		folderConfig := config.GetUnenrichedFolderConfigFromEngine(cmd.engine, cmd.configResolver, contentRoot, cmd.engine.GetLogger())
+		if err := cmd.validateIgnoreRequest(logger, folderConfig); err != nil {
 			return nil, err
 		}
-		err := cmd.createIgnoreRequest(engine, findingId, contentRoot, issue)
+		err := cmd.createIgnoreRequest(engine, findingId, folderConfig, issue)
 		if err != nil {
 			return nil, err
 		}
@@ -138,8 +139,8 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 	return nil, nil
 }
 
-func (cmd *submitIgnoreRequest) createIgnoreRequest(engine workflow.Engine, findingsId string, contentRoot types.FilePath, issue types.Issue) error {
-	engineConfig, err := cmd.initializeCreateConfiguration(engine.GetConfiguration().Clone(), findingsId, contentRoot)
+func (cmd *submitIgnoreRequest) createIgnoreRequest(engine workflow.Engine, findingsId string, folderConfig *types.FolderConfig, issue types.Issue) error {
+	engineConfig, err := cmd.initializeCreateConfiguration(engine.GetConfiguration().Clone(), findingsId, folderConfig)
 	if err != nil {
 		return err
 	}
@@ -150,7 +151,8 @@ func (cmd *submitIgnoreRequest) createIgnoreRequest(engine workflow.Engine, find
 	return err
 }
 
-func (cmd *submitIgnoreRequest) initializeCreateConfiguration(engineConfig configuration.Configuration, findingId string, contentRoot types.FilePath) (configuration.Configuration, error) {
+func (cmd *submitIgnoreRequest) initializeCreateConfiguration(engineConfig configuration.Configuration, findingId string, folderConfig *types.FolderConfig) (configuration.Configuration, error) {
+	contentRoot := folderConfig.GetFolderPath()
 	if len(cmd.command.Arguments) < 5 {
 		return nil, fmt.Errorf("insufficient arguments for ignore-create workflow")
 	}
@@ -172,7 +174,6 @@ func (cmd *submitIgnoreRequest) initializeCreateConfiguration(engineConfig confi
 	engineConfig = initializeBaseConfiguration(engineConfig, contentRoot)
 	engineConfig = addCreateAndUpdateConfiguration(engineConfig, ignoreType, reason, expiration)
 
-	folderConfig := config.GetUnenrichedFolderConfigFromEngine(cmd.engine, cmd.configResolver, contentRoot, cmd.engine.GetLogger())
 	if remoteRepoUrl := folderconfig.RemoteRepoUrlOverride(cmd.configResolver, folderConfig); remoteRepoUrl != "" {
 		engineConfig.Set(ignore_workflow.RemoteRepoUrlKey, remoteRepoUrl)
 	}
@@ -360,10 +361,9 @@ func (cmd *submitIgnoreRequest) executeIgnoreWorkflow(engine workflow.Engine, wo
 // uses). If neither is available, it sends a user-facing warning notification and returns an
 // error. The raw error from go-git is kept in the structured log only, to avoid leaking
 // filesystem paths.
-func (cmd *submitIgnoreRequest) validateIgnoreRequest(logger zerolog.Logger, contentRoot types.FilePath) error {
-	folderConfig := config.GetUnenrichedFolderConfigFromEngine(cmd.engine, cmd.configResolver, contentRoot, cmd.engine.GetLogger())
+func (cmd *submitIgnoreRequest) validateIgnoreRequest(logger zerolog.Logger, folderConfig *types.FolderConfig) error {
 	if _, err := folderconfig.RepoUrlForIgnores(cmd.configResolver, folderConfig); err != nil {
-		logger.Warn().Err(err).Str("contentRoot", string(contentRoot)).Msg("could not determine repository URL for ignore request")
+		logger.Warn().Err(err).Str("contentRoot", string(folderConfig.GetFolderPath())).Msg("could not determine repository URL for ignore request")
 		if cmd.notifier != nil {
 			cmd.notifier.SendShowMessage(sglsp.MTWarning, htmlIgnore.CreateIgnoreUnavailableReason)
 		}
