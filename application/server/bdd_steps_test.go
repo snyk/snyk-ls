@@ -89,6 +89,7 @@ type bddSteps struct {
 	ignoreCapturedRemoteRepoUrl string
 	ignoreCapturedFindingId     string
 	scannedFindingId            string
+	scannedIssueID              string
 	ignoreCommandErr            error
 
 	issueDetailsHtml string
@@ -223,14 +224,20 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	sc.Given(`^a folder that is not a Git repository$`, func() error {
 		return s.runOnScenarioGoroutine(s.aFolderThatIsNotAGitRepository)
 	})
-	sc.Given(`^the developer sets "([^"]*)" as a global additional parameter$`, func(ctx context.Context, param string) error {
+	sc.Given(`^a folder that is a Git repository with a remote$`, func() error {
+		return s.runOnScenarioGoroutine(s.aFolderThatIsAGitRepositoryWithARemote)
+	})
+	sc.Step(`^the developer sets "([^"]*)" as a global additional parameter$`, func(ctx context.Context, param string) error {
 		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperSetsAGlobalAdditionalParameter(ctx, param) })
 	})
 	sc.Given(`^the developer sets "([^"]*)" as the folder's additional parameter$`, func(ctx context.Context, param string) error {
 		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperSetsTheFoldersAdditionalParameter(ctx, param) })
 	})
-	sc.When(`^the developer saves a file with a security issue and creates an ignore$`, func(ctx context.Context) error {
-		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperSavesAFileWithASecurityIssueAndCreatesAnIgnore(ctx) })
+	sc.When(`^the developer saves a file with a security issue$`, func(ctx context.Context) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperSavesAFileWithASecurityIssue(ctx) })
+	})
+	sc.When(`^the developer creates an ignore for that issue$`, func(ctx context.Context) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperCreatesAnIgnoreForThatIssue(ctx) })
 	})
 	sc.Then(`^the ignore is filed for repository "([^"]*)"$`, func(repoUrl string) error {
 		return s.runOnScenarioGoroutine(func() error { return s.theIgnoreIsFiledForRepository(repoUrl) })
@@ -244,14 +251,14 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	sc.Then(`^no error notification is shown to the developer$`, func() error {
 		return s.runOnScenarioGoroutine(s.noErrorNotificationIsShownToTheDeveloper)
 	})
-	sc.Then(`^the details offered an enabled button$`, func() error {
-		return s.runOnScenarioGoroutine(s.theDetailsOfferedAnEnabledButton)
+	sc.Then(`^the issue details offer an enabled "Create ignore" button$`, func() error {
+		return s.runOnScenarioGoroutine(s.theIssueDetailsOfferAnEnabledCreateIgnoreButton)
 	})
 	sc.When(`^the developer opens the issue details$`, func(ctx context.Context) error {
 		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperOpensTheIssueDetails(ctx) })
 	})
-	sc.Then(`^Create ignore is disabled with an explanation to add a Git remote or set --remote-repo-url, then rescan$`, func() error {
-		return s.runOnScenarioGoroutine(s.createIgnoreIsDisabledWithExplanation)
+	sc.Then(`^the issue details offer a disabled "Create ignore" button with an explanation to add a Git remote or set --remote-repo-url, then rescan$`, func() error {
+		return s.runOnScenarioGoroutine(s.theIssueDetailsOfferADisabledCreateIgnoreButtonWithExplanation)
 	})
 	sc.Given(`^the developer saves a file that still has only the known issue$`, func() error {
 		return s.runOnScenarioGoroutine(s.developerSavesFileWithOnlyKnownIssue)
@@ -1198,13 +1205,23 @@ func (s *bddSteps) theFixRunsWithTheChosenProviderAndModel() error {
 	return nil
 }
 
-// aFolderThatIsNotAGitRepository builds the same fixture developerSavesFileWithSecurityIssue
-// uses, then strips its .git directory - only a --remote-repo-url override, not a Git
-// remote, can resolve a repository URL for it from here on.
+// aFolderThatIsNotAGitRepository strips the .git directory from the security-issue fixture,
+// so only a --remote-repo-url override, not a Git remote, can resolve a repository URL.
 func (s *bddSteps) aFolderThatIsNotAGitRepository() error {
+	return s.addSecurityIssueFolder(false)
+}
+
+// aFolderThatIsAGitRepositoryWithARemote keeps the fixture's Git repository and its remote.
+func (s *bddSteps) aFolderThatIsAGitRepositoryWithARemote() error {
+	return s.addSecurityIssueFolder(true)
+}
+
+func (s *bddSteps) addSecurityIssueFolder(keepGit bool) error {
 	filePath, fileDir := code.TempWorkdirWithIssues(s.scenarioT)
-	if err := os.RemoveAll(filepath.Join(string(fileDir), ".git")); err != nil {
-		return fmt.Errorf("failed to remove .git from fixture folder: %w", err)
+	if !keepGit {
+		if err := os.RemoveAll(filepath.Join(string(fileDir), ".git")); err != nil {
+			return fmt.Errorf("failed to remove .git from fixture folder: %w", err)
+		}
 	}
 	s.deltaFilePath = filePath
 	s.deltaFileDir = fileDir
@@ -1252,13 +1269,10 @@ func (s *bddSteps) theDeveloperSetsTheFoldersAdditionalParameter(ctx context.Con
 	return nil
 }
 
-// theDeveloperSavesAFileWithASecurityIssueAndCreatesAnIgnore saves the fixture file -
-// without re-adding the folder, aFolderThatIsNotAGitRepository already did that - then
-// drives workspace/executeCommand(snyk.submitIgnoreRequest) the way an editor's "ignore"
-// action does. The real ignore-create workflow is replaced with a fake that captures its
-// --remote-repo-url, the same way theDeveloperAsksSnykToFixAFolder substitutes the
-// external "fix" workflow, so the scenario stays network-free.
-func (s *bddSteps) theDeveloperSavesAFileWithASecurityIssueAndCreatesAnIgnore(ctx context.Context) error {
+// theDeveloperSavesAFileWithASecurityIssue saves the fixture file - without re-adding the
+// folder, aFolderThatIsNotAGitRepository already did that - and captures the scanned issue
+// and its rendered details before any ignore is filed.
+func (s *bddSteps) theDeveloperSavesAFileWithASecurityIssue(ctx context.Context) error {
 	didSaveParams := sglsp.DidSaveTextDocumentParams{
 		TextDocument: sglsp.TextDocumentIdentifier{URI: uri.PathToUri(s.deltaFilePath)},
 	}
@@ -1292,12 +1306,21 @@ func (s *bddSteps) theDeveloperSavesAFileWithASecurityIssueAndCreatesAnIgnore(ct
 
 	// Captured now, before the ignore is filed below - once the issue is ignored, the
 	// footer that would show the button disappears entirely, so this is the only point
-	// in this composite step from which "the details offered an enabled button" can
+	// in this composite step from which "the issue details offer an enabled \"Create ignore\" button" can
 	// still tell an enabled button apart from a button that no longer renders at all.
 	s.enableConsistentIgnoresForFolder()
 	s.scenarioT.Cleanup(code.ResetHTMLRenderer)
 	s.issueDetailsHtml, s.issueDetailsErr = s.fetchIssueDescriptionHtml(ctx, issueID)
+	s.scannedIssueID = issueID
+	return nil
+}
 
+// theDeveloperCreatesAnIgnoreForThatIssue files the ignore the way an editor's "ignore"
+// action does. The real ignore-create workflow is replaced with a fake that captures its
+// --remote-repo-url, the same way theDeveloperAsksSnykToFixAFolder substitutes the
+// external "fix" workflow, so the scenario stays network-free.
+func (s *bddSteps) theDeveloperCreatesAnIgnoreForThatIssue(ctx context.Context) error {
+	issueID := s.scannedIssueID
 	flagset := workflow.ConfigurationOptionsFromFlagset(pflag.NewFlagSet("", pflag.ContinueOnError))
 	callback := func(invocation workflow.InvocationContext, _ []workflow.Data) ([]workflow.Data, error) {
 		s.ignoreCapturedRemoteRepoUrl = invocation.GetConfiguration().GetString(ignore_workflow.RemoteRepoUrlKey)
@@ -1408,7 +1431,7 @@ func (s *bddSteps) fetchIssueDescriptionHtml(ctx context.Context, issueID string
 
 const createIgnoreDisabledButtonMarkup = `id="ignore-create" class="ignore-button secondary" disabled`
 
-func (s *bddSteps) theDetailsOfferedAnEnabledButton() error {
+func (s *bddSteps) theIssueDetailsOfferAnEnabledCreateIgnoreButton() error {
 	if s.issueDetailsErr != nil {
 		return fmt.Errorf("generateIssueDescription call failed: %w", s.issueDetailsErr)
 	}
@@ -1446,7 +1469,7 @@ func (s *bddSteps) theDeveloperOpensTheIssueDetails(ctx context.Context) error {
 	return nil
 }
 
-func (s *bddSteps) createIgnoreIsDisabledWithExplanation() error {
+func (s *bddSteps) theIssueDetailsOfferADisabledCreateIgnoreButtonWithExplanation() error {
 	if s.issueDetailsErr != nil {
 		return fmt.Errorf("generateIssueDescription call failed: %w", s.issueDetailsErr)
 	}
