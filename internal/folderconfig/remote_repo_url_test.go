@@ -17,8 +17,6 @@
 package folderconfig
 
 import (
-	"os"
-	"os/exec"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -29,7 +27,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/snyk/snyk-ls/internal/testsupport"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
@@ -50,20 +47,13 @@ func newTestConfigResolver(t *testing.T) (*types.ConfigResolver, configuration.C
 	return resolver, conf
 }
 
-func gitCommandForRemoteRepoUrlTest(dir string, args ...string) *exec.Cmd {
-	cmd := exec.Command("git", testsupport.GitUnsigned(args...)...)
-	cmd.Dir = dir
-	cmd.Env = testsupport.GitEnvWithoutInheritedRepoConfig(os.Environ())
-	return cmd
-}
-
 // initGitRepoWithRemote creates a throwaway Git repository with an "origin" remote,
 // the same shape code.TempWorkdirWithIssues builds for its fixtures.
 func initGitRepoWithRemote(t *testing.T, dir string, remoteUrl string) {
 	t.Helper()
-	_, err := gitCommandForRemoteRepoUrlTest(dir, "init").Output()
+	_, err := gitCommandForTestRepo(dir, "init").Output()
 	require.NoError(t, err)
-	_, err = gitCommandForRemoteRepoUrlTest(dir, "config", "remote.origin.url", remoteUrl).Output()
+	_, err = gitCommandForTestRepo(dir, "config", "remote.origin.url", remoteUrl).Output()
 	require.NoError(t, err)
 }
 
@@ -171,48 +161,57 @@ func Test_RepoUrlForIgnores(t *testing.T) {
 	})
 }
 
-func Test_extractFlagValue(t *testing.T) {
+func Test_remoteRepoUrlFromArgs(t *testing.T) {
 	tests := []struct {
 		name     string
 		args     []string
-		flag     string
 		expected string
 	}{
 		{
 			name:     "equals form",
 			args:     []string{"--all-projects", "--remote-repo-url=https://github.com/example/repo.git"},
-			flag:     "--remote-repo-url",
 			expected: "https://github.com/example/repo.git",
 		},
 		{
 			name:     "space-separated form",
 			args:     []string{"--remote-repo-url", "https://github.com/example/repo.git"},
-			flag:     "--remote-repo-url",
 			expected: "https://github.com/example/repo.git",
 		},
 		{
 			name:     "flag not present",
 			args:     []string{"--all-projects"},
-			flag:     "--remote-repo-url",
 			expected: "",
 		},
 		{
 			name:     "space-separated form missing value",
 			args:     []string{"--remote-repo-url"},
-			flag:     "--remote-repo-url",
 			expected: "",
 		},
 		{
 			name:     "empty args",
 			args:     []string{},
-			flag:     "--remote-repo-url",
 			expected: "",
+		},
+		{
+			name:     "repeated flag, last one wins like the CLI",
+			args:     []string{"--remote-repo-url=https://first.example/repo", "--remote-repo-url=https://second.example/repo"},
+			expected: "https://second.example/repo",
+		},
+		{
+			name:     "empty equals form is treated as not set",
+			args:     []string{"--remote-repo-url="},
+			expected: "",
+		},
+		{
+			name:     "unrelated flags and positional args are tolerated",
+			args:     []string{"--all-projects", "--org=acme", "positional", "--remote-repo-url=https://github.com/example/repo.git", "--unknown-bool"},
+			expected: "https://github.com/example/repo.git",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, extractFlagValue(tt.args, tt.flag))
+			assert.Equal(t, tt.expected, remoteRepoUrlFromArgs(tt.args))
 		})
 	}
 }

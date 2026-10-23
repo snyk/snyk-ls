@@ -17,17 +17,16 @@
 package folderconfig
 
 import (
-	"strings"
+	"io"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/utils/git"
+	"github.com/spf13/pflag"
 
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// remoteRepoUrlFlag is the CLI-style flag name for configuration.FLAG_REMOTE_REPO_URL
-// ("remote-repo-url"), as it would appear in a folder's Additional Parameters setting.
-const remoteRepoUrlFlag = "--" + configuration.FLAG_REMOTE_REPO_URL
+const remoteRepoUrlFlag = configuration.FLAG_REMOTE_REPO_URL
 
 // RepoUrlUnavailableRemedy is the user-facing remedy appended to error messages when
 // neither a Git remote nor a --remote-repo-url override can be resolved for a folder.
@@ -41,11 +40,11 @@ func RemoteRepoUrlOverride(resolver types.ConfigResolverInterface, fc *types.Fol
 		return ""
 	}
 	if fc != nil {
-		if value := extractFlagValue(resolver.GetStringSlice(types.SettingAdditionalParameters, fc), remoteRepoUrlFlag); value != "" {
+		if value := remoteRepoUrlFromArgs(resolver.GetStringSlice(types.SettingAdditionalParameters, fc)); value != "" {
 			return value
 		}
 	}
-	return extractFlagValue(resolver.GetStringSlice(types.SettingCliAdditionalOssParameters, fc), remoteRepoUrlFlag)
+	return remoteRepoUrlFromArgs(resolver.GetStringSlice(types.SettingCliAdditionalOssParameters, fc))
 }
 
 // RepoUrlForIgnores is the URL ignores for this folder are keyed on: the override if set,
@@ -61,16 +60,14 @@ func RepoUrlForIgnores(resolver types.ConfigResolverInterface, fc *types.FolderC
 	return git.RepoUrlFromDir(contentRoot)
 }
 
-// extractFlagValue returns the value of a CLI-style flag from args, supporting both the
-// "--flag=value" and "--flag value" forms. Returns "" if the flag is not present.
-func extractFlagValue(args []string, flag string) string {
-	for i, arg := range args {
-		if value, ok := strings.CutPrefix(arg, flag+"="); ok {
-			return value
-		}
-		if arg == flag && i+1 < len(args) {
-			return args[i+1]
-		}
-	}
-	return ""
+// remoteRepoUrlFromArgs parses args the way the CLI does, so repeated flags resolve last-wins
+// and unrelated Additional Parameters are ignored. An empty value counts as not set.
+func remoteRepoUrlFromArgs(args []string) string {
+	fs := pflag.NewFlagSet("additional-parameters", pflag.ContinueOnError)
+	fs.ParseErrorsWhitelist = pflag.ParseErrorsWhitelist{UnknownFlags: true}
+	fs.SetOutput(io.Discard)
+	var remoteRepoUrl string
+	fs.StringVar(&remoteRepoUrl, remoteRepoUrlFlag, "", "")
+	_ = fs.Parse(args)
+	return remoteRepoUrl
 }
