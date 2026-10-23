@@ -109,7 +109,7 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 		if err := cmd.validateIgnoreRequest(logger, folderConfig); err != nil {
 			return nil, err
 		}
-		err := cmd.createIgnoreRequest(engine, findingId, folderConfig, issue)
+		err := cmd.createIgnoreRequest(engine, findingId, contentRoot, folderConfig, issue)
 		if err != nil {
 			return nil, err
 		}
@@ -139,8 +139,8 @@ func (cmd *submitIgnoreRequest) Execute(ctx context.Context) (any, error) {
 	return nil, nil
 }
 
-func (cmd *submitIgnoreRequest) createIgnoreRequest(engine workflow.Engine, findingsId string, folderConfig *types.FolderConfig, issue types.Issue) error {
-	engineConfig, err := cmd.initializeCreateConfiguration(engine.GetConfiguration().Clone(), findingsId, folderConfig)
+func (cmd *submitIgnoreRequest) createIgnoreRequest(engine workflow.Engine, findingsId string, contentRoot types.FilePath, folderConfig *types.FolderConfig, issue types.Issue) error {
+	engineConfig, err := cmd.initializeCreateConfiguration(engine.GetConfiguration().Clone(), findingsId, contentRoot, folderConfig)
 	if err != nil {
 		return err
 	}
@@ -151,8 +151,7 @@ func (cmd *submitIgnoreRequest) createIgnoreRequest(engine workflow.Engine, find
 	return err
 }
 
-func (cmd *submitIgnoreRequest) initializeCreateConfiguration(engineConfig configuration.Configuration, findingId string, folderConfig *types.FolderConfig) (configuration.Configuration, error) {
-	contentRoot := folderConfig.GetFolderPath()
+func (cmd *submitIgnoreRequest) initializeCreateConfiguration(engineConfig configuration.Configuration, findingId string, contentRoot types.FilePath, folderConfig *types.FolderConfig) (configuration.Configuration, error) {
 	if len(cmd.command.Arguments) < 5 {
 		return nil, fmt.Errorf("insufficient arguments for ignore-create workflow")
 	}

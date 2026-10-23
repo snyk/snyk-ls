@@ -152,7 +152,7 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration(t *testing.T) {
 			}
 
 			engineConfig := engine.GetConfiguration()
-			config, err := cmd.initializeCreateConfiguration(engineConfig, "finding123", config.GetUnenrichedFolderConfigFromEngine(engine, cmd.configResolver, contentRoot, engine.GetLogger()))
+			config, err := cmd.initializeCreateConfiguration(engineConfig, "finding123", contentRoot, config.GetUnenrichedFolderConfigFromEngine(engine, cmd.configResolver, contentRoot, engine.GetLogger()))
 
 			if tt.expectedError != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
@@ -504,7 +504,7 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration_FallsBackToGlobalOrg
 
 	// Test initializeCreateConfiguration - when FolderOrganization returns the global org,
 	// it sets the org in the config (which is the global org)
-	engineConfig, err := cmd.initializeCreateConfiguration(engine.GetConfiguration().Clone(), "finding1", config.GetUnenrichedFolderConfigFromEngine(engine, cmd.configResolver, folderPath, engine.GetLogger()))
+	engineConfig, err := cmd.initializeCreateConfiguration(engine.GetConfiguration().Clone(), "finding1", folderPath, config.GetUnenrichedFolderConfigFromEngine(engine, cmd.configResolver, folderPath, engine.GetLogger()))
 	require.NoError(t, err)
 	configOrg := engineConfig.GetString(configuration.ORGANIZATION)
 	// When FolderOrganization returns the global org, initializeCreateConfiguration sets it in the config
@@ -693,9 +693,31 @@ func Test_submitIgnoreRequest_initializeCreateConfiguration_SetsRemoteRepoUrlFro
 		configResolver: testutil.DefaultConfigResolver(engine),
 	}
 
-	resultConfig, err := cmd.initializeCreateConfiguration(engineConf, "finding123", config.GetUnenrichedFolderConfigFromEngine(engine, cmd.configResolver, contentRoot, engine.GetLogger()))
+	resultConfig, err := cmd.initializeCreateConfiguration(engineConf, "finding123", contentRoot, config.GetUnenrichedFolderConfigFromEngine(engine, cmd.configResolver, contentRoot, engine.GetLogger()))
 	require.NoError(t, err)
 	assert.Equal(t, "https://github.com/example/repo.git", resultConfig.Get(ignore_workflow.RemoteRepoUrlKey))
+}
+
+func Test_submitIgnoreRequest_initializeCreateConfiguration_UsesCallersContentRootForInputDirectory(t *testing.T) {
+	engine := testutil.UnitTest(t)
+
+	contentRoot := types.FilePath("/fake/test-folder-caller-root")
+	_, _ = workspaceutil.SetupWorkspace(t, engine, contentRoot)
+	types.SetPreferredOrgAndOrgSetByUser(engine.GetConfiguration(), contentRoot, "test-org", true)
+
+	cmd := &submitIgnoreRequest{
+		command: types.CommandData{
+			Arguments: []any{"create", "issueId", "wont_fix", "reason", "expiration"},
+		},
+		engine:         engine,
+		configResolver: testutil.DefaultConfigResolver(engine),
+	}
+	folderConfig := config.GetUnenrichedFolderConfigFromEngine(engine, cmd.configResolver, contentRoot, engine.GetLogger())
+	folderConfig.FolderPath = types.FilePath("/normalized/other-path")
+
+	resultConfig, err := cmd.initializeCreateConfiguration(engine.GetConfiguration().Clone(), "finding123", contentRoot, folderConfig)
+	require.NoError(t, err)
+	assert.Equal(t, string(contentRoot), resultConfig.GetString(configuration.INPUT_DIRECTORY))
 }
 
 func Test_submitIgnoreRequest_CreateIgnore_SucceedsForNonGitFolder_WithRemoteRepoUrlOverride(t *testing.T) {
