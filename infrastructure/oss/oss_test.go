@@ -834,6 +834,32 @@ func TestCLIScanner_ostestScan_PropagatesFeatureFlagsToConfig(t *testing.T) {
 		"expected UseOsTest=false to be propagated")
 }
 
+func Test_propagateFeatureFlags_UvCLI(t *testing.T) {
+	tests := []struct {
+		name    string
+		enabled bool
+	}{
+		{name: "enableUvCLI on", enabled: true},
+		{name: "enableUvCLI off", enabled: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			folderConfig := &types.FolderConfig{
+				FolderPath:     types.FilePath(t.TempDir()),
+				ConfigResolver: testutil.DefaultConfigResolver(engine),
+			}
+			folderConfig.SetFeatureFlag(featureflag.EnableUvCLI, tt.enabled)
+			engineConfig := configuration.NewWithOpts()
+			engineConfig.Set("internal_snyk_cli_uv_enabled", !tt.enabled)
+
+			propagateFeatureFlags(folderConfig, engineConfig)
+
+			assert.Equal(t, tt.enabled, engineConfig.GetBool("internal_snyk_cli_uv_enabled"))
+		})
+	}
+}
+
 func Test_processOsTestWorkFlowData_AggregatesIssues(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	ctx := ctx2.NewContextWithLogger(t.Context(), engine.GetLogger())

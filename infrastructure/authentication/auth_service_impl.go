@@ -851,6 +851,9 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 
 	// Coalesce concurrent auth API calls: all in-flight callers share one result.
 	token := config.GetToken(conf)
+	if token == "" {
+		return false
+	}
 	v, _, _ := a.authCheckGroup.Do(token, func() (interface{}, error) {
 		u, e := a.authProvider.GetCheckAuthenticationFunction()(a.engine)
 		return &authCheckResult{user: u, err: e}, nil

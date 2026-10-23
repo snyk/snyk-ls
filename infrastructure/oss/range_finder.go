@@ -61,6 +61,8 @@ func getDependencyNode(
 		} else {
 			finder = &DefaultFinder{path: path, fileContent: fileContent, logger: logger}
 		}
+	case "golang", "gomodules":
+		finder = &goRangeFinder{path: path, fileContent: fileContent, logger: logger}
 	default:
 		finder = &DefaultFinder{path: path, fileContent: fileContent, logger: logger}
 	}
