@@ -24,22 +24,21 @@ import (
 	"time"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
-	"github.com/snyk/go-application-framework/pkg/utils/git"
 
+	"github.com/snyk/snyk-ls/internal/folderconfig"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// CreateIgnoreUnavailableReason is shown when ignore creation requires a Git remote
+// CreateIgnoreUnavailableReason is shown when ignore creation requires a repository URL
 // that cannot be resolved for the issue's content root.
-const CreateIgnoreUnavailableReason = "Cannot submit ignore: could not determine the repository URL for this folder. Please ensure the folder is part of a Git repository with a configured remote."
+const CreateIgnoreUnavailableReason = "Cannot submit ignore: could not determine the repository URL for this folder. Please " + folderconfig.RepoUrlUnavailableRemedy + "."
 
-// CanCreateIgnore reports whether an ignore-approval request can be submitted for
-// content at contentRoot. Uses the same resolver as submitIgnoreRequest validation.
-func CanCreateIgnore(contentRoot string) bool {
+func CanCreateIgnore(contentRoot string, configResolver types.ConfigResolverInterface) bool {
 	if contentRoot == "" {
 		return false
 	}
-	_, err := git.RepoUrlFromDir(contentRoot)
+	folderConfig := &types.FolderConfig{FolderPath: types.FilePath(contentRoot), ConfigResolver: configResolver}
+	_, err := folderconfig.RepoUrlForIgnores(configResolver, folderConfig)
 	return err == nil
 }
 
