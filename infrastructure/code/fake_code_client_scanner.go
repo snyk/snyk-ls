@@ -18,6 +18,8 @@ package code
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -36,6 +38,15 @@ type FakeCodeScannerClient struct {
 	UploadAndAnalyzeWasCalled bool
 	LegacyUploadWasCalled     bool   // Records which of the two upload paths the scan took
 	Organization              string // Captures the org the scanner was created with
+	RepositoryUrl             string // Captures the repository URL the scan target carried
+}
+
+// deriveFindingId mimics the real Snyk Code backend, which computes an asset finding ID from
+// the repository URL a scan ran against. The fake must do the same, or a test can never prove
+// that a scan and a later ignore against the same URL agree on the finding they mean.
+func deriveFindingId(repositoryUrl, ruleId string) string {
+	sum := sha256.Sum256([]byte(repositoryUrl + ruleId))
+	return hex.EncodeToString(sum[:])
 }
 
 const (
@@ -43,8 +54,10 @@ const (
 	CatchingInterruptedExceptionWithoutInterrupt string = "catchingInterruptedExceptionWithoutInterrupt"
 )
 
-func getSarifResponseJson2(filePath string) string {
+func getSarifResponseJson2(filePath string, repositoryUrl string) string {
 	filePath = strings.ReplaceAll(filePath, `\`, `\\`)
+	findingId1 := deriveFindingId(repositoryUrl, "java/"+DontUsePrintStackTrace)
+	findingId2 := deriveFindingId(repositoryUrl, "java/"+CatchingInterruptedExceptionWithoutInterrupt)
 	return fmt.Sprintf(`{
   "type": "sarif",
   "progress": 1,
@@ -223,7 +236,8 @@ func getSarifResponseJson2(filePath string) string {
             ],
             "fingerprints": {
               "0": "35bc91513238a0a06af1824552fb3f838201f6fbbf1d76632b2604242e838d20",
-              "1": "c2e08f55.1333c445.d1699128.15932eef.606b2add.34c3b532.4a752797.e9000d02.c2e08f55.1333c445.cd271e66.e22980a8.d31a8364.2f2c7742.4a752797.54d46e25"
+              "1": "c2e08f55.1333c445.d1699128.15932eef.606b2add.34c3b532.4a752797.e9000d02.c2e08f55.1333c445.cd271e66.e22980a8.d31a8364.2f2c7742.4a752797.54d46e25",
+              "snyk/asset/finding/v1": "%[4]s"
             },
             "codeFlows": [
               {
@@ -331,7 +345,8 @@ func getSarifResponseJson2(filePath string) string {
             ],
             "fingerprints": {
               "0": "4ee04cfd17e0a8bee301d4741b26962f0a9630ac811ab48c06513857c3319f4c",
-              "1": "c2e08f55.1333c445.cd271e66.e22980a8.d31a8364.2f2c7742.4a752797.54d46e25.c2e08f55.1333c445.cd271e66.e22980a8.d31a8364.2f2c7742.4a752797.54d46e25"
+              "1": "c2e08f55.1333c445.cd271e66.e22980a8.d31a8364.2f2c7742.4a752797.54d46e25.c2e08f55.1333c445.cd271e66.e22980a8.d31a8364.2f2c7742.4a752797.54d46e25",
+              "snyk/asset/finding/v1": "%[5]s"
             },
             "codeFlows": [
               {
@@ -394,18 +409,21 @@ func getSarifResponseJson2(filePath string) string {
     ]
   }
 }
-`, DontUsePrintStackTrace, CatchingInterruptedExceptionWithoutInterrupt, filePath)
+`, DontUsePrintStackTrace, CatchingInterruptedExceptionWithoutInterrupt, filePath, findingId1, findingId2)
 }
 
 func (f *FakeCodeScannerClient) UploadAndAnalyze(
 	_ context.Context,
 	_ string,
-	_ scan.Target,
+	target scan.Target,
 	files <-chan string,
 	_ map[string]bool,
 ) (*codeClientSarif.SarifResponse, string, error) {
+	if repoTarget, ok := target.(*scan.RepositoryTarget); ok {
+		f.RepositoryUrl = repoTarget.GetRepositoryUrl()
+	}
 	var analysisResponse codeClientSarif.SarifResponse
-	responseJson := getSarifResponseJson2(filepath.Base(<-files))
+	responseJson := getSarifResponseJson2(filepath.Base(<-files), f.RepositoryUrl)
 	err := json.Unmarshal([]byte(responseJson), &analysisResponse)
 	f.UploadAndAnalyzeWasCalled = true
 	return &analysisResponse, "", err
