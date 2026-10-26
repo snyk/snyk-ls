@@ -409,8 +409,8 @@ func MockAndCaptureWorkflowInvocation(
 ) chan WorkflowCapture {
 	t.Helper()
 
+	// Not closed: async senders may reach the Do() callback after the test's cleanups ran.
 	ch := make(chan WorkflowCapture, times)
-	t.Cleanup(func() { close(ch) })
 
 	mockEngine.EXPECT().InvokeWithInputAndConfig(workflowID, gomock.Any(), gomock.Any()).
 		Times(times).
