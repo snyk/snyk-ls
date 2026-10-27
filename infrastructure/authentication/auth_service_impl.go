@@ -1198,14 +1198,9 @@ func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLeg
 	// flushCredentialUpdates without deadlocking the credentialUpdateWorker (which needs a.m.Lock).
 	a.m.Lock()
 	defer a.m.Unlock()
-	if a.syncGeneration.Load() != checkedGeneration {
+	// Async rotations by the credential worker do not bump syncGeneration; also check token in config.
+	if a.syncGeneration.Load() != checkedGeneration || config.GetToken(a.engine.GetConfiguration()) != token {
 		logger.Info().Msg("auth check finished for a token that is no longer current, not logging out")
-		return
-	}
-	// Also check whether the token in config has changed (e.g., via async credential rotation
-	// from the worker). If so, don't logout; the stale check result should not wipe the new token.
-	if config.GetToken(a.engine.GetConfiguration()) != token {
-		logger.Info().Msg("auth check finished for a token that has been replaced by async rotation, not logging out")
 		return
 	}
 	// Mark only after the generation check. A whoami that started on an older

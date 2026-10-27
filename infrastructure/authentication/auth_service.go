@@ -39,7 +39,7 @@ type AuthenticationService interface {
 	UpdateCredentials(newToken string, sendNotification bool, updateApiUrl bool)
 
 	// updateCredentials stores the token in the configuration, and sends a $/snyk.hasAuthenticated notification to the
-	// client if sendNotification is true.
+	// client if sendNotification is true
 	// doesn't have a mutex lock
 	// releaseLock releases a.m around the post-update hook; only valid when the caller holds the write lock
 	updateCredentials(newToken string, sendNotification bool, updateApiUrl bool, releaseLock bool)

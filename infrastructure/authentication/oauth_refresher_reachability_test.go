@@ -41,7 +41,6 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-// threadSafeBuffer is a goroutine-safe buffer for capturing log output.
 type threadSafeBuffer struct {
 	mu  sync.Mutex
 	buf bytes.Buffer
@@ -129,9 +128,7 @@ func Test_IsAuthenticated_DoesNotUseOAuth2ProviderCustomRefresherFunc(t *testing
 	)
 	t.Cleanup(func() { service.Shutdown() })
 
-	// Set the expired token using the proper token service to ensure types.SettingToken
-	// is updated (not just CONFIG_KEY_OAUTH_TOKEN).
-	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+	// SetToken keeps SettingToken and the OAuth storage key in sync, as production does.
 	tokenService.SetToken(conf, tokenString)
 	// Pre-wire the same provider production wiring produces (configureProviders() -> Default())
 	// so handleProviderInconsistencies() doesn't reconfigure and clear the token before the
