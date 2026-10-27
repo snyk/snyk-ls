@@ -128,7 +128,6 @@ func Test_IsAuthenticated_DoesNotUseOAuth2ProviderCustomRefresherFunc(t *testing
 	)
 	t.Cleanup(func() { service.Shutdown() })
 
-	// SetToken keeps SettingToken and the OAuth storage key in sync, as production does.
 	tokenService.SetToken(conf, tokenString)
 	// Pre-wire the same provider production wiring produces (configureProviders() -> Default())
 	// so handleProviderInconsistencies() doesn't reconfigure and clear the token before the

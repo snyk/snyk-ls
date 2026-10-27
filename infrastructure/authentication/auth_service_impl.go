@@ -108,8 +108,7 @@ type AuthenticationServiceImpl struct {
 	// instead of blocking forever if Shutdown has already stopped the worker.
 	credentialUpdateCtx    context.Context
 	credentialUpdateCancel context.CancelFunc
-	// syncGeneration is bumped by every synchronous credential write; queued async updates
-	// from an older generation are discarded.
+	// syncGeneration is bumped by synchronous credential writes; older queued async updates are dropped.
 	syncGeneration atomic.Uint64
 	// notifyMu is separate from m so notifier backpressure cannot block credential access.
 	notifyMu sync.Mutex
@@ -910,7 +909,6 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 	a.handleProviderInconsistencies()
 
 	// Coalesce concurrent auth API calls: all in-flight callers share one result.
-	// Re-read after provider reset, which can clear the token.
 	token, checkedGeneration, provider := a.snapshotCredentials(conf)
 	if token == "" || provider == nil {
 		return false
@@ -1109,7 +1107,6 @@ func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLeg
 		logger.Info().Msg("auth check finished for a token that is no longer current, not logging out")
 		return
 	}
-	// A stale whoami must not re-arm lastFailedToken after Logout or finishAuthenticate cleared it.
 	if a.markTokenFailed(token) {
 		logger.Info().Msg("auth check already failed for this token, not prompting again")
 		return

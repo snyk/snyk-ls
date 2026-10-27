@@ -503,8 +503,6 @@ func (p *errorFakeAuthProvider) AuthenticationMethod() types.AuthenticationMetho
 	return types.FakeAuthentication
 }
 
-// blockingErrorAuthProvider holds the whoami call until release is closed, so a
-// test can replace the token while the check of the old token is still in flight.
 type blockingErrorAuthProvider struct {
 	err       error
 	started   chan struct{}
@@ -1204,8 +1202,6 @@ func Test_ConfigureProviders_CredentialMismatch_ReleasesWriteLockDuringLogout(t 
 	var service AuthenticationService
 	notifier := &authNotificationProbeNotifier{
 		onAuthNotification: func() {
-			// logout's updateCredentials must release a.m before runPostMutationEffects;
-			// otherwise IsAuthenticated()'s a.m.RLock deadlocks on this goroutine's write lock.
 			_ = service.IsAuthenticated()
 			select {
 			case lockProbe <- struct{}{}:
@@ -1234,7 +1230,6 @@ func Test_ConfigureProviders_CredentialMismatch_ReleasesWriteLockDuringLogout(t 
 	}
 }
 
-// authNotificationProbeNotifier forwards auth-credential notifications to a test hook.
 type authNotificationProbeNotifier struct {
 	onAuthNotification func()
 }
