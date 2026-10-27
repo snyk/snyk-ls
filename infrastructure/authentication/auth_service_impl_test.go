@@ -688,6 +688,7 @@ func Test_IsAuthenticated_StaleFailedCheckDoesNotLogOutReplacementToken(t *testi
 	}
 	ts.SetToken(engine.GetConfiguration(), deadToken)
 	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+	t.Cleanup(service.Shutdown)
 
 	done := make(chan bool, 1)
 	go func() {
@@ -723,6 +724,7 @@ func Test_IsAuthenticated_StaleFailureDoesNotRearmLastFailedToken(t *testing.T) 
 	}
 	ts.SetToken(engine.GetConfiguration(), token)
 	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+	t.Cleanup(service.Shutdown)
 
 	done := make(chan bool, 1)
 	go func() {
@@ -1210,6 +1212,7 @@ func Test_ConfigureProviders_CredentialMismatch_ReleasesWriteLockDuringLogout(t 
 		},
 	}
 	service = NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notifier, testutil.DefaultConfigResolver(engine))
+	t.Cleanup(service.(*AuthenticationServiceImpl).Shutdown)
 
 	done := make(chan struct{})
 	go func() {
@@ -2603,6 +2606,7 @@ func Test_UpdateCredentials_NotificationBackpressureDoesNotBlockCredentialWrites
 		wrapped: notification.NewMockNotifier(),
 	}
 	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), blocker, testutil.DefaultConfigResolver(engine))
+	t.Cleanup(service.(*AuthenticationServiceImpl).Shutdown)
 
 	done1 := make(chan struct{})
 	go func() {
@@ -2622,11 +2626,9 @@ func Test_UpdateCredentials_NotificationBackpressureDoesNotBlockCredentialWrites
 		close(done2)
 	}()
 
-	time.Sleep(100 * time.Millisecond)
-
-	if config.GetToken(conf) != "token-2" {
-		t.Fatal("second credential write did not complete; notification backpressure blocked credential writes")
-	}
+	require.Eventually(t, func() bool {
+		return config.GetToken(conf) == "token-2"
+	}, 5*time.Second, time.Millisecond, "notification backpressure blocked credential writes")
 
 	close(blocker.release)
 
@@ -2647,6 +2649,7 @@ func Test_UpdateCredentials_OrderingGuarantee(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	mockNotifier := notification.NewMockNotifier()
 	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+	t.Cleanup(service.(*AuthenticationServiceImpl).Shutdown)
 
 	callCount := atomic.Int32{}
 	service.SetPostCredentialUpdateHook(func() {
@@ -2781,6 +2784,7 @@ func Test_UpdateCredentials_OrderingGuard_SyncGenerationAdvancedNoNotification(t
 	engine, ts := testutil.UnitTestWithEngine(t)
 	mockNotifier := notification.NewMockNotifier()
 	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+	t.Cleanup(service.(*AuthenticationServiceImpl).Shutdown)
 
 	callCount := atomic.Int32{}
 	service.SetPostCredentialUpdateHook(func() {
@@ -2804,6 +2808,7 @@ func Test_UpdateCredentials_OrderingAtomicity(t *testing.T) {
 	}
 	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), blocker, testutil.DefaultConfigResolver(engine))
 	impl := service.(*AuthenticationServiceImpl)
+	t.Cleanup(impl.Shutdown)
 
 	g1Done := make(chan struct{})
 	go func() {
@@ -2817,21 +2822,13 @@ func Test_UpdateCredentials_OrderingAtomicity(t *testing.T) {
 		t.Fatal("G1 Send did not start; blocker not working")
 	}
 
+	require.False(t, impl.notifyMu.TryLock(), "notifyMu must be held during Send")
+
 	g2Done := make(chan struct{})
-	g2ReachedNotify := make(chan struct{})
 	go func() {
-		impl.notifyMu.Lock()
-		close(g2ReachedNotify)
-		impl.notifyMu.Unlock()
 		service.UpdateCredentials("token-2", true, false)
 		close(g2Done)
 	}()
-
-	select {
-	case <-g2ReachedNotify:
-		t.Fatal("G2 acquired notifyMu while G1 was still in Send - mutex not held during Send")
-	case <-time.After(500 * time.Millisecond):
-	}
 
 	close(blocker.release)
 
