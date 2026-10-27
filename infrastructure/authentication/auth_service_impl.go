@@ -984,7 +984,7 @@ type authCheckResult struct {
 
 func (a *AuthenticationServiceImpl) authCheck(token string, provider AuthenticationProvider) func() (interface{}, error) {
 	return func() (interface{}, error) {
-		if token == "" || provider == nil {
+		if token == "" {
 			return &authCheckResult{}, nil
 		}
 		u, e := provider.GetCheckAuthenticationFunction()(a.engine)
