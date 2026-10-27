@@ -2339,6 +2339,7 @@ func Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterSyncWrite(t *testing.T)
 	t.Parallel()
 	engine, ts := testutil.UnitTestWithEngine(t)
 	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+	t.Cleanup(service.Shutdown)
 	impl := service.(*AuthenticationServiceImpl)
 
 	const realToken = "test-real-token-ide-2106"
@@ -2375,6 +2376,7 @@ func Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterAuthenticate(t *testing
 	engine, ts := testutil.UnitTestWithEngine(t)
 	provider := &FakeAuthenticationProvider{Engine: engine}
 	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+	t.Cleanup(service.Shutdown)
 	impl := service.(*AuthenticationServiceImpl)
 
 	impl.m.Lock()
@@ -2409,6 +2411,7 @@ func Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterLogout(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	provider := &FakeAuthenticationProvider{Engine: engine}
 	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+	t.Cleanup(service.Shutdown)
 	impl := service.(*AuthenticationServiceImpl)
 
 	const priorToken = "test-prior-token-that-should-be-cleared"
@@ -2447,6 +2450,7 @@ func Test_CredentialUpdateWorker_HookCanAcquireLock(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
 	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+	t.Cleanup(service.Shutdown)
 
 	impl := service.(*AuthenticationServiceImpl)
 	hookCalled := make(chan struct{}, 1)
@@ -2473,6 +2477,7 @@ func Test_UpdateCredentials_HookCanAcquireLock(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
 	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+	t.Cleanup(service.Shutdown)
 
 	hookCalled := make(chan struct{}, 1)
 
@@ -2512,6 +2517,7 @@ func Test_UpdateCredentials_SkipsStaleNotification(t *testing.T) {
 		provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
 		mockNotifier := notification.NewMockNotifier()
 		service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+		t.Cleanup(service.Shutdown)
 
 		hookCalled := make(chan struct{}, 1)
 		innerCalled := atomic.Bool{}
@@ -2547,6 +2553,7 @@ func Test_UpdateCredentials_SkipsStaleNotification(t *testing.T) {
 		provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
 		mockNotifier := notification.NewMockNotifier()
 		service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+		t.Cleanup(service.Shutdown)
 
 		service.UpdateCredentials("token-b", true, false)
 
@@ -2713,6 +2720,7 @@ func Test_CredentialNotifications_DeliveredInGenerationOrder(t *testing.T) {
 					generation:       impl.syncGeneration.Load(),
 				}
 				impl.updateCredentials("t1", true, false)
+				impl.m.Unlock()
 				impl.flushCredentialUpdates()
 			},
 			minSends: 1,
