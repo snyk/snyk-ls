@@ -387,6 +387,37 @@ func TestIsAuthenticated_ConcurrentCallsSendOnlyOneNotification(t *testing.T) {
 		"concurrent IsAuthenticated() calls should make exactly one auth API call via singleflight, not one per caller")
 }
 
+// Test_IsAuthenticated_ProviderAccessIsRaceFreeAgainstProviderWrites must be run with -race.
+// The fake returns a non-logout error so later iterations keep calling doAuthCheck instead of
+// short-circuiting on an empty token after logout.
+func Test_IsAuthenticated_ProviderAccessIsRaceFreeAgainstProviderWrites(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
+	ts.SetToken(engine.GetConfiguration(), "some-test-token")
+	newProvider := func() *FakeAuthenticationProvider {
+		return &FakeAuthenticationProvider{IsAuthenticated: false, Engine: engine}
+	}
+	service := NewAuthenticationService(engine, ts, newProvider(), error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+	t.Cleanup(service.Shutdown)
+
+	const iterations = 500
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for range iterations {
+			service.IsAuthenticated()
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for range iterations {
+			service.SetProvider(newProvider())
+		}
+	}()
+	wg.Wait()
+}
+
 // TestIsAuthenticated_ConcurrentCallsAllReturnSharedResult guards against a regression
 // where a token-keyed "already in flight" guard around authCheckGroup.Do (added to fix
 // IDE-2178's reentrant-call deadlock, see git history) also short-circuited legitimate

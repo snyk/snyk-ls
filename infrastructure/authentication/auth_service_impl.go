@@ -995,12 +995,12 @@ type authCheckResult struct {
 	err  error
 }
 
-func (a *AuthenticationServiceImpl) authCheck(token string) func() (interface{}, error) {
+func (a *AuthenticationServiceImpl) authCheck(token string, provider AuthenticationProvider) func() (interface{}, error) {
 	return func() (interface{}, error) {
-		if token == "" {
+		if token == "" || provider == nil {
 			return &authCheckResult{}, nil
 		}
-		u, e := a.authProvider.GetCheckAuthenticationFunction()(a.engine)
+		u, e := provider.GetCheckAuthenticationFunction()(a.engine)
 		return &authCheckResult{user: u, err: e}, nil
 	}
 }
@@ -1011,14 +1011,14 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 	// Coalesce concurrent auth API calls: all in-flight callers share one result.
 	// Re-read after provider reset: that path can clear the token, and an empty
 	// token must not be sent to whoami or turned into a re-auth prompt.
-	// Token and generation are one snapshot. UpdateCredentials writes both
-	// under a.m; reading them separately lets a login land between the loads
-	// and attribute the old token's failure to the new generation.
-	token, checkedGeneration := a.snapshotCredentials(conf)
-	if token == "" {
+	// Token, generation, and provider are one snapshot under a.m. UpdateCredentials
+	// and SetProvider write under a.m; reading them separately lets a login or
+	// provider swap land between the loads.
+	token, checkedGeneration, provider := a.snapshotCredentials(conf)
+	if token == "" || provider == nil {
 		return false
 	}
-	v, _, _ := a.authCheckGroup.Do(token, a.authCheck(token))
+	v, _, _ := a.authCheckGroup.Do(token, a.authCheck(token, provider))
 	ar, ok := v.(*authCheckResult)
 	if !ok {
 		return false
@@ -1088,21 +1088,23 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 // configure providers, if needed, as specified in the config
 func (a *AuthenticationServiceImpl) handleProviderInconsistencies() {
 	authMethod := config.GetAuthenticationMethodFromConfig(a.engine.GetConfiguration())
-	msg := fmt.Sprintf("inconsistent auth provider, resetting (authMethod: %s, authenticator: %s)", authMethod, reflect.TypeOf(a.authProvider))
+	// Snapshot under a.m so concurrent SetProvider/ConfigureProviders cannot race.
+	provider := a.Provider()
+	msg := fmt.Sprintf("inconsistent auth provider, resetting (authMethod: %s, authenticator: %s)", authMethod, reflect.TypeOf(provider))
 	var ok bool
 	switch {
-	case a.authProvider == nil:
+	case provider == nil:
 		ok = false
 		msg = "auth provider is not set, resetting to default"
 	case authMethod == types.OAuthAuthentication:
-		_, ok = a.authProvider.(*OAuth2Provider)
+		_, ok = provider.(*OAuth2Provider)
 	case authMethod == types.TokenAuthentication:
-		_, ok = a.authProvider.(*CliAuthenticationProvider)
+		_, ok = provider.(*CliAuthenticationProvider)
 	case authMethod == types.PatAuthentication:
-		_, ok = a.authProvider.(*PatAuthenticationProvider)
+		_, ok = provider.(*PatAuthenticationProvider)
 	case authMethod == types.FakeAuthentication:
-		_, fake := a.authProvider.(*FakeAuthenticationProvider)
-		_, cli := a.authProvider.(*CliAuthenticationProvider)
+		_, fake := provider.(*FakeAuthenticationProvider)
+		_, cli := provider.(*CliAuthenticationProvider)
 		ok = fake || cli
 	default:
 		ok = false
@@ -1197,10 +1199,10 @@ func isPermanentOAuthRefreshError(errMsg string) bool {
 		strings.Contains(errMsg, "token_inactive")
 }
 
-func (a *AuthenticationServiceImpl) snapshotCredentials(conf configuration.Configuration) (string, uint64) {
+func (a *AuthenticationServiceImpl) snapshotCredentials(conf configuration.Configuration) (string, uint64, AuthenticationProvider) {
 	a.m.RLock()
 	defer a.m.RUnlock()
-	return config.GetToken(conf), a.syncGeneration.Load()
+	return config.GetToken(conf), a.syncGeneration.Load(), a.authProvider
 }
 
 func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLegacyToken bool, invalidToken oauth2.Token, checkedGeneration uint64, token string) {
