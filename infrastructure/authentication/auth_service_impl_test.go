@@ -739,7 +739,7 @@ func Test_IsAuthenticated_StaleFailureDoesNotRearmLastFailedToken(t *testing.T) 
 
 	service.Logout(t.Context())
 	service.m.Lock()
-	service.updateCredentials(token, false, false, true)
+	service.updateCredentials(token, false, false)
 	service.clearLastFailedToken()
 	service.m.Unlock()
 	close(provider.release)
@@ -2714,8 +2714,7 @@ func Test_CredentialNotifications_DeliveredInGenerationOrder(t *testing.T) {
 					updateApiUrl:     false,
 					generation:       impl.syncGeneration.Load(),
 				}
-				impl.updateCredentials("t1", true, false, true)
-				impl.m.Unlock()
+				impl.updateCredentials("t1", true, false)
 				impl.flushCredentialUpdates()
 			},
 			minSends: 1,

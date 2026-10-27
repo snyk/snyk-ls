@@ -423,8 +423,8 @@ func (a *AuthenticationServiceImpl) finishAuthenticate(provider AuthenticationPr
 		config.UpdateApiEndpointsOnConfig(a.engine.GetConfiguration(), prioritizedUrl)
 	}
 
-	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification, true)
-	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger(), true)
+	a.updateCredentials(token, true, shouldSendUrlUpdatedNotification)
+	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())
 	a.clearLastFailedToken()
 	a.sendAuthenticationAnalytics()
 	return token, err
@@ -684,25 +684,19 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 	a.m.Lock()
 	defer a.m.Unlock()
 
-	a.updateCredentials(newToken, sendNotification, updateApiUrl, true)
+	a.updateCredentials(newToken, sendNotification, updateApiUrl)
 }
 
-// updateCredentials must be called with a.m held. With releaseLock, a.m is released around the
-// post-update hook, which may call back into a.m-locking methods (RWMutex is not reentrant).
-func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool, updateApiUrl bool, releaseLock bool) {
+// updateCredentials must be called with a.m held; it releases a.m while running the post-update hook, which may call back into a.m-locking methods (RWMutex is not reentrant).
+func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool, updateApiUrl bool) {
 	if !a.applyTokenMutationLocked(newToken, updateApiUrl) {
 		return
 	}
 
 	generation := a.syncGeneration.Add(1)
 
-	if releaseLock {
-		a.m.Unlock()
-		a.runPostMutationEffects(newToken, sendNotification, updateApiUrl, generation)
-		a.m.Lock()
-		return
-	}
-
+	a.m.Unlock()
+	defer a.m.Lock()
 	a.runPostMutationEffects(newToken, sendNotification, updateApiUrl, generation)
 }
 
@@ -838,8 +832,8 @@ func (a *AuthenticationServiceImpl) clearCredentials(ctx context.Context) {
 			a.errorReporter.CaptureError(err)
 		}
 	}
-	a.updateCredentials("", true, false, true)
-	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger(), true)
+	a.updateCredentials("", true, false)
+	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())
 
 	a.lastUsedTokenMu.Lock()
 	a.lastUsedToken = ""
@@ -1015,7 +1009,7 @@ func (a *AuthenticationServiceImpl) handleProviderInconsistencies() {
 	if !ok {
 		a.engine.GetLogger().Warn().Msg(msg)
 		a.m.Lock()
-		a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger(), true)
+		a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())
 		a.m.Unlock()
 	}
 }
@@ -1158,10 +1152,10 @@ func (a *AuthenticationServiceImpl) ConfigureProviders(conf configuration.Config
 	a.m.Lock()
 	defer a.m.Unlock()
 
-	a.configureProviders(conf, logger, true)
+	a.configureProviders(conf, logger)
 }
 
-func (a *AuthenticationServiceImpl) configureProviders(conf configuration.Configuration, logger *zerolog.Logger, releaseLockOnLogout bool) {
+func (a *AuthenticationServiceImpl) configureProviders(conf configuration.Configuration, logger *zerolog.Logger) {
 	authMethod := config.GetAuthenticationMethodFromConfig(conf)
 	subLogger := logger.With().
 		Str("method", "configureProviders").

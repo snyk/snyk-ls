@@ -197,7 +197,7 @@ func newOAuthStorageBridgeCallback(authenticationService AuthenticationService) 
 			serviceImpl.QueueCredentialUpdate(newToken, true, false)
 		} else {
 			// Fallback to direct goroutine for non-impl types (should not happen in practice)
-			go authenticationService.updateCredentials(newToken, true, false, false)
+			go authenticationService.updateCredentials(newToken, true, false)
 		}
 	}
 }
