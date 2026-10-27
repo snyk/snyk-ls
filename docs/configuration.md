@@ -11,6 +11,7 @@ This document describes the complete configuration architecture of the Snyk Lang
 - [Precedence Resolution](#precedence-resolution)
 - [Effective Organization](#effective-organization)
 - [Remote Configuration (LDX-Sync)](#remote-configuration-ldx-sync)
+- [Remote Repository URL Override](#remote-repository-url-override)
 - [Locked Fields](#locked-fields)
 - [IDE ↔ LS Protocol](#ide--ls-protocol)
 - [FolderConfig](#folderconfig)
@@ -376,6 +377,17 @@ The LDX-Sync API response contains a `FolderSettings` map keyed by **normalized*
 Since the client reads raw git remote URLs from the local `.git/config` (e.g., `git@github.com:org/repo.git`), the LS uses `github.com/snyk/go-application-framework/pkg/utils/git.NormalizeGitURL` when resolving folder settings: `ExtractFolderSettings` normalizes both each map key from the API and the folder's remote URL so SSH, HTTPS, mixed-case, and credentialed URLs resolve consistently with the backend.
 
 See also: [configuration-precedence-folder.mmd](diagrams/configuration-precedence-folder.mmd) (folder-scope precedence).
+
+---
+
+## Remote Repository URL Override
+
+`ignore create` needs a repository URL to key the ignore on. For a folder that is not a Git repository, or whose Git remote should not be used, set `--remote-repo-url=<url>` in Additional Parameters. The override is read from:
+
+- **Folder scope**: `additional_parameters` (IntelliJ stores Additional Parameters per folder).
+- **Global scope**: `cli_additional_oss_parameters` (VS Code sends one global string).
+
+If both are set, the folder value wins. The override takes precedence over the repository's Git remote. The override applies to Snyk Code and Snyk Secrets scans and to `ignore create`. When neither the override nor a Git remote is available, Create ignore is disabled in the issue details.
 
 ---
 
