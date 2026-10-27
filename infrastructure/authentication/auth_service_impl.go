@@ -686,7 +686,8 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 	a.updateCredentials(newToken, sendNotification, updateApiUrl)
 }
 
-// updateCredentials must be called with a.m held; it releases a.m while running the post-update hook, which may call back into a.m-locking methods (RWMutex is not reentrant).
+// updateCredentials must be called with a.m write-locked. It releases a.m while running the
+// post-update hook, which may call back into a.m-locking methods (RWMutex is not reentrant).
 func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool, updateApiUrl bool) {
 	if !a.applyTokenMutationLocked(newToken, updateApiUrl) {
 		return
@@ -810,6 +811,19 @@ func (a *AuthenticationServiceImpl) CancelOngoingAuth() {
 }
 
 func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
+	// Drain any credential update already queued (e.g. by GAF's syncTokenRefresh
+	// resyncing the token from on-disk storage during the request that just failed and
+	// triggered this logout) before applying our own authoritative clear below. Without
+	// this, credentialUpdateWorker could apply that stale, queued-but-not-yet-drained
+	// update after our clear, resurrecting the token this logout removes (IDE-2402).
+	a.m.Unlock()
+	a.flushCredentialUpdates()
+	a.m.Lock()
+	a.clearCredentials(ctx)
+}
+
+// clearCredentials must be called with a.m write-locked and after flushCredentialUpdates.
+func (a *AuthenticationServiceImpl) clearCredentials(ctx context.Context) {
 	a.engine.GetConfiguration().ClearCache()
 	a.engine.GetLogger().Info().
 		Str("method", "AuthenticationService.logout").
@@ -817,13 +831,6 @@ func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 		Str("authentication_method", string(config.GetAuthenticationMethodFromConfig(a.engine.GetConfiguration()))).
 		Msg("clearing authentication credentials")
 
-	a.m.Unlock()
-	a.flushCredentialUpdates()
-	a.m.Lock()
-	a.clearCredentials(ctx)
-}
-
-func (a *AuthenticationServiceImpl) clearCredentials(ctx context.Context) {
 	if a.authProvider != nil {
 		err := a.authProvider.ClearAuthentication(ctx)
 		if err != nil {
