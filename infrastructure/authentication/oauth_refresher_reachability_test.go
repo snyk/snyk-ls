@@ -17,14 +17,17 @@
 package authentication
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
@@ -38,6 +41,24 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
+// threadSafeBuffer is a goroutine-safe buffer for capturing log output.
+type threadSafeBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *threadSafeBuffer) Write(p []byte) (n int, err error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *threadSafeBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
 // Test_IsAuthenticated_DoesNotUseOAuth2ProviderCustomRefresherFunc pins down a
 // non-obvious architectural fact (IDE-2178): OAuth2Provider.GetCheckAuthenticationFunction()
 // returns the free function AuthenticationCheck, which ignores its receiver and always
@@ -46,13 +67,17 @@ import (
 // closure (auth_configuration.go) is only ever used by the explicit login flow
 // (Authenticate -> CancelableAuthenticate), never by IsAuthenticated()/scan/whoami traffic.
 //
-// This drives the real production entry point with an expired token and asserts a real
-// refresh attempt and a real whoami call both happen (proven via hit counters) and that
-// the stale token is cleared from storage afterward.
+// This drives the real production entry point with an expired token and asserts the
+// closure's distinctive log signature ("oauth.refresherFunc") never appears, even though
+// a real refresh attempt and a real whoami call both happen (proven via hit counters).
 func Test_IsAuthenticated_DoesNotUseOAuth2ProviderCustomRefresherFunc(t *testing.T) {
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+
+	var logOutput threadSafeBuffer
+	logger := zerolog.New(&logOutput).Level(zerolog.DebugLevel)
+	engine.SetLogger(&logger)
 
 	var tokenEndpointHits, selfEndpointHits int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -91,7 +116,7 @@ func Test_IsAuthenticated_DoesNotUseOAuth2ProviderCustomRefresherFunc(t *testing
 	}
 	tokenBytes, err := json.Marshal(expiredToken)
 	require.NoError(t, err)
-	conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, string(tokenBytes))
+	tokenString := string(tokenBytes)
 
 	mockNotifier := notification.NewMockNotifier()
 	service := NewAuthenticationService(
@@ -103,6 +128,11 @@ func Test_IsAuthenticated_DoesNotUseOAuth2ProviderCustomRefresherFunc(t *testing
 		testutil.DefaultConfigResolver(engine),
 	)
 	t.Cleanup(func() { service.Shutdown() })
+
+	// Set the expired token using the proper token service to ensure types.SettingToken
+	// is updated (not just CONFIG_KEY_OAUTH_TOKEN).
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+	tokenService.SetToken(conf, tokenString)
 	// Pre-wire the same provider production wiring produces (configureProviders() -> Default())
 	// so handleProviderInconsistencies() doesn't reconfigure and clear the token before the
 	// refresh/whoami path under test ever runs.
@@ -119,4 +149,13 @@ func Test_IsAuthenticated_DoesNotUseOAuth2ProviderCustomRefresherFunc(t *testing
 	// IsAuthenticated() returning false for one call - assert the token was cleared.
 	assert.Empty(t, conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN),
 		"invalid_grant refresh failure must clear the stale token from storage, not just report not-authenticated")
+
+	logStr := logOutput.String()
+	assert.NotEmpty(t, logStr, "some log output was captured, so the negative assertion cannot pass vacuously")
+	customRefresherFired := strings.Contains(logStr, "oauth.refresherFunc") ||
+		strings.Contains(logStr, "refreshing oauth2 token")
+	assert.False(t, customRefresherFired,
+		"Default()'s custom refresherFunc closure fired during real IsAuthenticated()-driven "+
+			"traffic - this contradicts the assumption that OAuth whoami/scan calls never route "+
+			"through it; re-investigate before relying on that assumption elsewhere")
 }
