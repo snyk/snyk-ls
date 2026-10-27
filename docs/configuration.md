@@ -11,6 +11,7 @@ This document describes the complete configuration architecture of the Snyk Lang
 - [Precedence Resolution](#precedence-resolution)
 - [Effective Organization](#effective-organization)
 - [Remote Configuration (LDX-Sync)](#remote-configuration-ldx-sync)
+- [Remote Repository URL Override](#remote-repository-url-override)
 - [Locked Fields](#locked-fields)
 - [IDE ↔ LS Protocol](#ide--ls-protocol)
 - [FolderConfig](#folderconfig)
@@ -377,6 +378,17 @@ See also: [configuration-precedence-folder.mmd](diagrams/configuration-precedenc
 
 ---
 
+## Remote Repository URL Override
+
+`ignore create` needs a repository URL to key the ignore on. For a folder that is not a Git repository, or whose Git remote should not be used, set `--remote-repo-url=<url>` in Additional Parameters. The override is read from:
+
+- **Folder scope**: `additional_parameters` (IntelliJ stores Additional Parameters per folder).
+- **Global scope**: `cli_additional_oss_parameters` (VS Code sends one global string).
+
+If both are set, the folder value wins. The override takes precedence over the repository's Git remote. The override applies to Snyk Code and Snyk Secrets scans and to `ignore create`. When neither the override nor a Git remote is available, Create ignore is disabled in the issue details.
+
+---
+
 ## Locked Fields
 
 When LDX-Sync returns a setting as `locked`, the admin prevents any user override.
@@ -551,6 +563,39 @@ sequenceDiagram
 
     LS->>IDE: $/snyk.configuration<br/>{settings: {...}, folderConfigs: [{folderPath, settings: {...}}]}
 ```
+
+### Credentials written by another LS process
+
+Every IDE window runs its own language server, and all of them share one storage file per IDE
+(`<xdg config>/snyk/ls-config-<integration>`). The storage `Set` of a process fires the callbacks
+registered for that key only in that process. `WatchFileForWritesByOtherProcesses`, started in
+`initialize`, re-reads the file every few seconds and fires the registered callback for a key whose
+value differs from what this process last wrote or read itself. Only the OAuth token key has a
+callback (the OAuth storage bridge), so a sign-in in one window reaches the others:
+
+```mermaid
+sequenceDiagram
+    participant IDE_A as IDE window A
+    participant LS_A as LS A
+    participant Store as ls-config file
+    participant LS_B as LS B
+    participant IDE_B as IDE window B
+
+    IDE_A->>LS_A: snyk.login
+    LS_A->>Store: Set(INTERNAL_OAUTH_TOKEN_STORAGE, token)
+    LS_A->>IDE_A: $/snyk.hasAuthenticated {token}
+
+    loop every storageWatchInterval
+        LS_B->>Store: read
+        Note over LS_B: value differs from the one<br/>LS B wrote or read itself
+    end
+    LS_B->>LS_B: OAuth storage bridge → QueueCredentialUpdate
+    Note over LS_B: shouldUpdateToken: same or newer expiry wins,<br/>tokens that already failed in this session are ignored
+    LS_B->>IDE_B: $/snyk.hasAuthenticated {token}
+```
+
+Not propagated this way: empty values (an explicit logout stays in its window; the bridge drops them,
+see IDE-2179), PAT and legacy tokens (no callback on their keys).
 
 ---
 

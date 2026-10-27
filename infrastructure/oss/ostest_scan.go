@@ -115,6 +115,7 @@ var lsToFrameworkFeatureFlagMap = map[string]string{ //nolint:gochecknoglobals /
 	featureflag.UseExperimentalRiskScore:      "internal_snyk_cli_experimental_risk_score",
 	featureflag.UseExperimentalRiskScoreInCLI: "internal_snyk_cli_experimental_risk_score_in_cli",
 	featureflag.UseOsTest:                     "internal_snyk_cli_use_test_shim_for_os_cli_test",
+	featureflag.EnableUvCLI:                   "internal_snyk_cli_uv_enabled",
 }
 
 func propagateFeatureFlags(folderConfig *types.FolderConfig, engineConfig configuration.Configuration) {
