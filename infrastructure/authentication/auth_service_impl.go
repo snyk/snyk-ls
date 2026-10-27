@@ -686,7 +686,6 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 	a.updateCredentials(newToken, sendNotification, updateApiUrl)
 }
 
-// updateCredentials must be called with a.m write-locked; it releases a.m while the post-update hook runs.
 func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool, updateApiUrl bool) {
 	if !a.applyTokenMutationLocked(newToken, updateApiUrl) {
 		return
@@ -821,7 +820,6 @@ func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 	a.clearCredentials(ctx)
 }
 
-// clearCredentials must be called with a.m write-locked and after flushCredentialUpdates.
 func (a *AuthenticationServiceImpl) clearCredentials(ctx context.Context) {
 	a.engine.GetConfiguration().ClearCache()
 	a.engine.GetLogger().Info().
@@ -1108,7 +1106,6 @@ func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLeg
 	a.flushCredentialUpdates()
 	a.m.Lock()
 	defer a.m.Unlock()
-	// Async rotations by the credential worker do not bump syncGeneration.
 	if a.syncGeneration.Load() != checkedGeneration || config.GetToken(a.engine.GetConfiguration()) != token {
 		logger.Info().Msg("auth check finished for a token that is no longer current, not logging out")
 		return
