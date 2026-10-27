@@ -4274,3 +4274,30 @@ func TestUpdateSettings_LlmModelPersistsToConfiguration(t *testing.T) {
 
 	assert.Equal(t, "llama3.1", types.GetGlobalString(conf, types.SettingLlmModel))
 }
+
+// TestUpdateSettings_SaveWithoutLlmKeysLeavesStoredLlmValuesIntact proves a
+// settings save that omits the LLM keys - which is what the IDE HTML settings
+// page now sends, since it no longer renders those controls - cannot overwrite
+// values Ambient Canary stored via workspace/didChangeConfiguration.
+func TestUpdateSettings_SaveWithoutLlmKeysLeavesStoredLlmValuesIntact(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	cr := testutil.DefaultConfigResolver(engine)
+	ctx := testCtx(t, t.Context(), engine, tokenService)
+
+	ambientCanarySettings := map[string]*types.ConfigSetting{
+		types.SettingLlmProvider: {Value: "ollama", Changed: true},
+		types.SettingLlmBaseUrl:  {Value: "http://localhost:11434", Changed: true},
+		types.SettingLlmModel:    {Value: "llama3.1", Changed: true},
+	}
+	UpdateSettings(ctx, conf, engine, engine.GetLogger(), ambientCanarySettings, nil, analytics.TriggerSourceTest, cr)
+
+	dialogSaveSettings := map[string]*types.ConfigSetting{
+		types.SettingSnykOssEnabled: {Value: true, Changed: true},
+	}
+	UpdateSettings(ctx, conf, engine, engine.GetLogger(), dialogSaveSettings, nil, analytics.TriggerSourceTest, cr)
+
+	assert.Equal(t, "ollama", types.GetGlobalString(conf, types.SettingLlmProvider))
+	assert.Equal(t, "http://localhost:11434", types.GetGlobalString(conf, types.SettingLlmBaseUrl))
+	assert.Equal(t, "llama3.1", types.GetGlobalString(conf, types.SettingLlmModel))
+}
