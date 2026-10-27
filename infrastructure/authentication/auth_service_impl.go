@@ -115,12 +115,9 @@ type AuthenticationServiceImpl struct {
 	// syncGeneration is incremented in updateCredentials under a.m, and read by
 	// the worker under a.m and by runPostMutationEffects under notifyMu.
 	syncGeneration atomic.Uint64
-	// notifyMu serializes the ordering claim and the notifier push so a
+	// notifyMu serializes the syncGeneration check and the notifier push so a
 	// superseded credential notification can never overtake a newer one.
 	notifyMu sync.Mutex
-	// lastNotifiedGeneration is the highest generation pushed to the notifier,
-	// guarded by notifyMu.
-	lastNotifiedGeneration uint64
 	// writingToken holds a pointer to the token string that the credentialUpdateWorker
 	// is currently writing to conf via updateCredentials → tokenService.SetToken →
 	// WriteTokenToConfig → conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, …).  When the conf key
@@ -852,16 +849,6 @@ func (a *AuthenticationServiceImpl) runPostMutationEffects(newToken string, send
 				Msg("skipping notification for credential update superseded by a newer generation")
 			return
 		}
-
-		if generation < a.lastNotifiedGeneration {
-			a.engine.GetLogger().Debug().
-				Uint64("generation", generation).
-				Uint64("last_notified_generation", a.lastNotifiedGeneration).
-				Msg("skipping notification for generation superseded by a newer epoch")
-			return
-		}
-
-		a.lastNotifiedGeneration = generation
 
 		a.engine.GetLogger().Debug().
 			Str("method", "AuthenticationService.updateCredentials").

@@ -2793,35 +2793,133 @@ func Test_UpdateCredentials_OrderingGuarantee(t *testing.T) {
 	assert.Equal(t, "token-gen2", authParams.Token, "only gen 2's token should be delivered")
 }
 
-// Test_UpdateCredentials_OrderingGuard_DropsSuperseded (TEST C) verifies that
-// the ordering guard deterministically drops notifications for generations that
-// have already been sent. Sets lastNotifiedGeneration higher than the generation
-// the next update will carry, then asserts the notification is dropped.
-func Test_UpdateCredentials_OrderingGuard_DropsSuperseded(t *testing.T) {
-	engine, ts := testutil.UnitTestWithEngine(t)
-	mockNotifier := notification.NewMockNotifier()
-	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
-	impl := service.(*AuthenticationServiceImpl)
+// Test_CredentialNotifications_DeliveredInGenerationOrder is a regression guard for
+// credential notification ordering. The syncGeneration check under notifyMu protects
+// the user-visible invariant that the last AuthenticationParams delivered matches the
+// token currently in config.
+func Test_CredentialNotifications_DeliveredInGenerationOrder(t *testing.T) {
+	tests := []struct {
+		name     string
+		run      func(t *testing.T, service AuthenticationService, impl *AuthenticationServiceImpl)
+		minSends int
+		exact    bool
+	}{
+		{
+			name: "sequential sync writes",
+			run: func(t *testing.T, service AuthenticationService, _ *AuthenticationServiceImpl) {
+				t.Helper()
+				service.UpdateCredentials("t1", true, false)
+				service.UpdateCredentials("t2", true, false)
+				service.UpdateCredentials("t3", true, false)
+			},
+			minSends: 3,
+			exact:    true,
+		},
+		{
+			name: "async update after sync write shares the current epoch and is delivered",
+			run: func(t *testing.T, service AuthenticationService, impl *AuthenticationServiceImpl) {
+				t.Helper()
+				service.UpdateCredentials("t1", true, false)
+				impl.QueueCredentialUpdate("t2", true, false)
+				impl.flushCredentialUpdates()
+				impl.QueueCredentialUpdate("t3", true, false)
+				impl.flushCredentialUpdates()
+			},
+			minSends: 3,
+			exact:    true,
+		},
+		{
+			name: "stale async update is dropped before notifying",
+			run: func(t *testing.T, service AuthenticationService, impl *AuthenticationServiceImpl) {
+				t.Helper()
+				// Hold a.m so the worker cannot drain the stale update before the
+				// sync write advances syncGeneration (same determinism pattern as
+				// Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterSyncWrite).
+				impl.m.Lock()
+				impl.credentialUpdateChan <- credentialUpdate{
+					token:            "stale",
+					sendNotification: true,
+					updateApiUrl:     false,
+					generation:       impl.syncGeneration.Load(),
+				}
+				done := make(chan struct{})
+				go func() {
+					defer close(done)
+					service.UpdateCredentials("t1", true, false)
+				}()
+				impl.m.Unlock()
+				<-done
+				impl.flushCredentialUpdates()
+			},
+			minSends: 1,
+			exact:    true,
+		},
+		{
+			name: "sync write nested in the post-mutation window supersedes the outer notification",
+			run: func(t *testing.T, service AuthenticationService, _ *AuthenticationServiceImpl) {
+				t.Helper()
+				var once atomic.Bool
+				service.SetPostCredentialUpdateHook(func() {
+					if once.CompareAndSwap(false, true) {
+						service.UpdateCredentials("inner", true, false)
+					}
+				})
+				service.UpdateCredentials("outer", true, false)
+			},
+			minSends: 1,
+			exact:    true,
+		},
+		{
+			name: "concurrent sync writes",
+			run: func(t *testing.T, service AuthenticationService, _ *AuthenticationServiceImpl) {
+				t.Helper()
+				var wg sync.WaitGroup
+				wg.Add(8)
+				for i := range 8 {
+					go func(i int) {
+						defer wg.Done()
+						service.UpdateCredentials(fmt.Sprintf("c%d", i+1), true, false)
+					}(i)
+				}
+				wg.Wait()
+			},
+			minSends: 1,
+			exact:    false,
+		},
+	}
 
-	// Manually set lastNotifiedGeneration higher than the generation that will be used.
-	impl.notifyMu.Lock()
-	nextGen := impl.syncGeneration.Load() + 1
-	impl.lastNotifiedGeneration = nextGen + 10
-	impl.notifyMu.Unlock()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			engine, ts := testutil.UnitTestWithEngine(t)
+			mockNotifier := notification.NewMockNotifier()
+			service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+			impl := service.(*AuthenticationServiceImpl)
+			t.Cleanup(impl.Shutdown)
 
-	// UpdateCredentials will increment syncGeneration to nextGen, which is < lastNotifiedGeneration,
-	// so the notification should be dropped by the ordering guard (superseded by newer epoch).
-	service.UpdateCredentials("token-test", true, false)
+			tt.run(t, service, impl)
 
-	// No notification should be sent (superseded by newer epoch).
-	require.Equal(t, 0, mockNotifier.SendCount(), "superseded generation should not send notification")
+			sendCount := mockNotifier.SendCount()
+			if tt.exact {
+				require.Equal(t, tt.minSends, sendCount, "unexpected notification count")
+			} else {
+				require.GreaterOrEqual(t, sendCount, tt.minSends, "expected at least one notification")
+			}
+
+			messages := mockNotifier.SentMessages()
+			require.NotEmpty(t, messages)
+			last := messages[len(messages)-1]
+			authParams, ok := last.(types.AuthenticationParams)
+			require.True(t, ok, "last message should be AuthenticationParams")
+			assert.Equal(t, config.GetToken(engine.GetConfiguration()), authParams.Token,
+				"last AuthenticationParams must carry the token currently in config")
+		})
+	}
 }
 
 // Test_UpdateCredentials_OrderingGuard_SyncGenerationAdvancedNoNotification
 // verifies that the syncGeneration guard catches the case where a newer
-// credential write completes (advancing syncGeneration) but does NOT notify
-// (leaving lastNotifiedGeneration unchanged), and then an older generation
-// reaches the notify step. This is the case that only guard A catches.
+// credential write completes (advancing syncGeneration) but does NOT notify,
+// and then an older generation reaches the notify step.
 func Test_UpdateCredentials_OrderingGuard_SyncGenerationAdvancedNoNotification(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	mockNotifier := notification.NewMockNotifier()
@@ -2832,10 +2930,9 @@ func Test_UpdateCredentials_OrderingGuard_SyncGenerationAdvancedNoNotification(t
 		if callCount.Add(1) == 1 {
 			// From inside the outer (generation 1) hook, perform a newer
 			// credential update (generation 2) with sendNotification=FALSE.
-			// This advances syncGeneration without advancing lastNotifiedGeneration,
-			// creating the exact case that guard A must catch: when the outer
-			// generation reaches the notify step, syncGeneration will be ahead
-			// but lastNotifiedGeneration won't reflect the newer generation.
+			// This advances syncGeneration without sending a notification,
+			// so when the outer generation reaches the notify step,
+			// syncGeneration is ahead and the outer notification is dropped.
 			service.UpdateCredentials("token-gen2-no-notify", false, false)
 		}
 	})
@@ -2844,14 +2941,12 @@ func Test_UpdateCredentials_OrderingGuard_SyncGenerationAdvancedNoNotification(t
 	// gen 2 will update and complete without notifying. When gen 1's notification
 	// attempt executes, it will find that gen 2's generation has already been
 	// recorded in syncGeneration (by the inner UpdateCredentials advancing it),
-	// causing gen 1 to be dropped by guard A despite lastNotifiedGeneration
-	// not advancing (since gen 2 didn't notify).
+	// causing gen 1 to be dropped by the syncGeneration guard.
 	service.UpdateCredentials("token-gen1", true, false)
 
-	// No notifications should be sent. Gen 1's notification is dropped by guard A
-	// because syncGeneration advanced (due to gen 2 completing) even though
-	// lastNotifiedGeneration never advanced (since gen 2 didn't notify).
-	require.Equal(t, 0, mockNotifier.SendCount(), "gen 1 should be dropped by syncGeneration guard despite lastNotifiedGeneration not advancing")
+	// No notifications should be sent. Gen 1's notification is dropped because
+	// syncGeneration advanced due to gen 2 completing (even though gen 2 did not notify).
+	require.Equal(t, 0, mockNotifier.SendCount(), "gen 1 should be dropped by syncGeneration guard")
 }
 
 // Test_UpdateCredentials_OrderingAtomicity (TEST D) verifies that the claim
