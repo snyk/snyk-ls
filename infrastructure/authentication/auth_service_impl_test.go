@@ -389,33 +389,58 @@ func TestIsAuthenticated_ConcurrentCallsSendOnlyOneNotification(t *testing.T) {
 
 // Test_IsAuthenticated_ProviderAccessIsRaceFreeAgainstProviderWrites must be run with -race.
 // The fake returns a non-logout error so later iterations keep calling doAuthCheck instead of
-// short-circuiting on an empty token after logout.
+// short-circuiting on an empty token after logout. CheckAuthDelay plus multiple reader/writer
+// goroutines keep unlocked a.authProvider reads overlapping SetProvider writes.
 func Test_IsAuthenticated_ProviderAccessIsRaceFreeAgainstProviderWrites(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
 	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
 	ts.SetToken(engine.GetConfiguration(), "some-test-token")
 	newProvider := func() *FakeAuthenticationProvider {
-		return &FakeAuthenticationProvider{IsAuthenticated: false, Engine: engine}
+		return &FakeAuthenticationProvider{
+			IsAuthenticated: false,
+			Engine:          engine,
+			CheckAuthDelay:  time.Millisecond,
+		}
 	}
 	service := NewAuthenticationService(engine, ts, newProvider(), error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
 	t.Cleanup(service.Shutdown)
 
-	const iterations = 500
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		for range iterations {
-			service.IsAuthenticated()
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		for range iterations {
-			service.SetProvider(newProvider())
-		}
-	}()
-	wg.Wait()
+	const iterations = 40
+	const readers = 8
+	const writers = 4
+	start := make(chan struct{})
+	stop := make(chan struct{})
+	var readersDone sync.WaitGroup
+	readersDone.Add(readers)
+	for range readers {
+		go func() {
+			defer readersDone.Done()
+			<-start
+			for range iterations {
+				service.IsAuthenticated()
+			}
+		}()
+	}
+	var writersDone sync.WaitGroup
+	writersDone.Add(writers)
+	for range writers {
+		go func() {
+			defer writersDone.Done()
+			<-start
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					service.SetProvider(newProvider())
+				}
+			}
+		}()
+	}
+	close(start)
+	readersDone.Wait()
+	close(stop)
+	writersDone.Wait()
 }
 
 // TestIsAuthenticated_ConcurrentCallsAllReturnSharedResult guards against a regression
@@ -2793,10 +2818,6 @@ func Test_UpdateCredentials_OrderingGuarantee(t *testing.T) {
 	assert.Equal(t, "token-gen2", authParams.Token, "only gen 2's token should be delivered")
 }
 
-// Test_CredentialNotifications_DeliveredInGenerationOrder is a regression guard for
-// credential notification ordering. The syncGeneration check under notifyMu protects
-// the user-visible invariant that the last AuthenticationParams delivered matches the
-// token currently in config.
 func Test_CredentialNotifications_DeliveredInGenerationOrder(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -2832,9 +2853,9 @@ func Test_CredentialNotifications_DeliveredInGenerationOrder(t *testing.T) {
 			name: "stale async update is dropped before notifying",
 			run: func(t *testing.T, service AuthenticationService, impl *AuthenticationServiceImpl) {
 				t.Helper()
-				// Hold a.m so the worker cannot drain the stale update before the
-				// sync write advances syncGeneration (same determinism pattern as
-				// Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterSyncWrite).
+				// Hold a.m across enqueue + sync write so syncGeneration is bumped
+				// before the worker can observe the stale update. releaseLock=true
+				// unlocks only around post-mutation effects (after the bump).
 				impl.m.Lock()
 				impl.credentialUpdateChan <- credentialUpdate{
 					token:            "stale",
@@ -2842,13 +2863,8 @@ func Test_CredentialNotifications_DeliveredInGenerationOrder(t *testing.T) {
 					updateApiUrl:     false,
 					generation:       impl.syncGeneration.Load(),
 				}
-				done := make(chan struct{})
-				go func() {
-					defer close(done)
-					service.UpdateCredentials("t1", true, false)
-				}()
+				impl.updateCredentials("t1", true, false, true)
 				impl.m.Unlock()
-				<-done
 				impl.flushCredentialUpdates()
 			},
 			minSends: 1,
