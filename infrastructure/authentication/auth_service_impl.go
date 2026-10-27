@@ -686,8 +686,7 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 	a.updateCredentials(newToken, sendNotification, updateApiUrl)
 }
 
-// updateCredentials must be called with a.m write-locked. It releases a.m while running the
-// post-update hook, which may call back into a.m-locking methods (RWMutex is not reentrant).
+// updateCredentials must be called with a.m write-locked; it releases a.m while the post-update hook runs.
 func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool, updateApiUrl bool) {
 	if !a.applyTokenMutationLocked(newToken, updateApiUrl) {
 		return
