@@ -805,7 +805,7 @@ func (a *AuthenticationServiceImpl) Logout(ctx context.Context) {
 	defer a.m.Unlock()
 
 	a.clearLastFailedToken()
-	a.logout(ctx, true)
+	a.logout(ctx)
 }
 
 func (a *AuthenticationServiceImpl) CancelOngoingAuth() {
@@ -816,7 +816,7 @@ func (a *AuthenticationServiceImpl) CancelOngoingAuth() {
 	a.previousAuthCtxCancelFuncMu.Unlock()
 }
 
-func (a *AuthenticationServiceImpl) logout(ctx context.Context, releaseLock bool) {
+func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 	a.engine.GetConfiguration().ClearCache()
 	a.engine.GetLogger().Info().
 		Str("method", "AuthenticationService.logout").
@@ -824,20 +824,13 @@ func (a *AuthenticationServiceImpl) logout(ctx context.Context, releaseLock bool
 		Str("authentication_method", string(config.GetAuthenticationMethodFromConfig(a.engine.GetConfiguration()))).
 		Msg("clearing authentication credentials")
 
-	// Drain any credential update already queued (e.g. by GAF's syncTokenRefresh
-	// resyncing the token from on-disk storage during the request that just failed and
-	// triggered this logout) before applying our own authoritative clear below. Without
-	// this, credentialUpdateWorker could apply that stale, queued-but-not-yet-drained
-	// update after our clear, resurrecting the token this logout removes (IDE-2402).
-	// The worker needs a.m to apply updates.
-	if releaseLock {
-		a.m.Unlock()
-	}
+	a.m.Unlock()
 	a.flushCredentialUpdates()
-	if releaseLock {
-		a.m.Lock()
-	}
+	a.m.Lock()
+	a.clearCredentials(ctx)
+}
 
+func (a *AuthenticationServiceImpl) clearCredentials(ctx context.Context) {
 	if a.authProvider != nil {
 		err := a.authProvider.ClearAuthentication(ctx)
 		if err != nil {
@@ -845,8 +838,8 @@ func (a *AuthenticationServiceImpl) logout(ctx context.Context, releaseLock bool
 			a.errorReporter.CaptureError(err)
 		}
 	}
-	a.updateCredentials("", true, false, releaseLock)
-	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger(), releaseLock)
+	a.updateCredentials("", true, false, true)
+	a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger(), true)
 
 	a.lastUsedTokenMu.Lock()
 	a.lastUsedToken = ""
@@ -1114,6 +1107,7 @@ func (a *AuthenticationServiceImpl) snapshotCredentials(conf configuration.Confi
 
 func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLegacyToken bool, invalidToken oauth2.Token, checkedGeneration uint64, token string) {
 	logger.Info().Msg("could not authenticate user with current credentials, API returned empty user object")
+	a.flushCredentialUpdates()
 	a.m.Lock()
 	defer a.m.Unlock()
 	// Async rotations by the credential worker do not bump syncGeneration.
@@ -1127,7 +1121,7 @@ func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLeg
 		return
 	}
 	logger.Info().Msg("logging out, empty user response")
-	a.logout(context.Background(), true)
+	a.clearCredentials(context.Background())
 
 	// determine the right error message
 	if !isLegacyToken {
@@ -1206,7 +1200,7 @@ func (a *AuthenticationServiceImpl) configureProviders(conf configuration.Config
 		subLogger.Info().
 			Str("provider_type", fmt.Sprintf("%T", a.provider())).
 			Msg("configured auth method does not match current token; clearing credentials")
-		a.logout(context.Background(), releaseLockOnLogout)
+		a.logout(context.Background())
 		if authMethodChanged {
 			subLogger.Info().Msg("detected auth provider change, logging out and sending re-auth message")
 			a.sendAuthenticationRequest(MethodChangedMessage, "Re-authenticate")

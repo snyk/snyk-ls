@@ -755,6 +755,68 @@ func Test_IsAuthenticated_StaleFailureDoesNotRearmLastFailedToken(t *testing.T) 
 	assert.False(t, service.isKnownFailedToken(token))
 }
 
+func Test_IsAuthenticated_StaleLogoutDoesNotClearTokenWrittenDuringFlush(t *testing.T) {
+	const T1 = "old-token"
+	const T2 = "new-token"
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	provider := &blockingErrorAuthProvider{
+		err:     buildWhoamiErr(fmt.Errorf("API request failed (status: 401)")),
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	ts.SetToken(conf, T1)
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+	t.Cleanup(service.Shutdown)
+
+	hookEntered := make(chan struct{})
+	hookRelease := make(chan struct{})
+	hookCalled := atomic.Bool{}
+
+	service.SetPostCredentialUpdateHook(func() {
+		if hookCalled.CompareAndSwap(false, true) {
+			close(hookEntered)
+			<-hookRelease
+		}
+	})
+
+	authDone := make(chan bool, 1)
+	go func() {
+		authDone <- service.IsAuthenticated()
+	}()
+
+	select {
+	case <-provider.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("auth check did not start")
+	}
+
+	service.QueueCredentialUpdate(T1, false, true)
+	select {
+	case <-hookEntered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("hook did not enter")
+	}
+
+	close(provider.release)
+
+	require.Eventually(t, func() bool {
+		return len(service.credentialUpdateChan) == 1
+	}, 5*time.Second, time.Millisecond, "logout flush barrier should be enqueued in channel")
+
+	service.UpdateCredentials(T2, false, false)
+	close(hookRelease)
+
+	select {
+	case <-authDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("IsAuthenticated did not return")
+	}
+
+	assert.Equal(t, T2, config.GetToken(conf), "T2 must not be cleared by logout's flush window")
+}
+
 // buildWhoamiErr simulates the real production error wrapping chain:
 // http.Client.Get returns *url.Error → wrapped by GAF whoami workflow →
 // pkgerrors.Wrap("failed to invoke whoami workflow") → pkgerrors.Wrap("failed to get active user")
