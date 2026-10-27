@@ -4,13 +4,19 @@ Feature: LLM provider settings for autonomous remediation
   runs. Ambient Canary supplies them from its own settings. The IDE HTML
   configuration dialog does not render them.
 
-  # maps: IDE-2274-M1, IDE-2274-M2, IDE-2274-M5
+  # maps: IDE-2274-M1, IDE-2274-M2
   Scenario: Saved LLM settings persist via LSP and the dialog does not render them
     Given a running language server
     When a developer saves "ollama" as the LLM provider with custom API endpoint "http://localhost:11434"
     And the developer reopens the Snyk configuration dialog
     Then the language server has persisted the chosen LLM provider and endpoint
     And the configuration dialog does not render Ambient Canary or LLM settings
+
+  # maps: IDE-2274-M5
+  Scenario: A developer who has never chosen a provider has no forced default
+    Given a running language server
+    When a developer reopens the Snyk configuration dialog without ever choosing an LLM provider
+    Then the language server has no persisted LLM provider
 
   # maps: IDE-2274-M4
   Scenario: The configuration dialog never asks for or displays an LLM API key

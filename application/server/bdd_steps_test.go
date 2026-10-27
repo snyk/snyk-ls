@@ -198,14 +198,17 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	sc.When(`^a developer reopens the Snyk configuration dialog$`, func(ctx context.Context) error {
 		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperReopensTheConfigurationDialog(ctx) })
 	})
+	sc.When(`^a developer reopens the Snyk configuration dialog without ever choosing an LLM provider$`, func(ctx context.Context) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperReopensTheConfigurationDialog(ctx) })
+	})
 	sc.Then(`^the configuration dialog does not render Ambient Canary or LLM settings$`, func() error {
 		return s.runOnScenarioGoroutine(s.theDialogDoesNotRenderAmbientCanaryOrLlmSettings)
 	})
-	sc.Then(`^the language server has persisted the chosen LLM provider and model$`, func() error {
-		return s.runOnScenarioGoroutine(s.theLanguageServerHasPersistedTheChosenLlmProviderAndModel)
+	sc.Then(`^the language server has persisted the chosen LLM provider and (model|endpoint)$`, func(field string) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theLanguageServerHasPersistedTheChosenLlmProviderAnd(field) })
 	})
-	sc.Then(`^the language server has persisted the chosen LLM provider and endpoint$`, func() error {
-		return s.runOnScenarioGoroutine(s.theLanguageServerHasPersistedTheChosenLlmProviderAndEndpoint)
+	sc.Then(`^the language server has no persisted LLM provider$`, func() error {
+		return s.runOnScenarioGoroutine(s.theLanguageServerHasNoPersistedLlmProvider)
 	})
 	sc.Then(`^the configuration dialog contains no field for an LLM API key$`, func() error {
 		return s.runOnScenarioGoroutine(s.theDialogContainsNoLlmApiKeyField)
@@ -581,33 +584,36 @@ func (s *bddSteps) theDialogDoesNotRenderAmbientCanaryOrLlmSettings() error {
 	return nil
 }
 
-// theLanguageServerHasPersistedTheChosenLlmProviderAndModel reads the
-// persisted LLM settings back from configuration after a
+// theLanguageServerHasPersistedTheChosenLlmProviderAnd reads the persisted
+// LLM settings back from configuration after a
 // workspace/didChangeConfiguration save.
-func (s *bddSteps) theLanguageServerHasPersistedTheChosenLlmProviderAndModel() error {
+func (s *bddSteps) theLanguageServerHasPersistedTheChosenLlmProviderAnd(field string) error {
 	conf := s.engine.GetConfiguration()
 	gotProvider := types.GetGlobalString(conf, types.SettingLlmProvider)
-	gotModel := types.GetGlobalString(conf, types.SettingLlmModel)
 	if gotProvider != s.savedLlmProvider {
 		return fmt.Errorf("expected persisted LLM provider %q, got %q", s.savedLlmProvider, gotProvider)
 	}
-	if gotModel != s.savedLlmModel {
-		return fmt.Errorf("expected persisted LLM model %q, got %q", s.savedLlmModel, gotModel)
+	switch field {
+	case "model":
+		gotModel := types.GetGlobalString(conf, types.SettingLlmModel)
+		if gotModel != s.savedLlmModel {
+			return fmt.Errorf("expected persisted LLM model %q, got %q", s.savedLlmModel, gotModel)
+		}
+	case "endpoint":
+		gotEndpoint := types.GetGlobalString(conf, types.SettingLlmBaseUrl)
+		if gotEndpoint != s.savedLlmBaseUrl {
+			return fmt.Errorf("expected persisted LLM endpoint %q, got %q", s.savedLlmBaseUrl, gotEndpoint)
+		}
+	default:
+		return fmt.Errorf("unknown persisted LLM field %q", field)
 	}
 	return nil
 }
 
-// theLanguageServerHasPersistedTheChosenLlmProviderAndEndpoint reads the
-// persisted LLM provider and custom API endpoint back from configuration.
-func (s *bddSteps) theLanguageServerHasPersistedTheChosenLlmProviderAndEndpoint() error {
-	conf := s.engine.GetConfiguration()
-	gotProvider := types.GetGlobalString(conf, types.SettingLlmProvider)
-	gotEndpoint := types.GetGlobalString(conf, types.SettingLlmBaseUrl)
-	if gotProvider != s.savedLlmProvider {
-		return fmt.Errorf("expected persisted LLM provider %q, got %q", s.savedLlmProvider, gotProvider)
-	}
-	if gotEndpoint != s.savedLlmBaseUrl {
-		return fmt.Errorf("expected persisted LLM endpoint %q, got %q", s.savedLlmBaseUrl, gotEndpoint)
+func (s *bddSteps) theLanguageServerHasNoPersistedLlmProvider() error {
+	gotProvider := types.GetGlobalString(s.engine.GetConfiguration(), types.SettingLlmProvider)
+	if gotProvider != "" {
+		return fmt.Errorf("expected no persisted LLM provider, got %q", gotProvider)
 	}
 	return nil
 }
