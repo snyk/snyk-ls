@@ -3046,6 +3046,49 @@ func Test_UpdateCredentials_OrderingAtomicity(t *testing.T) {
 	assert.Equal(t, "token-2", ap2.Token)
 }
 
+func Test_IsAuthenticated_DoesNotLogoutWhenAsyncRotationReplacedCheckedToken(t *testing.T) {
+	const tokenT1 = "invalidCreds"
+	const tokenT2 = "refreshed-token"
+	engine, ts := testutil.UnitTestWithEngine(t)
+
+	provider := &blockingErrorAuthProvider{
+		err:     buildWhoamiErr(fmt.Errorf("API request failed (status: 401)")),
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	ts.SetToken(engine.GetConfiguration(), tokenT1)
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+
+	done := make(chan bool, 1)
+	go func() {
+		done <- service.IsAuthenticated()
+	}()
+
+	select {
+	case <-provider.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("auth check did not start")
+	}
+
+	// While whoami is in flight with T1, replace the token with T2 via async rotation.
+	service.QueueCredentialUpdate(tokenT2, true, false)
+	service.flushCredentialUpdates()
+	close(provider.release)
+
+	select {
+	case authenticated := <-done:
+		assert.False(t, authenticated)
+	case <-time.After(5 * time.Second):
+		t.Fatal("IsAuthenticated did not return")
+	}
+
+	// The checked token (T1) was invalidated by async rotation before handleEmptyUser
+	// ran, so the token should NOT be cleared. The refreshed token T2 must still be in
+	// config, not wiped by a stale logout.
+	assert.Equal(t, tokenT2, config.GetToken(engine.GetConfiguration()),
+		"async rotation must replace stale token; stale auth failure must not wipe the replacement")
+}
+
 // Regression guard that pins the existing semantics of getPrioritizedApiUrl,
 // which the aud-claim discovery work explicitly leaves unchanged. Any future
 // "improvement" that breaks these rows should fail this test.
