@@ -80,6 +80,7 @@ type bddSteps struct {
 
 	savedLlmProvider    string
 	savedLlmModel       string
+	savedLlmBaseUrl     string
 	fixCapturedProvider string
 	fixCapturedModel    string
 	fixCapturedIssueIDs string
@@ -200,17 +201,14 @@ func (s *bddSteps) register(sc *godog.ScenarioContext) {
 	sc.When(`^a developer reopens the Snyk configuration dialog without ever choosing an LLM provider$`, func(ctx context.Context) error {
 		return s.runOnScenarioGoroutine(func() error { return s.theDeveloperReopensTheConfigurationDialog(ctx) })
 	})
-	sc.Then(`^the configuration dialog shows "([^"]*)" as the selected LLM provider$`, func(provider string) error {
-		return s.runOnScenarioGoroutine(func() error { return s.theDialogShowsTheSelectedLlmProvider(provider) })
+	sc.Then(`^the configuration dialog does not render Ambient Canary or LLM settings$`, func() error {
+		return s.runOnScenarioGoroutine(s.theDialogDoesNotRenderAmbientCanaryOrLlmSettings)
 	})
-	sc.Then(`^the configuration dialog shows "([^"]*)" as the custom (?:API endpoint|LLM provider's API endpoint)$`, func(endpoint string) error {
-		return s.runOnScenarioGoroutine(func() error { return s.theDialogShowsTheCustomApiEndpoint(endpoint) })
+	sc.Then(`^the language server has persisted the chosen LLM provider and (model|endpoint)$`, func(field string) error {
+		return s.runOnScenarioGoroutine(func() error { return s.theLanguageServerHasPersistedTheChosenLlmProviderAnd(field) })
 	})
-	sc.Then(`^the configuration dialog shows "([^"]*)" as the selected LLM model$`, func(model string) error {
-		return s.runOnScenarioGoroutine(func() error { return s.theDialogShowsTheSelectedLlmModel(model) })
-	})
-	sc.Then(`^the configuration dialog shows no LLM provider selected$`, func() error {
-		return s.runOnScenarioGoroutine(s.theDialogShowsNoLlmProviderSelected)
+	sc.Then(`^the language server has no persisted LLM provider$`, func() error {
+		return s.runOnScenarioGoroutine(s.theLanguageServerHasNoPersistedLlmProvider)
 	})
 	sc.Then(`^the configuration dialog contains no field for an LLM API key$`, func() error {
 		return s.runOnScenarioGoroutine(s.theDialogContainsNoLlmApiKeyField)
@@ -513,6 +511,8 @@ func (s *bddSteps) aDeveloperSavesTheLlmProviderAndEndpoint(ctx context.Context,
 	if _, err := s.loc.Client.Call(ctx, "workspace/didChangeConfiguration", params); err != nil {
 		return fmt.Errorf("workspace/didChangeConfiguration call failed: %w", err)
 	}
+	s.savedLlmProvider = provider
+	s.savedLlmBaseUrl = endpoint
 	return nil
 }
 
@@ -564,53 +564,56 @@ func (s *bddSteps) theDeveloperReopensTheConfigurationDialog(ctx context.Context
 	return nil
 }
 
-func (s *bddSteps) theDialogShowsTheSelectedLlmProvider(provider string) error {
-	needle := `id="llm_provider"`
-	idx := strings.Index(s.dialogHTML, needle)
-	if idx == -1 {
-		return fmt.Errorf("expected an llm_provider field in the configuration dialog HTML")
+// theDialogDoesNotRenderAmbientCanaryOrLlmSettings checks the IDE HTML
+// settings page. Ambient Canary still reads these settings and supplies
+// them itself; this page does not render the controls.
+func (s *bddSteps) theDialogDoesNotRenderAmbientCanaryOrLlmSettings() error {
+	forbidden := []string{
+		"ambient_canary_autonomy",
+		"Ambient Canary autonomy",
+		"<h2>Autonomous remediation</h2>",
+		`id="llm_provider"`,
+		`id="llm_model"`,
+		`id="llm_base_url"`,
 	}
-	// The selected <option> for the chosen provider must carry "selected" within
-	// the llm_provider <select> element.
-	selectEnd := strings.Index(s.dialogHTML[idx:], "</select>")
-	if selectEnd == -1 {
-		return fmt.Errorf("expected a closing </select> for the llm_provider field")
-	}
-	selectHTML := s.dialogHTML[idx : idx+selectEnd]
-	optionNeedle := fmt.Sprintf(`value="%s" selected`, provider)
-	if !strings.Contains(selectHTML, optionNeedle) {
-		return fmt.Errorf("expected provider %q to be selected in the llm_provider field, got: %s", provider, selectHTML)
-	}
-	return nil
-}
-
-func (s *bddSteps) theDialogShowsTheCustomApiEndpoint(endpoint string) error {
-	if !strings.Contains(s.dialogHTML, endpoint) {
-		return fmt.Errorf("expected custom API endpoint %q to be shown in the configuration dialog HTML", endpoint)
+	for _, needle := range forbidden {
+		if strings.Contains(s.dialogHTML, needle) {
+			return fmt.Errorf("configuration dialog must not render %q", needle)
+		}
 	}
 	return nil
 }
 
-func (s *bddSteps) theDialogShowsTheSelectedLlmModel(model string) error {
-	if !strings.Contains(s.dialogHTML, model) {
-		return fmt.Errorf("expected model %q to be shown in the configuration dialog HTML", model)
+// theLanguageServerHasPersistedTheChosenLlmProviderAnd reads the persisted
+// LLM settings back from configuration after a
+// workspace/didChangeConfiguration save.
+func (s *bddSteps) theLanguageServerHasPersistedTheChosenLlmProviderAnd(field string) error {
+	conf := s.engine.GetConfiguration()
+	gotProvider := types.GetGlobalString(conf, types.SettingLlmProvider)
+	if gotProvider != s.savedLlmProvider {
+		return fmt.Errorf("expected persisted LLM provider %q, got %q", s.savedLlmProvider, gotProvider)
+	}
+	switch field {
+	case "model":
+		gotModel := types.GetGlobalString(conf, types.SettingLlmModel)
+		if gotModel != s.savedLlmModel {
+			return fmt.Errorf("expected persisted LLM model %q, got %q", s.savedLlmModel, gotModel)
+		}
+	case "endpoint":
+		gotEndpoint := types.GetGlobalString(conf, types.SettingLlmBaseUrl)
+		if gotEndpoint != s.savedLlmBaseUrl {
+			return fmt.Errorf("expected persisted LLM endpoint %q, got %q", s.savedLlmBaseUrl, gotEndpoint)
+		}
+	default:
+		return fmt.Errorf("unknown persisted LLM field %q", field)
 	}
 	return nil
 }
 
-func (s *bddSteps) theDialogShowsNoLlmProviderSelected() error {
-	needle := `id="llm_provider"`
-	idx := strings.Index(s.dialogHTML, needle)
-	if idx == -1 {
-		return fmt.Errorf("expected an llm_provider field in the configuration dialog HTML")
-	}
-	selectEnd := strings.Index(s.dialogHTML[idx:], "</select>")
-	if selectEnd == -1 {
-		return fmt.Errorf("expected a closing </select> for the llm_provider field")
-	}
-	selectHTML := s.dialogHTML[idx : idx+selectEnd]
-	if !strings.Contains(selectHTML, "selected") {
-		return fmt.Errorf("expected an option to be selected in the llm_provider field")
+func (s *bddSteps) theLanguageServerHasNoPersistedLlmProvider() error {
+	gotProvider := types.GetGlobalString(s.engine.GetConfiguration(), types.SettingLlmProvider)
+	if gotProvider != "" {
+		return fmt.Errorf("expected no persisted LLM provider, got %q", gotProvider)
 	}
 	return nil
 }
