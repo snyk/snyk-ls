@@ -19,7 +19,6 @@ package vcs
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/go-git/go-git/v5"
@@ -91,21 +90,22 @@ func getFolderConfig(path types.FilePath) *types.FolderConfig {
 	}
 }
 
+func baseFolderContainsFile(basePath types.FilePath, relativePath string) bool {
+	_, err := os.Stat(filepath.Join(string(basePath), relativePath))
+	return err == nil
+}
+
 func TestCheckoutHandler_SubfolderPath(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	repoRootPath := types.FilePath(t.TempDir())
 	repo, _ := initGitRepo(t, repoRootPath, false)
 
-	// Create a subfolder in the repo
 	subfolderName := "subproject"
 	subfolderPath := types.FilePath(filepath.Join(string(repoRootPath), subfolderName))
-	err := os.Mkdir(string(subfolderPath), 0755)
-	require.NoError(t, err)
+	require.NoError(t, os.Mkdir(string(subfolderPath), 0755))
 
-	// Create a file in the subfolder and commit it
 	testFile := filepath.Join(string(subfolderPath), "test.txt")
-	err = os.WriteFile(testFile, []byte("subfolder test data"), 0600)
-	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(testFile, []byte("subfolder test data"), 0600))
 
 	worktree, err := repo.Worktree()
 	require.NoError(t, err)
@@ -116,25 +116,13 @@ func TestCheckoutHandler_SubfolderPath(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Checkout handler with subfolder as FolderPath
 	ch := NewCheckoutHandler(engine.GetConfiguration())
 	err = ch.CheckoutBaseBranch(engine.GetLogger(), getFolderConfig(subfolderPath))
 	require.NoError(t, err)
+	defer ch.CleanupFunc()()
 
-	// Verify the base folder path points to the subfolder in the cloned repo
 	baseFolderPath := ch.BaseFolderPath()
-	assert.NotEmpty(t, baseFolderPath)
-
-	// The base folder path should be the temp clone root with subfolder path appended
-	assert.True(t, strings.Contains(string(baseFolderPath), subfolderName),
-		"base folder path should include subfolder name: %s", string(baseFolderPath))
-
-	// Verify the subfolder content exists in the cloned location
-	subfolderFile := filepath.Join(string(baseFolderPath), "test.txt")
-	_, err = os.Stat(subfolderFile)
-	assert.NoError(t, err, "subfolder content should exist at the expected path")
-
-	ch.CleanupFunc()()
+	assert.True(t, baseFolderContainsFile(baseFolderPath, "test.txt"))
 }
 
 func TestCheckoutHandler_RootPath(t *testing.T) {
@@ -142,20 +130,11 @@ func TestCheckoutHandler_RootPath(t *testing.T) {
 	repoPath := types.FilePath(t.TempDir())
 	_, _ = initGitRepo(t, repoPath, false)
 
-	// Checkout handler with repo root as FolderPath
 	ch := NewCheckoutHandler(engine.GetConfiguration())
 	err := ch.CheckoutBaseBranch(engine.GetLogger(), getFolderConfig(repoPath))
 	require.NoError(t, err)
+	defer ch.CleanupFunc()()
 
-	// Verify the base folder path points to the temp clone root (no subfolder)
 	baseFolderPath := ch.BaseFolderPath()
-	assert.NotEmpty(t, baseFolderPath)
-
-	// For root workspaces, the base folder path should just be the clone temp root
-	// The temp root will have subdirectories and files from the repo
-	testFile := filepath.Join(string(baseFolderPath), "testFile.txt")
-	_, err = os.Stat(testFile)
-	assert.NoError(t, err, "root checkout should place repo content directly in base folder path")
-
-	ch.CleanupFunc()()
+	assert.True(t, baseFolderContainsFile(baseFolderPath, "testFile.txt"))
 }
