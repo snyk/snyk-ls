@@ -19,15 +19,15 @@ package authentication
 import (
 	"bytes"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/auth"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
@@ -40,6 +40,23 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
+
+type threadSafeBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *threadSafeBuffer) Write(p []byte) (n int, err error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *threadSafeBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
 
 // Test_IsAuthenticated_DoesNotUseOAuth2ProviderCustomRefresherFunc pins down a
 // non-obvious architectural fact (IDE-2178): OAuth2Provider.GetCheckAuthenticationFunction()
@@ -56,6 +73,10 @@ func Test_IsAuthenticated_DoesNotUseOAuth2ProviderCustomRefresherFunc(t *testing
 	engine, tokenService := testutil.UnitTestWithEngine(t)
 	conf := engine.GetConfiguration()
 	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+
+	var logOutput threadSafeBuffer
+	logger := zerolog.New(&logOutput).Level(zerolog.DebugLevel)
+	engine.SetLogger(&logger)
 
 	var tokenEndpointHits, selfEndpointHits int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +115,7 @@ func Test_IsAuthenticated_DoesNotUseOAuth2ProviderCustomRefresherFunc(t *testing
 	}
 	tokenBytes, err := json.Marshal(expiredToken)
 	require.NoError(t, err)
-	conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, string(tokenBytes))
+	tokenString := string(tokenBytes)
 
 	mockNotifier := notification.NewMockNotifier()
 	service := NewAuthenticationService(
@@ -105,29 +126,15 @@ func Test_IsAuthenticated_DoesNotUseOAuth2ProviderCustomRefresherFunc(t *testing
 		mockNotifier,
 		testutil.DefaultConfigResolver(engine),
 	)
+	t.Cleanup(func() { service.Shutdown() })
+
+	tokenService.SetToken(conf, tokenString)
 	// Pre-wire the same provider production wiring produces (configureProviders() -> Default())
 	// so handleProviderInconsistencies() doesn't reconfigure and clear the token before the
 	// refresh/whoami path under test ever runs.
 	service.SetProvider(Default(engine, service))
 
-	// zerolog writes to stderr in this test harness; capture it concurrently since output
-	// volume can exceed the pipe buffer if read only after the write side closes.
-	r, w, pipeErr := os.Pipe()
-	require.NoError(t, pipeErr)
-	origStderr := os.Stderr
-	os.Stderr = w
-	captured := make(chan string, 1)
-	go func() {
-		var buf bytes.Buffer
-		_, _ = io.Copy(&buf, r)
-		captured <- buf.String()
-	}()
-
 	result := service.IsAuthenticated()
-
-	os.Stderr = origStderr
-	_ = w.Close()
-	logOutput := <-captured
 
 	assert.False(t, result, "expired token with failing whoami/refresh must not report authenticated")
 	assert.Greater(t, int(atomic.LoadInt32(&tokenEndpointHits)), 0,
@@ -139,8 +146,10 @@ func Test_IsAuthenticated_DoesNotUseOAuth2ProviderCustomRefresherFunc(t *testing
 	assert.Empty(t, conf.GetString(auth.CONFIG_KEY_OAUTH_TOKEN),
 		"invalid_grant refresh failure must clear the stale token from storage, not just report not-authenticated")
 
-	customRefresherFired := strings.Contains(logOutput, "oauth.refresherFunc") ||
-		strings.Contains(logOutput, "refreshing oauth2 token")
+	logStr := logOutput.String()
+	assert.NotEmpty(t, logStr, "some log output was captured, so the negative assertion cannot pass vacuously")
+	customRefresherFired := strings.Contains(logStr, "oauth.refresherFunc") ||
+		strings.Contains(logStr, "refreshing oauth2 token")
 	assert.False(t, customRefresherFired,
 		"Default()'s custom refresherFunc closure fired during real IsAuthenticated()-driven "+
 			"traffic - this contradicts the assumption that OAuth whoami/scan calls never route "+

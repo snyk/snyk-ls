@@ -1012,21 +1012,29 @@ func getIssueListFromPublishDiagnosticsNotification(t *testing.T, jsonRPCRecorde
 }
 
 // assertDeltaNewIssuesInFile waits for delta issues to be published and asserts that
-// new issues are only reported for the expected file path.
+// new issues are only reported for the expected file path. Fails fast if diagnostics
+// arrive without any IsNew=true issues instead of waiting for the full timeout.
 func assertDeltaNewIssuesInFile(t *testing.T, jsonRPCRecorder *testsupport.JsonRPCRecorder, folderPath types.FilePath, expectedNewIssuePath string) {
 	t.Helper()
-	var issueList []types.ScanIssue
 	assert.Eventually(t, func() bool {
-		issueList = getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, folderPath)
-		return len(issueList) > 0
-	}, maxIntegTestDuration, time.Millisecond)
-
-	for _, issue := range issueList {
-		if issue.IsNew {
-			issuePath := filepath.Clean(string(issue.FilePath))
-			assert.Equal(t, expectedNewIssuePath, issuePath, "new issue should only be from the expected file: %s", string(issue.FilePath))
+		currentIssues := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, folderPath)
+		if len(currentIssues) == 0 {
+			return false
 		}
-	}
+		hasNewIssue := false
+		for _, issue := range currentIssues {
+			if issue.IsNew {
+				hasNewIssue = true
+				issuePath := filepath.Clean(string(issue.FilePath))
+				assert.Equal(t, expectedNewIssuePath, issuePath, "new issue filepath")
+			}
+		}
+		if !hasNewIssue {
+			assert.Fail(t, "diagnostics received but no issues with IsNew=true")
+			return true
+		}
+		return hasNewIssue
+	}, maxIntegTestDuration, time.Millisecond)
 }
 
 func checkAutofixDiffs(t *testing.T, engine workflow.Engine, issueList []types.ScanIssue, loc server.Local, recorder *testsupport.JsonRPCRecorder) {

@@ -40,6 +40,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/types/mock_types"
+	"github.com/snyk/snyk-ls/internal/vcs"
 )
 
 func TestScanBaseBranch_AllProducts_ReceiveCorrectPathAndFolderPath(t *testing.T) {
@@ -419,6 +420,42 @@ func TestScan_DeltaOn_WorkingTreeResultCarriesCurrentReferenceState(t *testing.T
 			assert.Equal(t, tc.want, refErrAtPublish, "the working-tree $/snyk.scan reports the current reference state")
 		})
 	}
+}
+
+func TestScanBaseBranch_SubfolderMissingOnBaseBranch_PersistsEmptyBaseline(t *testing.T) {
+	engine, tokenService := testutil.UnitTestWithEngine(t)
+	ctrl := gomock.NewController(t)
+
+	repoDir := t.TempDir()
+	testsupport.InitTestGitRepo(t, repoDir)
+	subfolder := filepath.Join(repoDir, "subproject")
+	require.NoError(t, os.MkdirAll(subfolder, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(subfolder, "vulns.js"), []byte("console.log(1)"), 0o600))
+
+	folderConfig := &types.FolderConfig{FolderPath: types.FilePath(subfolder)}
+	syncFolderToConfig(t, engine, folderConfig, &syncFolderOpts{BaseBranch: "main"})
+
+	mockScanner := mock_types.NewMockProductScanner(ctrl)
+	mockScanner.EXPECT().Product().Return(product.ProductCode).AnyTimes()
+	mockScanner.EXPECT().Scan(gomock.Any(), gomock.Any()).Times(0)
+
+	mockPersister := mock_persistence.NewMockScanSnapshotPersister(ctrl)
+	mockPersister.EXPECT().Exists(gomock.Any(), gomock.Any(), gomock.Any()).Return(false)
+	mockPersister.EXPECT().Add(folderConfig.FolderPath, gomock.Any(), gomock.Len(0), product.ProductCode).Return(nil).Times(1)
+
+	dcs := setupScannerWithMock(t, engine, tokenService, mockScanner)
+	dcs.scanPersister = mockPersister
+
+	checkoutHandler := vcs.NewCheckoutHandler(engine.GetConfiguration())
+	t.Cleanup(func() {
+		if cleanup := checkoutHandler.CleanupFunc(); cleanup != nil {
+			cleanup()
+		}
+	})
+
+	err := dcs.scanBaseBranch(t.Context(), mockScanner, folderConfig, checkoutHandler)
+
+	require.NoError(t, err)
 }
 
 // setupScannerWithMock creates a scanner with a mock ProductScanner for testing

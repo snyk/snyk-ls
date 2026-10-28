@@ -59,6 +59,7 @@ type credentialUpdate struct {
 	token            string
 	sendNotification bool
 	updateApiUrl     bool
+	generation       uint64
 	// done, when non-nil, marks this item as a flush barrier rather than a real
 	// credential update: credentialUpdateWorker signals it (without touching conf) once
 	// every update enqueued strictly before the barrier has been applied. See
@@ -107,6 +108,10 @@ type AuthenticationServiceImpl struct {
 	// instead of blocking forever if Shutdown has already stopped the worker.
 	credentialUpdateCtx    context.Context
 	credentialUpdateCancel context.CancelFunc
+	// syncGeneration is bumped by synchronous credential writes; older queued async updates are dropped.
+	syncGeneration atomic.Uint64
+	// notifyMu is separate from m so notifier backpressure cannot block credential access.
+	notifyMu sync.Mutex
 	// writingToken holds a pointer to the token string that the credentialUpdateWorker
 	// is currently writing to conf via updateCredentials → tokenService.SetToken →
 	// WriteTokenToConfig → conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, …).  When the conf key
@@ -168,17 +173,35 @@ func (a *AuthenticationServiceImpl) credentialUpdateWorker(ctx context.Context) 
 				close(update.done)
 				continue
 			}
+			a.m.Lock()
+			if update.generation < a.syncGeneration.Load() {
+				a.engine.GetLogger().Debug().
+					Uint64("update_generation", update.generation).
+					Uint64("current_generation", a.syncGeneration.Load()).
+					Bool("token_empty", update.token == "").
+					Msg("credential update worker: discarding stale async update superseded by synchronous credential write")
+				a.m.Unlock()
+				continue
+			}
+			generation := a.syncGeneration.Load()
 			// Advertise which token we are about to write so QueueCredentialUpdate can
 			// recognize and drop the re-entrant callback that fires when
 			// WriteTokenToConfig calls conf.Set(auth.CONFIG_KEY_OAUTH_TOKEN, …) and
 			// the key is persisted in storage (which triggers the bridge callback again).
-			// The clear is deferred so it always runs even if updateCredentials panics,
+			// The clear is deferred so it always runs even if applyTokenMutationLocked panics,
 			// preventing the guard from staying permanently armed for that token string.
+			var applied bool
 			func() {
 				a.writingToken.Store(&update.token)
 				defer a.writingToken.Store(nil)
-				a.updateCredentials(update.token, update.sendNotification, update.updateApiUrl)
+				applied = a.applyTokenMutationLocked(update.token, update.updateApiUrl)
 			}()
+			a.m.Unlock()
+
+			// The hook may call back into a.m-locking methods; RWMutex is not reentrant.
+			if applied {
+				a.runPostMutationEffects(update.token, update.sendNotification, update.updateApiUrl, generation)
+			}
 		}
 	}
 }
@@ -232,11 +255,13 @@ func (a *AuthenticationServiceImpl) QueueCredentialUpdate(token string, sendNoti
 			Msg("dropping duplicate credential update for token already being written")
 		return
 	}
+	gen := a.syncGeneration.Load()
 	select {
 	case a.credentialUpdateChan <- credentialUpdate{
 		token:            token,
 		sendNotification: sendNotification,
 		updateApiUrl:     updateApiUrl,
+		generation:       gen,
 	}:
 	default:
 		a.engine.GetLogger().Warn().
@@ -662,17 +687,28 @@ func (a *AuthenticationServiceImpl) UpdateCredentials(newToken string, sendNotif
 }
 
 func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotification bool, updateApiUrl bool) {
+	if !a.applyTokenMutationLocked(newToken, updateApiUrl) {
+		return
+	}
+
+	generation := a.syncGeneration.Add(1)
+
+	a.m.Unlock()
+	defer a.m.Lock()
+	a.runPostMutationEffects(newToken, sendNotification, updateApiUrl, generation)
+}
+
+func (a *AuthenticationServiceImpl) applyTokenMutationLocked(newToken string, updateApiUrl bool) bool {
 	conf := a.engine.GetConfiguration()
 	oldToken := config.GetToken(conf)
 	if oldToken == newToken && !updateApiUrl {
-		return
+		return false
 	}
 
 	a.engine.GetLogger().Debug().
 		Str("method", "AuthenticationService.updateCredentials").
 		Bool("old_token_empty", oldToken == "").
 		Bool("new_token_empty", newToken == "").
-		Bool("send_notification", sendNotification).
 		Bool("update_api_url", updateApiUrl).
 		Str("authentication_method", string(config.GetAuthenticationMethodFromConfig(conf))).
 		Msg("auth credentials update requested")
@@ -689,7 +725,7 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 				Bool("current_token_empty", config.GetToken(conf) == "").
 				Str("authentication_method", string(config.GetAuthenticationMethodFromConfig(conf))).
 				Msg("auth credentials update skipped because token was not applied")
-			return
+			return false
 		}
 		// Reset the notification cooldown so the user gets immediate feedback after changing credentials
 		a.notifDedup.Lock()
@@ -698,6 +734,10 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 		a.notifDedup.Unlock()
 	}
 
+	return true
+}
+
+func (a *AuthenticationServiceImpl) runPostMutationEffects(newToken string, sendNotification bool, updateApiUrl bool, generation uint64) {
 	a.postCredentialUpdateHookMu.RLock()
 	postCredentialUpdateHook := a.postCredentialUpdateHook
 	a.postCredentialUpdateHookMu.RUnlock()
@@ -718,10 +758,23 @@ func (a *AuthenticationServiceImpl) updateCredentials(newToken string, sendNotif
 	}
 
 	if sendNotification {
+		conf := a.engine.GetConfiguration()
 		apiUrl := ""
 		if updateApiUrl {
 			apiUrl = a.configResolver.GetString(types.SettingApiEndpoint, nil)
 		}
+
+		a.notifyMu.Lock()
+		defer a.notifyMu.Unlock()
+
+		if generation < a.syncGeneration.Load() {
+			a.engine.GetLogger().Debug().
+				Uint64("captured_generation", generation).
+				Uint64("current_generation", a.syncGeneration.Load()).
+				Msg("skipping notification for credential update superseded by a newer generation")
+			return
+		}
+
 		a.engine.GetLogger().Debug().
 			Str("method", "AuthenticationService.updateCredentials").
 			Bool("token_empty", newToken == "").
@@ -756,19 +809,24 @@ func (a *AuthenticationServiceImpl) CancelOngoingAuth() {
 }
 
 func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
+	// Drain any credential update already queued (e.g. by GAF's syncTokenRefresh
+	// resyncing the token from on-disk storage during the request that just failed and
+	// triggered this logout) before applying our own authoritative clear below. Without
+	// this, credentialUpdateWorker could apply that stale, queued-but-not-yet-drained
+	// update after our clear, resurrecting the token this logout removes (IDE-2402).
+	a.m.Unlock()
+	a.flushCredentialUpdates()
+	a.m.Lock()
+	a.clearCredentials(ctx)
+}
+
+func (a *AuthenticationServiceImpl) clearCredentials(ctx context.Context) {
 	a.engine.GetConfiguration().ClearCache()
 	a.engine.GetLogger().Info().
 		Str("method", "AuthenticationService.logout").
 		Bool("token_empty", config.GetToken(a.engine.GetConfiguration()) == "").
 		Str("authentication_method", string(config.GetAuthenticationMethodFromConfig(a.engine.GetConfiguration()))).
 		Msg("clearing authentication credentials")
-
-	// Drain any credential update already queued (e.g. by GAF's syncTokenRefresh
-	// resyncing the token from on-disk storage during the request that just failed and
-	// triggered this logout) before applying our own authoritative clear below. Without
-	// this, credentialUpdateWorker could apply that stale, queued-but-not-yet-drained
-	// update after our clear, resurrecting the token this logout removes (IDE-2402).
-	a.flushCredentialUpdates()
 
 	if a.authProvider != nil {
 		err := a.authProvider.ClearAuthentication(ctx)
@@ -788,26 +846,21 @@ func (a *AuthenticationServiceImpl) logout(ctx context.Context) {
 // IsAuthenticated returns true if the token is verified
 // If the token is set, but not valid IsAuthenticated returns false
 func (a *AuthenticationServiceImpl) IsAuthenticated() bool {
-	a.m.RLock()
-	defer a.m.RUnlock()
-
-	return a.isAuthenticated()
-}
-
-func (a *AuthenticationServiceImpl) isAuthenticated() bool {
 	logger := a.engine.GetLogger().With().Str("method", "AuthenticationService.IsAuthenticated").Logger()
 
+	a.m.RLock()
 	conf := a.engine.GetConfiguration()
 	token := config.GetToken(conf)
-
 	_, isNotExpired := a.authCache.Get(token)
+	a.m.RUnlock()
+
 	if isNotExpired {
 		logger.Debug().Msg("IsAuthenticated (found in cache)")
 		return true
 	}
 
 	if token == "" {
-		logger.Info().Str("method", "IsAuthenticated").Msg("no credentials found")
+		logger.Info().Msg("no credentials found")
 		return false
 	}
 
@@ -846,18 +899,25 @@ type authCheckResult struct {
 	err  error
 }
 
+func (a *AuthenticationServiceImpl) authCheck(token string, provider AuthenticationProvider) func() (interface{}, error) {
+	return func() (interface{}, error) {
+		if token == "" {
+			return &authCheckResult{}, nil
+		}
+		u, e := provider.GetCheckAuthenticationFunction()(a.engine)
+		return &authCheckResult{user: u, err: e}, nil
+	}
+}
+
 func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration, logger zerolog.Logger) bool {
 	a.handleProviderInconsistencies()
 
 	// Coalesce concurrent auth API calls: all in-flight callers share one result.
-	token := config.GetToken(conf)
-	if token == "" {
+	token, checkedGeneration, provider := a.snapshotCredentials(conf)
+	if token == "" || provider == nil {
 		return false
 	}
-	v, _, _ := a.authCheckGroup.Do(token, func() (interface{}, error) {
-		u, e := a.authProvider.GetCheckAuthenticationFunction()(a.engine)
-		return &authCheckResult{user: u, err: e}, nil
-	})
+	v, _, _ := a.authCheckGroup.Do(token, a.authCheck(token, provider))
 	ar, ok := v.(*authCheckResult)
 	if !ok {
 		return false
@@ -890,15 +950,10 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 			return false
 		}
 
-		if a.markTokenFailed(token) {
-			logger.Info().Msg("auth check already failed for this token, not prompting again")
-			return false
-		}
-
 		invalidOAuth2Token, isLegacyTokenErr := config.ParseOAuthToken(token, a.engine.GetLogger())
 		isLegacyToken := isLegacyTokenErr != nil
 
-		a.handleEmptyUser(logger, isLegacyToken, invalidOAuth2Token)
+		a.handleEmptyUser(logger, isLegacyToken, invalidOAuth2Token, checkedGeneration, token)
 		return false
 	}
 	a.clearLastFailedToken()
@@ -932,21 +987,22 @@ func (a *AuthenticationServiceImpl) doAuthCheck(conf configuration.Configuration
 // configure providers, if needed, as specified in the config
 func (a *AuthenticationServiceImpl) handleProviderInconsistencies() {
 	authMethod := config.GetAuthenticationMethodFromConfig(a.engine.GetConfiguration())
-	msg := fmt.Sprintf("inconsistent auth provider, resetting (authMethod: %s, authenticator: %s)", authMethod, reflect.TypeOf(a.authProvider))
+	provider := a.Provider()
+	msg := fmt.Sprintf("inconsistent auth provider, resetting (authMethod: %s, authenticator: %s)", authMethod, reflect.TypeOf(provider))
 	var ok bool
 	switch {
-	case a.authProvider == nil:
+	case provider == nil:
 		ok = false
 		msg = "auth provider is not set, resetting to default"
 	case authMethod == types.OAuthAuthentication:
-		_, ok = a.authProvider.(*OAuth2Provider)
+		_, ok = provider.(*OAuth2Provider)
 	case authMethod == types.TokenAuthentication:
-		_, ok = a.authProvider.(*CliAuthenticationProvider)
+		_, ok = provider.(*CliAuthenticationProvider)
 	case authMethod == types.PatAuthentication:
-		_, ok = a.authProvider.(*PatAuthenticationProvider)
+		_, ok = provider.(*PatAuthenticationProvider)
 	case authMethod == types.FakeAuthentication:
-		_, fake := a.authProvider.(*FakeAuthenticationProvider)
-		_, cli := a.authProvider.(*CliAuthenticationProvider)
+		_, fake := provider.(*FakeAuthenticationProvider)
+		_, cli := provider.(*CliAuthenticationProvider)
 		ok = fake || cli
 	default:
 		ok = false
@@ -954,7 +1010,9 @@ func (a *AuthenticationServiceImpl) handleProviderInconsistencies() {
 	}
 	if !ok {
 		a.engine.GetLogger().Warn().Msg(msg)
+		a.m.Lock()
 		a.configureProviders(a.engine.GetConfiguration(), a.engine.GetLogger())
+		a.m.Unlock()
 	}
 }
 
@@ -1037,10 +1095,27 @@ func isPermanentOAuthRefreshError(errMsg string) bool {
 		strings.Contains(errMsg, "token_inactive")
 }
 
-func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLegacyToken bool, invalidToken oauth2.Token) {
+func (a *AuthenticationServiceImpl) snapshotCredentials(conf configuration.Configuration) (string, uint64, AuthenticationProvider) {
+	a.m.RLock()
+	defer a.m.RUnlock()
+	return config.GetToken(conf), a.syncGeneration.Load(), a.authProvider
+}
+
+func (a *AuthenticationServiceImpl) handleEmptyUser(logger zerolog.Logger, isLegacyToken bool, invalidToken oauth2.Token, checkedGeneration uint64, token string) {
 	logger.Info().Msg("could not authenticate user with current credentials, API returned empty user object")
+	a.flushCredentialUpdates()
+	a.m.Lock()
+	defer a.m.Unlock()
+	if a.syncGeneration.Load() != checkedGeneration || config.GetToken(a.engine.GetConfiguration()) != token {
+		logger.Info().Msg("auth check finished for a token that is no longer current, not logging out")
+		return
+	}
+	if a.markTokenFailed(token) {
+		logger.Info().Msg("auth check already failed for this token, not prompting again")
+		return
+	}
 	logger.Info().Msg("logging out, empty user response")
-	a.logout(context.Background())
+	a.clearCredentials(context.Background())
 
 	// determine the right error message
 	if !isLegacyToken {

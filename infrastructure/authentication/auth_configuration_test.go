@@ -142,8 +142,6 @@ func Test_RegisterOAuthStorageBridge_UsesDefaultUnlockedCallback(t *testing.T) {
 		notification.NewNotifier(),
 		testutil.DefaultConfigResolver(engine),
 	)
-	serviceImpl, ok := service.(*AuthenticationServiceImpl)
-	require.True(t, ok)
 
 	RegisterOAuthStorageBridge(storageWithCallbacks, service)
 
@@ -155,9 +153,6 @@ func Test_RegisterOAuthStorageBridge_UsesDefaultUnlockedCallback(t *testing.T) {
 	})
 	require.NoError(t, err)
 	rotatedToken := string(rotatedTokenBytes)
-
-	serviceImpl.m.Lock()
-	defer serviceImpl.m.Unlock()
 
 	require.NoError(t, storageWithCallbacks.Set(auth.CONFIG_KEY_OAUTH_TOKEN, rotatedToken))
 	require.Eventually(t, func() bool {

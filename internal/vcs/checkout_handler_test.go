@@ -17,9 +17,14 @@
 package vcs
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -83,4 +88,53 @@ func getFolderConfig(path types.FilePath) *types.FolderConfig {
 	return &types.FolderConfig{
 		FolderPath: path,
 	}
+}
+
+func baseFolderContainsFile(basePath types.FilePath, relativePath string) bool {
+	_, err := os.Stat(filepath.Join(string(basePath), relativePath))
+	return err == nil
+}
+
+func TestCheckoutHandler_SubfolderPath(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	repoRootPath := types.FilePath(t.TempDir())
+	repo, _ := initGitRepo(t, repoRootPath, false)
+
+	subfolderName := "subproject"
+	subfolderPath := types.FilePath(filepath.Join(string(repoRootPath), subfolderName))
+	require.NoError(t, os.Mkdir(string(subfolderPath), 0755))
+
+	testFile := filepath.Join(string(subfolderPath), "test.txt")
+	require.NoError(t, os.WriteFile(testFile, []byte("subfolder test data"), 0600))
+
+	worktree, err := repo.Worktree()
+	require.NoError(t, err)
+	_, err = worktree.Add(filepath.Join(subfolderName, "test.txt"))
+	require.NoError(t, err)
+	_, err = worktree.Commit("Add subfolder test file", &git.CommitOptions{
+		Author: &object.Signature{Name: t.Name()},
+	})
+	require.NoError(t, err)
+
+	ch := NewCheckoutHandler(engine.GetConfiguration())
+	err = ch.CheckoutBaseBranch(engine.GetLogger(), getFolderConfig(subfolderPath))
+	require.NoError(t, err)
+	defer ch.CleanupFunc()()
+
+	baseFolderPath := ch.BaseFolderPath()
+	assert.True(t, baseFolderContainsFile(baseFolderPath, "test.txt"))
+}
+
+func TestCheckoutHandler_RootPath(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	repoPath := types.FilePath(t.TempDir())
+	_, _ = initGitRepo(t, repoPath, false)
+
+	ch := NewCheckoutHandler(engine.GetConfiguration())
+	err := ch.CheckoutBaseBranch(engine.GetLogger(), getFolderConfig(repoPath))
+	require.NoError(t, err)
+	defer ch.CleanupFunc()()
+
+	baseFolderPath := ch.BaseFolderPath()
+	assert.True(t, baseFolderContainsFile(baseFolderPath, "testFile.txt"))
 }
