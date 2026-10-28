@@ -89,6 +89,30 @@ func (ch *CheckoutHandler) CheckoutBaseBranch(logger *zerolog.Logger, folderConf
 		return err
 	}
 
+	// Resolve the git repository root to compute the relative path from root to folderPath
+	repoRoot, err := GitRepoRoot(folderPath)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to resolve git repository root")
+		return err
+	}
+
+	// Calculate the relative path from the repository root to the configured folder
+	relativePath, err := filepath.Rel(string(repoRoot), string(folderPath))
+	if err != nil {
+		logger.Error().Err(err).
+			Str("repoRoot", string(repoRoot)).
+			Str("folderPath", string(folderPath)).
+			Msg("Failed to compute relative path from repo root to folder")
+		return err
+	}
+
+	// Append the relative path to the temporary clone root
+	// For root workspaces, relativePath will be "." so baseFolderPath stays as temp root
+	finalBaseFolderPath := baseBranchFolderPath
+	if relativePath != "." {
+		finalBaseFolderPath = filepath.Join(baseBranchFolderPath, relativePath)
+	}
+
 	cleanupFunc := func() {
 		if baseBranchFolderPath == "" {
 			return
@@ -101,7 +125,7 @@ func (ch *CheckoutHandler) CheckoutBaseBranch(logger *zerolog.Logger, folderConf
 		}
 	}
 
-	ch.baseFolderPath = types.FilePath(baseBranchFolderPath)
+	ch.baseFolderPath = types.FilePath(finalBaseFolderPath)
 	ch.repository = repo
 	ch.cleanupFunc = cleanupFunc
 	return nil

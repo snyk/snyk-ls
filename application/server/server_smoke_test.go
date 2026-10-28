@@ -1017,10 +1017,17 @@ func assertDeltaNewIssuesInFile(t *testing.T, jsonRPCRecorder *testsupport.JsonR
 	t.Helper()
 	var issueList []types.ScanIssue
 	assert.Eventually(t, func() bool {
-		issueList = getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, folderPath)
-		return len(issueList) > 0
+		currentIssues := getIssueListFromPublishDiagnosticsNotification(t, jsonRPCRecorder, product.ProductCode, folderPath)
+		for _, issue := range currentIssues {
+			if issue.IsNew {
+				issueList = currentIssues
+				return true
+			}
+		}
+		return false
 	}, maxIntegTestDuration, time.Millisecond)
 
+	assert.Greater(t, len(issueList), 0, "should have found at least one new issue")
 	for _, issue := range issueList {
 		if issue.IsNew {
 			issuePath := filepath.Clean(string(issue.FilePath))
