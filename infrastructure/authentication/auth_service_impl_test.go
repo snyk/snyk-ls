@@ -387,6 +387,59 @@ func TestIsAuthenticated_ConcurrentCallsSendOnlyOneNotification(t *testing.T) {
 		"concurrent IsAuthenticated() calls should make exactly one auth API call via singleflight, not one per caller")
 }
 
+// Only meaningful under -race.
+func Test_IsAuthenticated_ProviderAccessIsRaceFreeAgainstProviderWrites(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.FakeAuthentication))
+	ts.SetToken(engine.GetConfiguration(), "some-test-token")
+	newProvider := func() *FakeAuthenticationProvider {
+		return &FakeAuthenticationProvider{
+			IsAuthenticated: false,
+			Engine:          engine,
+			CheckAuthDelay:  time.Millisecond,
+		}
+	}
+	service := NewAuthenticationService(engine, ts, newProvider(), error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+	t.Cleanup(service.Shutdown)
+
+	const iterations = 40
+	const readers = 8
+	const writers = 4
+	start := make(chan struct{})
+	stop := make(chan struct{})
+	var readersDone sync.WaitGroup
+	readersDone.Add(readers)
+	for range readers {
+		go func() {
+			defer readersDone.Done()
+			<-start
+			for range iterations {
+				service.IsAuthenticated()
+			}
+		}()
+	}
+	var writersDone sync.WaitGroup
+	writersDone.Add(writers)
+	for range writers {
+		go func() {
+			defer writersDone.Done()
+			<-start
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					service.SetProvider(newProvider())
+				}
+			}
+		}()
+	}
+	close(start)
+	readersDone.Wait()
+	close(stop)
+	writersDone.Wait()
+}
+
 // TestIsAuthenticated_ConcurrentCallsAllReturnSharedResult guards against a regression
 // where a token-keyed "already in flight" guard around authCheckGroup.Do (added to fix
 // IDE-2178's reentrant-call deadlock, see git history) also short-circuited legitimate
@@ -447,6 +500,33 @@ func (p *errorFakeAuthProvider) ClearAuthentication(_ context.Context) error    
 func (p *errorFakeAuthProvider) AuthURL(_ context.Context) string               { return "" }
 func (p *errorFakeAuthProvider) setAuthUrl(_ string)                            {}
 func (p *errorFakeAuthProvider) AuthenticationMethod() types.AuthenticationMethod {
+	return types.FakeAuthentication
+}
+
+type blockingErrorAuthProvider struct {
+	err       error
+	started   chan struct{}
+	release   chan struct{}
+	callCount int32
+}
+
+func (p *blockingErrorAuthProvider) GetCheckAuthenticationFunction() AuthenticationFunction {
+	return func(_ workflow.Engine) (string, error) {
+		atomic.AddInt32(&p.callCount, 1)
+		select {
+		case <-p.started:
+		default:
+			close(p.started)
+		}
+		<-p.release
+		return "", p.err
+	}
+}
+func (p *blockingErrorAuthProvider) Authenticate(_ context.Context) (string, error) { return "", nil }
+func (p *blockingErrorAuthProvider) ClearAuthentication(_ context.Context) error    { return nil }
+func (p *blockingErrorAuthProvider) AuthURL(_ context.Context) string               { return "" }
+func (p *blockingErrorAuthProvider) setAuthUrl(_ string)                            {}
+func (p *blockingErrorAuthProvider) AuthenticationMethod() types.AuthenticationMethod {
 	return types.FakeAuthentication
 }
 
@@ -575,6 +655,15 @@ func Test_IsAuthenticated_FailedTokenIsReportedOnce(t *testing.T) {
 		assert.Equal(t, 1, reAuthRequests(notifier))
 	})
 
+	t.Run("empty token is not sent to the provider and is not prompted", func(t *testing.T) {
+		service, provider, notifier, ts := setup(t)
+		ts.SetToken(service.engine.GetConfiguration(), "")
+
+		assert.False(t, service.doAuthCheck(service.engine.GetConfiguration(), *service.engine.GetLogger()))
+		assert.Equal(t, int32(0), atomic.LoadInt32(&provider.callCount))
+		assert.Equal(t, 0, reAuthRequests(notifier))
+	})
+
 	t.Run("explicit logout allows the same token to be checked again", func(t *testing.T) {
 		service, provider, notifier, ts := setup(t)
 
@@ -586,6 +675,146 @@ func Test_IsAuthenticated_FailedTokenIsReportedOnce(t *testing.T) {
 		assert.Equal(t, int32(2), atomic.LoadInt32(&provider.callCount))
 		assert.Equal(t, 2, reAuthRequests(notifier))
 	})
+}
+
+func Test_IsAuthenticated_StaleFailedCheckDoesNotLogOutReplacementToken(t *testing.T) {
+	const deadToken = "invalidCreds"
+	const freshToken = "fresh-token"
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &blockingErrorAuthProvider{
+		err:     buildWhoamiErr(fmt.Errorf("API request failed (status: 401)")),
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	ts.SetToken(engine.GetConfiguration(), deadToken)
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+	t.Cleanup(service.Shutdown)
+
+	done := make(chan bool, 1)
+	go func() {
+		done <- service.IsAuthenticated()
+	}()
+
+	select {
+	case <-provider.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("auth check did not start")
+	}
+
+	service.UpdateCredentials(freshToken, false, false)
+	close(provider.release)
+
+	select {
+	case authenticated := <-done:
+		assert.False(t, authenticated)
+	case <-time.After(5 * time.Second):
+		t.Fatal("IsAuthenticated did not return")
+	}
+
+	assert.Equal(t, freshToken, config.GetToken(engine.GetConfiguration()))
+}
+
+func Test_IsAuthenticated_StaleFailureDoesNotRearmLastFailedToken(t *testing.T) {
+	const token = "same-token"
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &blockingErrorAuthProvider{
+		err:     buildWhoamiErr(fmt.Errorf("API request failed (status: 401)")),
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	ts.SetToken(engine.GetConfiguration(), token)
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+	t.Cleanup(service.Shutdown)
+
+	done := make(chan bool, 1)
+	go func() {
+		done <- service.IsAuthenticated()
+	}()
+
+	select {
+	case <-provider.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("auth check did not start")
+	}
+
+	service.Logout(t.Context())
+	service.m.Lock()
+	service.updateCredentials(token, false, false)
+	service.clearLastFailedToken()
+	service.m.Unlock()
+	close(provider.release)
+
+	select {
+	case authenticated := <-done:
+		assert.False(t, authenticated)
+	case <-time.After(5 * time.Second):
+		t.Fatal("IsAuthenticated did not return")
+	}
+
+	assert.Equal(t, token, config.GetToken(engine.GetConfiguration()))
+	assert.False(t, service.isKnownFailedToken(token))
+}
+
+func Test_IsAuthenticated_StaleLogoutDoesNotClearTokenWrittenDuringFlush(t *testing.T) {
+	const T1 = "old-token"
+	const T2 = "new-token"
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	provider := &blockingErrorAuthProvider{
+		err:     buildWhoamiErr(fmt.Errorf("API request failed (status: 401)")),
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	ts.SetToken(conf, T1)
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+	t.Cleanup(service.Shutdown)
+
+	hookEntered := make(chan struct{})
+	hookRelease := make(chan struct{})
+	hookCalled := atomic.Bool{}
+
+	service.SetPostCredentialUpdateHook(func() {
+		if hookCalled.CompareAndSwap(false, true) {
+			close(hookEntered)
+			<-hookRelease
+		}
+	})
+
+	authDone := make(chan bool, 1)
+	go func() {
+		authDone <- service.IsAuthenticated()
+	}()
+
+	select {
+	case <-provider.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("auth check did not start")
+	}
+
+	service.QueueCredentialUpdate(T1, false, true)
+	select {
+	case <-hookEntered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("hook did not enter")
+	}
+
+	close(provider.release)
+
+	require.Eventually(t, func() bool {
+		return len(service.credentialUpdateChan) == 1
+	}, 5*time.Second, time.Millisecond, "logout flush barrier should be enqueued in channel")
+
+	service.UpdateCredentials(T2, false, false)
+	close(hookRelease)
+
+	select {
+	case <-authDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("IsAuthenticated did not return")
+	}
+
+	assert.Equal(t, T2, config.GetToken(conf), "T2 must not be cleared by logout's flush window")
 }
 
 // buildWhoamiErr simulates the real production error wrapping chain:
@@ -962,6 +1191,75 @@ func Test_ConfigureProviders_CredentialMismatch_CallsClearAuthentication(t *test
 	assert.True(t, provider.ClearAuthenticationCalled, "configureProviders must call ClearAuthentication on credential mismatch")
 	assert.Empty(t, config.GetToken(conf), "mismatched token must be cleared from memory")
 }
+
+func Test_ConfigureProviders_CredentialMismatch_ReleasesWriteLockDuringLogout(t *testing.T) {
+	t.Parallel()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+	conf.Set(configresolver.UserGlobalKey(types.SettingAuthenticationMethod), string(types.OAuthAuthentication))
+	ts.SetToken(conf, "00000000-0000-0000-0000-000000000002")
+
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine, Method: types.OAuthAuthentication}
+	lockProbe := make(chan struct{}, 1)
+	var service AuthenticationService
+	notifier := &authNotificationProbeNotifier{
+		onAuthNotification: func() {
+			_ = service.IsAuthenticated()
+			select {
+			case lockProbe <- struct{}{}:
+			default:
+			}
+		},
+	}
+	service = NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notifier, testutil.DefaultConfigResolver(engine))
+	t.Cleanup(service.(*AuthenticationServiceImpl).Shutdown)
+
+	done := make(chan struct{})
+	go func() {
+		service.ConfigureProviders(conf, engine.GetLogger())
+		close(done)
+	}()
+
+	select {
+	case <-lockProbe:
+	case <-time.After(5 * time.Second):
+		t.Fatal("ConfigureProviders did not release a.m during logout credential clear")
+	}
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("ConfigureProviders did not return: a.m was not correctly re-acquired after logout")
+	}
+}
+
+type authNotificationProbeNotifier struct {
+	onAuthNotification func()
+}
+
+func (n *authNotificationProbeNotifier) Receive() (payload any, stop bool) {
+	panic("implement me")
+}
+
+func (n *authNotificationProbeNotifier) CreateListener(_ func(params any)) {
+	panic("implement me")
+}
+
+func (n *authNotificationProbeNotifier) DisposeListener() {
+	panic("implement me")
+}
+
+func (n *authNotificationProbeNotifier) SendShowMessage(_ sglsp.MessageType, _ string) {}
+
+func (n *authNotificationProbeNotifier) Send(msg any) {
+	if _, ok := msg.(types.AuthenticationParams); ok && n.onAuthNotification != nil {
+		n.onAuthNotification()
+	}
+}
+
+func (n *authNotificationProbeNotifier) SendError(_ error) {}
+
+func (n *authNotificationProbeNotifier) SendErrorDiagnostic(_ types.FilePath, _ error) {}
 
 func TestAuthenticate_CancellationPreservesExistingToken(t *testing.T) {
 	engine, ts := testutil.UnitTestWithEngine(t)
@@ -2035,6 +2333,576 @@ func Test_swapHost(t *testing.T) {
 			assert.Equal(t, tt.expected, swapHost(tt.customUrl, tt.newHost))
 		})
 	}
+}
+
+func Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterSyncWrite(t *testing.T) {
+	t.Parallel()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+	t.Cleanup(service.Shutdown)
+	impl := service.(*AuthenticationServiceImpl)
+
+	const realToken = "test-real-token-ide-2106"
+
+	impl.m.Lock()
+	impl.credentialUpdateChan <- credentialUpdate{
+		token:            "",
+		sendNotification: false,
+		updateApiUrl:     false,
+		generation:       impl.syncGeneration.Load(),
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		service.UpdateCredentials(realToken, false, false)
+	}()
+
+	impl.m.Unlock()
+	<-done
+
+	require.Eventually(t, func() bool {
+		return len(impl.credentialUpdateChan) == 0
+	}, 5*time.Second, 10*time.Millisecond, "credential update channel should drain")
+
+	require.Eventually(t, func() bool {
+		return config.GetToken(engine.GetConfiguration()) == realToken
+	}, 5*time.Second, 10*time.Millisecond,
+		"stale async clear-token update must not overwrite the synchronously-set token")
+}
+
+func Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterAuthenticate(t *testing.T) {
+	t.Parallel()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{Engine: engine}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+	t.Cleanup(service.Shutdown)
+	impl := service.(*AuthenticationServiceImpl)
+
+	impl.m.Lock()
+	impl.credentialUpdateChan <- credentialUpdate{
+		token:            "",
+		sendNotification: false,
+		updateApiUrl:     false,
+		generation:       impl.syncGeneration.Load(),
+	}
+
+	authDone := make(chan struct{})
+	go func() {
+		defer close(authDone)
+		_, _ = service.Authenticate(t.Context())
+	}()
+
+	impl.m.Unlock()
+	<-authDone
+
+	require.Eventually(t, func() bool {
+		return len(impl.credentialUpdateChan) == 0
+	}, 5*time.Second, 10*time.Millisecond, "credential update channel should drain")
+
+	require.Eventually(t, func() bool {
+		return config.GetToken(engine.GetConfiguration()) == "e448dc1a-26c6-11ed-a261-0242ac120002"
+	}, 5*time.Second, 10*time.Millisecond,
+		"stale async clear-token update must not overwrite the token set by authenticate()")
+}
+
+func Test_QueueCredentialUpdate_StaleUpdateDiscardedAfterLogout(t *testing.T) {
+	t.Parallel()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{Engine: engine}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+	t.Cleanup(service.Shutdown)
+	impl := service.(*AuthenticationServiceImpl)
+
+	const priorToken = "test-prior-token-that-should-be-cleared"
+
+	service.UpdateCredentials(priorToken, false, false)
+
+	impl.m.Lock()
+	impl.credentialUpdateChan <- credentialUpdate{
+		token:            priorToken,
+		sendNotification: false,
+		updateApiUrl:     false,
+		generation:       impl.syncGeneration.Load(),
+	}
+
+	logoutDone := make(chan struct{})
+	go func() {
+		defer close(logoutDone)
+		service.Logout(t.Context())
+	}()
+
+	impl.m.Unlock()
+	<-logoutDone
+
+	require.Eventually(t, func() bool {
+		return len(impl.credentialUpdateChan) == 0
+	}, 5*time.Second, 10*time.Millisecond, "credential update channel should drain")
+
+	require.Eventually(t, func() bool {
+		return config.GetToken(engine.GetConfiguration()) == ""
+	}, 5*time.Second, 10*time.Millisecond,
+		"stale async restore-token update must not undo the logout")
+}
+
+func Test_CredentialUpdateWorker_HookCanAcquireLock(t *testing.T) {
+	t.Parallel()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+	t.Cleanup(service.Shutdown)
+
+	impl := service.(*AuthenticationServiceImpl)
+	hookCalled := make(chan struct{}, 1)
+
+	service.SetPostCredentialUpdateHook(func() {
+		_ = service.IsAuthenticated()
+		select {
+		case hookCalled <- struct{}{}:
+		default:
+		}
+	})
+
+	impl.QueueCredentialUpdate("initial-token", false, false)
+
+	select {
+	case <-hookCalled:
+	case <-time.After(5 * time.Second):
+		t.Fatal("postCredentialUpdateHook deadlocked: worker is holding a.m across the hook call")
+	}
+}
+
+func Test_UpdateCredentials_HookCanAcquireLock(t *testing.T) {
+	t.Parallel()
+	engine, ts := testutil.UnitTestWithEngine(t)
+	provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewNotifier(), testutil.DefaultConfigResolver(engine))
+	t.Cleanup(service.Shutdown)
+
+	hookCalled := make(chan struct{}, 1)
+
+	service.SetPostCredentialUpdateHook(func() {
+		_ = service.IsAuthenticated()
+		select {
+		case hookCalled <- struct{}{}:
+		default:
+		}
+	})
+
+	done := make(chan struct{})
+	go func() {
+		service.UpdateCredentials("sync-path-token", false, false)
+		close(done)
+	}()
+
+	select {
+	case <-hookCalled:
+	case <-time.After(5 * time.Second):
+		t.Fatal("postCredentialUpdateHook deadlocked: UpdateCredentials is holding a.m across the hook call")
+	}
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("UpdateCredentials did not return: a.m was not correctly re-acquired after the hook")
+	}
+}
+
+func Test_UpdateCredentials_SkipsStaleNotification(t *testing.T) {
+	t.Parallel()
+
+	t.Run("stale generation suppresses notification", func(t *testing.T) {
+		t.Parallel()
+		engine, ts := testutil.UnitTestWithEngine(t)
+		provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
+		mockNotifier := notification.NewMockNotifier()
+		service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+		t.Cleanup(service.Shutdown)
+
+		hookCalled := make(chan struct{}, 1)
+		innerCalled := atomic.Bool{}
+		service.SetPostCredentialUpdateHook(func() {
+			if !innerCalled.Swap(true) {
+				service.UpdateCredentials("token-inner", true, false)
+			}
+			select {
+			case hookCalled <- struct{}{}:
+			default:
+			}
+		})
+
+		service.UpdateCredentials("token-outer", true, false)
+
+		select {
+		case <-hookCalled:
+		case <-time.After(5 * time.Second):
+			t.Fatal("hook never called")
+		}
+
+		assert.Equal(t, 1, mockNotifier.SendCount(), "only the inner call's notification should send")
+		messages := mockNotifier.SentMessages()
+		require.Len(t, messages, 1)
+		authParams, ok := messages[0].(types.AuthenticationParams)
+		require.True(t, ok, "message should be AuthenticationParams")
+		assert.Equal(t, "token-inner", authParams.Token, "notification should be for the inner token")
+	})
+
+	t.Run("current generation sends notification", func(t *testing.T) {
+		t.Parallel()
+		engine, ts := testutil.UnitTestWithEngine(t)
+		provider := &FakeAuthenticationProvider{IsAuthenticated: true, Engine: engine}
+		mockNotifier := notification.NewMockNotifier()
+		service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+		t.Cleanup(service.Shutdown)
+
+		service.UpdateCredentials("token-b", true, false)
+
+		assert.Equal(t, 1, mockNotifier.SendCount(), "notification should send when generation is current")
+		messages := mockNotifier.SentMessages()
+		require.Len(t, messages, 1)
+		authParams, ok := messages[0].(types.AuthenticationParams)
+		require.True(t, ok, "message should be AuthenticationParams")
+		assert.Equal(t, "token-b", authParams.Token)
+	})
+}
+
+type blockingNotifier struct {
+	startOnce sync.Once
+	started   chan struct{}
+	release   chan struct{}
+	wrapped   notification.Notifier
+}
+
+func (b *blockingNotifier) Send(msg any) {
+	b.startOnce.Do(func() { close(b.started) })
+	<-b.release
+	b.wrapped.Send(msg)
+}
+
+func (b *blockingNotifier) SendShowMessage(messageType sglsp.MessageType, message string) {
+	b.wrapped.SendShowMessage(messageType, message)
+}
+
+func (b *blockingNotifier) SendError(err error) {
+	b.wrapped.SendError(err)
+}
+
+func (b *blockingNotifier) SendErrorDiagnostic(path types.FilePath, err error) {
+	b.wrapped.SendErrorDiagnostic(path, err)
+}
+
+func (b *blockingNotifier) Receive() (payload any, stop bool) {
+	return b.wrapped.Receive()
+}
+
+func (b *blockingNotifier) CreateListener(callback func(params any)) {
+	b.wrapped.CreateListener(callback)
+}
+
+func (b *blockingNotifier) DisposeListener() {
+	b.wrapped.DisposeListener()
+}
+
+func Test_UpdateCredentials_NotificationBackpressureDoesNotBlockCredentialWrites(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	conf := engine.GetConfiguration()
+
+	blocker := &blockingNotifier{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+		wrapped: notification.NewMockNotifier(),
+	}
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), blocker, testutil.DefaultConfigResolver(engine))
+	t.Cleanup(service.(*AuthenticationServiceImpl).Shutdown)
+
+	done1 := make(chan struct{})
+	go func() {
+		service.UpdateCredentials("token-1", true, false)
+		close(done1)
+	}()
+
+	select {
+	case <-blocker.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("first Send did not start")
+	}
+
+	done2 := make(chan struct{})
+	go func() {
+		service.UpdateCredentials("token-2", true, false)
+		close(done2)
+	}()
+
+	require.Eventually(t, func() bool {
+		return config.GetToken(conf) == "token-2"
+	}, 5*time.Second, time.Millisecond, "notification backpressure blocked credential writes")
+
+	close(blocker.release)
+
+	select {
+	case <-done1:
+	case <-time.After(5 * time.Second):
+		t.Fatal("first UpdateCredentials did not complete")
+	}
+
+	select {
+	case <-done2:
+	case <-time.After(5 * time.Second):
+		t.Fatal("second UpdateCredentials did not complete")
+	}
+}
+
+func Test_UpdateCredentials_OrderingGuarantee(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+	t.Cleanup(service.(*AuthenticationServiceImpl).Shutdown)
+
+	callCount := atomic.Int32{}
+	service.SetPostCredentialUpdateHook(func() {
+		if callCount.Add(1) == 1 {
+			service.UpdateCredentials("token-gen2", true, false)
+		}
+	})
+
+	service.UpdateCredentials("token-gen1", true, false)
+
+	require.Equal(t, 1, mockNotifier.SendCount(), "only gen 2 notification should send; gen 1 should be dropped")
+	messages := mockNotifier.SentMessages()
+	require.Len(t, messages, 1)
+
+	authParams, ok := messages[0].(types.AuthenticationParams)
+	require.True(t, ok, "message should be AuthenticationParams")
+	assert.Equal(t, "token-gen2", authParams.Token, "only gen 2's token should be delivered")
+}
+
+func Test_CredentialNotifications_DeliveredInGenerationOrder(t *testing.T) {
+	tests := []struct {
+		name     string
+		run      func(t *testing.T, service AuthenticationService, impl *AuthenticationServiceImpl)
+		minSends int
+		exact    bool
+	}{
+		{
+			name: "sequential sync writes",
+			run: func(t *testing.T, service AuthenticationService, _ *AuthenticationServiceImpl) {
+				t.Helper()
+				service.UpdateCredentials("t1", true, false)
+				service.UpdateCredentials("t2", true, false)
+				service.UpdateCredentials("t3", true, false)
+			},
+			minSends: 3,
+			exact:    true,
+		},
+		{
+			name: "async update after sync write shares the current epoch and is delivered",
+			run: func(t *testing.T, service AuthenticationService, impl *AuthenticationServiceImpl) {
+				t.Helper()
+				service.UpdateCredentials("t1", true, false)
+				impl.QueueCredentialUpdate("t2", true, false)
+				impl.flushCredentialUpdates()
+				impl.QueueCredentialUpdate("t3", true, false)
+				impl.flushCredentialUpdates()
+			},
+			minSends: 3,
+			exact:    true,
+		},
+		{
+			name: "stale async update is dropped before notifying",
+			run: func(t *testing.T, service AuthenticationService, impl *AuthenticationServiceImpl) {
+				t.Helper()
+				// Holding a.m keeps the worker from applying the update before the generation bump.
+				impl.m.Lock()
+				impl.credentialUpdateChan <- credentialUpdate{
+					token:            "stale",
+					sendNotification: true,
+					updateApiUrl:     false,
+					generation:       impl.syncGeneration.Load(),
+				}
+				impl.updateCredentials("t1", true, false)
+				impl.m.Unlock()
+				impl.flushCredentialUpdates()
+			},
+			minSends: 1,
+			exact:    true,
+		},
+		{
+			name: "sync write nested in the post-mutation window supersedes the outer notification",
+			run: func(t *testing.T, service AuthenticationService, _ *AuthenticationServiceImpl) {
+				t.Helper()
+				var once atomic.Bool
+				service.SetPostCredentialUpdateHook(func() {
+					if once.CompareAndSwap(false, true) {
+						service.UpdateCredentials("inner", true, false)
+					}
+				})
+				service.UpdateCredentials("outer", true, false)
+			},
+			minSends: 1,
+			exact:    true,
+		},
+		{
+			name: "concurrent sync writes",
+			run: func(t *testing.T, service AuthenticationService, _ *AuthenticationServiceImpl) {
+				t.Helper()
+				var wg sync.WaitGroup
+				wg.Add(8)
+				for i := range 8 {
+					go func(i int) {
+						defer wg.Done()
+						service.UpdateCredentials(fmt.Sprintf("c%d", i+1), true, false)
+					}(i)
+				}
+				wg.Wait()
+			},
+			minSends: 1,
+			exact:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			engine, ts := testutil.UnitTestWithEngine(t)
+			mockNotifier := notification.NewMockNotifier()
+			service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+			impl := service.(*AuthenticationServiceImpl)
+			t.Cleanup(impl.Shutdown)
+
+			tt.run(t, service, impl)
+
+			sendCount := mockNotifier.SendCount()
+			if tt.exact {
+				require.Equal(t, tt.minSends, sendCount, "unexpected notification count")
+			} else {
+				require.GreaterOrEqual(t, sendCount, tt.minSends, "expected at least one notification")
+			}
+
+			messages := mockNotifier.SentMessages()
+			require.NotEmpty(t, messages)
+			last := messages[len(messages)-1]
+			authParams, ok := last.(types.AuthenticationParams)
+			require.True(t, ok, "last message should be AuthenticationParams")
+			assert.Equal(t, config.GetToken(engine.GetConfiguration()), authParams.Token,
+				"last AuthenticationParams must carry the token currently in config")
+		})
+	}
+}
+
+func Test_UpdateCredentials_OrderingGuard_SyncGenerationAdvancedNoNotification(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+	mockNotifier := notification.NewMockNotifier()
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), mockNotifier, testutil.DefaultConfigResolver(engine))
+	t.Cleanup(service.(*AuthenticationServiceImpl).Shutdown)
+
+	callCount := atomic.Int32{}
+	service.SetPostCredentialUpdateHook(func() {
+		if callCount.Add(1) == 1 {
+			service.UpdateCredentials("token-gen2-no-notify", false, false)
+		}
+	})
+
+	service.UpdateCredentials("token-gen1", true, false)
+
+	require.Equal(t, 0, mockNotifier.SendCount(), "gen 1 should be dropped by syncGeneration guard")
+}
+
+func Test_UpdateCredentials_OrderingAtomicity(t *testing.T) {
+	engine, ts := testutil.UnitTestWithEngine(t)
+
+	blocker := &blockingNotifier{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+		wrapped: notification.NewMockNotifier(),
+	}
+	service := NewAuthenticationService(engine, ts, nil, error_reporting.NewTestErrorReporter(engine), blocker, testutil.DefaultConfigResolver(engine))
+	impl := service.(*AuthenticationServiceImpl)
+	t.Cleanup(impl.Shutdown)
+
+	g1Done := make(chan struct{})
+	go func() {
+		service.UpdateCredentials("token-1", true, false)
+		close(g1Done)
+	}()
+
+	select {
+	case <-blocker.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("G1 Send did not start; blocker not working")
+	}
+
+	require.False(t, impl.notifyMu.TryLock(), "notifyMu must be held during Send")
+
+	g2Done := make(chan struct{})
+	go func() {
+		service.UpdateCredentials("token-2", true, false)
+		close(g2Done)
+	}()
+
+	close(blocker.release)
+
+	select {
+	case <-g1Done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("G1 did not complete after releasing Send")
+	}
+
+	select {
+	case <-g2Done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("G2 did not complete after G1 finished")
+	}
+
+	require.Equal(t, 2, blocker.wrapped.(*notification.MockNotifier).SendCount(), "both should send")
+	messages := blocker.wrapped.(*notification.MockNotifier).SentMessages()
+	require.Len(t, messages, 2)
+
+	ap1, ok1 := messages[0].(types.AuthenticationParams)
+	require.True(t, ok1)
+	assert.Equal(t, "token-1", ap1.Token)
+
+	ap2, ok2 := messages[1].(types.AuthenticationParams)
+	require.True(t, ok2)
+	assert.Equal(t, "token-2", ap2.Token)
+}
+
+func Test_IsAuthenticated_DoesNotLogoutWhenAsyncRotationReplacedCheckedToken(t *testing.T) {
+	const tokenT1 = "invalidCreds"
+	const tokenT2 = "refreshed-token"
+	engine, ts := testutil.UnitTestWithEngine(t)
+
+	provider := &blockingErrorAuthProvider{
+		err:     buildWhoamiErr(fmt.Errorf("API request failed (status: 401)")),
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	ts.SetToken(engine.GetConfiguration(), tokenT1)
+	service := NewAuthenticationService(engine, ts, provider, error_reporting.NewTestErrorReporter(engine), notification.NewMockNotifier(), testutil.DefaultConfigResolver(engine)).(*AuthenticationServiceImpl)
+	t.Cleanup(service.Shutdown)
+
+	done := make(chan bool, 1)
+	go func() {
+		done <- service.IsAuthenticated()
+	}()
+
+	select {
+	case <-provider.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("auth check did not start")
+	}
+
+	service.QueueCredentialUpdate(tokenT2, true, false)
+	service.flushCredentialUpdates()
+	close(provider.release)
+
+	select {
+	case authenticated := <-done:
+		assert.False(t, authenticated)
+	case <-time.After(5 * time.Second):
+		t.Fatal("IsAuthenticated did not return")
+	}
+
+	assert.Equal(t, tokenT2, config.GetToken(engine.GetConfiguration()),
+		"async rotation must replace stale token; stale auth failure must not wipe the replacement")
 }
 
 // Regression guard that pins the existing semantics of getPrioritizedApiUrl,
