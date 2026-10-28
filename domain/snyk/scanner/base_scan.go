@@ -116,7 +116,6 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 	// scan
 	var results []types.Issue
 	logger.Debug().Msg("scanBaseBranch: scanning reference folder")
-	// For a base branch scan, the scan root is the temporary base branch directory.
 	// Copy prefix key values so the base scan config inherits all settings.
 	baseScanConfig := *folderConfig
 	baseScanConfig.FolderPath = baseFolderPath
