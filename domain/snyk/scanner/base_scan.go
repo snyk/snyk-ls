@@ -20,6 +20,7 @@ package scanner
 import (
 	"context"
 	"errors"
+	"os"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -54,17 +55,9 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 		return err
 	}
 
-	var referenceFolderPath types.FilePath
-	if val, _ := sc.configResolver.GetValue(types.SettingReferenceFolder, folderConfig); val != nil {
-		if s, ok := val.(string); ok {
-			referenceFolderPath = types.FilePath(s)
-		}
-	}
-	if referenceFolderPath != "" {
-		if err := types.ValidatePathLenient(referenceFolderPath); err != nil {
-			logger.Error().Err(err).Str("referencePath", string(referenceFolderPath)).Msg("invalid reference folder path")
-			return err
-		}
+	referenceFolderPath, err := sc.validatedReferenceFolderPath(folderConfig, &logger)
+	if err != nil {
+		return err
 	}
 
 	folderPath := folderConfig.FolderPath
@@ -74,7 +67,7 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 	logger = logger.With().Str("folderPath", string(folderPath)).Logger()
 
 	logger.Debug().Msg("scanBaseBranch: starting reference/base branch scan")
-	if err := sc.deltaReferenceErr(folderConfig); err != nil {
+	if err = sc.deltaReferenceErr(folderConfig); err != nil {
 		return err
 	}
 	persistHash, err := sc.getPersistHash(folderConfig)
@@ -97,6 +90,12 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 			return err
 		}
 		baseFolderPath = checkoutHandler.BaseFolderPath()
+		if isMissingOnBaseBranch(baseFolderPath) {
+			// The workspace subfolder doesn't exist on the base branch, so every current issue is new.
+			logger.Debug().Str("baseFolderPath", string(baseFolderPath)).Msg("scanBaseBranch: folder missing on base branch, persisting empty baseline")
+			sc.persistScanResults(folderConfig, []types.Issue{}, s)
+			return nil
+		}
 	} else {
 		logger.Debug().
 			Str("referenceFolderPath", string(baseFolderPath)).
@@ -133,6 +132,27 @@ func (sc *DelegatingConcurrentScanner) scanBaseBranch(ctx context.Context, s typ
 	sc.persistScanResults(folderConfig, results, s)
 
 	return nil
+}
+
+func (sc *DelegatingConcurrentScanner) validatedReferenceFolderPath(folderConfig *types.FolderConfig, logger *zerolog.Logger) (types.FilePath, error) {
+	var referenceFolderPath types.FilePath
+	if val, _ := sc.configResolver.GetValue(types.SettingReferenceFolder, folderConfig); val != nil {
+		if s, ok := val.(string); ok {
+			referenceFolderPath = types.FilePath(s)
+		}
+	}
+	if referenceFolderPath != "" {
+		if err := types.ValidatePathLenient(referenceFolderPath); err != nil {
+			logger.Error().Err(err).Str("referencePath", string(referenceFolderPath)).Msg("invalid reference folder path")
+			return "", err
+		}
+	}
+	return referenceFolderPath, nil
+}
+
+func isMissingOnBaseBranch(baseFolderPath types.FilePath) bool {
+	_, err := os.Stat(string(baseFolderPath))
+	return errors.Is(err, os.ErrNotExist)
 }
 
 // deltaReferenceErr returns nil when the folder has a usable delta reference. It doesn't hash the
