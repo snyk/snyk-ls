@@ -53,6 +53,23 @@ func Test_sendFolderConfigAnalytics_AdditionalParametersContainOnlyFlagKeys(t *t
 	}
 }
 
+func Test_sendFolderConfigAnalytics_ValueOnlyChangeSendsFlagNamesWithoutValues(t *testing.T) {
+	engine := testutil.UnitTest(t)
+	mockEngine, engineConfig := testutil.SetUpEngineMock(t, engine)
+	capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, 1)
+
+	sendFolderConfigAnalytics(engineConfig, mockEngine, mockEngine.GetLogger(), "", analytics.TriggerSourceTest,
+		types.FolderConfigSnapshot{AdditionalParameters: []string{"--org=old-secret"}},
+		types.FolderConfigSnapshot{AdditionalParameters: []string{"--org=new-secret"}},
+		testutil.DefaultConfigResolver(mockEngine))
+
+	captured := testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent")
+	payload := string(captured.Input[0].GetPayload().([]byte))
+	assert.Contains(t, payload, `[\"--org\"]`)
+	assert.NotContains(t, payload, "old-secret")
+	assert.NotContains(t, payload, "new-secret")
+}
+
 func Test_sendFolderConfigAnalytics_AdditionalParametersEventSending(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -62,9 +79,9 @@ func Test_sendFolderConfigAnalytics_AdditionalParametersEventSending(t *testing.
 	}{
 		{"flag added", []string{"--dev"}, []string{"--dev", "--all-projects"}, true},
 		{"flag removed", []string{"--dev", "--all-projects"}, []string{"--dev"}, true},
-		{"only a value changed", []string{"--org=a"}, []string{"--org=b"}, false},
+		{"only a value changed", []string{"--org=a"}, []string{"--org=b"}, true},
 		{"only the order changed", []string{"--dev", "--all-projects"}, []string{"--all-projects", "--dev"}, false},
-		{"only a separate value changed", []string{"--org", "a"}, []string{"--org", "b"}, false},
+		{"only a separate value changed", []string{"--org", "a"}, []string{"--org", "b"}, true},
 	}
 
 	for _, tt := range tests {

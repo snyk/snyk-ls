@@ -76,6 +76,10 @@ func SendConfigChangedAnalyticsEvent(conf configuration.Configuration, engine wo
 		return
 	}
 
+	SendConfigChangedAnalyticsEventIgnoringEquality(conf, engine, logger, field, oldValue, newValue, path, triggerSource, configResolver)
+}
+
+func SendConfigChangedAnalyticsEventIgnoringEquality(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, field string, oldValue, newValue any, path types.FilePath, triggerSource TriggerSource, configResolver types.ConfigResolverInterface) {
 	// Don't send analytics if both values are empty
 	if util.IsEmptyValue(oldValue) && util.IsEmptyValue(newValue) {
 		return

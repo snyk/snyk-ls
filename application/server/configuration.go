@@ -1575,12 +1575,10 @@ func sendFolderConfigAnalytics(conf configuration.Configuration, engine workflow
 	}
 
 	// AdditionalParameters change
-	oldFlagNames := analytics.CLIFlagNames(oldSnapshot.AdditionalParameters)
-	newFlagNames := analytics.CLIFlagNames(newSnapshot.AdditionalParameters)
-	if !util.SlicesEqualIgnoringOrder(oldFlagNames, newFlagNames) {
-		oldParamsJSON, _ := json.Marshal(oldFlagNames)
-		newParamsJSON, _ := json.Marshal(newFlagNames)
-		go analytics.SendConfigChangedAnalyticsEvent(conf, engine, logger, configAdditionalParameters, string(oldParamsJSON), string(newParamsJSON), path, triggerSource, configResolver)
+	if !util.SlicesEqualIgnoringOrder(oldSnapshot.AdditionalParameters, newSnapshot.AdditionalParameters) {
+		oldParamsJSON, _ := json.Marshal(analytics.CLIFlagNames(oldSnapshot.AdditionalParameters))
+		newParamsJSON, _ := json.Marshal(analytics.CLIFlagNames(newSnapshot.AdditionalParameters))
+		go analytics.SendConfigChangedAnalyticsEventIgnoringEquality(conf, engine, logger, configAdditionalParameters, string(oldParamsJSON), string(newParamsJSON), path, triggerSource, configResolver)
 	}
 
 	// ReferenceFolderPath change
