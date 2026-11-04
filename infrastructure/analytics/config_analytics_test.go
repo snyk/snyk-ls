@@ -240,3 +240,38 @@ func TestSendConfigChangedAnalytics_OrgSelection(t *testing.T) {
 		})
 	}
 }
+
+func TestSendConfigChangedAnalyticsEventIgnoringEquality(t *testing.T) {
+	tests := []struct {
+		name      string
+		oldValue  any
+		newValue  any
+		expectSet bool
+	}{
+		{"sends when values are equal", `["--org"]`, `["--org"]`, true},
+		{"sends when values differ", `["--org"]`, `["--org","--dev"]`, true},
+		{"does not send when both are empty", "", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			mockEngine, engineConfig := testutil.SetUpEngineMock(t, engine)
+			config.SetWorkspace(engineConfig, nil)
+			times := 0
+			if tt.expectSet {
+				times = 1
+			}
+			capturedCh := testutil.MockAndCaptureWorkflowInvocation(t, mockEngine, localworkflows.WORKFLOWID_REPORT_ANALYTICS, times)
+
+			SendConfigChangedAnalyticsEventIgnoringEquality(engineConfig, mockEngine, mockEngine.GetLogger(), "testConfig", tt.oldValue, tt.newValue, "", TriggerSourceTest, testutil.DefaultConfigResolver(mockEngine))
+
+			if tt.expectSet {
+				testsupport.RequireEventuallyReceive(t, capturedCh, time.Second, 10*time.Millisecond, "analytics should have been sent")
+				return
+			}
+			time.Sleep(200 * time.Millisecond)
+			assert.Empty(t, capturedCh)
+		})
+	}
+}
