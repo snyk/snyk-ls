@@ -28,7 +28,7 @@ LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/application/config.Development=true'
 
 TOOLS_BIN := $(shell pwd)/.bin/$(DEV_GOOS)-$(DEV_GOARCH)
 
-OVERRIDE_GOCI_LINT_V := v2.12.2
+OVERRIDE_GOCI_LINT_V := v2.14.0
 GOLICENSES_V := v1.6.0
 PACT_V := 2.4.2
 
@@ -50,8 +50,16 @@ $(TOOLS_BIN)/go-licenses:
 	@echo "==> Installing go-licenses"
 	@GOBIN=$(TOOLS_BIN) go install github.com/google/go-licenses@$(GOLICENSES_V)
 
-$(TOOLS_BIN)/golangci-lint:
+# The binary path carries no version, so make never reinstalls it on a version bump; the marker does.
+GOCI_LINT_MARKER := $(TOOLS_BIN)/.golangci-lint.$(OVERRIDE_GOCI_LINT_V)
+
+$(TOOLS_BIN)/golangci-lint: $(GOCI_LINT_MARKER)
 	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/$(OVERRIDE_GOCI_LINT_V)/install.sh | sh -s -- -b $(TOOLS_BIN)/ $(OVERRIDE_GOCI_LINT_V)
+
+$(GOCI_LINT_MARKER):
+	@mkdir -p $(TOOLS_BIN)
+	@rm -f $(TOOLS_BIN)/.golangci-lint.* $(TOOLS_BIN)/golangci-lint
+	@touch $@
 
 $(TOOLS_BIN)/pact/bin/pact:
 	cd $(TOOLS_BIN); curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/v$(PACT_V)/install.sh | PACT_CLI_VERSION=v$(PACT_V) bash
@@ -330,7 +338,7 @@ license-update: $(TOOLS_BIN)/go-licenses
 	@mkdir -p 'licenses_temp/github.com/brianblakely/nodep-date-input-polyfill'
 	@mv 'licenses/github.com/brianblakely/nodep-date-input-polyfill/LICENSE' 'licenses_temp/github.com/brianblakely/nodep-date-input-polyfill/LICENSE'
 	@rm -rf 'licenses'
-	@GOROOT=$(GOROOT) $(TOOLS_BIN)/go-licenses save . --save_path="licenses" --ignore "github.com/snyk/snyk-ls"
+	@GOOS=linux GOARCH=amd64 GOROOT=$(GOROOT) $(TOOLS_BIN)/go-licenses save . --save_path="licenses" --ignore "github.com/snyk/snyk-ls"
 	@mkdir -p 'licenses/github.com/brianblakely/nodep-date-input-polyfill'
 	@mv 'licenses_temp/github.com/brianblakely/nodep-date-input-polyfill/LICENSE' 'licenses/github.com/brianblakely/nodep-date-input-polyfill/LICENSE'
 	@rm -rf 'licenses_temp'

@@ -212,6 +212,7 @@ func (f *fakeTestResult) GetSubjectLocators() *[]testapi.TestSubjectLocator { re
 func (f *fakeTestResult) GetTestResources() *[]testapi.TestResource         { return nil }
 func (f *fakeTestResult) GetExecutionState() testapi.TestExecutionStates    { return "" }
 func (f *fakeTestResult) GetErrors() *[]testapi.IoSnykApiCommonError        { return nil }
+func (f *fakeTestResult) GetError() error                                   { return nil }
 func (f *fakeTestResult) GetWarnings() *[]testapi.IoSnykApiCommonError      { return nil }
 func (f *fakeTestResult) GetPassFail() *testapi.PassFail                    { return nil }
 func (f *fakeTestResult) GetOutcomeReason() *testapi.TestOutcomeReason      { return nil }
