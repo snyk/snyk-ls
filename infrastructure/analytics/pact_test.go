@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pact-foundation/pact-go/dsl"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
@@ -65,7 +66,7 @@ func TestAnalyticsProviderPactV2(t *testing.T) {
 		WithRequest(dsl.Request{
 			Method: "POST",
 			Path:   dsl.String("/hidden/orgs/" + orgUUID + "/analytics"),
-			Body:   expectedBody,
+			Body:   withSenderPlatformFields(t, expectedBody),
 		}).
 		WillRespondWith(dsl.Response{
 			Status:  201,
@@ -120,7 +121,7 @@ func TestAnalyticsPluginInstalled(t *testing.T) {
 		WithRequest(dsl.Request{
 			Method: "POST",
 			Path:   dsl.String("/hidden/orgs/" + orgUUID + "/analytics"),
-			Body:   expectedOutputData,
+			Body:   withSenderPlatformFields(t, expectedOutputData),
 		}).
 		WillRespondWith(dsl.Response{
 			Status:  201,
@@ -132,6 +133,35 @@ func TestAnalyticsPluginInstalled(t *testing.T) {
 	if err := pact.Verify(test); err != nil {
 		t.Fatalf("Error on Verify: %v", err)
 	}
+}
+
+// withSenderPlatformFields adds the runtime.platform fields that the analytics sender fills in before posting.
+// osname depends on the host, so only its shape is matched.
+func withSenderPlatformFields(t *testing.T, body any) map[string]any {
+	t.Helper()
+	raw, err := json.Marshal(body)
+	require.NoError(t, err)
+	var expected map[string]any
+	require.NoError(t, json.Unmarshal(raw, &expected))
+
+	platform := childObject(t, childObject(t, childObject(t, childObject(t, expected, "data"), "attributes"), "runtime"), "platform")
+	platform["configuration"] = map[string]any{
+		"extra_ca_certs":           dsl.Like(false),
+		"fips":                     dsl.Like(false),
+		"insecure_https":           dsl.Like(false),
+		"network_request_attempts": dsl.Like(1),
+		"proxy":                    dsl.Like(false),
+	}
+	platform["osname"] = dsl.Term("Ubuntu 24.04 LTS", ".+")
+	return expected
+}
+
+// childObject fails the test instead of panicking when the body has no object under key.
+func childObject(t *testing.T, parent map[string]any, key string) map[string]any {
+	t.Helper()
+	child, ok := parent[key].(map[string]any)
+	require.Truef(t, ok, "expected %q to be a JSON object", key)
+	return child
 }
 
 func testGetAnalyticsEventParam(t *testing.T, engine workflow.Engine) (types.AnalyticsEventParam, any) {
