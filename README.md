@@ -508,7 +508,7 @@ synchronization. For further information please see [CONTRIBUTING.md](CONTRIBUTI
 
 ### From Source
 
-- Install the Go version listed in [CONTRIBUTING.md](CONTRIBUTING.md) (currently Go 1.26.x), set the `GOPATH` and `GOROOT` if needed
+- Install the Go version in [go.mod](go.mod), set the `GOPATH` and `GOROOT` if needed
 - Enter the root directory of this repository
 - Execute `go get ./...` to download all dependencies
 - Execute `make build && make install` to produce a `snyk-ls` binary
