@@ -111,6 +111,13 @@ func SmokeTestWithEngine(t *testing.T, tokenSecretName string, shardEnvVar strin
 // whatever credentials the host or its proxy supplies.
 const unitTestAPIURL = "http://127.0.0.1:1"
 
+// NestedFolderLookupRepetitions is how many times tests repeat a workspace
+// lookup with nested folders. Map iteration order is randomized per range loop,
+// so a lookup that picks parent or child by iteration order has roughly even
+// odds per call; this many repetitions leave such a regression a 1 in 2^50
+// chance of passing.
+const NestedFolderLookupRepetitions = 50
+
 func UnitTest(t *testing.T) workflow.Engine {
 	t.Helper()
 	engine, _ := UnitTestWithEngine(t)
