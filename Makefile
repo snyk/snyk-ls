@@ -28,7 +28,7 @@ LDFLAGS_DEV := "-X 'github.com/snyk/snyk-ls/application/config.Development=true'
 
 TOOLS_BIN := $(shell pwd)/.bin/$(DEV_GOOS)-$(DEV_GOARCH)
 
-OVERRIDE_GOCI_LINT_V := v2.12.2
+OVERRIDE_GOCI_LINT_V := v2.14.0
 GOLICENSES_V := v1.6.0
 PACT_V := 2.4.2
 
@@ -50,8 +50,27 @@ $(TOOLS_BIN)/go-licenses:
 	@echo "==> Installing go-licenses"
 	@GOBIN=$(TOOLS_BIN) go install github.com/google/go-licenses@$(GOLICENSES_V)
 
-$(TOOLS_BIN)/golangci-lint:
-	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/$(OVERRIDE_GOCI_LINT_V)/install.sh | sh -s -- -b $(TOOLS_BIN)/ $(OVERRIDE_GOCI_LINT_V)
+GOCI_LINT_BIN := $(TOOLS_BIN)/golangci-lint-$(OVERRIDE_GOCI_LINT_V)
+GOCI_LINT_MARKER := $(TOOLS_BIN)/.golangci-lint-$(OVERRIDE_GOCI_LINT_V)
+
+# golangci-lint is a symlink to the required versioned binary.
+$(TOOLS_BIN)/golangci-lint: $(GOCI_LINT_MARKER)
+	@ln -sfn golangci-lint-$(OVERRIDE_GOCI_LINT_V) $@
+	@# Make reads the binary's mtime through the symlink. Touch the binary so the link is not seen as older than the marker.
+	@touch $(GOCI_LINT_BIN)
+
+# A marker file is used to indicate which versioned binary the symlink is pointing to.
+$(GOCI_LINT_MARKER): | $(GOCI_LINT_BIN)
+	@# Drop any old markers, so going back to an older pin will cause a re-link.
+	@rm -f $(TOOLS_BIN)/.golangci-lint-*
+	@touch $@
+
+# The real golangci-lint binaries are stored versioned, so switching to an older version doesn't require re-downloading.
+$(GOCI_LINT_BIN):
+	@mkdir -p $(TOOLS_BIN)
+	@# Remove the symlink first, so a failed download doesn't leave us pointing at the incorrect version.
+	@rm -f $(TOOLS_BIN)/golangci-lint
+	@tmp=$$(mktemp -d) && trap 'rm -rf $$tmp' EXIT && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/$(OVERRIDE_GOCI_LINT_V)/install.sh | sh -s -- -b $$tmp $(OVERRIDE_GOCI_LINT_V) && mv $$tmp/golangci-lint $@
 
 $(TOOLS_BIN)/pact/bin/pact:
 	cd $(TOOLS_BIN); curl -fsSL https://raw.githubusercontent.com/pact-foundation/pact-ruby-standalone/v$(PACT_V)/install.sh | PACT_CLI_VERSION=v$(PACT_V) bash
@@ -330,7 +349,7 @@ license-update: $(TOOLS_BIN)/go-licenses
 	@mkdir -p 'licenses_temp/github.com/brianblakely/nodep-date-input-polyfill'
 	@mv 'licenses/github.com/brianblakely/nodep-date-input-polyfill/LICENSE' 'licenses_temp/github.com/brianblakely/nodep-date-input-polyfill/LICENSE'
 	@rm -rf 'licenses'
-	@GOROOT=$(GOROOT) $(TOOLS_BIN)/go-licenses save . --save_path="licenses" --ignore "github.com/snyk/snyk-ls"
+	@GOOS=linux GOARCH=amd64 GOROOT=$(GOROOT) $(TOOLS_BIN)/go-licenses save . --save_path="licenses" --ignore "github.com/snyk/snyk-ls"
 	@mkdir -p 'licenses/github.com/brianblakely/nodep-date-input-polyfill'
 	@mv 'licenses_temp/github.com/brianblakely/nodep-date-input-polyfill/LICENSE' 'licenses/github.com/brianblakely/nodep-date-input-polyfill/LICENSE'
 	@rm -rf 'licenses_temp'

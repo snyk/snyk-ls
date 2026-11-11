@@ -3,7 +3,7 @@ You'll need
 - Gnu Make
 - Bash
 - Python 3 (incl. requests module)
-- Go 1.26.2
+- Go (the version in [go.mod](go.mod))
 
 ## Linux headless
 
