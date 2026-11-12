@@ -233,7 +233,55 @@ func TestGetAbsTargetFilePath_FallbackAndNonFallbackCases(t *testing.T) {
 
 		actual := getAbsTargetFilePath(logger, "", "package.json", types.FilePath(workDir), contextPath)
 
-		assert.Equal(t, types.FilePath(""), actual)
+		assert.Equal(t, types.FilePath(filepath.Join(workDir, "package.json")), actual)
+	})
+
+	t.Run("returns path inside workDir for declared module without a build file", func(t *testing.T) {
+		workDir := t.TempDir()
+		contextPath := types.FilePath(workDir)
+
+		actual := getAbsTargetFilePath(logger, workDir, "frontend/build.gradle", types.FilePath(workDir), contextPath)
+
+		assert.Equal(t, types.FilePath(filepath.Join(workDir, "frontend", "build.gradle")), actual)
+	})
+
+	t.Run("resolves declared module relative to the scan root inside workDir", func(t *testing.T) {
+		workDir := t.TempDir()
+		scanRoot := filepath.Join(workDir, "sub")
+		require.NoError(t, os.MkdirAll(scanRoot, 0o755))
+
+		actual := getAbsTargetFilePath(logger, scanRoot, "frontend/build.gradle", types.FilePath(workDir), types.FilePath(scanRoot))
+
+		assert.Equal(t, types.FilePath(filepath.Join(scanRoot, "frontend", "build.gradle")), actual)
+	})
+
+	t.Run("uses workDir when the scan path is a manifest file", func(t *testing.T) {
+		workDir := t.TempDir()
+		manifest := filepath.Join(workDir, "package.json")
+		require.NoError(t, os.WriteFile(manifest, []byte("{}"), 0o644))
+
+		actual := getAbsTargetFilePath(logger, manifest, "frontend/build.gradle", types.FilePath(workDir), types.FilePath(manifest))
+
+		assert.Equal(t, types.FilePath(filepath.Join(workDir, "frontend", "build.gradle")), actual)
+	})
+
+	t.Run("uses workDir when the scan root is outside workDir", func(t *testing.T) {
+		workDir := t.TempDir()
+		scanRoot := t.TempDir()
+
+		actual := getAbsTargetFilePath(logger, scanRoot, "frontend/build.gradle", types.FilePath(workDir), types.FilePath(workDir))
+
+		assert.Equal(t, types.FilePath(filepath.Join(workDir, "frontend", "build.gradle")), actual)
+	})
+
+	t.Run("returns empty path when relative path escapes workDir", func(t *testing.T) {
+		for _, displayTargetFile := range []string{"../other/build.gradle", "cli/../../other/build.gradle"} {
+			workDir := t.TempDir()
+
+			actual := getAbsTargetFilePath(logger, workDir, displayTargetFile, types.FilePath(workDir), types.FilePath(workDir))
+
+			assert.Equal(t, types.FilePath(""), actual, displayTargetFile)
+		}
 	})
 }
 

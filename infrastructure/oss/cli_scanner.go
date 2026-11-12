@@ -504,6 +504,16 @@ func resolveNonRelativePath(logger *zerolog.Logger, resultPath, displayTargetFil
 	if path != "" && filepath.Base(string(path)) == basePath {
 		return path
 	}
+	scanRoots := []string{string(workDir)}
+	if uri.IsDirectory(types.FilePath(resultPath)) {
+		scanRoots = []string{resultPath, string(workDir)}
+	}
+	for _, scanRoot := range scanRoots {
+		pathInScanRoot := types.FilePath(filepath.Join(scanRoot, displayTargetFile))
+		if uri.FolderContains(workDir, pathInScanRoot) {
+			return pathInScanRoot
+		}
+	}
 	logger.Error().Msgf("couldn't determine absolute file path for: %s", displayTargetFile)
 	return ""
 }
