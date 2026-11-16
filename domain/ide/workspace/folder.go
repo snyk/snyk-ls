@@ -425,8 +425,12 @@ func (f *Folder) updateGlobalCacheAndSeverityCounts(scanData *types.ScanData) {
 	dedupMap := map[string]bool{}
 	for _, issue := range scanData.Issues {
 		if !f.Contains(issue.GetAffectedFilePath()) {
-			msg := "issue found in scanData " + issue.GetAffectedFilePath() + " that does not pertain to folder: " + f.path
-			panic(msg)
+			f.logger.Error().
+				Str("method", "updateGlobalCacheAndSeverityCounts").
+				Str("path", string(issue.GetAffectedFilePath())).
+				Str("folder", string(f.path)).
+				Msg("issue found in scanData that does not pertain to folder, skipping")
+			continue
 		}
 		uniqueIssueID := f.getUniqueIssueID(issue)
 
