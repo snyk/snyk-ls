@@ -50,11 +50,10 @@ func Test_Code_Html_getCodeDetailsHtml_WithInlineIgnores_WithoutIAW(t *testing.T
 	fixes := getFixes()
 	repoCount := 54387
 	issue := &snyk.Issue{
-		Range:     getIssueRange(),
-		CWEs:      []string{"CWE-123", "CWE-456"},
-		ID:        "go/NoHardcodedCredentials/test",
-		Severity:  2,
-		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
+		Range:    getIssueRange(),
+		CWEs:     []string{"CWE-123", "CWE-456"},
+		ID:       "go/NoHardcodedCredentials/test",
+		Severity: 2,
 		AdditionalData: snyk.CodeIssueData{
 			Title:              "Allocation of Resources Without Limits or Throttling",
 			DataFlow:           dataFlow,
@@ -83,7 +82,6 @@ func Test_Code_Html_getCodeDetailsHtml_WithInlineIgnores_WithoutIAW(t *testing.T
 
 	// assert Header section
 	assert.Contains(t, codePanelHtml, "Priority score: 890")
-	assert.Contains(t, codePanelHtml, `href="https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide"`)
 
 	// assert Data Flow section
 	expectedDataFlowHeading := fmt.Sprintf(`Data Flow - %d steps`, len(dataFlow))
@@ -119,11 +117,10 @@ func Test_Code_Html_getCodeDetailsHtml_withAIfix(t *testing.T) {
 	fixes := getFixes()
 	repoCount := 54387
 	issue := &snyk.Issue{
-		Range:     getIssueRange(),
-		CWEs:      []string{"CWE-123", "CWE-456"},
-		ID:        "go/NoHardcodedCredentials/test",
-		Severity:  2,
-		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
+		Range:    getIssueRange(),
+		CWEs:     []string{"CWE-123", "CWE-456"},
+		ID:       "go/NoHardcodedCredentials/test",
+		Severity: 2,
 		AdditionalData: snyk.CodeIssueData{
 			Title:              "Allocation of Resources Without Limits or Throttling",
 			DataFlow:           dataFlow,
@@ -198,7 +195,6 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 	issue := &snyk.Issue{
 		ID:        "java/DontUsePrintStackTrace",
 		Severity:  2,
-		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
 		CWEs:      []string{"CWE-123", "CWE-456"},
 		IsIgnored: true,
 		IgnoreDetails: &types.IgnoreDetails{
@@ -231,7 +227,6 @@ func Test_Code_Html_getCodeDetailsHtml_ignored(t *testing.T) {
 
 	// assert Header section
 	assert.Contains(t, codePanelHtml, "Priority score: 0")
-	assert.NotContains(t, codePanelHtml, `href="https://when-no-lesson-data-element-not-in-the-template"`)
 
 	// assert Ignore Details section - Elements should be present
 	assert.Contains(t, codePanelHtml, `class="sn-status-message mod-warning"`)
@@ -252,7 +247,6 @@ func Test_Code_Html_getCodeDetailsHtml_ignore_pending(t *testing.T) {
 	issue := &snyk.Issue{
 		ID:        "java/DontUsePrintStackTrace",
 		Severity:  2,
-		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
 		CWEs:      []string{"CWE-123", "CWE-456"},
 		IsIgnored: false,
 		IgnoreDetails: &types.IgnoreDetails{
@@ -285,7 +279,6 @@ func Test_Code_Html_getCodeDetailsHtml_ignore_pending(t *testing.T) {
 
 	// assert Header section
 	assert.Contains(t, codePanelHtml, "Priority score: 0")
-	assert.NotContains(t, codePanelHtml, `href="https://when-no-lesson-data-element-not-in-the-template"`)
 
 	// assert Ignore Details section - Elements should be present
 	assert.Contains(t, codePanelHtml, `class="sn-status-message mod-warning"`)
@@ -306,7 +299,6 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_expired(t *testing.T) {
 	issue := &snyk.Issue{
 		ID:        "scala/DontUsePrintStackTrace",
 		Severity:  2,
-		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
 		CWEs:      []string{"CWE-123", "CWE-456"},
 		IsIgnored: true,
 		IgnoreDetails: &types.IgnoreDetails{
@@ -350,7 +342,6 @@ func Test_Code_Html_getCodeDetailsHtml_ignored_customEndpoint(t *testing.T) {
 		Severity:  2,
 		CWEs:      []string{"CWE-123", "CWE-456"},
 		IsIgnored: true,
-		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
 		IgnoreDetails: &types.IgnoreDetails{
 			Category:   "wont-fix",
 			Reason:     getIgnoreReason("short"),
@@ -423,11 +414,10 @@ func Test_Code_Html_getCodeDetailsHtml_hasCSS(t *testing.T) {
 	fixes := getFixes()
 	repoCount := 54387
 	issue := &snyk.Issue{
-		Range:     getIssueRange(),
-		CWEs:      []string{"CWE-123", "CWE-456"},
-		ID:        "go/NoHardcodedCredentials/test",
-		Severity:  2,
-		LessonUrl: "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide",
+		Range:    getIssueRange(),
+		CWEs:     []string{"CWE-123", "CWE-456"},
+		ID:       "go/NoHardcodedCredentials/test",
+		Severity: 2,
 		AdditionalData: snyk.CodeIssueData{
 			Title:              "Allocation of Resources Without Limits or Throttling",
 			DataFlow:           dataFlow,

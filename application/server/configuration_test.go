@@ -68,17 +68,16 @@ import (
 )
 
 var sampleSettings = map[string]*types.ConfigSetting{
-	types.SettingSnykOssEnabled:             {Value: false, Changed: true},
-	types.SettingSnykCodeEnabled:            {Value: false, Changed: true},
-	types.SettingSnykIacEnabled:             {Value: false, Changed: true},
-	types.SettingProxyInsecure:              {Value: true, Changed: true},
-	types.SettingApiEndpoint:                {Value: "https://api.fake.snyk.io", Changed: true},
-	types.SettingAdditionalParameters:       {Value: "--all-projects -d", Changed: true},
-	types.SettingAdditionalEnvironment:      {Value: "a=b;c=d", Changed: true},
-	types.SettingSendErrorReports:           {Value: true, Changed: true},
-	types.SettingToken:                      {Value: "token", Changed: true},
-	types.SettingCodeEndpoint:               {Value: "https://deeproxy.fake.snyk.io", Changed: true},
-	types.SettingEnableSnykLearnCodeActions: {Value: true, Changed: true},
+	types.SettingSnykOssEnabled:        {Value: false, Changed: true},
+	types.SettingSnykCodeEnabled:       {Value: false, Changed: true},
+	types.SettingSnykIacEnabled:        {Value: false, Changed: true},
+	types.SettingProxyInsecure:         {Value: true, Changed: true},
+	types.SettingApiEndpoint:           {Value: "https://api.fake.snyk.io", Changed: true},
+	types.SettingAdditionalParameters:  {Value: "--all-projects -d", Changed: true},
+	types.SettingAdditionalEnvironment: {Value: "a=b;c=d", Changed: true},
+	types.SettingSendErrorReports:      {Value: true, Changed: true},
+	types.SettingToken:                 {Value: "token", Changed: true},
+	types.SettingCodeEndpoint:          {Value: "https://deeproxy.fake.snyk.io", Changed: true},
 }
 
 func keyFoundInEnv(key string) bool {
@@ -173,7 +172,6 @@ func Test_WorkspaceDidChangeConfiguration_Push(t *testing.T) {
 	assert.True(t, strings.Contains(os.Getenv("PATH"), "addPath"))
 	assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSendErrorReports))
 	assert.Equal(t, "token", config.GetToken(engine.GetConfiguration()))
-	assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingEnableSnykLearnCodeActions))
 }
 
 // Test_WorkspaceDidChangeConfiguration_LspEnvelope verifies that the handler correctly
@@ -298,7 +296,6 @@ func Test_WorkspaceDidChangeConfiguration_Pull(t *testing.T) {
 	assert.Equal(t, types.GetGlobalString(engine.GetConfiguration(), types.SettingApiEndpoint), conf.GetString(configuration.API_URL))
 	assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingSendErrorReports))
 	assert.Equal(t, "token", config.GetToken(engine.GetConfiguration()))
-	assert.True(t, types.GetGlobalBool(engine.GetConfiguration(), types.SettingEnableSnykLearnCodeActions))
 }
 
 func callBackMock(_ context.Context, request *jrpc2.Request) (any, error) {

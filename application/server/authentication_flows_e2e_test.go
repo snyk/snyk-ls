@@ -533,7 +533,6 @@ func startE2ELocalServer(
 		deps.AuthenticationService,
 		deps.FeatureFlagService,
 		deps.Notifier,
-		deps.LearnService,
 		nil,
 		nil,
 		nil,

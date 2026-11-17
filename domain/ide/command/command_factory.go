@@ -31,7 +31,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	noti "github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -49,7 +48,6 @@ func CreateFromCommandData(
 	srv types.Server,
 	authService authentication.AuthenticationService,
 	featureFlagService featureflag.Service,
-	learnService learn.Service,
 	notifier noti.Notifier,
 	issueProvider snyk.IssueProvider,
 	codeScanner *code.Scanner,
@@ -89,10 +87,6 @@ func CreateFromCommandData(
 		// notifier omitted: trust notifications are sent by ws.TrustFoldersAndScan
 		// using the workspace's own notifier — this command needs no separate one.
 		return &trustWorkspaceFoldersCommand{command: commandData, engine: engine, configResolver: configResolver}, nil
-	case types.GetLearnLesson:
-		return &getLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
-	case types.OpenLearnLesson:
-		return &openLearnLesson{command: commandData, srv: srv, learnService: learnService}, nil
 	case types.GetSettingsSastEnabled:
 		return &sastEnabled{command: commandData, logger: logger, authenticationService: authService, engineConfig: conf}, nil
 	case types.GetFeatureFlagStatus:

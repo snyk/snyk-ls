@@ -20,7 +20,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,8 +30,6 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
-	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
@@ -62,14 +59,6 @@ func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 	fakeFeatureFlagService.SastSettings = &sast_contract.SastResponse{SastEnabled: true}
 
 	// Create scanner with FakeCodeScannerClient to avoid real API calls
-	ctrl := gomock.NewController(t)
-	t.Cleanup(ctrl.Finish)
-	learnMock := mock_learn.NewMockService(ctrl)
-	// Set up learn service mock to return empty lessons (needed by issue enhancer)
-	learnMock.EXPECT().
-		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(&learn.Lesson{}, nil).AnyTimes()
-
 	prefixKeyConf := engine.GetConfiguration()
 	fakeFeatureFlagService.Conf = prefixKeyConf
 	fs := pflag.NewFlagSet("code-integ-test", pflag.ContinueOnError)
@@ -83,8 +72,6 @@ func Test_Scan_SetsContentRootCorrectly(t *testing.T) {
 		engine,
 		performance.NewInstrumentor(),
 		&snyk_api.FakeApiClient{CodeEnabled: true},
-		newTestCodeErrorReporter(),
-		learnMock,
 		fakeFeatureFlagService,
 		notification.NewNotifier(),
 		NewCodeInstrumentor(),

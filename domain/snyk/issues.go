@@ -75,8 +75,6 @@ type Issue struct {
 	CVEs []string
 	// AdditionalData contains data that can be passed by the product (e.g. for presentation)
 	AdditionalData types.IssueAdditionalData `json:"additionalData"`
-	// Learn Service Lesson URL
-	LessonUrl      string `json:"url"`
 	Fingerprint    string
 	GlobalIdentity string
 	FindingId      string
@@ -108,7 +106,6 @@ func (i *Issue) Clone() *Issue {
 		CWEs:                i.CWEs,
 		CVEs:                i.CVEs,
 		AdditionalData:      i.AdditionalData,
-		LessonUrl:           i.LessonUrl,
 		Fingerprint:         i.Fingerprint,
 		GlobalIdentity:      i.GlobalIdentity,
 		FindingId:           i.FindingId,
@@ -182,12 +179,6 @@ func (i *Issue) GetIssueType() types.IssueType {
 	i.m.RLock()
 	defer i.m.RUnlock()
 	return i.IssueType
-}
-
-func (i *Issue) GetLessonUrl() string {
-	i.m.RLock()
-	defer i.m.RUnlock()
-	return i.LessonUrl
 }
 
 func (i *Issue) GetID() string {
@@ -278,12 +269,6 @@ func (i *Issue) GetAdditionalData() types.IssueAdditionalData {
 	i.m.RLock()
 	defer i.m.RUnlock()
 	return i.AdditionalData
-}
-
-func (i *Issue) SetLessonUrl(url string) {
-	i.m.Lock()
-	defer i.m.Unlock()
-	i.LessonUrl = url
 }
 
 func (i *Issue) SetAdditionalData(data types.IssueAdditionalData) {

@@ -236,8 +236,6 @@ func (renderer *HtmlRenderer) GetDetailsHtml(ctx context.Context, issue types.Is
 		"CommitFixes":                   commitFixes,
 		"PriorityScore":                 additionalData.PriorityScore,
 		"SnykWebUrl":                    appLink,
-		"LessonUrl":                     issue.GetLessonUrl(),
-		"LessonIcon":                    html.LessonIcon(),
 		"IgnoreLineAction":              getLineToIgnoreAction(issue),
 		"HasAIFix":                      additionalData.HasAIFix,
 		"ExternalIcon":                  html.ExternalIcon(),

@@ -77,7 +77,6 @@ func newReferenceOSSScanner(
 		performance.NewInstrumentor(),
 		error_reporting.NewTestErrorReporter(engine),
 		executor,
-		getLearnMock(t),
 		notification.NewMockNotifier(),
 		resolver,
 		testutil.NewDrainedProgressTracker(),

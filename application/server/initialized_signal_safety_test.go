@@ -23,8 +23,8 @@ package server
 // initializedHandler launches, so scanner-readiness waiters block until real
 // init completes (invariant D1). But every dependency resolution that runs
 // BEFORE that goroutine launches — mustConfigResolverFromContext,
-// mustNotifierFromContext, mustLearnServiceFromContext, mustScannerFromContext,
-// … — panics on a missing dep. jrpc2 (and withContext) recover such a handler
+// mustNotifierFromContext, mustScannerFromContext, … — panics on a missing dep.
+// jrpc2 (and withContext) recover such a handler
 // panic and keep the server alive, but the background goroutine is never
 // reached, so without a safety net the signal never fires and any goroutine
 // parked in WaitForLspInitialized (e.g. the outbound-notification dispatch in

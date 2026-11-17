@@ -969,16 +969,6 @@ func collectOssIssueDataComparisons(title string, unified, legacy types.OssIssue
 		})
 	}
 
-	if unified.Lesson != legacy.Lesson {
-		comparisons = append(comparisons, FieldComparison{
-			DiagnosticTitle: title,
-			FieldPath:       "Data.AdditionalData.Lesson",
-			Matched:         false,
-			UnifiedValue:    formatAny(unified.Lesson),
-			LegacyValue:     formatAny(legacy.Lesson),
-		})
-	}
-
 	return comparisons
 }
 

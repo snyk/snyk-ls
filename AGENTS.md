@@ -27,7 +27,7 @@ Tests use `testify` with a table-driven style (`tests := []struct{...}`). `INTEG
 - `main.go` is the entry point: it parses flags, initializes the go-application-framework engine/config, and calls `server.Start(engine, ts)`.
 - `application/` handles process wiring: `application/server` (LSP/JSON-RPC handlers), `application/di` (dependency injection), `application/config`, `application/codeaction`, `application/watcher`, `application/entrypoint`.
 - `domain/` holds core business logic: `domain/ide` (workspace, hover, codelens, treeview, initialize, all LSP-facing) and `domain/snyk` (scanner, persistence, remediation, delta, for scan orchestration).
-- `infrastructure/` contains product/backend integrations: `code`, `oss`, `iac`, `secrets`, `cli` (Snyk CLI executor), `authentication`, `learn`, `analytics`, `snyk_api`, `featureflag`, `filesystem`, `sentry`.
+- `infrastructure/` contains product/backend integrations: `code`, `oss`, `iac`, `secrets`, `cli` (Snyk CLI executor), `authentication`, `analytics`, `snyk_api`, `featureflag`, `filesystem`, `sentry`.
 - `internal/` holds shared utilities: `types` (core interfaces/mocks), `product` (product enum), `uri`, `progress`, `notification`, `logging`, `mcp`, `storage`, `vcs`, `fflags`, `testsupport`/`testutil`.
 - `ast/` does lightweight source parsing (e.g. `ast/maven/parser.go`) used for range/dependency resolution.
 - `ls_extension/` is a go-application-framework workflow letting the Snyk CLI invoke the LS as an extension (`WORKFLOWID_LS`).

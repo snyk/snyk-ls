@@ -1347,7 +1347,6 @@ func buildSmokeTestSettings(engine workflow.Engine) types.DidChangeConfiguration
 				types.SettingSnykOssEnabled:               {Value: types.GetGlobalBool(cfg, types.SettingSnykOssEnabled), Changed: true},
 				types.SettingCliPath:                      {Value: types.GetGlobalString(cfg, types.SettingCliPath), Changed: true},
 				types.SettingEnableSnykOssQuickFixActions: {Value: true, Changed: true},
-				types.SettingEnableSnykLearnCodeActions:   {Value: true, Changed: true},
 			},
 		},
 	}
@@ -1399,7 +1398,6 @@ func prepareInitParams(t *testing.T, cloneTargetDir types.FilePath, engine workf
 				types.SettingSnykOssEnabled:               {Value: types.GetGlobalBool(cfg, types.SettingSnykOssEnabled), Changed: true},
 				types.SettingCliPath:                      {Value: types.GetGlobalString(cfg, types.SettingCliPath), Changed: true},
 				types.SettingEnableSnykOssQuickFixActions: {Value: true, Changed: true},
-				types.SettingEnableSnykLearnCodeActions:   {Value: true, Changed: true},
 			},
 		},
 	}

@@ -62,7 +62,6 @@ const (
 	configBaseBranch                          = "baseBranch"
 	configCliBaseDownloadURL                  = "cliBaseDownloadURL"
 	configEnableDeltaFindings                 = "enableDeltaFindings"
-	configEnableSnykLearnCodeActions          = "enableSnykLearnCodeActions"
 	configEnableSnykOSSQuickFixCodeActions    = "enableSnykOSSQuickFixCodeActions"
 	configEnableTrustedFoldersFeature         = "enableTrustedFoldersFeature"
 	configEndpoint                            = "endpoint"
@@ -441,7 +440,6 @@ func processConfigSettings(ctx context.Context, conf configuration.Configuration
 	applyManageBinariesAutomatically(conf, engine, logger, settings, triggerSource, configResolver)
 	applyTrustEnabledFromSettings(conf, engine, logger, settings, triggerSource, configResolver)
 	applyTrustedFoldersFromSettings(conf, engine, logger, settings, triggerSource, configResolver)
-	applySnykLearnCodeActions(conf, engine, logger, settings, triggerSource, configResolver)
 	applySnykOssQuickFixCodeActions(conf, engine, logger, settings, triggerSource, configResolver)
 	applySnykOpenBrowserActions(conf, settings)
 	applyMcpConfiguration(mustNotifierFromContext(ctx), conf, engine, logger, settings, triggerSource, configResolver)
@@ -1212,18 +1210,6 @@ func applyUserSettingsPath(conf configuration.Configuration, settings map[string
 		return
 	}
 	types.SetGlobalUser(conf, types.SettingUserSettingsPath, v)
-}
-
-func applySnykLearnCodeActions(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {
-	v, ok := settingBool(settings, types.SettingEnableSnykLearnCodeActions)
-	if !ok {
-		return
-	}
-	oldValue := types.GetGlobalBool(conf, types.SettingEnableSnykLearnCodeActions)
-	types.SetGlobalUser(conf, types.SettingEnableSnykLearnCodeActions, v)
-	if oldValue != v && conf.GetBool(types.SettingIsLspInitialized) {
-		analytics.SendConfigChangedAnalytics(conf, engine, logger, configEnableSnykLearnCodeActions, oldValue, v, triggerSource, configResolver)
-	}
 }
 
 func applySnykOssQuickFixCodeActions(conf configuration.Configuration, engine workflow.Engine, logger *zerolog.Logger, settings map[string]*types.ConfigSetting, triggerSource analytics.TriggerSource, configResolver types.ConfigResolverInterface) {

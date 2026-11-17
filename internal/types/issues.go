@@ -111,7 +111,6 @@ type Issue interface {
 	GetCWEs() []string
 	GetCVEs() []string
 	GetIssueType() IssueType
-	GetLessonUrl() string
 	GetIssueDescriptionURL() *url.URL
 	GetCodeActions() []CodeAction
 	GetCodelensCommands() []CommandData
@@ -120,7 +119,6 @@ type Issue interface {
 	GetReferences() []Reference
 	GetFindingId() string
 	SetCodelensCommands(lenses []CommandData)
-	SetLessonUrl(url string)
 	SetAdditionalData(data IssueAdditionalData)
 	SetGlobalIdentity(globalIdentity string)
 	SetIsNew(isNew bool)

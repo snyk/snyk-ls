@@ -50,7 +50,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/iac"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/oss"
 	"github.com/snyk/snyk-ls/infrastructure/sentry"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
@@ -64,7 +63,6 @@ type Dependencies struct {
 	ConfigResolver        types.ConfigResolverInterface
 	FeatureFlagService    featureflag.Service
 	Notifier              domainNotify.Notifier
-	LearnService          learn.Service
 	LdxSyncService        command.LdxSyncService
 	ScanStateAggregator   scanstates.Aggregator
 	InlineValueProvider   snyk.InlineValueProvider
@@ -128,7 +126,6 @@ func Init(engine workflow.Engine, tokenService types.TokenService) Dependencies 
 
 	localErrorReporter := sentry.NewSentryErrorReporter(conf, logger, engine, localNotifier, localConfigResolver)
 	localInstaller := install.NewInstaller(engine, localErrorReporter, unauthorizedHttpClient, localConfigResolver, progressTracker)
-	localLearnService := learn.New(gafConfiguration, logger, unauthorizedHttpClient)
 	localInstrumentor := performance2.NewInstrumentor()
 	localFeatureFlagService := featureflag.New(conf, logger, engine, localConfigResolver)
 	localSnykApiClient := snyk_api.NewSnykApiClient(conf, logger, authorizedClient, localConfigResolver)
@@ -157,9 +154,9 @@ func Init(engine workflow.Engine, tokenService types.TokenService) Dependencies 
 	localCodeErrorReporter := code.NewCodeErrorReporter(localErrorReporter)
 
 	localIaCScanner := iac.New(conf, logger, localInstrumentor, localErrorReporter, localSnykCli, localConfigResolver, progressTracker)
-	localOpenSourceScanner := oss.NewCLIScanner(engine, localInstrumentor, localErrorReporter, localSnykCli, localLearnService, localNotifier, localConfigResolver, progressTracker)
+	localOpenSourceScanner := oss.NewCLIScanner(engine, localInstrumentor, localErrorReporter, localSnykCli, localNotifier, localConfigResolver, progressTracker)
 	localScanNotifier, _ := appNotification.NewScanNotifier(localNotifier, localConfigResolver)
-	localSnykCodeScanner := code.New(engine, localInstrumentor, localSnykApiClient, localCodeErrorReporter, localLearnService, localFeatureFlagService, localNotifier, localCodeInstrumentor, localCodeErrorReporter, code.CreateCodeScanner, localConfigResolver, progressTracker)
+	localSnykCodeScanner := code.New(engine, localInstrumentor, localSnykApiClient, localFeatureFlagService, localNotifier, localCodeInstrumentor, localCodeErrorReporter, code.CreateCodeScanner, localConfigResolver, progressTracker)
 	localSecretsScanner := secrets.New(conf, engine, logger, localInstrumentor, localSnykApiClient, localNotifier, localConfigResolver)
 
 	localCLIInitializer := cli.NewInitializer(conf, logger, localErrorReporter, localInstaller, localNotifier, localSnykCli, localConfigResolver)
@@ -189,7 +186,7 @@ func Init(engine workflow.Engine, tokenService types.TokenService) Dependencies 
 	localFolderRemediator, _ := localRemediationProvider.(remediation.FolderRemediator)
 
 	localCodeActionService := codeaction.NewService(engine, w, localFileWatcher, localNotifier, localFeatureFlagService, localConfigResolver, localRemediationProvider)
-	localCommandService := command.NewService(engine, logger, localAuthenticationService, localFeatureFlagService, localNotifier, localLearnService, w, localSnykCodeScanner, localSnykCli, localLdxSyncService, localConfigResolver, localScanStateAggregator.StateSnapshot, localFolderRemediator, localScanCtx)
+	localCommandService := command.NewService(engine, logger, localAuthenticationService, localFeatureFlagService, localNotifier, w, localSnykCodeScanner, localSnykCli, localLdxSyncService, localConfigResolver, localScanStateAggregator.StateSnapshot, localFolderRemediator, localScanCtx)
 
 	var localInlineValueProvider snyk.InlineValueProvider
 	if ivp, ok := localScanner.(snyk.InlineValueProvider); ok {
@@ -201,7 +198,6 @@ func Init(engine workflow.Engine, tokenService types.TokenService) Dependencies 
 		ConfigResolver:        localConfigResolver,
 		FeatureFlagService:    localFeatureFlagService,
 		Notifier:              localNotifier,
-		LearnService:          localLearnService,
 		LdxSyncService:        localLdxSyncService,
 		ScanStateAggregator:   localScanStateAggregator,
 		InlineValueProvider:   localInlineValueProvider,

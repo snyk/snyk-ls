@@ -338,7 +338,6 @@ func Test_BuildLspConfiguration_SkipsWriteOnlySettings(t *testing.T) {
 	require.NotNil(t, lspConfig.Settings)
 	assert.NotContains(t, lspConfig.Settings, types.SettingToken)
 	assert.NotContains(t, lspConfig.Settings, types.SettingSendErrorReports)
-	assert.NotContains(t, lspConfig.Settings, types.SettingEnableSnykLearnCodeActions)
 	assert.NotContains(t, lspConfig.Settings, types.SettingEnableSnykOssQuickFixActions)
 	assert.NotContains(t, lspConfig.Settings, types.SettingEnableSnykOpenBrowserActions)
 }

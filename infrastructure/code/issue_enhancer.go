@@ -18,16 +18,13 @@ package code
 
 import (
 	"context"
-	"fmt"
 	"net/url"
 	"strconv"
 
 	"github.com/rs/zerolog"
-	codeClientObservability "github.com/snyk/code-client-go/observability"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/performance"
 	"github.com/snyk/snyk-ls/internal/types"
@@ -39,28 +36,22 @@ const ShowInDetailPanelIdeCommand = "showInDetailPanel"
 const FixIssuePrefix = "⚡ Fix this issue: "
 
 type IssueEnhancer struct {
-	instrumentor   performance.Instrumentor
-	errorReporter  codeClientObservability.ErrorReporter
-	notifier       notification.Notifier
-	learnService   learn.Service
-	requestId      string
-	rootPath       types.FilePath
-	engine         workflow.Engine
-	folderConfig   *types.FolderConfig
-	configResolver types.ConfigResolverInterface
+	instrumentor performance.Instrumentor
+	notifier     notification.Notifier
+	requestId    string
+	rootPath     types.FilePath
+	engine       workflow.Engine
+	folderConfig *types.FolderConfig
 }
 
-func newIssueEnhancer(instrumentor performance.Instrumentor, errorReporter codeClientObservability.ErrorReporter, notifier notification.Notifier, learnService learn.Service, requestId string, rootPath types.FilePath, engine workflow.Engine, folderConfig *types.FolderConfig, configResolver types.ConfigResolverInterface) IssueEnhancer {
+func newIssueEnhancer(instrumentor performance.Instrumentor, notifier notification.Notifier, requestId string, rootPath types.FilePath, engine workflow.Engine, folderConfig *types.FolderConfig) IssueEnhancer {
 	return IssueEnhancer{
-		instrumentor:   instrumentor,
-		errorReporter:  errorReporter,
-		notifier:       notifier,
-		learnService:   learnService,
-		requestId:      requestId,
-		rootPath:       rootPath,
-		engine:         engine,
-		folderConfig:   folderConfig,
-		configResolver: configResolver,
+		instrumentor: instrumentor,
+		notifier:     notifier,
+		requestId:    requestId,
+		rootPath:     rootPath,
+		engine:       engine,
+		folderConfig: folderConfig,
 	}
 }
 
@@ -76,12 +67,10 @@ func (b *IssueEnhancer) addIssueActions(_ context.Context, issues []types.Issue)
 		}
 	}
 
-	learnEnabled := b.configResolver.GetBool(types.SettingEnableSnykLearnCodeActions, b.folderConfig)
 	b.engine.GetLogger().Debug().Str("method", method).Msg("Autofix is enabled: " + strconv.FormatBool(autoFixEnabled))
-	b.engine.GetLogger().Debug().Str("method", method).Msg("Snyk Learn is enabled: " + strconv.FormatBool(learnEnabled))
 
-	if !autoFixEnabled && !learnEnabled {
-		b.engine.GetLogger().Trace().Msg("Autofix | Snyk Learn code actions are disabled, not adding code actions")
+	if !autoFixEnabled {
+		b.engine.GetLogger().Trace().Msg("Autofix code actions are disabled, not adding code actions")
 		return
 	}
 
@@ -110,13 +99,6 @@ func (b *IssueEnhancer) addIssueActions(_ context.Context, issues []types.Issue)
 			}))
 		}
 		issues[i].SetAdditionalData(issueData)
-
-		if learnEnabled {
-			action := b.createOpenSnykLearnCodeAction(issues[i])
-			if action != nil {
-				issues[i].SetCodeActions(append(issues[i].GetCodeActions(), action))
-			}
-		}
 	}
 }
 
@@ -168,29 +150,6 @@ func (b *IssueEnhancer) getSnykShowDocumentCommand(issue types.Issue, action str
 		Arguments: []any{snykUri, issue.GetRange()},
 	}
 	return commandData
-}
-
-func (b *IssueEnhancer) createOpenSnykLearnCodeAction(issue types.Issue) (ca types.CodeAction) {
-	title := fmt.Sprintf("Learn more about %s (Snyk)", issueTitle(issue))
-	lesson, err := b.learnService.GetLesson(issue.GetEcosystem(), issue.GetID(), issue.GetCWEs(), issue.GetCVEs(), issue.GetIssueType())
-	if err != nil {
-		b.engine.GetLogger().Err(err).Msg("failed to get lesson")
-		b.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: ""})
-		return nil
-	}
-
-	if lesson != nil && lesson.Url != "" {
-		ca = &snyk.CodeAction{
-			Title:         title,
-			OriginalTitle: title,
-			Command: &types.CommandData{
-				Title:     title,
-				CommandId: types.OpenBrowserCommand,
-				Arguments: []any{lesson.Url},
-			},
-		}
-	}
-	return ca
 }
 
 func getShardKey(folderPath types.FilePath, authToken string) string {

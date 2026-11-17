@@ -94,15 +94,13 @@ func Test_addIssueActions(t *testing.T) {
 
 	mockNotifier := notification.NewMockNotifier()
 	issueEnhancer := IssueEnhancer{
-		notifier:       mockNotifier,
-		instrumentor:   performance.NewInstrumentor(),
-		engine:         engine,
-		configResolver: testutil.DefaultConfigResolver(engine),
+		notifier:     mockNotifier,
+		instrumentor: performance.NewInstrumentor(),
+		engine:       engine,
 	}
 
 	var setupCodeSettings = func() {
 		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingSnykCodeEnabled), true)
-		engine.GetConfiguration().Set(configresolver.UserGlobalKey(types.SettingEnableSnykLearnCodeActions), false)
 		folderPath := types.FilePath("/test/issue-enhancer")
 		engineConfig := engine.GetConfiguration()
 		types.SetPreferredOrgAndOrgSetByUser(engineConfig, folderPath, "test-org", true)

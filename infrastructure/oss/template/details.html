@@ -75,15 +75,6 @@
         <div>Risk score: {{.RiskScore}}</div>
         {{end}}
       </div>
-      {{ if .LessonUrl }}
-      <div class="sn-learn" id="learn">
-        {{.LessonIcon}}
-        <a class="learn--link lesson-link" id="learn--link" href="{{.LessonUrl}}">
-          Learn about this issue type
-          {{.ExternalIcon}}
-        </a>
-      </div>
-      {{end}}
     </section>
     <section class="delimiter-top summary">
       <div class="summary-item module">
@@ -164,9 +155,6 @@
 
   </div>
   <script nonce="${nonce}">
-    if (document.getElementById("learn--link") && document.getElementById("learn")) {
-      document.getElementById("learn").className = "sn-learn show";
-    }
     if (document.getElementById("more-detailed-paths--link")) {
       document.getElementById("more-detailed-paths--link").onclick = function() {
         var paths = document.getElementsByClassName("path");

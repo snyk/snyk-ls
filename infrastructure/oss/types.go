@@ -28,7 +28,6 @@ import (
 
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
 )
@@ -67,7 +66,6 @@ type ossIssue struct {
 	IsPatchable          bool               `json:"isPatchable"`
 	License              string             `json:"license,omitempty"`
 	Language             string             `json:"language,omitempty"`
-	lesson               *learn.Lesson      `json:"-"`
 	OriginalSeverity     string             `json:"originalSeverity,omitempty"`
 	SeverityWithCritical string             `json:"severityWithCritical,omitempty"`
 	AppliedPolicyRules   AppliedPolicyRules `json:"appliedPolicyRules,omitempty"`
@@ -126,10 +124,6 @@ func (r AppliedPolicyRules) toAppliedPolicyRules() snyk.AppliedPolicyRules {
 	}
 }
 
-var (
-	LearnLicenseUrl = "https://learn.snyk.io/lesson/license-policy-management/?loc=ide" //nolint:gochecknoglobals // effectively a package-level constant
-)
-
 type Annotation struct {
 	Value  string `json:"value,omitempty"`
 	Reason string `json:"reason,omitempty"`
@@ -165,23 +159,9 @@ func (i *ossIssue) toAdditionalData(engine workflow.Engine, scanResult *scanResu
 	additionalData.DisplayTargetFile = affectedFilePath
 	additionalData.Language = i.Language
 	additionalData.MatchingIssues = matchingIssues
-	if i.lesson != nil || i.isLicenseIssue() {
-		additionalData.Lesson = i.getLessonURL()
-	}
 	additionalData.Remediation = i.GetRemediation()
 	additionalData.AppliedPolicyRules = i.AppliedPolicyRules.toAppliedPolicyRules()
 	return additionalData
-}
-
-func (i *ossIssue) isLicenseIssue() bool {
-	return i.License != ""
-}
-
-func (i *ossIssue) getLessonURL() string {
-	if i.isLicenseIssue() {
-		return LearnLicenseUrl
-	}
-	return i.lesson.Url
 }
 
 func (i *ossIssue) toReferences(engine workflow.Engine) []types.Reference {

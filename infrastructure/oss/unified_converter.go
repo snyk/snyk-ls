@@ -29,11 +29,9 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/float"
-	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/util"
@@ -168,12 +166,11 @@ func processIssue(ctx context.Context, trIssue testapi.Issue, logger zerolog.Log
 		CWEs:                introducingOssIssueData.Identifiers.CWE,
 		CVEs:                introducingOssIssueData.Identifiers.CVE,
 		AdditionalData:      introducingOssIssueData,
-		LessonUrl:           introducingOssIssueData.Lesson,
 	}
 
 	// add code actions
-	if learnService, errReporter := getLearnServiceAndErrorReporter(ctx); learnService != nil && errReporter != nil && configResolver != nil {
-		addCodeActionsAndLenses(engine, configResolver, learnService, errReporter, affectedFilePath, dependencyNode, issue, folderConfig)
+	if configResolver != nil {
+		addCodeActionsAndLenses(engine, configResolver, affectedFilePath, dependencyNode, issue, folderConfig)
 	}
 
 	// Calculate fingerprint
@@ -211,22 +208,6 @@ func populateMatchingIssues(ctx context.Context, trIssue testapi.Issue, problem 
 		}
 	}
 	return matching
-}
-
-func getLearnServiceAndErrorReporter(ctx context.Context) (learn.Service, error_reporting.ErrorReporter) {
-	deps, ok := ctx2.DependenciesFromContext(ctx)
-	if !ok {
-		return nil, nil
-	}
-	var ls learn.Service
-	var er error_reporting.ErrorReporter
-	if v, ok := deps[ctx2.DepLearnService].(learn.Service); ok {
-		ls = v
-	}
-	if v, ok := deps[ctx2.DepErrorReporter].(error_reporting.ErrorReporter); ok {
-		er = v
-	}
-	return ls, er
 }
 
 func ecosystem(trIssue testapi.Issue, logger zerolog.Logger) (string, error) {
@@ -545,7 +526,6 @@ func buildOssIssueData(
 		RiskScore:          trIssue.GetRiskScore(),
 	}
 
-	data.Lesson = Lesson(ctx, problem, data.Identifiers.CWE, data.Identifiers.CVE, ecosystem)
 	return data, nil
 }
 
@@ -736,21 +716,4 @@ func createIssueURL(id string) *url.URL {
 		return nil
 	}
 	return u
-}
-
-func Lesson(ctx context.Context, problem *testapi.SnykVulnProblem, cwes []string, cves []string, ecosystemStr string) string {
-	var lessonURL string
-	deps, depsFound := ctx2.DependenciesFromContext(ctx)
-	if depsFound {
-		if ls, ok := deps[ctx2.DepLearnService].(learn.Service); ok {
-			// Extract lesson URL from learn service
-			if ls != nil {
-				lesson, err := ls.GetLesson(ecosystemStr, problem.Id, cwes, cves, types.DependencyVulnerability)
-				if err == nil && lesson != nil {
-					lessonURL = lesson.Url
-				}
-			}
-		}
-	}
-	return lessonURL
 }

@@ -95,8 +95,6 @@ func (renderer *HtmlRenderer) GetDetailsHtml(issue types.Issue) string {
 		"CvssCalculatorUrl":  types.GetCvssCalculatorUrl(additionalData.CvssSources),
 		"ExploitMaturity":    getExploitMaturity(additionalData),
 		"IntroducedThroughs": getIntroducedThroughs(additionalData, config.GetSnykUI(renderer.engine.GetConfiguration())),
-		"LessonUrl":          additionalData.Lesson,
-		"LessonIcon":         html.LessonIcon(),
 		"ExternalIcon":       html.ExternalIcon(),
 		"FixedIn":            additionalData.FixedIn,
 		"DetailedPaths":      detailedPaths,

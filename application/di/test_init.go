@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/spf13/pflag"
@@ -44,8 +43,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/code"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/iac"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
-	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/infrastructure/oss"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	domainNotify "github.com/snyk/snyk-ls/internal/notification"
@@ -116,21 +113,6 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 	localCodeInstrumentor := code.NewCodeInstrumentor()
 	localScanNotifier, _ := appNotification.NewScanNotifier(localNotifier, localConfigResolver)
 
-	var localLearnService learn.Service
-	if overrideDeps != nil && overrideDeps.LearnService != nil {
-		localLearnService = overrideDeps.LearnService
-	} else {
-		ctrl := gomock.NewController(t)
-		learnMock := mock_learn.NewMockService(ctrl)
-		learnMock.EXPECT().GetAllLessons().Return([]learn.Lesson{{}}, nil).AnyTimes()
-		learnMock.EXPECT().MaintainCacheFunc().AnyTimes()
-		learnMock.
-			EXPECT().
-			GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(&learn.Lesson{}, nil).AnyTimes()
-		localLearnService = learnMock
-	}
-
 	var localScanPersister persistence.ScanSnapshotPersister
 	if overrideDeps != nil && overrideDeps.ScanPersister != nil {
 		localScanPersister = overrideDeps.ScanPersister
@@ -158,8 +140,8 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 	} else {
 		localProgressTracker = progress.NewTracker(logger)
 	}
-	localSnykCodeScanner := code.New(engine, localInstrumentor, localSnykApiClient, localCodeErrorReporter, localLearnService, localFeatureFlagService, localNotifier, localCodeInstrumentor, localCodeErrorReporter, code.NewFakeCodeScannerClient, localConfigResolver, localProgressTracker)
-	localOpenSourceScanner := oss.NewCLIScanner(engine, localInstrumentor, localErrorReporter, localSnykCli, localLearnService, localNotifier, localConfigResolver, localProgressTracker)
+	localSnykCodeScanner := code.New(engine, localInstrumentor, localSnykApiClient, localFeatureFlagService, localNotifier, localCodeInstrumentor, localCodeErrorReporter, code.NewFakeCodeScannerClient, localConfigResolver, localProgressTracker)
+	localOpenSourceScanner := oss.NewCLIScanner(engine, localInstrumentor, localErrorReporter, localSnykCli, localNotifier, localConfigResolver, localProgressTracker)
 	localIaCScanner := iac.New(gafConfiguration, logger, localInstrumentor, localErrorReporter, localSnykCli, localConfigResolver, localProgressTracker)
 	localScanner := scanner2.NewDelegatingScanner(engine, tokenService, localScanInitializer, localInstrumentor, localScanNotifier, localSnykApiClient, localAuthenticationService, localNotifier, localScanPersister, localScanStateAggregator, localConfigResolver, localSnykCodeScanner, localIaCScanner, localOpenSourceScanner)
 
@@ -204,7 +186,6 @@ func TestInit(t *testing.T, engine workflow.Engine, tokenService types.TokenServ
 		ConfigResolver:        localConfigResolver,
 		FeatureFlagService:    localFeatureFlagService,
 		Notifier:              localNotifier,
-		LearnService:          localLearnService,
 		LdxSyncService:        localLdxSyncService,
 		ScanStateAggregator:   localScanStateAggregator,
 		InlineValueProvider:   localInlineValueProvider,

@@ -155,7 +155,7 @@ All settings are registered via `RegisterAllConfigurations(fs *pflag.FlagSet)` i
 | `config.description` | Description of what the setting does | `{"Enable Snyk Code analysis"}` |
 | `config.writeOnly` | Accepted IDE→LS but NOT sent in LS→IDE notifications | `{"true"}` |
 
-> **Write-only settings** (`token`, `send_error_reports`, `enable_snyk_learn_code_actions`, etc.) participate in the normal precedence resolution chain when the LS reads them internally — they are simply skipped when building outbound `$/snyk.configuration` notifications sent to the IDE. This prevents sensitive values (e.g., tokens) from being echoed back.
+> **Write-only settings** (`token`, `send_error_reports`, etc.) participate in the normal precedence resolution chain when the LS reads them internally — they are simply skipped when building outbound `$/snyk.configuration` notifications sent to the IDE. This prevents sensitive values (e.g., tokens) from being echoed back.
 
 ```go
 registerFlag(fs, SettingSnykCodeEnabled, false, "Enable Snyk Code", map[string][]string{
@@ -180,7 +180,7 @@ When `conf.AddFlagSet(fs)` is called, GAF indexes annotations into lookup maps. 
 
 > **`additional_parameters` / `additional_environment` at Project Defaults (global fallback):** These two folder-scope settings are also writable at `user:global` from the Project Defaults tab of the HTML settings dialog. The LS stores: params as `cli_additional_oss_parameters` (`[]string`) at `UserGlobalKey` via `SetGlobalDeferredFolderScope`; env as a raw string at `UserGlobalKey(additional_environment)` via `SetGlobalUser` (also applied to the process via `os.Setenv`). At scan time the resolver falls back to `user:global` for folders without a folder-level override, so Project Defaults values apply to all projects by default. Per-project additional_parameters are **appended**; per-project additional_environment entries **override** Project Defaults values on key conflict (project wins). These settings are intentionally **not LDX-Sync routed** (security requirement: IDE settings flow only, see `ldx_sync_adapter.go`).
 
-**Write-only (5):** `token`, `send_error_reports`, `enable_snyk_learn_code_actions`, `enable_snyk_oss_quick_fix_code_actions`, `enable_snyk_open_browser_actions`
+**Write-only (4):** `token`, `send_error_reports`, `enable_snyk_oss_quick_fix_code_actions`, `enable_snyk_open_browser_actions`
 
 ---
 

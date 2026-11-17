@@ -399,12 +399,6 @@ func RegisterAllConfigurations(fs *pflag.FlagSet) {
 		configresolver.AnnotationDisplayName: {"Send Error Reports"},
 		configresolver.AnnotationDescription: {"Enable sending error reports to Snyk"},
 	})
-	registerFlag(fs, SettingEnableSnykLearnCodeActions, true, "Enable Snyk Learn code actions", map[string][]string{
-		configresolver.AnnotationScope:       {machineScope},
-		configresolver.AnnotationWriteOnly:   {"true"},
-		configresolver.AnnotationDisplayName: {"Snyk Learn Code Actions"},
-		configresolver.AnnotationDescription: {"Enable Snyk Learn code actions"},
-	})
 	registerFlag(fs, SettingEnableSnykOssQuickFixActions, false, "Enable Snyk OSS quick fix code actions", map[string][]string{
 		configresolver.AnnotationScope:       {machineScope},
 		configresolver.AnnotationWriteOnly:   {"true"},

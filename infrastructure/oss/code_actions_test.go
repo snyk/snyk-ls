@@ -32,7 +32,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/ast"
-	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -135,7 +134,7 @@ func Test_GetCodeActions_MavenPropertyInParentPom_RedirectsToParent(t *testing.T
 	issue.UpgradePath = []any{"false", "org.cyclonedx:cyclonedx-core-java@11.0.1"}
 
 	snykIssue := toIssue(engine, defaultResolver(t, engine), types.FilePath(dir), types.FilePath(childPath), issue,
-		&scanResult{}, nil, depNode, getLearnMock(t), error_reporting.NewTestErrorReporter(engine), "", nil)
+		&scanResult{}, nil, depNode, "", nil)
 
 	quickFix := findUpgradeAction(t, snykIssue.CodeActions)
 	edit := (*quickFix.GetDeferredEdit())(context.Background())
@@ -218,7 +217,7 @@ func Test_GetCodeActions_MavenParentPomPropertyVersion_RedirectsToParentProperty
 	issue.UpgradePath = []any{"false", "org.cyclonedx:cyclonedx-core-java@11.0.1"}
 
 	snykIssue := toIssue(engine, defaultResolver(t, engine), types.FilePath(dir), types.FilePath(childPath), issue,
-		&scanResult{}, nil, depNode, getLearnMock(t), error_reporting.NewTestErrorReporter(engine), "", nil)
+		&scanResult{}, nil, depNode, "", nil)
 
 	quickFix := findUpgradeAction(t, snykIssue.CodeActions)
 	edit := (*quickFix.GetDeferredEdit())(context.Background())
@@ -400,7 +399,7 @@ func Test_MavenPropertyQuickfix_AppliedTwice_DoesNotCorruptPom(t *testing.T) {
 	issue.UpgradePath = []any{"false", "org.cyclonedx:cyclonedx-core-java@11.0.1"}
 
 	snykIssue := toIssue(engine, defaultResolver(t, engine), types.FilePath(dir), types.FilePath(pomPath), issue,
-		&scanResult{}, nil, depNode, getLearnMock(t), error_reporting.NewTestErrorReporter(engine), "", nil)
+		&scanResult{}, nil, depNode, "", nil)
 	quickFix := findUpgradeAction(t, snykIssue.CodeActions)
 
 	// Apply the cached edit, persisting the result to disk between applies as a
@@ -633,7 +632,7 @@ func applyMavenUpgradeQuickfix(t *testing.T, pom string) []types.TextEdit {
 	issue.UpgradePath = []any{"false", "org.cyclonedx:cyclonedx-core-java@11.0.1"}
 
 	snykIssue := toIssue(engine, defaultResolver(t, engine), types.FilePath(dir), types.FilePath(pomPath), issue,
-		&scanResult{}, nil, depNode, getLearnMock(t), error_reporting.NewTestErrorReporter(engine), "", nil)
+		&scanResult{}, nil, depNode, "", nil)
 	quickFix := findUpgradeAction(t, snykIssue.CodeActions)
 	edit := (*quickFix.GetDeferredEdit())(context.Background())
 	return edit.Changes[pomPath]

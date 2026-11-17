@@ -1176,7 +1176,6 @@ sequenceDiagram
 
 - `token` should NOT appear in the `settings` or `folderConfigs[].settings` of `$/snyk.configuration`
 - `send_error_reports` should NOT appear
-- `enable_snyk_learn_code_actions` should NOT appear
 
 ### Validation
 

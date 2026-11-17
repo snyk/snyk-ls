@@ -53,7 +53,6 @@ type OssIssueData struct {
 	Language           string             `json:"language"`
 	Details            string             `json:"details"`
 	MatchingIssues     []OssIssueData     `json:"matchingIssues"`
-	Lesson             string             `json:"lesson,omitempty"`
 	Remediation        string             `json:"remediation"`
 	AppliedPolicyRules AppliedPolicyRules `json:"appliedPolicyRules,omitempty"`
 	RiskScore          uint16             `json:"riskScore,omitempty"`

@@ -39,7 +39,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
@@ -100,7 +99,6 @@ type CLIScanner struct {
 	scheduledScan           *time.Timer
 	scheduledScanMtx        *sync.Mutex
 	scanCount               int
-	learnService            learn.Service
 	notifier                noti.Notifier
 	inlineValues            inlineValueMap
 	supportedFiles          map[string]bool
@@ -111,7 +109,7 @@ type CLIScanner struct {
 	progressTracker         *progress.Tracker
 }
 
-func NewCLIScanner(engine workflow.Engine, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, learnService learn.Service, notifier noti.Notifier, configResolver types.ConfigResolverInterface, progressTracker *progress.Tracker) types.ProductScanner {
+func NewCLIScanner(engine workflow.Engine, instrumentor performance.Instrumentor, errorReporter error_reporting.ErrorReporter, cli cli.Executor, notifier noti.Notifier, configResolver types.ConfigResolverInterface, progressTracker *progress.Tracker) types.ProductScanner {
 	scanner := CLIScanner{
 		instrumentor:            instrumentor,
 		errorReporter:           errorReporter,
@@ -123,7 +121,6 @@ func NewCLIScanner(engine workflow.Engine, instrumentor performance.Instrumentor
 		runningScans:            map[types.FilePath]*scans.ScanProgress{},
 		refreshScanWaitDuration: 6 * time.Hour,
 		scanCount:               1,
-		learnService:            learnService,
 		notifier:                notifier,
 		inlineValues:            make(inlineValueMap),
 		packageIssueCache:       make(map[string][]types.Issue),
@@ -463,7 +460,7 @@ func (cliScanner *CLIScanner) unmarshallAndRetrieveAnalysis(
 	path types.FilePath,
 	format string,
 ) (issues []types.Issue) {
-	issues, err := ProcessScanResults(ctx, scanOutput, cliScanner.errorReporter, cliScanner.learnService, cliScanner.packageIssueCache, true, format)
+	issues, err := ProcessScanResults(ctx, scanOutput, cliScanner.errorReporter, cliScanner.packageIssueCache, true, format)
 
 	if err != nil {
 		cliScanner.errorReporter.CaptureErrorAndReportAsIssue(path, err)
@@ -736,8 +733,6 @@ func (cliScanner *CLIScanner) enrichContext(ctx context.Context) context.Context
 	// shared map in the parent context — concurrent scans from the same parent
 	// context would otherwise race on the same map.
 	deps := ctx2.CopyDependenciesFromContext(ctx)
-	deps[ctx2.DepLearnService] = cliScanner.learnService
-	deps[ctx2.DepErrorReporter] = cliScanner.errorReporter
 	deps[ctx2.DepCLIExecutor] = cliScanner.cli
 	deps[ctx2.DepEngine] = cliScanner.engine
 
