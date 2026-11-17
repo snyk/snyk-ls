@@ -1247,7 +1247,6 @@ type OssIssueData struct {
 	ProjectName       string         `json:"projectName"`
 	DisplayTargetFile FilePath       `json:"displayTargetFile"`
 	MatchingIssues    []OssIssueData `json:"matchingIssues"`
-	Lesson            string         `json:"lessonUrl,omitempty"`
 	RiskScore         uint16         `json:"riskScore,omitempty"`
 }
 type OssIdentifiers struct {

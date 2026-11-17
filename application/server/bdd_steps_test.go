@@ -401,13 +401,13 @@ func (s *bddSteps) aRunningLanguageServer() error {
 	// AiFixHandler -> GetAutofixDiffs wiring instead of failing on a nil scanner.
 	codeErrorReporter := code.NewCodeErrorReporter(error_reporting.NewTestErrorReporter(engine))
 	fixDiffsCodeScanner := code.New(
-		engine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, codeErrorReporter, nil,
+		engine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true},
 		baseDeps.FeatureFlagService, baseDeps.Notifier, code.NewCodeInstrumentor(), codeErrorReporter,
 		code.NewFakeCodeScannerClient, resolver, testutil.NewDrainedProgressTracker(),
 	)
 	baseDeps.CommandService = command.NewService(
 		engine, engine.GetLogger(), baseDeps.AuthenticationService, baseDeps.FeatureFlagService, baseDeps.Notifier,
-		baseDeps.LearnService, issueProvider, fixDiffsCodeScanner, nil, baseDeps.LdxSyncService,
+		issueProvider, fixDiffsCodeScanner, nil, baseDeps.LdxSyncService,
 		baseDeps.ConfigResolver, baseDeps.ScanStateAggregator.StateSnapshot, folderRemediator, baseDeps.ScanCtx,
 	)
 

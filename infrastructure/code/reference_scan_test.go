@@ -69,8 +69,6 @@ func newReferenceCodeScanner(
 		mockEngine,
 		performance.NewInstrumentor(),
 		&snyk_api.FakeApiClient{CodeEnabled: true},
-		newTestCodeErrorReporter(),
-		setupMockLearnServiceNoLessons(t),
 		flags,
 		notification.NewNotifier(),
 		NewCodeInstrumentor(),

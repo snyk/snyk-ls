@@ -39,7 +39,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/issuecache"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
@@ -77,13 +76,11 @@ func NewScanStatus() *ScanStatus {
 type Scanner struct {
 	*issuecache.IssueCache
 	SnykApiClient      snyk_api.SnykApiClient
-	errorReporter      codeClientObservability.ErrorReporter
 	bundleHashesMutex  sync.RWMutex
 	changedFilesMutex  sync.RWMutex
 	scanStatusMutex    sync.RWMutex
 	runningScans       map[types.FilePath]*ScanStatus
 	changedPaths       map[types.FilePath]map[types.FilePath]bool // tracks files that were changed since the last scan per workspace folder
-	learnService       learn.Service
 	featureFlagService featureflag.Service
 	fileFilters        *xsync.MapOf[string, *gafUtils.FileFilter]
 	notifier           notification.Notifier
@@ -117,15 +114,13 @@ func (sc *Scanner) AddBundleHash(key types.FilePath, value string) {
 	sc.bundleHashes[key] = value
 }
 
-func New(engine workflow.Engine, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, reporter codeClientObservability.ErrorReporter, learnService learn.Service, featureFlagService featureflag.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter, codeScanner func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error), configResolver types.ConfigResolverInterface, progressTracker *progress.Tracker) *Scanner {
+func New(engine workflow.Engine, instrumentor performance.Instrumentor, apiClient snyk_api.SnykApiClient, featureFlagService featureflag.Service, notifier notification.Notifier, codeInstrumentor codeClientObservability.Instrumentor, codeErrorReporter codeClientObservability.ErrorReporter, codeScanner func(sc *Scanner, folderConfig *types.FolderConfig) (codeClient.CodeScanner, error), configResolver types.ConfigResolverInterface, progressTracker *progress.Tracker) *Scanner {
 	return &Scanner{
 		IssueCache:         issuecache.NewIssueCache(product.ProductCode),
 		SnykApiClient:      apiClient,
-		errorReporter:      reporter,
 		runningScans:       map[types.FilePath]*ScanStatus{},
 		changedPaths:       map[types.FilePath]map[types.FilePath]bool{},
 		fileFilters:        xsync.NewMapOf[*gafUtils.FileFilter](),
-		learnService:       learnService,
 		featureFlagService: featureFlagService,
 		notifier:           notifier,
 		bundleHashes:       map[types.FilePath]string{},
@@ -244,9 +239,6 @@ func (sc *Scanner) Scan(ctx context.Context, pathToScan types.FilePath) (issues 
 		return nil, err
 	}
 
-	// Populate HTML template
-	sc.enhanceIssuesDetails(results)
-
 	sc.RemoveFromCache(filesToBeScanned)
 	sc.AddToCache(results)
 	return results, err
@@ -361,29 +353,6 @@ func (sc *Scanner) legacyFilteredFiles(folderPath types.FilePath, logger zerolog
 	}
 
 	return fileFilter.GetFilteredFiles(fileFilter.GetAllFiles(), append(lsDefaultIgnoredRules, rules...)), nil
-}
-
-// Populate HTML template
-func (sc *Scanner) enhanceIssuesDetails(issues []types.Issue) {
-	logger := sc.engine.GetLogger().With().Str("method", "issue_enhancer.enhanceIssuesDetails").Logger()
-
-	for i := range issues {
-		issue := issues[i]
-		issueData, ok := issue.GetAdditionalData().(snyk.CodeIssueData)
-		if !ok {
-			logger.Error().Msg("Failed to fetch additional data")
-			continue
-		}
-
-		lesson, err := sc.learnService.GetLesson(issue.GetEcosystem(), issue.GetID(), issue.GetCWEs(), issue.GetCVEs(), issue.GetIssueType())
-		if err != nil {
-			logger.Warn().Err(err).Msg("Failed to get lesson")
-			sc.errorReporter.CaptureError(err, codeClientObservability.ErrorReporterOptions{ErrorDiagnosticPath: ""})
-		} else if lesson != nil && lesson.Url != "" {
-			issue.SetLessonUrl(lesson.Url)
-		}
-		issue.SetAdditionalData(issueData)
-	}
 }
 
 // getFilesToBeScanned returns a map of files that need to be scanned and removes them from the changedPaths set.
@@ -545,14 +514,11 @@ func (sc *Scanner) UploadAndAnalyze(ctx context.Context, path types.FilePath, fo
 	}
 	issueEnhancer := newIssueEnhancer(
 		sc.Instrumentor,
-		sc.errorReporter,
 		sc.notifier,
-		sc.learnService,
 		requestId,
 		path,
 		sc.engine,
 		folderConfig,
-		sc.configResolver,
 	)
 	issueEnhancer.addIssueActions(ctx, issues)
 

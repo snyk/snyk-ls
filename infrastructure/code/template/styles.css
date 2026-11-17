@@ -197,23 +197,6 @@ main {
   line-height: 2rem;
 }
 
-.sn-learn {
-  display: flex;
-  align-items: center;
-  gap: 0.5em;
-  margin-top: 10px;
-}
-
-.lesson-icon {
-  display: flex;
-  align-items: center;
-}
-
-.lesson-link {
-  display: flex;
-  align-items: center;
-}
-
 .is-external {
   padding-right: 12px;
 }

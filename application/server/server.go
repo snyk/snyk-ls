@@ -58,7 +58,6 @@ import (
 	"github.com/snyk/snyk-ls/infrastructure/cli/cli_constants"
 	"github.com/snyk/snyk-ls/infrastructure/cli/install"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/data_structure"
 	"github.com/snyk/snyk-ls/internal/folderconfig"
@@ -163,7 +162,6 @@ func validateMandatoryDeps(deps di.Dependencies) error {
 		{"Notifier", deps.Notifier != nil},
 		{"FeatureFlagService", deps.FeatureFlagService != nil},
 		{"ErrorReporter", deps.ErrorReporter != nil},
-		{"LearnService", deps.LearnService != nil},
 		{"Scanner", deps.Scanner != nil},
 		{"HoverService", deps.HoverService != nil},
 		{"ScanNotifier", deps.ScanNotifier != nil},
@@ -266,9 +264,6 @@ func injectCoreServicesIntoMap(m map[string]any, deps di.Dependencies) {
 	m[ctx2.DepCodeActionService] = deps.CodeActionService
 	if deps.FeatureFlagService != nil {
 		m[ctx2.DepFeatureFlagService] = deps.FeatureFlagService
-	}
-	if deps.LearnService != nil {
-		m[ctx2.DepLearnService] = deps.LearnService
 	}
 	if deps.FileWatcher != nil {
 		m[ctx2.DepFileWatcher] = deps.FileWatcher
@@ -515,23 +510,6 @@ func mustFeatureFlagServiceFromContext(ctx context.Context) featureflag.Service 
 	svc, ok := featureFlagServiceFromContext(ctx)
 	if !ok {
 		panic("FeatureFlagService missing from context")
-	}
-	return svc
-}
-
-func learnServiceFromContext(ctx context.Context) (learn.Service, bool) {
-	deps, ok := ctx2.DependenciesFromContext(ctx)
-	if !ok {
-		return nil, false
-	}
-	svc, ok := deps[ctx2.DepLearnService].(learn.Service)
-	return svc, ok
-}
-
-func mustLearnServiceFromContext(ctx context.Context) learn.Service {
-	svc, ok := learnServiceFromContext(ctx)
-	if !ok {
-		panic("LearnService missing from context")
 	}
 	return svc
 }
@@ -832,8 +810,6 @@ func commands(conf configuration.Configuration) []string {
 		types.CopyAuthLinkCommand,
 		types.LogoutCommand,
 		types.TrustWorkspaceFoldersCommand,
-		types.OpenLearnLesson,
-		types.GetLearnLesson,
 		types.SubmitIgnoreRequest,
 		types.GetSettingsSastEnabled,
 		types.GetFeatureFlagStatus,
@@ -1000,19 +976,10 @@ func initializedHandler(conf configuration.Configuration, engine workflow.Engine
 		// Capture context-scoped dependencies now, while the request context is alive.
 		// The heavy initialization below runs in a background goroutine after this
 		// handler returns, so it must not read from the (soon-canceled) request context.
-		learnService := mustLearnServiceFromContext(ctx)
 		scannerInstance := mustScannerFromContext(ctx)
 		scanPersister := mustScanPersisterFromContext(ctx)
 		scanStateAgg := mustScanStateAggregatorFromContext(ctx)
 		ffService := mustFeatureFlagServiceFromContext(ctx)
-
-		go func() {
-			_, err := learnService.GetAllLessons()
-			if err != nil {
-				logger.Err(err).Msg("Error initializing lessons cache")
-			}
-			go learnService.MaintainCacheFunc()
-		}()
 
 		// The cache janitor is auth-independent and cheap; keep it on the handler
 		// goroutine so the cancel func is recorded before shutdown can read it (avoids a

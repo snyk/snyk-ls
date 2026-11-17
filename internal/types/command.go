@@ -33,8 +33,6 @@ const (
 	CopyAuthLinkCommand             = "snyk.copyAuthLink"
 	LogoutCommand                   = "snyk.logout"
 	TrustWorkspaceFoldersCommand    = "snyk.trustWorkspaceFolders"
-	OpenLearnLesson                 = "snyk.openLearnLesson"
-	GetLearnLesson                  = "snyk.getLearnLesson"
 	GetSettingsSastEnabled          = "snyk.getSettingsSastEnabled"
 	GetFeatureFlagStatus            = "snyk.getFeatureFlagStatus"
 	GetActiveUserCommand            = "snyk.getActiveUser"

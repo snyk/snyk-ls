@@ -400,7 +400,6 @@ func getOssIssue(issue types.Issue, canonicalRoot types.FilePath, logger *zerolo
 			ProjectName:       additionalData.ProjectName,
 			DisplayTargetFile: additionalData.DisplayTargetFile,
 			MatchingIssues:    matchingIssues,
-			Lesson:            additionalData.Lesson,
 			RiskScore:         additionalData.RiskScore,
 		},
 	}

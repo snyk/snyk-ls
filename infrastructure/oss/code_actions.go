@@ -29,12 +29,10 @@ import (
 
 	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
-	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func GetCodeActions(engine workflow.Engine, configResolver types.ConfigResolverInterface, learnService learn.Service, ep error_reporting.ErrorReporter, affectedFilePath types.FilePath, issueDepNode *ast.Node, issue types.Issue, folderConfig *types.FolderConfig) (actions []types.CodeAction) {
+func GetCodeActions(engine workflow.Engine, configResolver types.ConfigResolverInterface, affectedFilePath types.FilePath, issueDepNode *ast.Node, issue types.Issue, folderConfig *types.FolderConfig) (actions []types.CodeAction) {
 	if issueDepNode == nil {
 		engine.GetLogger().Debug().Str("issue", issue.GetRuleID()).Msg("skipping adding code action, as issueDepNode is empty")
 		return actions
@@ -142,62 +140,7 @@ func GetCodeActions(engine workflow.Engine, configResolver types.ConfigResolverI
 		}
 	}
 
-	codeAction := AddSnykLearnAction(
-		engine,
-		configResolver,
-		learnService,
-		ep,
-		ossIssueData.Title,
-		ossIssueData.PackageManager,
-		issue.GetRuleID(),
-		ossIssueData.Identifiers.CWE,
-		ossIssueData.Identifiers.CVE,
-		folderConfig,
-	)
-
-	if codeAction != nil {
-		actions = append(actions, codeAction)
-	}
-
 	return actions
-}
-
-func AddSnykLearnAction(
-	engine workflow.Engine,
-	configResolver types.ConfigResolverInterface,
-	learnService learn.Service,
-	ep error_reporting.ErrorReporter,
-	title string,
-	packageManager string,
-	vulnId string,
-	cwes []string,
-	cves []string,
-	folderConfig *types.FolderConfig,
-) (action types.CodeAction) {
-	if configResolver.GetBool(types.SettingEnableSnykLearnCodeActions, folderConfig) {
-		lesson, err := learnService.GetLesson(packageManager, vulnId, cwes, cves, types.DependencyVulnerability)
-		if err != nil {
-			msg := "failed to get lesson"
-			engine.GetLogger().Err(err).Msg(msg)
-			ep.CaptureError(errors.WithMessage(err, msg))
-			return nil
-		}
-
-		if lesson != nil && lesson.Url != "" {
-			t := fmt.Sprintf("Learn more about %s (Snyk)", title)
-			action = &snyk.CodeAction{
-				Title:         t,
-				OriginalTitle: t,
-				Command: &types.CommandData{
-					Title:     t,
-					CommandId: types.OpenBrowserCommand,
-					Arguments: []any{lesson.Url},
-				},
-			}
-			engine.GetLogger().Debug().Str("method", "oss.issue.AddSnykLearnAction").Msgf("Learn action: %v", action)
-		}
-	}
-	return action
 }
 
 // addQuickFixAction builds a deferred "upgrade" code action. fileContent, when

@@ -23,7 +23,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
@@ -36,8 +35,6 @@ import (
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/cli"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
-	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/notification"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
@@ -246,7 +243,6 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 	// Setup the scanner with necessary dependencies
 	instrumentor := performance.NewInstrumentor()
 	errorReporter := error_reporting.NewTestErrorReporter(engine)
-	learnMock := mock_learn.NewMockService(gomock.NewController(t))
 	notifier := notification.NewMockNotifier()
 
 	cliScanner := &CLIScanner{
@@ -254,7 +250,6 @@ func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
 		cli:               cliExecutor,
 		instrumentor:      instrumentor,
 		errorReporter:     errorReporter,
-		learnService:      learnMock,
 		notifier:          notifier,
 		configResolver:    defaultResolver(t, engine),
 		mutex:             &sync.RWMutex{},
@@ -420,25 +415,12 @@ func TestConvertScanResultToIssues_IgnoredIssuesNotPropagated(t *testing.T) {
 	targetFilePath := types.FilePath("/test/workdir/package.json")
 	fileContent := []byte("test file content")
 
-	// Create mock learn service and error reporter
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	learnService := mock_learn.NewMockService(ctrl)
-	errorReporter := error_reporting.NewTestErrorReporter(engine)
-
-	// Expect GetLesson to be called for the non-ignored issue (SNYK-1) when there's no AST node
-	learnService.EXPECT().
-		GetLesson("", "SNYK-1", nil, nil, types.DependencyVulnerability).
-		Return(&learn.Lesson{Url: "https://learn.snyk.io/lesson/test"}, nil).
-		AnyTimes()
-
 	// Empty package issue cache
 	packageIssueCache := make(map[string][]types.Issue)
 
 	configResolver := testutil.DefaultConfigResolver(engine)
 	// Convert scan results to issues
-	issues := convertScanResultToIssues(engine, configResolver, scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)), nil)
+	issues := convertScanResultToIssues(engine, configResolver, scanResult, workDir, targetFilePath, fileContent, packageIssueCache, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)), nil)
 
 	// Verify that only non-ignored issues are included in the result
 	assert.Equal(t, 1, len(issues), "Expected only one non-ignored issue")
@@ -612,17 +594,10 @@ func Test_shouldUseLegacyScan_uv(t *testing.T) {
 // other scanner's channel (IDE-2036).
 func Test_NewCLIScanner_ProgressChannelIsolation(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	ctrl := gomock.NewController(t)
-	t.Cleanup(ctrl.Finish)
-
-	learnMock := mock_learn.NewMockService(ctrl)
-	learnMock.EXPECT().GetAllLessons().Return([]learn.Lesson{{}}, nil).AnyTimes()
-	learnMock.EXPECT().GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(&learn.Lesson{}, nil).AnyTimes()
 
 	newScanner := func(progressCh chan types.ProgressParams) types.ProductScanner {
 		return NewCLIScanner(engine, performance.NewInstrumentor(), error_reporting.NewTestErrorReporter(engine),
-			cli.NewTestExecutor(engine), learnMock, notification.NewMockNotifier(),
+			cli.NewTestExecutor(engine), notification.NewMockNotifier(),
 			defaultResolver(t, engine), progress.NewTrackerWithChannel(progressCh, engine.GetLogger()))
 	}
 

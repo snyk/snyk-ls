@@ -49,7 +49,6 @@ func TestCreateFromCommandData_FixFolder_WiresProvider(t *testing.T) {
 		nil, // srv
 		nil, // authService
 		nil, // featureFlagService
-		nil, // learnService
 		notifier,
 		nil, // issueProvider
 		nil, // codeScanner

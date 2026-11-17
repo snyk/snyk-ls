@@ -23,7 +23,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
@@ -56,21 +55,6 @@ func Test_ossIssue_toAdditionalData_ConvertsPolicyAnnotations(t *testing.T) {
 	require.NotEmpty(t, convertedIssue.AppliedPolicyRules.Annotation.Value)
 	require.NotEmpty(t, convertedIssue.AppliedPolicyRules.Annotation.Reason)
 }
-func Test_ossIssue_toAdditionalData_HasLicenseLearnURL(t *testing.T) {
-	engine := testutil.UnitTest(t)
-
-	issue := setupOssIssueWithLicenseType(t)
-	fakeScanResult := &scanResult{
-		DisplayTargetFile: "testFile",
-		ProjectName:       "test",
-	}
-	path := types.FilePath(fmt.Sprintf("/path/to/%s", fakeScanResult.DisplayTargetFile))
-	emptyRange := types.Range{}
-	convertedIssue := issue.toAdditionalData(engine, fakeScanResult, []snyk.OssIssueData{}, path, emptyRange)
-
-	assert.Equal(t, "https://learn.snyk.io/lesson/license-policy-management/?loc=ide", convertedIssue.Lesson)
-}
-
 func Test_ossIssue_toAdditionalData_ConvertsSeverityChange(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	issue := setupOssIssueWithSeverityChangePolicy(t)
@@ -90,12 +74,6 @@ func Test_ossIssue_toAdditionalData_ConvertsSeverityChange(t *testing.T) {
 func setupOssIssueWithPolicyAnnotations(t *testing.T) ossIssue {
 	t.Helper()
 	name := filepath.Join("testdata", "policyAnnotationsInputData.json")
-	issue := unmarshalIssueFromFile(t, name)
-	return issue
-}
-func setupOssIssueWithLicenseType(t *testing.T) ossIssue {
-	t.Helper()
-	name := filepath.Join("testdata", "licenseIssueInput.json")
 	issue := unmarshalIssueFromFile(t, name)
 	return issue
 }

@@ -40,7 +40,6 @@ func TestDependencies_AllFieldsPopulated(t *testing.T) {
 	assert.NotNil(t, deps.ConfigResolver, "ConfigResolver must be set")
 	assert.NotNil(t, deps.FeatureFlagService, "FeatureFlagService must be set")
 	assert.NotNil(t, deps.Notifier, "Notifier must be set")
-	assert.NotNil(t, deps.LearnService, "LearnService must be set")
 	assert.NotNil(t, deps.LdxSyncService, "LdxSyncService must be set")
 	assert.NotNil(t, deps.ScanStateAggregator, "ScanStateAggregator must be set")
 

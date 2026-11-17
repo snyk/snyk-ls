@@ -29,9 +29,7 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/ast"
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
-	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/product"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -49,7 +47,7 @@ func vulnIndicesByID(res *scanResult) map[string][]int {
 	return out
 }
 
-func toIssue(engine workflow.Engine, configResolver types.ConfigResolverInterface, workDir types.FilePath, affectedFilePath types.FilePath, issue ossIssue, scanResult *scanResult, sameIDIndices []int, issueDepNode *ast.Node, learnService learn.Service, ep error_reporting.ErrorReporter, format string, folderConfig *types.FolderConfig) *snyk.Issue {
+func toIssue(engine workflow.Engine, configResolver types.ConfigResolverInterface, workDir types.FilePath, affectedFilePath types.FilePath, issue ossIssue, scanResult *scanResult, sameIDIndices []int, issueDepNode *ast.Node, format string, folderConfig *types.FolderConfig) *snyk.Issue {
 	rangeFromNode := getRangeFromNode(issueDepNode)
 
 	matchingIssues := make([]snyk.OssIssueData, 0, len(sameIDIndices))
@@ -83,13 +81,6 @@ func toIssue(engine workflow.Engine, configResolver types.ConfigResolverInterfac
 		message = message[:maxLength] + "... (Snyk)"
 	}
 
-	if learnService != nil && issue.lesson == nil && !issue.isLicenseIssue() && !issue.IsIgnored {
-		lesson, err := learnService.GetLesson(issue.PackageManager, issue.Id, issue.Identifiers.CWE, issue.Identifiers.CVE, types.DependencyVulnerability)
-		if err == nil && lesson != nil && lesson.Url != "" {
-			additionalData.Lesson = lesson.Url
-		}
-	}
-
 	snykIssue := &snyk.Issue{
 		ID:      issue.Id,
 		Message: message,
@@ -116,13 +107,12 @@ func toIssue(engine workflow.Engine, configResolver types.ConfigResolverInterfac
 		Ecosystem:           issue.PackageManager,
 		CWEs:                issue.Identifiers.CWE,
 		CVEs:                issue.Identifiers.CVE,
-		LessonUrl:           additionalData.Lesson,
 		AdditionalData:      additionalData,
 	}
 	fingerprint := utils.CalculateFingerprintFromAdditionalData(snykIssue)
 	snykIssue.SetFingerPrint(fingerprint)
 
-	addCodeActionsAndLenses(engine, configResolver, learnService, ep, affectedFilePath, issueDepNode, snykIssue, folderConfig)
+	addCodeActionsAndLenses(engine, configResolver, affectedFilePath, issueDepNode, snykIssue, folderConfig)
 
 	return snykIssue
 }
@@ -130,15 +120,12 @@ func toIssue(engine workflow.Engine, configResolver types.ConfigResolverInterfac
 func addCodeActionsAndLenses(
 	engine workflow.Engine,
 	configResolver types.ConfigResolverInterface,
-	learnService learn.Service,
-	ep error_reporting.ErrorReporter,
 	affectedFilePath types.FilePath,
 	issueDepNode *ast.Node,
 	issue *snyk.Issue,
 	folderConfig *types.FolderConfig,
 ) {
-	// this needs to be first so that the lesson from Snyk Learn is added
-	codeActions := GetCodeActions(engine, configResolver, learnService, ep, affectedFilePath, issueDepNode, issue, folderConfig)
+	codeActions := GetCodeActions(engine, configResolver, affectedFilePath, issueDepNode, issue, folderConfig)
 
 	var codelensCommands []types.CommandData
 	for _, codeAction := range codeActions {
@@ -181,7 +168,7 @@ func getRangeFromNode(issueDepNode *ast.Node) types.Range {
 // to keep it close to the code that needs it.
 var packageIssueCacheMutex sync.Mutex //nolint:gochecknoglobals // required guard for mutable package state
 
-func convertScanResultToIssues(engine workflow.Engine, configResolver types.ConfigResolverInterface, res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte, learnService learn.Service, ep error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue, format string, folderConfig *types.FolderConfig) []types.Issue {
+func convertScanResultToIssues(engine workflow.Engine, configResolver types.ConfigResolverInterface, res *scanResult, workDir types.FilePath, targetFilePath types.FilePath, fileContent []byte, packageIssueCache map[string][]types.Issue, format string, folderConfig *types.FolderConfig) []types.Issue {
 	logger := engine.GetLogger().With().Str("method", "convertScanResultToIssues").Logger()
 	var issues []types.Issue
 
@@ -200,7 +187,7 @@ func convertScanResultToIssues(engine workflow.Engine, configResolver types.Conf
 		}
 		node := getDependencyNode(&logger, targetFilePath, ossLegacyIssue.PackageManager, ossLegacyIssue.From, fileContent, workDir)
 		sameID := byID[ossLegacyIssue.Id]
-		snykIssue := toIssue(engine, configResolver, workDir, targetFilePath, ossLegacyIssue, res, sameID, node, learnService, ep, format, folderConfig)
+		snykIssue := toIssue(engine, configResolver, workDir, targetFilePath, ossLegacyIssue, res, sameID, node, format, folderConfig)
 		packageIssueCacheMutex.Lock()
 		packageIssueCache[packageKey] = append(packageIssueCache[packageKey], snykIssue)
 		packageIssueCacheMutex.Unlock()

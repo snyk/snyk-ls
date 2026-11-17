@@ -31,19 +31,18 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/snyk-ls/application/config"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
 	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/types"
 	"github.com/snyk/snyk-ls/internal/uri"
 )
 
-// ConvertJSONToIssues converts OSS JSON output to Issue objects with optional learn service
+// ConvertJSONToIssues converts OSS JSON output to Issue objects.
 // This is a standalone version of CLIScanner.unmarshallAndRetrieveAnalysis
-func ConvertJSONToIssues(engine workflow.Engine, logger *zerolog.Logger, jsonData []byte, learnService learn.Service, workDir string, configResolver types.ConfigResolverInterface) ([]types.Issue, error) {
+func ConvertJSONToIssues(engine workflow.Engine, logger *zerolog.Logger, jsonData []byte, workDir string, configResolver types.ConfigResolverInterface) ([]types.Issue, error) {
 	ctx := ctx2.NewContextWithEngine(context.Background(), engine)
 	ctx = ctx2.NewContextWithConfigResolver(ctx, configResolver)
-	issues, err := ProcessScanResults(ctx, jsonData, error_reporting.NewTestErrorReporter(engine), learnService, make(map[string][]types.Issue), false, config.FormatMd)
+	issues, err := ProcessScanResults(ctx, jsonData, error_reporting.NewTestErrorReporter(engine), make(map[string][]types.Issue), false, config.FormatMd)
 	return issues, err
 }
 
@@ -51,7 +50,7 @@ func ConvertJSONToIssues(engine workflow.Engine, logger *zerolog.Logger, jsonDat
 // our internal issue format. It also populates the given package cache with the
 // found problems per package.
 //   - scanOutput: the output of the scan (can be either a []byte or []workflow.Data)
-func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error_reporting.ErrorReporter, learnService learn.Service, packageIssueCache map[string][]types.Issue, readFiles bool, format string) ([]types.Issue, error) {
+func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error_reporting.ErrorReporter, packageIssueCache map[string][]types.Issue, readFiles bool, format string) ([]types.Issue, error) {
 	if ctx.Err() != nil {
 		return nil, nil
 	}
@@ -89,7 +88,7 @@ func ProcessScanResults(ctx context.Context, scanOutput any, errorReporter error
 
 		fileContent := getFileContent(targetFilePath, readFiles, logger)
 
-		issues := convertScanResultToIssues(engine, configResolver, sr, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, format, folderConfig)
+		issues := convertScanResultToIssues(engine, configResolver, sr, workDir, targetFilePath, fileContent, packageIssueCache, format, folderConfig)
 		allIssues = append(allIssues, issues...)
 		return nil
 	})

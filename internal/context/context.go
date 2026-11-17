@@ -99,7 +99,6 @@ const DepScanStateAggregator = "scanStateAggregator"
 const DepFolderConfig = "folderConfig"
 const DepErrorReporter = "errorReporter"
 const DepCLIExecutor = "cliExecutor"
-const DepLearnService = "learnService"
 const DepConfigResolver = "configResolver"
 const DepWorkspace = "workspace"
 const DepEngine = "engine"
@@ -115,8 +114,7 @@ const DepCommandService = "commandService"
 const DepProgressTracker = "progressTracker"
 
 // NewContextWithDependencies returns a new Context that carries dependencies.
-// This can be used to pass pointers to injected (service) dependencies, e.g. a pointer
-// to the learn service or the cli scanner.
+// This can be used to pass pointers to injected service dependencies.
 //
 // Returns:
 //   - context.Context: the new enriched context
@@ -125,8 +123,7 @@ func NewContextWithDependencies(ctx context.Context, dependencies map[string]any
 }
 
 // DependenciesFromContext returns the dependencies stored in ctx, if any.
-// This can be used to retrieve pointers to injected (service) dependencies, e.g. a pointer
-// to the learn service or the cli scanner.
+// This can be used to retrieve pointers to injected service dependencies.
 //
 // Returns:
 //   - map[string]any: the dependencies stored in ctx

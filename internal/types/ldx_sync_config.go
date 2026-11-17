@@ -92,7 +92,6 @@ const (
 	SettingTrustedFolders               = "trusted_folders"
 	SettingToken                        = "token"
 	SettingSendErrorReports             = "send_error_reports"
-	SettingEnableSnykLearnCodeActions   = "enable_snyk_learn_code_actions"
 	SettingEnableSnykOssQuickFixActions = "enable_snyk_oss_quick_fix_code_actions"
 	SettingEnableSnykOpenBrowserActions = "enable_snyk_open_browser_actions"
 

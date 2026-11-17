@@ -46,8 +46,6 @@ import (
 	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
-	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
 	"github.com/snyk/snyk-ls/infrastructure/snyk_api"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
 	ctx2 "github.com/snyk/snyk-ls/internal/context"
@@ -139,8 +137,6 @@ func setupTestScanner(t *testing.T) (*Scanner, workflow.Engine) {
 	scanner := New(engine,
 		performance.NewInstrumentor(),
 		&snyk_api.FakeApiClient{CodeEnabled: true},
-		newTestCodeErrorReporter(),
-		setupMockLearnServiceNoLessons(t),
 		fakeFeatureFlagService,
 		notification.NewNotifier(),
 		NewCodeInstrumentor(),
@@ -179,8 +175,6 @@ func TestUploadAndAnalyze(t *testing.T) {
 		scanner := New(engine,
 			performance.NewInstrumentor(),
 			&snyk_api.FakeApiClient{CodeEnabled: true},
-			newTestCodeErrorReporter(),
-			setupMockLearnServiceNoLessons(t),
 			featureflag.NewFakeService(),
 			mockNotifier,
 			NewCodeInstrumentor(),
@@ -211,8 +205,6 @@ func TestUploadAndAnalyze(t *testing.T) {
 			scanner := New(engine,
 				performance.NewInstrumentor(),
 				&snyk_api.FakeApiClient{CodeEnabled: true},
-				newTestCodeErrorReporter(),
-				setupMockLearnServiceNoLessons(t),
 				featureflag.NewFakeService(),
 				notification.NewNotifier(),
 				NewCodeInstrumentor(),
@@ -257,8 +249,6 @@ func TestUploadAndAnalyze_RepositoryUrlOverride(t *testing.T) {
 		scanner := New(engine,
 			performance.NewInstrumentor(),
 			&snyk_api.FakeApiClient{CodeEnabled: true},
-			newTestCodeErrorReporter(),
-			setupMockLearnServiceNoLessons(t),
 			featureflag.NewFakeService(),
 			notification.NewNotifier(),
 			NewCodeInstrumentor(),
@@ -361,8 +351,6 @@ func TestUploadAndAnalyzeWithIgnores(t *testing.T) {
 		engine,
 		performance.NewInstrumentor(),
 		&snyk_api.FakeApiClient{CodeEnabled: true},
-		newTestCodeErrorReporter(),
-		setupMockLearnServiceNoLessons(t),
 		featureflag.NewFakeService(),
 		notification.NewNotifier(),
 		NewCodeInstrumentor(),
@@ -406,7 +394,7 @@ func Test_Scan_UsesConfigResolverFromContext(t *testing.T) {
 		Return(false).
 		Times(1)
 
-	scanner := New(engine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: false}, newTestCodeErrorReporter(), nil, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, defaultResolver(engine), testutil.NewDrainedProgressTracker())
+	scanner := New(engine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: false}, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, defaultResolver(engine), testutil.NewDrainedProgressTracker())
 	folderConfig := &types.FolderConfig{FolderPath: types.FilePath(t.TempDir())}
 	ctx := ctx2.NewContextWithConfigResolver(context.Background(), mockResolver)
 	ctx = ctx2.NewContextWithFolderConfig(ctx, folderConfig)
@@ -430,7 +418,7 @@ func Test_Scan_FallsBackToStructFieldWhenNoResolverInContext(t *testing.T) {
 		Return(false).
 		Times(1)
 
-	scanner := New(engine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: false}, newTestCodeErrorReporter(), nil, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, mockResolver, testutil.NewDrainedProgressTracker())
+	scanner := New(engine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: false}, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, mockResolver, testutil.NewDrainedProgressTracker())
 	folderConfig := &types.FolderConfig{FolderPath: types.FilePath(t.TempDir())}
 	ctx := ctx2.NewContextWithFolderConfig(context.Background(), folderConfig)
 
@@ -471,7 +459,7 @@ func Test_Scan(t *testing.T) {
 
 		resolver := testutil.DefaultConfigResolver(engine)
 
-		scanner := New(engine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: false}, newTestCodeErrorReporter(), nil, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, defaultResolver(engine), testutil.NewDrainedProgressTracker())
+		scanner := New(engine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: false}, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, defaultResolver(engine), testutil.NewDrainedProgressTracker())
 		tempDir, _, _ := setupIgnoreWorkspace(t)
 
 		types.SetSastSettings(realConfig, tempDir, &sast_contract.SastResponse{SastEnabled: false})
@@ -527,8 +515,6 @@ func Test_Scan(t *testing.T) {
 				mockEngine,
 				performance.NewInstrumentor(),
 				snykApiMock,
-				newTestCodeErrorReporter(),
-				setupMockLearnServiceNoLessons(t),
 				fakeFeatureFlagService,
 				notification.NewNotifier(),
 				NewCodeInstrumentor(),
@@ -552,57 +538,6 @@ func Test_Scan(t *testing.T) {
 				"the consistent ignores flag on the folder config decides which upload path the scan takes")
 		})
 	}
-}
-
-func Test_enhanceIssuesDetails(t *testing.T) {
-	engine := testutil.UnitTest(t)
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	// Arrange
-	learnMock := mock_learn.NewMockService(ctrl)
-	errorReporterMock := newTestCodeErrorReporter()
-
-	expectedLessonUrl := "https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide"
-
-	learnMock.
-		EXPECT().
-		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(&learn.Lesson{Url: expectedLessonUrl}, nil).AnyTimes()
-
-	scanner := New(engine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, errorReporterMock, learnMock, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, defaultResolver(engine), testutil.NewDrainedProgressTracker())
-
-	issues := []types.Issue{
-		&snyk.Issue{
-			CWEs:      []string{"CWE-123", "CWE-456"},
-			ID:        "java/DontUsePrintStackTrace",
-			Severity:  2,
-			LessonUrl: expectedLessonUrl,
-			AdditionalData: snyk.CodeIssueData{
-				Title:          "Allocation of Resources Without Limits or Throttling",
-				IsSecurityType: true,
-				Message:        "Either rethrow this java.lang.InterruptedException or set the interrupted flag on the current thread with 'Thread.currentThread().interrupt()'. Otherwise the information that the current thread was interrupted will be lost.",
-				PriorityScore:  890,
-			},
-		},
-	}
-
-	// Act
-	scanner.enhanceIssuesDetails(issues)
-	// Create a fake API client with the feature flag disabled
-	apiClient := &snyk_api.FakeApiClient{
-		CodeEnabled: true,
-	}
-	// Set the response for the FeatureFlagStatus method
-	apiClient.SetResponse("FeatureFlagStatus", snyk_api.FFResponse{Ok: false})
-
-	// invoke method under test
-	htmlRenderer, err := GetHTMLRenderer(engine, featureflag.New(engine.GetConfiguration(), engine.GetLogger(), engine, testutil.DefaultConfigResolver(engine)))
-	assert.Nil(t, err)
-	html := htmlRenderer.GetDetailsHtml(t.Context(), issues[0])
-	// Assert
-	assert.Equal(t, expectedLessonUrl, issues[0].GetLessonUrl())
-	assert.Contains(t, html, `href="https://learn.snyk.io/lesson/no-rate-limiting/?loc=ide"`)
 }
 
 func setupIgnoreWorkspace(t *testing.T) (tempDir types.FilePath, ignoredFilePath types.FilePath, notIgnoredFilePath types.FilePath) {
@@ -647,7 +582,7 @@ func writeGitIgnoreIntoDir(t *testing.T, ignorePatterns string, tempDir types.Fi
 
 func Test_IsEnabledForFolder(t *testing.T) {
 	engine := testutil.UnitTest(t)
-	scanner := New(engine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), nil, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, defaultResolver(engine), testutil.NewDrainedProgressTracker())
+	scanner := New(engine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, defaultResolver(engine), testutil.NewDrainedProgressTracker())
 	folderConfig := &types.FolderConfig{FolderPath: types.FilePath(t.TempDir())}
 	t.Run(
 		"should return true if Snyk Code is generally enabled", func(t *testing.T) {
@@ -677,8 +612,6 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			engine,
 			performance.NewInstrumentor(),
 			&snyk_api.FakeApiClient{CodeEnabled: true},
-			newTestCodeErrorReporter(),
-			setupMockLearnServiceNoLessons(t),
 			featureflag.NewFakeService(),
 			notification.NewNotifier(),
 			NewCodeInstrumentor(),
@@ -741,8 +674,6 @@ func TestUploadAnalyzeWithAutofix(t *testing.T) {
 			engine,
 			performance.NewInstrumentor(),
 			&snyk_api.FakeApiClient{CodeEnabled: true},
-			newTestCodeErrorReporter(),
-			setupMockLearnServiceNoLessons(t),
 			featureflag.NewFakeService(),
 			notification.NewNotifier(),
 			NewCodeInstrumentor(),
@@ -813,8 +744,6 @@ func TestDeltaScanUsesFolderOrg(t *testing.T) {
 		engine,
 		performance.NewInstrumentor(),
 		&snyk_api.FakeApiClient{CodeEnabled: true},
-		newTestCodeErrorReporter(),
-		setupMockLearnServiceNoLessons(t),
 		featureflag.NewFakeService(),
 		notification.NewNotifier(),
 		NewCodeInstrumentor(),
@@ -1005,8 +934,6 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 			mockEngine,
 			performance.NewInstrumentor(),
 			&snyk_api.FakeApiClient{CodeEnabled: true},
-			newTestCodeErrorReporter(),
-			setupMockLearnServiceNoLessons(t),
 			fakeFeatureFlagService,
 			notification.NewNotifier(),
 			NewCodeInstrumentor(),
@@ -1036,7 +963,7 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		folderConfig := setupFolderConfig(t, realConfig, engine.GetLogger(), tempDir, folderOrg)
 		fakeFeatureFlagService.PopulateFolderConfig(folderConfig)
 
-		scanner := New(mockEngine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), nil, fakeFeatureFlagService, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, defaultResolver(mockEngine), testutil.NewDrainedProgressTracker())
+		scanner := New(mockEngine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, fakeFeatureFlagService, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, defaultResolver(mockEngine), testutil.NewDrainedProgressTracker())
 
 		ctx := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig)
 		issues, err := scanner.Scan(ctx, types.FilePath("test.go"))
@@ -1073,9 +1000,8 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		folderConfig2 := setupFolderConfig(t, realConfig, engine.GetLogger(), tempDir2, org2)
 		fakeFeatureFlagService2.PopulateFolderConfig(folderConfig2)
 
-		learnMock := setupMockLearnServiceNoLessons(t)
-		scanner1 := New(mockEngine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, fakeFeatureFlagService1, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, defaultResolver(mockEngine), testutil.NewDrainedProgressTracker())
-		scanner2 := New(mockEngine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), learnMock, fakeFeatureFlagService2, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, defaultResolver(mockEngine), testutil.NewDrainedProgressTracker())
+		scanner1 := New(mockEngine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, fakeFeatureFlagService1, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, defaultResolver(mockEngine), testutil.NewDrainedProgressTracker())
+		scanner2 := New(mockEngine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, fakeFeatureFlagService2, notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, defaultResolver(mockEngine), testutil.NewDrainedProgressTracker())
 
 		// Scan with org1 (should succeed since SAST is enabled)
 		ctx1 := ctx2.NewContextWithFolderConfig(t.Context(), folderConfig1)
@@ -1090,17 +1016,6 @@ func Test_Scan_WithFolderSpecificOrganization(t *testing.T) {
 		assert.ErrorContains(t, err2, utils.ErrSnykCodeNotEnabled)
 		assert.Empty(t, issues2)
 	})
-}
-
-// setupMockLearnServiceNoLessons creates a mock learn service that returns an empty lesson for any GetLesson call.
-// This is the default setup used by most tests that don't care about the learn service behavior.
-func setupMockLearnServiceNoLessons(t *testing.T) *mock_learn.MockService {
-	t.Helper()
-	learnMock := mock_learn.NewMockService(gomock.NewController(t))
-	learnMock.EXPECT().
-		GetLesson(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(&learn.Lesson{}, nil).AnyTimes()
-	return learnMock
 }
 
 func Test_resolveOrgToUUID(t *testing.T) {
@@ -1193,7 +1108,7 @@ func Test_CodeConfig_UsesFolderOrganization(t *testing.T) {
 
 	// Create a scanner to test CreateCodeScanner (the actual function used in scanning)
 	// This is called via sc.codeScanner() in UploadAndAnalyze during actual scans
-	scanner := New(engine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), nil, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, defaultResolver(engine), testutil.NewDrainedProgressTracker())
+	scanner := New(engine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, defaultResolver(engine), testutil.NewDrainedProgressTracker())
 
 	// Test folder 1
 	t.Run("folder 1", func(t *testing.T) {
@@ -1231,7 +1146,7 @@ func Test_CodeConfig_FallsBackToGlobalOrg(t *testing.T) {
 	require.NotNil(t, folderConfig, "FolderConfig should not be nil")
 
 	// Create a scanner to test createCodeConfig
-	scanner := New(engine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), nil, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, defaultResolver(engine), testutil.NewDrainedProgressTracker())
+	scanner := New(engine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, defaultResolver(engine), testutil.NewDrainedProgressTracker())
 
 	// Verify the CodeConfig has the correct org
 	codeConfig, err := scanner.createCodeConfig(folderConfig)
@@ -1281,7 +1196,7 @@ func Test_createCodeConfig_UsesOrgFromFolderConfigNotFromPath(t *testing.T) {
 	passedFolderConfig := &types.FolderConfig{FolderPath: scanPath}
 	passedFolderConfig.ConfigResolver = types.NewMinimalConfigResolver(passedConf)
 
-	scanner := New(engine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, newTestCodeErrorReporter(), nil, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, defaultResolver(engine), testutil.NewDrainedProgressTracker())
+	scanner := New(engine, performance.NewInstrumentor(), &snyk_api.FakeApiClient{CodeEnabled: true}, featureflag.NewFakeService(), notification.NewNotifier(), NewCodeInstrumentor(), newTestCodeErrorReporter(), NewFakeCodeScannerClient, defaultResolver(engine), testutil.NewDrainedProgressTracker())
 
 	// Act - call createCodeConfig with the passed FolderConfig
 	codeConfig, err := scanner.createCodeConfig(passedFolderConfig)

@@ -30,7 +30,7 @@ import (
 	"github.com/snyk/snyk-ls/internal/types"
 )
 
-func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
+func Test_OssDetailsPanel_html(t *testing.T) {
 	engine := testutil.UnitTest(t)
 	expectedVariables := []string{"${headerEnd}", "${cspSource}", "${ideStyle}", "${nonce}"}
 	slices.Sort(expectedVariables)
@@ -78,65 +78,6 @@ func Test_OssDetailsPanel_html_noLearn(t *testing.T) {
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, strings.Join(issueAdditionalData.From, " &gt; ")))
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, strings.Join(issue2.From, " &gt; ")))
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "<li>list</li>"))
-	assert.False(t, strings.Contains(issueDetailsPanelHtml, "Learn about this issue type"))
-}
-
-func Test_OssDetailsPanel_html_withLearn(t *testing.T) {
-	engine := testutil.UnitTest(t)
-
-	issueAdditionalData := snyk.OssIssueData{
-		Title:       "myTitle",
-		Name:        "myIssue",
-		Description: "- list",
-		From:        []string{"1", "2", "3", "4"},
-		Lesson:      "something",
-	}
-
-	issue := &snyk.Issue{
-		ID:             "randomId",
-		Severity:       types.Critical,
-		AdditionalData: issueAdditionalData,
-	}
-
-	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issueAdditionalData)
-
-	// invoke methode under test
-	htmlRenderer, err := NewHtmlRenderer(engine)
-	assert.NoError(t, err)
-	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
-
-	assert.True(t, strings.Contains(issueDetailsPanelHtml, "Learn about this issue type"))
-}
-
-func Test_OssDetailsPanel_html_withLearn_withCustomEndpoint(t *testing.T) {
-	engine := testutil.UnitTest(t)
-
-	issueAdditionalData := snyk.OssIssueData{
-		Title:       "myTitle",
-		Name:        "myIssue",
-		Description: "- list",
-		From:        []string{"1", "2", "3", "4"},
-		Lesson:      "something",
-		MatchingIssues: []snyk.OssIssueData{
-			{
-				From: []string{"1", "2", "3", "4"},
-			},
-		},
-	}
-
-	issue := &snyk.Issue{
-		ID:             "randomId",
-		Severity:       types.Critical,
-		AdditionalData: issueAdditionalData,
-	}
-
-	issueAdditionalData.MatchingIssues = append(issueAdditionalData.MatchingIssues, issueAdditionalData)
-
-	htmlRenderer, err := NewHtmlRenderer(engine)
-	assert.NoError(t, err)
-	issueDetailsPanelHtml := htmlRenderer.GetDetailsHtml(issue)
-
-	assert.Truef(t, strings.Contains(issueDetailsPanelHtml, "learn."), issueDetailsPanelHtml)
 }
 
 func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
@@ -211,7 +152,6 @@ func Test_OssDetailsPanel_html_moreDetailedPaths(t *testing.T) {
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, strings.Join(issueAdditionalData.From, " &gt; ")))
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, strings.Join(issue2.From, " &gt; ")))
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "<li>list</li>"))
-	assert.False(t, strings.Contains(issueDetailsPanelHtml, "Learn about this issue type"))
 	assert.True(t, strings.Contains(issueDetailsPanelHtml, "...and"))
 	// Test that the computed CVSS calculator URL is present
 	expectedUrl := types.GetCvssCalculatorUrl(issueAdditionalData.CvssSources)

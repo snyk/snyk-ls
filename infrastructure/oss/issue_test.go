@@ -19,15 +19,10 @@ package oss
 import (
 	"testing"
 
-	"github.com/golang/mock/gomock"
-	"github.com/snyk/go-application-framework/pkg/configuration/configresolver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/snyk/snyk-ls/domain/snyk"
-	"github.com/snyk/snyk-ls/infrastructure/learn"
-	"github.com/snyk/snyk-ls/infrastructure/learn/mock_learn"
-	"github.com/snyk/snyk-ls/internal/observability/error_reporting"
 	"github.com/snyk/snyk-ls/internal/testutil"
 	"github.com/snyk/snyk-ls/internal/types"
 )
@@ -94,19 +89,10 @@ func TestConvertScanResultToIssues_SameIdMultiplePackages_MatchingIssuesIncludes
 	targetFilePath := types.FilePath("/test/workdir/package.json")
 	fileContent := []byte(`{"dependencies":{"lodash":"4.17.4"}}`)
 
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	learnService := mock_learn.NewMockService(ctrl)
-	learnService.EXPECT().
-		GetLesson(gomock.Any(), issueID, gomock.Any(), gomock.Any(), types.DependencyVulnerability).
-		Return(&learn.Lesson{Url: "https://learn.snyk.io/lesson/test"}, nil).
-		AnyTimes()
-
-	errorReporter := error_reporting.NewTestErrorReporter(engine)
 	packageIssueCache := make(map[string][]types.Issue)
 	configResolver := testutil.DefaultConfigResolver(engine)
 
-	issues := convertScanResultToIssues(engine, configResolver, scanResult, workDir, targetFilePath, fileContent, learnService, errorReporter, packageIssueCache, engine.GetConfiguration().GetString(configresolver.UserGlobalKey(types.SettingFormat)), nil)
+	issues := convertScanResultToIssues(engine, configResolver, scanResult, workDir, targetFilePath, fileContent, packageIssueCache, "", nil)
 
 	require.Len(t, issues, 3)
 	for _, i := range issues {

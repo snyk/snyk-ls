@@ -62,10 +62,9 @@ var allSettings = []string{
 	SettingSecureAtInceptionExecutionFreq,
 	SettingToken,
 	SettingSendErrorReports,
-	SettingEnableSnykLearnCodeActions,
 	SettingEnableSnykOssQuickFixActions,
 	SettingEnableSnykOpenBrowserActions,
-	// Org-scope (15 — was 13, enabled_severities split into 4 severity_filter_* keys)
+	// Org-scope
 	SettingSeverityFilterCritical,
 	SettingSeverityFilterHigh,
 	SettingSeverityFilterMedium,
@@ -177,7 +176,6 @@ var expectedAnnotations = map[string]struct {
 	// Write-only (machine-scope)
 	SettingToken:                        {machineScope, "", "Token", "token", true},
 	SettingSendErrorReports:             {machineScope, "", "Send Error Reports", "sendErrorReports", true},
-	SettingEnableSnykLearnCodeActions:   {machineScope, "", "Snyk Learn Code Actions", "enableSnykLearnCodeActions", true},
 	SettingEnableSnykOssQuickFixActions: {machineScope, "", "Snyk OSS Quick Fix Code Actions", "enableSnykOSSQuickFixCodeActions", true},
 	SettingEnableSnykOpenBrowserActions: {machineScope, "", "Snyk Open Browser Actions", "enableSnykOpenBrowserActions", true},
 }
@@ -188,7 +186,7 @@ func TestRegisterAllConfigurations_FC048_ProducesFlagsWithCorrectAnnotations(t *
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	RegisterAllConfigurations(fs)
 
-	assert.Len(t, allSettings, 64, "allSettings should have 64 entries (30 machine + 5 write-only + 16 org + 13 folder)")
+	assert.Len(t, allSettings, 63, "allSettings should have 63 entries (30 machine + 4 write-only + 16 org + 13 folder)")
 
 	for _, name := range allSettings {
 		t.Run(name, func(t *testing.T) {
@@ -233,7 +231,6 @@ func TestRegisterAllConfigurations_FC048_ProducesFlagsWithCorrectAnnotations(t *
 var writeOnlySettingsForTest = []string{
 	SettingToken,
 	SettingSendErrorReports,
-	SettingEnableSnykLearnCodeActions,
 	SettingEnableSnykOssQuickFixActions,
 	SettingEnableSnykOpenBrowserActions,
 }
@@ -353,7 +350,7 @@ func TestIsWriteOnlySetting(t *testing.T) {
 	fm := fmFromFlags(t)
 	for _, name := range []string{
 		SettingToken, SettingSendErrorReports,
-		SettingEnableSnykLearnCodeActions, SettingEnableSnykOssQuickFixActions,
+		SettingEnableSnykOssQuickFixActions,
 		SettingEnableSnykOpenBrowserActions,
 	} {
 		assert.True(t, IsWriteOnlySetting(fm, name), "expected %q to be write-only", name)

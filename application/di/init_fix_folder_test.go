@@ -89,7 +89,7 @@ func TestDI_NewService_FixFolderProvider_Wired(t *testing.T) {
 	svc := command.NewService(
 		engine,
 		engine.GetLogger(),
-		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil, nil, nil,
 		provider,
 		t.Context(),
 	)

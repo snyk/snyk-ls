@@ -198,27 +198,6 @@ p + h2, p + h3 {
   border: 1px solid var(--border-color);
 }
 
-.sn-learn {
-  display: flex;
-  align-items: center;
-  gap: 0.5em;
-  margin-top: 10px;
-  opacity: 0;
-  height: 0;
-}
-
-.sn-learn.show {
-  opacity: 1;
-  height: auto;
-  transition-duration: 500ms;
-  transition-property: height, opacity;
-}
-
 code{
   color: var(--text-color);
-}
-
-.lesson-link {
-  display: flex;
-  align-items: center;
 }
