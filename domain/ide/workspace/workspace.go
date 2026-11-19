@@ -214,20 +214,24 @@ func (w *Workspace) IssuesForRange(path types.FilePath, r types.Range) []types.I
 	return nil
 }
 
-// GetFolderContaining returns the first folder that contains the given path, or
-// nil if none does.
+// GetFolderContaining returns the deepest folder that contains the given path, or
+// nil if none does. With nested workspace folders the innermost one owns the path.
 //
 // CONCURRENCY: callers must NOT hold w.mutex when calling this function — it reads
 // w.folders bare (no lock). RemoveFolder and DeleteFile already call it while
 // holding w.mutex.Lock(); adding a lock here would deadlock those callers.
 // A follow-up is needed to audit and protect all w.folders iterators uniformly.
 func (w *Workspace) GetFolderContaining(path types.FilePath) types.Folder {
+	var deepestFolder types.Folder
 	for _, folder := range w.folders {
-		if folder.Contains(path) {
-			return folder
+		if !folder.Contains(path) {
+			continue
+		}
+		if deepestFolder == nil || len(folder.Path()) > len(deepestFolder.Path()) {
+			deepestFolder = folder
 		}
 	}
-	return nil
+	return deepestFolder
 }
 
 func (w *Workspace) Folders() []types.Folder {
