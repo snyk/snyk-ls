@@ -22,6 +22,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/rs/zerolog"
+
+	"github.com/snyk/snyk-ls/application/config"
 	"github.com/snyk/snyk-ls/domain/snyk"
 	"github.com/snyk/snyk-ls/infrastructure/featureflag"
 	"github.com/snyk/snyk-ls/infrastructure/utils"
@@ -48,6 +51,13 @@ type FolderData struct {
 	// line: when Agent Fix is off we hide the line entirely rather than surface a
 	// fix the user cannot action.
 	AgentFixEnabled bool
+	// Organization is the effective Snyk organization for this folder (from folder
+	// config). Used in org-disabled product tooltips so support cases can see which
+	// org the plugin resolved.
+	Organization string
+	// OrganizationSetByUser is true when the folder's org was chosen in settings
+	// rather than auto-selected.
+	OrganizationSetByUser bool
 }
 
 // fileIconProvider is satisfied by issue data types that can supply a file-node icon
@@ -136,6 +146,10 @@ func (b *TreeBuilder) BuildTree(workspace types.Workspace) TreeViewData {
 		if cfg != nil {
 			fd.ConsistentIgnoresEnabled = cfg.GetFeatureFlag(featureflag.SnykCodeConsistentIgnores)
 			if conf := cfg.Conf(); conf != nil {
+				nopLogger := zerolog.Nop()
+				fd.Organization = config.FolderOrganizationFromConfig(conf, cfg.FolderPath, &nopLogger)
+				fd.OrganizationSetByUser = types.ReadFolderConfigSnapshot(conf, cfg.FolderPath).OrgSetByUser
+
 				// Agent Fix is gated per-folder here (each folder's Code node reflects its
 				// own SAST settings). This intentionally differs from the summary panel,
 				// which is workspace-wide and uses any-folder enablement
@@ -386,7 +400,7 @@ func (b *TreeBuilder) buildProductNodes(fd FolderData) []TreeNode {
 		if !enabled {
 			tooltip = productSettingsDisabledTooltip(p)
 		} else if scanError != "" {
-			tooltip = productDisabledTooltip(p, scanError)
+			tooltip = productDisabledTooltip(p, scanError, fd.Organization, fd.OrganizationSetByUser)
 		} else if scanRegistered && !scanning && totalIssues == 0 {
 			// Surfaces the ✅ tick's meaning on hover; the child node carries any
 			// filter-aware detail.
@@ -967,14 +981,26 @@ func productSettingsDisabledTooltip(p product.Product) string {
 // scan error. The wording is tailored to *why* it didn't run so the user knows
 // whether they can act on it:
 //   - org/entitlement disablement ("…not enabled for this organization") is not
-//     self-serve, so the copy points the user at their org admin.
+//     self-serve, so the copy points the user at their org admin. When the
+//     resolved Organization is known, the tooltip names it and whether it was
+//     auto-selected or chosen in settings.
 //   - folder-level disablement is a plugin-settings choice (folder config), so it
 //     reuses the same settings message as the product toggle being off.
 //   - anything else is a genuine scan failure the user can inspect via the
 //     click-to-open error overlay.
-func productDisabledTooltip(p product.Product, scanError string) string {
+func productDisabledTooltip(p product.Product, scanError string, organization string, organizationSetByUser bool) string {
 	switch scanError {
 	case utils.ErrSnykCodeNotEnabled, utils.ErrSnykSecretsNotEnabled:
+		if organization != "" {
+			source := "auto-selected"
+			if organizationSetByUser {
+				source = "chosen in settings"
+			}
+			return fmt.Sprintf(
+				"%s is disabled for your Snyk organization (%s, %s). If that is not the organization you expected, change it in the Snyk plugin settings. Otherwise contact your org admin if you expected it to be available.",
+				productDisplayName(p), organization, source,
+			)
+		}
 		return fmt.Sprintf("%s is disabled for your Snyk organization. Contact your org admin if you expected it to be available.", productDisplayName(p))
 	case utils.ErrSnykCodeNotEnabledForFolder, utils.ErrSnykSecretsNotEnabledForFolder,
 		utils.ErrSnykIacNotEnabledForFolder, utils.ErrSnykOssNotEnabledForFolder:

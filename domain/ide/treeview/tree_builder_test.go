@@ -860,6 +860,86 @@ func TestBuildTree_ReadsAgentFixEnabledFromSastSettings(t *testing.T) {
 	}
 }
 
+// TestBuildTree_ReadsOrganizationFromFolderConfig exercises BuildTree wiring that
+// fills FolderData.Organization and OrganizationSetByUser from real folder config,
+// then surfaces them on the Code "disabled at organization" tooltip.
+func TestBuildTree_ReadsOrganizationFromFolderConfig(t *testing.T) {
+	cases := []struct {
+		name                string
+		preferredOrg        string
+		autoDeterminedOrg   string
+		orgSetByUser        bool
+		wantOrgInTooltip    string
+		wantSourcePhrase    string
+		wantNotSourcePhrase string
+	}{
+		{
+			name:                "auto-selected organization from AutoDeterminedOrg",
+			autoDeterminedOrg:   "folder-auto-org",
+			orgSetByUser:        false,
+			wantOrgInTooltip:    "folder-auto-org",
+			wantSourcePhrase:    "auto-selected",
+			wantNotSourcePhrase: "chosen in settings",
+		},
+		{
+			name:                "organization chosen in settings from PreferredOrg",
+			preferredOrg:        "folder-settings-org",
+			orgSetByUser:        true,
+			wantOrgInTooltip:    "folder-settings-org",
+			wantSourcePhrase:    "chosen in settings",
+			wantNotSourcePhrase: "auto-selected",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			engine := testutil.UnitTest(t)
+			conf := engine.GetConfiguration()
+			folderPath := types.FilePath("/project")
+
+			types.SetPreferredOrgAndOrgSetByUser(conf, folderPath, tc.preferredOrg, tc.orgSetByUser)
+			if tc.autoDeterminedOrg != "" {
+				types.SetAutoDeterminedOrg(conf, folderPath, tc.autoDeterminedOrg)
+			}
+
+			fc := &types.FolderConfig{
+				FolderPath:     folderPath,
+				ConfigResolver: types.NewMinimalConfigResolver(conf),
+				Engine:         engine,
+			}
+
+			ctrl := gomock.NewController(t)
+			folder := mock_types.NewMockFolder(ctrl)
+			folder.EXPECT().Path().Return(folderPath).AnyTimes()
+			folder.EXPECT().Name().Return("project").AnyTimes()
+			folder.EXPECT().FolderConfigReadOnly().Return(fc).AnyTimes()
+			folder.EXPECT().DisplayableIssueTypesFromConfig(gomock.Any()).
+				Return(map[product.FilterableIssueType]bool{product.FilterableIssueTypeCodeSecurity: true}).AnyTimes()
+			folder.EXPECT().IsDeltaFindingsEnabledFromConfig(gomock.Any()).Return(false).AnyTimes()
+			folder.EXPECT().IssueViewOptionsFromConfig(gomock.Any()).Return(types.IssueViewOptions{}).AnyTimes()
+
+			ff := &fakeFilteringFolder{MockFolder: folder, issues: nil}
+
+			ws := mock_types.NewMockWorkspace(ctrl)
+			ws.EXPECT().Folders().Return([]types.Folder{ff}).AnyTimes()
+			ws.EXPECT().GetFolderTrust().Return([]types.Folder{ff}, nil).AnyTimes()
+
+			builder := newBuilderWithCompletedScans()
+			builder.SetProductScanErrors(map[types.FilePath]map[product.Product]string{
+				folderPath: {product.ProductCode: utils.ErrSnykCodeNotEnabled},
+			})
+			data := builder.BuildTree(ws)
+
+			codeNode := findChildByProduct(data.Nodes, product.ProductCode)
+			require.NotNil(t, codeNode)
+			assert.Contains(t, codeNode.Tooltip, "disabled for your Snyk organization")
+			assert.Contains(t, codeNode.Tooltip, tc.wantOrgInTooltip)
+			assert.Contains(t, codeNode.Tooltip, tc.wantSourcePhrase)
+			assert.NotContains(t, codeNode.Tooltip, tc.wantNotSourcePhrase)
+			assert.Contains(t, codeNode.Tooltip, "org admin")
+		})
+	}
+}
+
 func TestBuildTree_AllUntrusted_ShowsBannerAndDimmedFolderNode(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	untrusted := mock_types.NewMockFolder(ctrl)
@@ -1561,23 +1641,93 @@ func TestBuildTree_DisabledScanner_TooltipVariesByReason(t *testing.T) {
 	})
 
 	t.Run("disabled at the organization", func(t *testing.T) {
+		const existingCodeTooltip = "Code Security is disabled for your Snyk organization. Contact your org admin if you expected it to be available."
+		const existingSecretsTooltip = "Secrets is disabled for your Snyk organization. Contact your org admin if you expected it to be available."
+
 		tests := []struct {
-			name           string
-			product        product.Product
-			issueType      product.FilterableIssueType
-			disabledErrMsg string
+			name                  string
+			product               product.Product
+			issueType             product.FilterableIssueType
+			disabledErrMsg        string
+			organization          string
+			organizationSetByUser bool
+			wantExact             string
+			wantContains          []string
+			wantNotContains       []string
 		}{
 			{
-				name:           "Code",
+				name:           "Code without organization keeps existing text",
 				product:        product.ProductCode,
 				issueType:      product.FilterableIssueTypeCodeSecurity,
 				disabledErrMsg: utils.ErrSnykCodeNotEnabled,
+				wantExact:      existingCodeTooltip,
 			},
 			{
-				name:           "Secrets",
+				name:           "Secrets without organization keeps existing text",
 				product:        product.ProductSecrets,
 				issueType:      product.FilterableIssueTypeSecrets,
 				disabledErrMsg: utils.ErrSnykSecretsNotEnabled,
+				wantExact:      existingSecretsTooltip,
+			},
+			{
+				name:                  "Code with auto-selected organization names it",
+				product:               product.ProductCode,
+				issueType:             product.FilterableIssueTypeCodeSecurity,
+				disabledErrMsg:        utils.ErrSnykCodeNotEnabled,
+				organization:          "my-auto-org",
+				organizationSetByUser: false,
+				wantContains: []string{
+					"disabled for your Snyk organization",
+					"my-auto-org",
+					"auto-selected",
+					"org admin",
+					"Snyk plugin settings",
+				},
+			},
+			{
+				name:                  "Code with organization chosen in settings names it",
+				product:               product.ProductCode,
+				issueType:             product.FilterableIssueTypeCodeSecurity,
+				disabledErrMsg:        utils.ErrSnykCodeNotEnabled,
+				organization:          "my-settings-org",
+				organizationSetByUser: true,
+				wantContains: []string{
+					"disabled for your Snyk organization",
+					"my-settings-org",
+					"chosen in settings",
+					"org admin",
+					"Snyk plugin settings",
+				},
+				wantNotContains: []string{"auto-selected"},
+			},
+			{
+				name:                  "Secrets with auto-selected organization names it",
+				product:               product.ProductSecrets,
+				issueType:             product.FilterableIssueTypeSecrets,
+				disabledErrMsg:        utils.ErrSnykSecretsNotEnabled,
+				organization:          "secrets-auto-org",
+				organizationSetByUser: false,
+				wantContains: []string{
+					"disabled for your Snyk organization",
+					"secrets-auto-org",
+					"auto-selected",
+					"org admin",
+				},
+			},
+			{
+				name:                  "Secrets with organization chosen in settings names it",
+				product:               product.ProductSecrets,
+				issueType:             product.FilterableIssueTypeSecrets,
+				disabledErrMsg:        utils.ErrSnykSecretsNotEnabled,
+				organization:          "secrets-settings-org",
+				organizationSetByUser: true,
+				wantContains: []string{
+					"disabled for your Snyk organization",
+					"secrets-settings-org",
+					"chosen in settings",
+					"org admin",
+				},
+				wantNotContains: []string{"auto-selected"},
 			},
 		}
 		for _, tt := range tests {
@@ -1588,13 +1738,22 @@ func TestBuildTree_DisabledScanner_TooltipVariesByReason(t *testing.T) {
 				})
 				data := builder.BuildTreeFromFolderData([]FolderData{{
 					FolderPath: "/project", FolderName: "project",
-					SupportedIssueTypes: map[product.FilterableIssueType]bool{tt.issueType: true},
+					SupportedIssueTypes:   map[product.FilterableIssueType]bool{tt.issueType: true},
+					Organization:          tt.organization,
+					OrganizationSetByUser: tt.organizationSetByUser,
 				}})
 
 				productNode := findChildByProduct(data.Nodes, tt.product)
 				require.NotNil(t, productNode)
-				assert.Contains(t, productNode.Tooltip, "disabled for your Snyk organization")
-				assert.Contains(t, productNode.Tooltip, "org admin")
+				if tt.wantExact != "" {
+					assert.Equal(t, tt.wantExact, productNode.Tooltip)
+				}
+				for _, s := range tt.wantContains {
+					assert.Contains(t, productNode.Tooltip, s)
+				}
+				for _, s := range tt.wantNotContains {
+					assert.NotContains(t, productNode.Tooltip, s)
+				}
 			})
 		}
 	})
