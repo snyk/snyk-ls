@@ -235,54 +235,64 @@ func TestGetAbsTargetFilePath_FallbackAndNonFallbackCases(t *testing.T) {
 
 		assert.Equal(t, types.FilePath(filepath.Join(workDir, "package.json")), actual)
 	})
+}
 
-	t.Run("returns path inside workDir for declared module without a build file", func(t *testing.T) {
-		workDir := t.TempDir()
-		contextPath := types.FilePath(workDir)
+func TestGetAbsTargetFilePath_DeclaredModuleWithoutFile(t *testing.T) {
+	testsupport.NotOnWindows(t, "filepath is os dependent")
+	logger := testutil.UnitTest(t).GetLogger()
 
-		actual := getAbsTargetFilePath(logger, workDir, "frontend/build.gradle", types.FilePath(workDir), contextPath)
-
-		assert.Equal(t, types.FilePath(filepath.Join(workDir, "frontend", "build.gradle")), actual)
-	})
-
-	t.Run("resolves declared module relative to the scan root inside workDir", func(t *testing.T) {
-		workDir := t.TempDir()
-		scanRoot := filepath.Join(workDir, "sub")
-		require.NoError(t, os.MkdirAll(scanRoot, 0o755))
-
-		actual := getAbsTargetFilePath(logger, scanRoot, "frontend/build.gradle", types.FilePath(workDir), types.FilePath(scanRoot))
-
-		assert.Equal(t, types.FilePath(filepath.Join(scanRoot, "frontend", "build.gradle")), actual)
-	})
-
-	t.Run("uses workDir when the scan path is a manifest file", func(t *testing.T) {
-		workDir := t.TempDir()
-		manifest := filepath.Join(workDir, "package.json")
-		require.NoError(t, os.WriteFile(manifest, []byte("{}"), 0o644))
-
-		actual := getAbsTargetFilePath(logger, manifest, "frontend/build.gradle", types.FilePath(workDir), types.FilePath(manifest))
-
-		assert.Equal(t, types.FilePath(filepath.Join(workDir, "frontend", "build.gradle")), actual)
-	})
-
-	t.Run("uses workDir when the scan root is outside workDir", func(t *testing.T) {
-		workDir := t.TempDir()
-		scanRoot := t.TempDir()
-
-		actual := getAbsTargetFilePath(logger, scanRoot, "frontend/build.gradle", types.FilePath(workDir), types.FilePath(workDir))
-
-		assert.Equal(t, types.FilePath(filepath.Join(workDir, "frontend", "build.gradle")), actual)
-	})
-
-	t.Run("returns empty path when relative path escapes workDir", func(t *testing.T) {
-		for _, displayTargetFile := range []string{"../other/build.gradle", "cli/../../other/build.gradle"} {
+	tests := []struct {
+		name              string
+		displayTargetFile string
+		scanRoot          func(t *testing.T, workDir string) string
+		contextIsWorkDir  bool
+		expected          string // relative to workDir; "" means no path
+	}{
+		{"scan root is workDir", "frontend/build.gradle",
+			func(_ *testing.T, w string) string { return w }, false, "frontend/build.gradle"},
+		{"scan root is a sub dir of workDir", "frontend/build.gradle",
+			func(t *testing.T, w string) string {
+				t.Helper()
+				p := filepath.Join(w, "sub")
+				require.NoError(t, os.MkdirAll(p, 0o755))
+				return p
+			}, false, "sub/frontend/build.gradle"},
+		{"scan path is a manifest file", "frontend/build.gradle",
+			func(t *testing.T, w string) string {
+				t.Helper()
+				p := filepath.Join(w, "package.json")
+				require.NoError(t, os.WriteFile(p, []byte("{}"), 0o644))
+				return p
+			}, false, "frontend/build.gradle"},
+		{"scan root is outside workDir", "frontend/build.gradle",
+			func(t *testing.T, _ string) string {
+				t.Helper()
+				return t.TempDir()
+			}, true, "frontend/build.gradle"},
+		{"relative path escapes workDir", "../other/build.gradle",
+			func(_ *testing.T, w string) string { return w }, false, ""},
+		{"nested relative path escapes workDir", "cli/../../other/build.gradle",
+			func(_ *testing.T, w string) string { return w }, false, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			workDir := t.TempDir()
+			root := tc.scanRoot(t, workDir)
 
-			actual := getAbsTargetFilePath(logger, workDir, displayTargetFile, types.FilePath(workDir), types.FilePath(workDir))
+			contextPath := root
+			if tc.contextIsWorkDir {
+				contextPath = workDir
+			}
 
-			assert.Equal(t, types.FilePath(""), actual, displayTargetFile)
-		}
-	})
+			actual := getAbsTargetFilePath(logger, root, tc.displayTargetFile, types.FilePath(workDir), types.FilePath(contextPath))
+
+			expected := types.FilePath("")
+			if tc.expected != "" {
+				expected = types.FilePath(filepath.Join(workDir, tc.expected))
+			}
+			assert.Equal(t, expected, actual)
+		})
+	}
 }
 
 func TestCLIScanner_prepareScanCommand_RemovesAllProjectsParam(t *testing.T) {
