@@ -17,6 +17,7 @@
 package iac
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -275,11 +276,16 @@ func (iac *Scanner) doScan(ctx context.Context, documentURI sglsp.DocumentURI, w
 		}
 	}
 
-	if err == nil && len(res) == 0 {
-		// CLI exited 0 with no output (most commonly: no IaC files in the directory).
-		// Return empty results rather than a misleading unmarshal error.
-		iac.logger.Debug().Str("method", method).Msg("CLI exited 0 with empty stdout; returning empty results")
-		return []iacScanResult{}, nil
+	if len(bytes.TrimSpace(res)) == 0 {
+		if err == nil {
+			// CLI exited 0 with no output (most commonly: no IaC files in the directory).
+			// Return empty results rather than a misleading unmarshal error.
+			iac.logger.Debug().Str("method", method).Msg("CLI exited 0 with empty stdout; returning empty results")
+			return []iacScanResult{}, nil
+		}
+
+		iac.logger.Err(err).Str("method", method).Msg("CLI failed and produced no output")
+		return nil, pkgerrors.Wrap(err, fmt.Sprintf("Error executing %v: the CLI produced no output", cmd))
 	}
 
 	return iac.unmarshal(res)
